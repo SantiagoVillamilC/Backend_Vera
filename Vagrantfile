@@ -44,13 +44,39 @@ Vagrant.configure("2") do |config|
     vb.cpus = 1
   end
 
-  # s.inline en lugar de s.path: el provisionador shell con "path" solo sube
-  # ese archivo al invitado. lib/comun.sh y pasos/ nunca llegarían y el script
-  # moriría en el primer source. Con s.inline se ejecuta el aprovisionador
-  # desde /vagrant, que es donde Vagrant sincroniza por defecto el directorio
-  # completo del proyecto (incluidos lib/ y pasos/).
-  config.vm.provision "shell" do |s|
-    s.privileged = true
-    s.inline = "bash /vagrant/infra/servidor/aprovisionar.sh"
-  end
+  # Sin carpeta compartida: vagrant-libvirt, a diferencia de virtualbox, no
+  # monta /vagrant por defecto. Esta caja tampoco trae rsync, así que ni
+  # siquiera la carpeta sincronizada de tipo rsync funcionaría. Se desactiva
+  # el montaje por defecto en vez de dejarlo declarado y roto en silencio.
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  # Dos variantes ya probadas y descartadas, para que nadie del equipo las
+  # vuelva a intentar:
+  #
+  #   1. s.path apuntando a aprovisionar.sh: el provisionador shell con
+  #      "path" solo sube ESE archivo al invitado. lib/comun.sh y pasos/
+  #      nunca llegaban y el script moría en el primer source.
+  #   2. s.inline = "bash /vagrant/infra/servidor/aprovisionar.sh": asumía
+  #      que Vagrant sincroniza el proyecto en /vagrant por defecto, como
+  #      hace virtualbox. Con libvirt no hay tal montaje: falla con
+  #      "No such file or directory".
+  #
+  # La solución es el provisionador "file": copia por SCP sobre la conexión
+  # SSH que Vagrant ya tiene abierta, sin depender de ningún demonio en el
+  # anfitrión ni de paquetes extra en el invitado (funciona igual con
+  # libvirt y con virtualbox). Copia solo infra/servidor/, que es
+  # exactamente lo que infra/servidor/README.md documenta que rsync envía a
+  # la VM de Azure real: la VM local queda fiel al despliegue real, en vez
+  # de recibir el repositorio completo que nunca tendría en producción.
+  #
+  # El provisionador "file" corre como el usuario "vagrant" (no como root),
+  # así que el destino tiene que ser escribible por ese usuario: /tmp sirve,
+  # /root y /opt no.
+  config.vm.provision "file",
+    source: "infra/servidor",
+    destination: "/tmp/infra-servidor"
+
+  config.vm.provision "shell",
+    privileged: true,
+    inline: "bash /tmp/infra-servidor/aprovisionar.sh"
 end
