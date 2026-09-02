@@ -33,11 +33,37 @@ vagrant up
 
 Levanta la caja `cloud-image/debian-13` (versión `20260831.2587.0`) definida
 en el `Vagrantfile` de la raíz del repositorio, con 2048 MB de RAM y 1 vCPU
-(para reflejar el `Standard_B1ms` de Azure), y ejecuta `aprovisionar.sh`
-mediante un provisionador de shell en modo `inline` que llama a
-`/vagrant/infra/servidor/aprovisionar.sh`. Esa ruta es la del directorio del
-proyecto ya sincronizado dentro de la VM, así que `lib/comun.sh` y `pasos/`
-llegan junto con el script principal.
+(para reflejar el `Standard_B1ms` de Azure). El arranque local sigue este
+orden:
+
+1. Vagrant crea la VM y la arranca con la caja fijada.
+2. El `Vagrantfile` desactiva el montaje por defecto de `/vagrant`
+   (`config.vm.synced_folder ".", "/vagrant", disabled: true`). A diferencia
+   de `virtualbox`, el proveedor `vagrant-libvirt` no monta esa carpeta
+   compartida por defecto, y esta caja tampoco trae `rsync`, así que ni
+   siquiera la carpeta sincronizada de tipo rsync serviría de respaldo.
+3. Un provisionador `file` copia el contenido de `infra/servidor/` (solo esa
+   carpeta, no el repositorio completo) a `/tmp/infra-servidor` dentro de la
+   VM, por SCP sobre la conexión SSH que Vagrant ya tiene abierta. No
+   necesita ningún demonio en el anfitrión ni paquetes extra en el invitado,
+   y funciona igual con `libvirt` y con `virtualbox`. Copiar exactamente
+   `infra/servidor/`, la misma carpeta que envía el `rsync` real hacia la VM
+   de Azure (ver más abajo), reproduce en la VM local lo que ocurre en
+   producción en vez de darle al invitado un repositorio que nunca tendría
+   en el destino real. El provisionador `file` corre como el usuario
+   `vagrant`, no como root, por eso el destino es `/tmp` y no `/root` ni
+   `/opt`.
+4. Un provisionador `shell` en modo `inline`, con `privileged: true`, ejecuta
+   `bash /tmp/infra-servidor/aprovisionar.sh`. Como `lib/comun.sh` y
+   `pasos/` viajaron junto con el resto de `infra/servidor/` en el paso
+   anterior, el script principal los encuentra sin depender de ninguna
+   carpeta compartida.
+
+El `Vagrantfile` deja comentado por qué se descartaron dos variantes
+anteriores: un provisionador `shell` con `path` (solo sube un archivo, así
+que `lib/` y `pasos/` nunca llegaban) y un `inline` que asumía `/vagrant`
+sincronizado por defecto (falla en `libvirt` con "No such file or
+directory").
 
 Esta caja está construida sobre la misma imagen cloud de Debian que la VM de
 Azure (mismo serial de compilación de Debian, ver
@@ -51,7 +77,31 @@ editar el archivo. Esta caja no publica variante `hyperv`. macOS queda fuera
 por ahora: ver el comentario de cabecera del `Vagrantfile`.
 
 Para dejar el proveedor y el propio Vagrant instalados, ver
-[`infra/local/preparar-entorno.sh`](../local/preparar-entorno.sh).
+[`infra/local/preparar-entorno.sh`](../local/preparar-entorno.sh). Los
+paquetes del proveedor no bastan para que `vagrant up --provider=libvirt`
+funcione: hay un orden que respetar.
+
+1. `infra/local/preparar-entorno.sh --instalar`. Instala Vagrant, los
+   paquetes de libvirt/KVM, y de paso intenta el resto de los pasos de abajo.
+2. Entrar al grupo `libvirt`. El paso anterior agrega al usuario, pero un
+   cambio de grupo no aplica a la sesión en curso: cerrar sesión y volver a
+   entrar, o ejecutar `newgrp libvirt` en la terminal donde se vaya a correr
+   Vagrant. Sin esto, `vagrant-libvirt` falla con un error de permisos que no
+   menciona el grupo.
+3. Confirmar que la red `default` de libvirt está activa. Queda definida pero
+   apagada justo después de instalar: `sudo virsh net-list --all` debe
+   mostrarla `active`; si no, `sudo virsh net-start default && sudo virsh
+   net-autostart default`. Sin esto, `vagrant up` falla con "Network default
+   is not active".
+4. Confirmar el plugin `vagrant-libvirt`: `vagrant plugin list` debe
+   mostrarlo. En Debian/Ubuntu llega como paquete apt; en Arch se instala con
+   `vagrant plugin install vagrant-libvirt` (sin `sudo`: los plugins de
+   Vagrant son por usuario, no del sistema).
+5. Recién ahí, `vagrant up --provider=libvirt`.
+
+`preparar-entorno.sh` (sin argumentos) diagnostica los cuatro puntos y, al
+final, imprime una verificación explícita de si el proveedor queda usable o
+no, item por item.
 
 ### Prueba de idempotencia con Docker
 
