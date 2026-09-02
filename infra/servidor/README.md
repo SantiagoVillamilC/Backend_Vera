@@ -170,7 +170,7 @@ en `.gitignore`).
 |---|---|---|---|
 | `00-verificar-sistema.sh` | Verificar que el sistema es el fijado | SCRUM-27 | Implementado |
 | `10-ssh.sh` | Endurecer el acceso por SSH | SCRUM-28 | Implementado |
-| `20-docker.sh` | Instalar Docker y Docker Compose | SCRUM-31 | Pendiente |
+| `20-docker.sh` | Instalar Docker y Docker Compose | SCRUM-31 | Implementado |
 | `30-nginx.sh` | Instalar y configurar nginx como proxy inverso | SCRUM-32 | Pendiente |
 | `40-postgres.sh` | Instalar y configurar Postgres en contenedor | SCRUM-33 | Pendiente |
 | `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Pendiente |
@@ -281,3 +281,63 @@ otra terminal que la conexión funciona por el puerto nuevo antes de cerrar
 la sesión actual, y solo después borrar la regla vieja del NSG (a mano,
 nunca desde un script: la política es que una regla existente no se edita
 ni se borra desde código).
+
+### `20-docker.sh`
+
+Instala Docker Engine y el plugin `docker compose` desde los paquetes
+propios de Debian 13 (`docker.io`, `docker-cli`, `docker-compose`), en vez
+de `curl -fsSL https://get.docker.com | sh`. Se descartó el script de
+terceros porque el repositorio de Debian ya trae una versión reciente
+(Docker Engine 26.1.5+dfsg1-9, Compose 2.26.1-4, verificado con
+`apt-cache policy` contra la misma imagen fijada en `imagen-fijada.sh`) y
+porque instalar desde apt evita ejecutar un script ajeno como root, evita
+sumar un repositorio y una llave GPG externos, y hereda las actualizaciones
+de seguridad que ya llegan por `trixie-security`.
+
+El nombre del paquete `docker-compose` en Debian engaña: no es el Compose
+v1 obsoleto, es Compose v2 empaquetado bajo el nombre viejo (confirmado con
+`apt-cache policy`, versión candidata `2.26.1-4`). El paquete deja el
+binario en dos rutas: `/usr/bin/docker-compose` (invocación con guion) y
+`/usr/libexec/docker/cli-plugins/docker-compose` (registrado como plugin),
+así que tanto `docker-compose version` como `docker compose version` (la
+invocación moderna, con espacio) funcionan.
+
+`docker-cli` se instala explícito porque tanto `docker.io` como
+`docker-compose` solo lo declaran como `Recommends` en el repositorio de
+Debian, no como `Depends` (verificado con `apt-cache depends`). apt instala
+los `Recommends` por defecto, pero algunas imágenes cloud minimizadas
+deshabilitan esa política, y si la imagen fijada llegara a cambiar en ese
+sentido, el cliente `docker` faltaría en silencio aunque el motor quedara
+instalado. Se probó instalando los tres paquetes con
+`--no-install-recommends` para confirmar que el escenario queda cubierto.
+
+El usuario administrador (`centinela`) no se agrega al grupo `docker` en
+este paso: ese grupo equivale a acceso root sin contraseña sobre el host
+(el socket de Docker no pasa por los mismos controles que `sudo`), y es una
+decisión de superficie de ataque que le corresponde al equipo, no algo que
+pida la tarjeta SCRUM-31. Mientras no se decida, los comandos `docker` en
+el servidor se ejecutan con `sudo`.
+
+La verificación tiene dos niveles. `docker --version` y
+`docker compose version` no dependen del daemon, así que corren siempre,
+incluso en el contenedor sin systemd de `probar-en-docker.sh`: confirman
+que los paquetes dejaron los comandos esperados, no solo que
+`apt-get install` salió con código 0. `docker info` sí necesita que systemd sea el proceso 1 (para que el
+servicio docker haya podido arrancar), así que se omite cuando no existe
+`/run/systemd/system` (mismo criterio que usa `asegurar_servicio_activo`
+en `lib/comun.sh`, no `command -v systemctl`: ese binario puede llegar
+como dependencia de otro paquete, como pasa con `systemd`/`systemd-sysv`
+al instalar `docker.io`, sin que systemd sea de verdad el proceso 1), y en
+la VM real confirma que el
+servicio no solo quedó "activo" según systemd, sino que de verdad está
+aceptando conexiones por el socket, la misma distinción que `10-ssh.sh`
+hace verificando con `ss -tln` después de reiniciar sshd en vez de confiar
+solo en lo que reporta `systemctl`.
+
+Nota pendiente de confirmar contra la VM real: el paquete `docker.io` de
+Debian suele dejar el servicio `docker` habilitado y activo desde su propio
+postinst, así que es probable que `asegurar_servicio_activo docker` tome
+la rama trivial ("ya está habilitado y activo") incluso en la primera
+corrida, y no la rama de `systemctl enable --now` que sigue sin
+ejercitarse de verdad. Se confirma la primera vez que este paso corra
+contra la VM de Azure.
