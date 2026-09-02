@@ -13,7 +13,7 @@
 # SERIAL_IMAGEN_DEBIAN, IMAGEN_OS_ID, IMAGEN_OS_VERSION_ID) NO se declaran acá:
 # viven en infra/servidor/imagen-fijada.sh, que es lo único que necesita
 # ambos lados de la frontera de despliegue (infra/azure/ nunca llega al
-# servidor real; infra/servidor/ sí, vía rsync, ver infra/servidor/README.md).
+# servidor real; infra/servidor/ sí, en el despliegue, ver infra/servidor/README.md).
 # Se resuelve con BASH_SOURCE, no con una ruta relativa al directorio de
 # trabajo, para que este archivo funcione sin importar desde dónde se invoque.
 DIRECTORIO_AZURE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

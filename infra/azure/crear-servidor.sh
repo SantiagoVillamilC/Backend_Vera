@@ -7,7 +7,7 @@
 # de red y la máquina virtual, en ese orden.
 #
 # Corre en el portátil del operador, no en el servidor: infra/azure/ está al
-# lado de infra/servidor/ que sí viaja por rsync (ver infra/servidor/README.md
+# lado de infra/servidor/ que sí viaja en el despliegue (ver infra/servidor/README.md
 # e infra/azure/variables.sh), pero este archivo se queda de este lado de la
 # frontera de despliegue.
 #
@@ -465,12 +465,17 @@ mostrar_resumen_cambios() {
   fi
 }
 
+# Imprime el comando de despliegue. Usa scp en lugar de rsync porque la imagen
+# cloud de Debian de Azure (y también la caja de Vagrant) no trae rsync en el
+# invitado: rsync necesita el binario en los dos extremos, así que si falta en
+# el destino el comando falla. scp viaja sobre la conexión SSH que ya existe,
+# sin necesitar paquetes extra.
 mostrar_comando_siguiente() {
   local ip="$1"
   paso "Siguiente paso"
   cat <<EOF
-  rsync -az infra/servidor/ ${USUARIO_ADMIN}@${ip}:/opt/centinela/infra-servidor/
-  ssh ${USUARIO_ADMIN}@${ip} 'sudo /opt/centinela/infra-servidor/aprovisionar.sh'
+  scp -r infra/servidor ${USUARIO_ADMIN}@${ip}:/tmp/infra-servidor
+  ssh ${USUARIO_ADMIN}@${ip} 'sudo bash /tmp/infra-servidor/aprovisionar.sh'
 EOF
 }
 
@@ -490,7 +495,10 @@ mostrar_cierre() {
   local ip disco
   ip="$(az network public-ip show -g "$GRUPO_RECURSOS" -n "$NOMBRE_IP_PUBLICA" --query ipAddress -o tsv --only-show-errors)" \
     || error_fatal "No se pudo leer la IP pública de ${NOMBRE_IP_PUBLICA}."
-  disco="$(az vm show -d -g "$GRUPO_RECURSOS" -n "$NOMBRE_VM" --query storageProfile.osDisk.diskSizeGb -o tsv --only-show-errors)" \
+  # Nota: el campo se llama diskSizeGB (GB en mayúscula). JMESPath distingue
+  # mayúsculas, así que un error de capitalización devuelve cadena vacía en
+  # silencio, sin fallar el query.
+  disco="$(az vm show -d -g "$GRUPO_RECURSOS" -n "$NOMBRE_VM" --query storageProfile.osDisk.diskSizeGB -o tsv --only-show-errors)" \
     || error_fatal "No se pudo leer el tamaño del disco de ${NOMBRE_VM}."
 
   info "IP pública: ${ip}"

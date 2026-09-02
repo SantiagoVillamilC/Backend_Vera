@@ -21,9 +21,16 @@ actual y solo aplican un cambio cuando el estado real difiere del esperado.
 ### VM de Azure (destino real)
 
 ```bash
-rsync -az infra/servidor/ usuario@servidor:/opt/centinela/infra-servidor/
-ssh usuario@servidor 'sudo /opt/centinela/infra-servidor/aprovisionar.sh'
+scp -r infra/servidor usuario@servidor:/tmp/infra-servidor
+ssh usuario@servidor 'sudo bash /tmp/infra-servidor/aprovisionar.sh'
 ```
+
+La copia va por `scp` sobre la conexión SSH existente, en lugar de `rsync`.
+La imagen cloud de Debian de Azure no trae `rsync` en el invitado, y `rsync`
+necesita el binario en los dos extremos de la conexión: si falta en el destino,
+el comando falla. `scp` no requiere paquetes extra en el invitado y funciona
+igual que la caja de Vagrant (ver el Vagrantfile, que también copia por `scp`
+a través del provisionador `file`).
 
 ### VM local con Vagrant
 
@@ -43,14 +50,14 @@ local sigue este orden:
    (`config.vm.synced_folder ".", "/vagrant", disabled: true`). A diferencia
    de `virtualbox`, el proveedor `vagrant-libvirt` no monta esa carpeta
    compartida por defecto, y esta caja tampoco trae `rsync`, así que ni
-   siquiera la carpeta sincronizada de tipo rsync serviría de respaldo.
+   siquiera una carpeta sincronizada serviría de respaldo.
 3. Un provisionador `file` copia el contenido de `infra/servidor/` (solo esa
    carpeta, no el repositorio completo) a `/tmp/infra-servidor` dentro de la
    VM, por SCP sobre la conexión SSH que Vagrant ya tiene abierta. No
    necesita ningún demonio en el anfitrión ni paquetes extra en el invitado,
    y funciona igual con `libvirt` y con `virtualbox`. Copiar exactamente
-   `infra/servidor/`, la misma carpeta que envía el `rsync` real hacia la VM
-   de Azure (ver más abajo), reproduce en la VM local lo que ocurre en
+   `infra/servidor/`, la misma carpeta que envía el despliegue real hacia la
+   VM de Azure (ver más abajo), reproduce en la VM local lo que ocurre en
    producción en vez de darle al invitado un repositorio que nunca tendría
    en el destino real. El provisionador `file` corre como el usuario
    `vagrant`, no como root, por eso el destino es `/tmp` y no `/root` ni
@@ -162,13 +169,13 @@ tres destinos (VM de Azure, VM local de Vagrant, contenedor de prueba):
 `IMAGEN_URN`, `IMAGEN_VERSION_ESPERADA`, `SERIAL_IMAGEN_DEBIAN`,
 `IMAGEN_OS_ID` e `IMAGEN_OS_VERSION_ID`. Solo declaraciones
 `: "${VAR:=valor}"`, sin lógica. Vive dentro de `infra/servidor/` a
-propósito: es lo único que viaja con el `rsync` al servidor real (ver más
-arriba), así que `aprovisionar.sh` lo carga con `source` justo después de
+propósito: es lo único que viaja en el despliegue hacia el servidor real (ver
+más arriba), así que `aprovisionar.sh` lo carga con `source` justo después de
 `lib/comun.sh`, antes de recorrer los pasos, y todos ellos (no solo el gate)
 pueden usar sus variables.
 
-[`infra/azure/variables.sh`](../azure/variables.sh), que sí queda fuera del
-`rsync`, hace `source` de este archivo (resuelto con `BASH_SOURCE`, no con una
+[`infra/azure/variables.sh`](../azure/variables.sh), que se queda del lado de
+la máquina local, hace `source` de este archivo (resuelto con `BASH_SOURCE`, no con una
 ruta relativa al directorio de trabajo) en vez de duplicar los valores. **Si
 cambia la imagen fijada, este es el único archivo que hay que tocar.**
 

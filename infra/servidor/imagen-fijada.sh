@@ -5,10 +5,10 @@
 # los tres destinos (VM de Azure, VM local de Vagrant, contenedor de prueba):
 # solo declaraciones con valores por defecto sobrescribibles por entorno, sin
 # lógica. Vive dentro de infra/servidor/ a propósito: es lo único que viaja
-# con el rsync al servidor real (ver infra/servidor/README.md), así que
+# en el despliegue al servidor real (ver infra/servidor/README.md), así que
 # aprovisionar.sh y sus pasos pueden depender de este archivo sin romper el
-# despliegue. infra/azure/variables.sh, que sí queda fuera del rsync, hace
-# source de este archivo en vez de duplicar los valores.
+# despliegue. infra/azure/variables.sh, que se queda del lado de la máquina local,
+# hace source de este archivo en vez de duplicar los valores.
 #
 # Para sobrescribir un valor sin editar este archivo:
 #   IMAGEN_VERSION_ESPERADA=0.20260907.2590 bash infra/servidor/aprovisionar.sh
