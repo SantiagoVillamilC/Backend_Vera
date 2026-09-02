@@ -464,7 +464,19 @@ crear_recursos() {
   # real) y esta nueva pueden coexistir mientras dura la transición, que es
   # justo lo que evita quedarse sin acceso si algo sale mal con el puerto
   # nuevo. Ver mostrar_cierre para el recordatorio de cuándo borrar la vieja.
-  asegurar_regla_nsg "permitir-ssh-${PUERTO_SSH}" 100 "$PUERTO_SSH" "$ORIGEN_SSH"
+  #
+  # Esquema de prioridades: los saltos de 5 y de 10 dejan espacio para
+  # insertar reglas intermedias sin renumerar las existentes.
+  # - 100: "permitir-ssh" (regla vieja del puerto 22). Existe solo durante la
+  #   transición y la borra un humano cuando confirma que el puerto nuevo
+  #   funciona. No se reutiliza el 100 para la regla nueva precisamente para
+  #   que las dos puedan convivir: Azure rechaza dos reglas con la misma
+  #   prioridad y dirección, y sin convivencia no hay forma segura de migrar
+  #   de puerto.
+  # - 105: "permitir-ssh-${PUERTO_SSH}" (regla nueva del puerto configurable).
+  # - 110: "permitir-http" (puerto 80).
+  # - 120: "permitir-https" (puerto 443).
+  asegurar_regla_nsg "permitir-ssh-${PUERTO_SSH}" 105 "$PUERTO_SSH" "$ORIGEN_SSH"
   asegurar_regla_nsg "permitir-http" 110 80 "*"
   asegurar_regla_nsg "permitir-https" 120 443 "*"
 
