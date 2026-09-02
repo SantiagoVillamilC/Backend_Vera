@@ -264,6 +264,25 @@ verificar_llaves_ssh() {
   done
 }
 
+# Valida que cada elemento de ORIGEN_SSH sea una IPv4 o un CIDR válido.
+# ORIGEN_SSH viene de sustitución de comando (curl -fsS https://ifconfig.me)
+# que puede fallar a medias: portal cautivo, respuesta truncada, o que el
+# servicio devuelva una página HTML de error en vez de una IP. Esos fallos no
+# dejan ORIGEN_SSH vacía sino llena de basura plausible. Este chequeo detecta
+# esa basura que los chequeos anteriores (no vacía, no abierta) dejarían pasar.
+validar_formato_origen_ssh() {
+  local origen="$1"
+  local elemento
+
+  read -ra elementos <<<"$origen"
+  for elemento in "${elementos[@]}"; do
+    if ! [[ $elemento =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$ ]]; then
+      local truncado="${elemento:0:60}"
+      error_fatal "ORIGEN_SSH contiene un elemento inválido: '${truncado}'. Se esperaba una IPv4 o un CIDR (ej: 190.67.159.249 o 190.67.0.0/16). Verifica que 'curl -fsS https://ifconfig.me' devolvió una IP, no una página HTML de error o una respuesta de un portal cautivo."
+    fi
+  done
+}
+
 # Verifica que ORIGEN_SSH esté definido y no sea un valor equivalente a
 # abierto. Se prefiere fallar sobre advertir: un default abierto (sin
 # fricción) termina en producción cuando alguien tiene prisa, y la regla del
@@ -278,7 +297,8 @@ verificar_origen_ssh() {
     return 0
   fi
 
-  if [[ -z "$ORIGEN_SSH" ]]; then
+  # Rechaza si está vacía O si es solo espacios en blanco
+  if [[ -z "${ORIGEN_SSH// }" ]]; then
     error_fatal "ORIGEN_SSH está vacía. Obtén tu IP pública con 'curl -fsS https://ifconfig.me' y ejecuta: ORIGEN_SSH=\$(curl -fsS https://ifconfig.me) bash infra/azure/crear-servidor.sh (o usa PERMITIR_SSH_ABIERTO=si como salida de escape deliberada)."
   fi
 
@@ -289,6 +309,7 @@ verificar_origen_ssh() {
       ;;
   esac
 
+  validar_formato_origen_ssh "$ORIGEN_SSH"
   info "ORIGEN_SSH se configurará como: ${ORIGEN_SSH}"
 }
 
