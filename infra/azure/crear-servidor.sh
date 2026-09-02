@@ -127,13 +127,14 @@ Variables de entorno relevantes:
                              verificaste por otro medio (por ejemplo, en un
                              pipeline sin terminal).
   ORIGEN_SSH                Rango CIDR o IP individual que puede conectarse
-                             al puerto 22 (SSH). Obligatoria: debe estar
-                             definida, y no puede valer "*" ni "0.0.0.0/0".
-                             Salida de escape: PERMITIR_SSH_ABIERTO=si.
-  PERMITIR_SSH_ABIERTO=si   Deja el puerto 22 abierto a todo internet (solo
-                             para casos muy concretos). Requiere aprobación
-                             explícita en cada ejecución: no hay valor por
-                             defecto.
+                             al puerto SSH (el número lo fija PUERTO_SSH en
+                             infra/servidor/red-fijada.sh). Vale "*" por
+                             defecto: abierto a todo internet a propósito
+                             (ver el comentario de ORIGEN_SSH en
+                             infra/azure/variables.sh sobre por qué, y
+                             sobre cuál es la protección real). Si se
+                             define con otro valor, tiene que ser una IPv4
+                             o un CIDR.
 
 Requiere "az login" vigente, incluso en modo --simular: la simulación lee
 el estado real de la suscripción para ser fiel a lo que pasaría.
@@ -265,14 +266,26 @@ verificar_llaves_ssh() {
 }
 
 # Valida que cada elemento de ORIGEN_SSH sea una IPv4 o un CIDR válido.
-# ORIGEN_SSH viene de sustitución de comando (curl -fsS https://ifconfig.me)
-# que puede fallar a medias: portal cautivo, respuesta truncada, o que el
-# servicio devuelva una página HTML de error en vez de una IP. Esos fallos no
-# dejan ORIGEN_SSH vacía sino llena de basura plausible. Este chequeo detecta
-# esa basura que los chequeos anteriores (no vacía, no abierta) dejarían pasar.
+# Se llama solo cuando ORIGEN_SSH no vale "*" (ver verificar_origen_ssh):
+# con "*" no hay nada que validar, porque abierto es ahora el valor por
+# defecto y esperado (ver infra/azure/variables.sh). Cuando alguien sí
+# define un origen a propósito, el riesgo sigue siendo el mismo de antes:
+# ORIGEN_SSH suele venir de una sustitución de comando (curl -fsS
+# https://ifconfig.me) que puede fallar a medias (portal cautivo, respuesta
+# truncada, una página HTML de error en vez de una IP, o directamente una
+# cadena vacía), y ese fallo no deja ORIGEN_SSH con un valor obviamente
+# inválido, sino con basura plausible o con nada. Por eso el chequeo de
+# vacío vive acá adentro, no en verificar_origen_ssh: "$(read -ra ...)"
+# sobre una cadena vacía produce un arreglo de cero elementos, así que el
+# bucle de abajo no iteraría ni una vez y dejaría pasar la cadena vacía en
+# silencio si no se cortara antes.
 validar_formato_origen_ssh() {
   local origen="$1"
   local elemento
+
+  if [[ -z "${origen// }" ]]; then
+    error_fatal "ORIGEN_SSH quedó vacía (y no vale \"*\"). Verifica que 'curl -fsS https://ifconfig.me' devolvió una IP y no una respuesta vacía por un fallo de red o un portal cautivo. Si de verdad quieres el origen abierto, usa ORIGEN_SSH='*' explícitamente."
+  fi
 
   read -ra elementos <<<"$origen"
   for elemento in "${elementos[@]}"; do
@@ -283,31 +296,18 @@ validar_formato_origen_ssh() {
   done
 }
 
-# Verifica que ORIGEN_SSH esté definido y no sea un valor equivalente a
-# abierto. Se prefiere fallar sobre advertir: un default abierto (sin
-# fricción) termina en producción cuando alguien tiene prisa, y la regla del
-# NSG es lo único que separa el puerto 22 de internet en una IP pública de
-# SKU Standard sin otra protección de entrada.
+# ORIGEN_SSH ya no exige acotarse a una IP: DECISIÓN QUE REVIERTE una
+# anterior que rechazaba "*" (ver el comentario completo de ORIGEN_SSH en
+# infra/azure/variables.sh). Acá solo queda decidir si hace falta validar
+# el formato: con "*" (el valor por defecto) no hay nada que validar. Si
+# alguien define un origen a propósito, sigue teniendo que ser una IPv4 o
+# un CIDR, porque el problema de la sustitución de comando que falla a
+# medias no desapareció con la reversión.
 verificar_origen_ssh() {
-  if [[ "${PERMITIR_SSH_ABIERTO:-}" == "si" ]]; then
-    aviso "PERMITIR_SSH_ABIERTO=si: el puerto 22 quedará expuesto a todo internet A PROPÓSITO."
-    if [[ -z "$ORIGEN_SSH" ]]; then
-      ORIGEN_SSH="*"
-    fi
+  if [[ "$ORIGEN_SSH" == "*" ]]; then
+    info "ORIGEN_SSH=* (por defecto): el puerto ${PUERTO_SSH} queda abierto a todo internet. La protección real contra acceso no autorizado es la autenticación exclusivamente por llave que fija infra/servidor/pasos/10-ssh.sh, no el origen de esta regla."
     return 0
   fi
-
-  # Rechaza si está vacía O si es solo espacios en blanco
-  if [[ -z "${ORIGEN_SSH// }" ]]; then
-    error_fatal "ORIGEN_SSH está vacía. Obtén tu IP pública con 'curl -fsS https://ifconfig.me' y ejecuta: ORIGEN_SSH=\$(curl -fsS https://ifconfig.me) bash infra/azure/crear-servidor.sh (o usa PERMITIR_SSH_ABIERTO=si como salida de escape deliberada)."
-  fi
-
-  local origen_lower="${ORIGEN_SSH,,}"
-  case "$origen_lower" in
-    \* | 0.0.0.0/0 | internet | any)
-      error_fatal "ORIGEN_SSH=${ORIGEN_SSH} deja el puerto 22 abierto a todo internet. Obtén tu IP pública con 'curl -fsS https://ifconfig.me' y ejecuta: ORIGEN_SSH=\$(curl -fsS https://ifconfig.me) bash infra/azure/crear-servidor.sh (o usa PERMITIR_SSH_ABIERTO=si como salida de escape deliberada)."
-      ;;
-  esac
 
   validar_formato_origen_ssh "$ORIGEN_SSH"
   info "ORIGEN_SSH se configurará como: ${ORIGEN_SSH}"
@@ -457,7 +457,14 @@ crear_recursos() {
   # Una IP pública de SKU Standard es deny por defecto en entrada, a
   # diferencia del SKU Basic retirado: sin estas tres reglas explícitas el
   # SSH no llega y parece que la VM está rota.
-  asegurar_regla_nsg "permitir-ssh" 100 22 "$ORIGEN_SSH"
+  #
+  # La regla de SSH cambia de nombre Y de puerto: "permitir-ssh-${PUERTO_SSH}"
+  # en vez de "permitir-ssh" a secas. Es a propósito, no un capricho de
+  # nomenclatura: así la regla vieja del puerto 22 (que ya existe en el NSG
+  # real) y esta nueva pueden coexistir mientras dura la transición, que es
+  # justo lo que evita quedarse sin acceso si algo sale mal con el puerto
+  # nuevo. Ver mostrar_cierre para el recordatorio de cuándo borrar la vieja.
+  asegurar_regla_nsg "permitir-ssh-${PUERTO_SSH}" 100 "$PUERTO_SSH" "$ORIGEN_SSH"
   asegurar_regla_nsg "permitir-http" 110 80 "*"
   asegurar_regla_nsg "permitir-https" 120 443 "*"
 
@@ -491,13 +498,51 @@ mostrar_resumen_cambios() {
 # invitado: rsync necesita el binario en los dos extremos, así que si falta en
 # el destino el comando falla. scp viaja sobre la conexión SSH que ya existe,
 # sin necesitar paquetes extra.
+#
+# El destino final pasa a ser /opt/centinela/infra-servidor, no /tmp: se
+# comprobó en la VM real que Debian limpia /tmp en cada arranque, así que
+# todo lo copiado ahí se pierde cada vez que la VM se reinicia (y SCRUM-29
+# la enciende y apaga a diario). /tmp sigue siendo la escala obligatoria de
+# scp (corre como el usuario administrador, que no puede escribir en /opt),
+# así que la copia real a /opt/centinela la hace un "sudo cp -rT" dentro de
+# la misma sesión ssh, no scp directamente.
+#
+# El puerto de conexión (-p para ssh, -P mayúscula para scp: es la misma
+# inconsistencia histórica de nombres de bandera entre los dos binarios, no
+# un error de tipeo) solo se puede ajustar cuando la transición del puerto
+# ya terminó. Mientras la regla NSG vieja del puerto 22 siga existiendo, no
+# hay forma de saber desde acá si esta VM ya pasó por SCRUM-28 (sshd ya en
+# PUERTO_SSH) o si es la primera vez que se aprovisiona (sshd todavía en el
+# 22, porque 10-ssh.sh corre DENTRO de esta misma sesión ssh): en vez de
+# adivinar, se imprimen las dos variantes rotuladas y la persona elige.
 mostrar_comando_siguiente() {
   local ip="$1"
+  local regla_vieja_existe="$2"
+  local destino_remoto="/tmp/infra-servidor"
+  local instalar_remoto="sudo mkdir -p /opt/centinela && sudo cp -rT ${destino_remoto} /opt/centinela/infra-servidor && sudo bash /opt/centinela/infra-servidor/aprovisionar.sh"
+
   paso "Siguiente paso"
-  cat <<EOF
-  scp -r infra/servidor ${USUARIO_ADMIN}@${ip}:/tmp/infra-servidor
-  ssh ${USUARIO_ADMIN}@${ip} 'sudo bash /tmp/infra-servidor/aprovisionar.sh'
+
+  if [[ "$regla_vieja_existe" == "si" ]]; then
+    cat <<EOF
+  Todavía existe la regla NSG del puerto 22 ("permitir-ssh"), así que no se
+  sabe desde acá si esta VM ya pasó por el endurecimiento de SSH (SCRUM-28)
+  o si es la primera vez. Dos variantes:
+
+  Primera vez (VM recién creada, sshd todavía escucha en el puerto 22):
+    scp -r infra/servidor ${USUARIO_ADMIN}@${ip}:${destino_remoto}
+    ssh ${USUARIO_ADMIN}@${ip} '${instalar_remoto}'
+
+  Ya aprovisionada antes (sshd ya está en el puerto ${PUERTO_SSH}):
+    scp -P ${PUERTO_SSH} -r infra/servidor ${USUARIO_ADMIN}@${ip}:${destino_remoto}
+    ssh -p ${PUERTO_SSH} ${USUARIO_ADMIN}@${ip} '${instalar_remoto}'
 EOF
+  else
+    cat <<EOF
+  scp -P ${PUERTO_SSH} -r infra/servidor ${USUARIO_ADMIN}@${ip}:${destino_remoto}
+  ssh -p ${PUERTO_SSH} ${USUARIO_ADMIN}@${ip} '${instalar_remoto}'
+EOF
+  fi
 }
 
 # Relee el estado real en vez de confiar en lo que este script acaba de
@@ -507,6 +552,18 @@ EOF
 mostrar_cierre() {
   paso "Resumen"
   mostrar_resumen_cambios
+
+  # El recordatorio de borrar la regla vieja del puerto 22 es condicional a
+  # propósito: solo aparece mientras esa regla siga existiendo, así que
+  # desaparece solo cuando la transición se completa, sin que nadie tenga
+  # que acordarse de quitarlo del script. recurso_existe es una lectura
+  # (az ... show), así que corre también en --simular, igual que las demás
+  # lecturas de este script.
+  local regla_vieja_existe="no"
+  if recurso_existe network nsg rule show --nsg-name "$NOMBRE_GRUPO_SEGURIDAD" -g "$GRUPO_RECURSOS" -n "permitir-ssh"; then
+    regla_vieja_existe="si"
+    aviso "La regla NSG vieja 'permitir-ssh' (puerto 22) todavía existe. Verifica primero, desde OTRA terminal, que la conexión funciona por el puerto ${PUERTO_SSH} (ssh -p ${PUERTO_SSH} ${USUARIO_ADMIN}@<ip>). Solo después de confirmarlo, bórrala con: az network nsg rule delete --nsg-name ${NOMBRE_GRUPO_SEGURIDAD} -g ${GRUPO_RECURSOS} -n permitir-ssh. Ese borrado lo hace una persona, nunca este script: la política es que una regla existente no se edita ni se borra desde código."
+  fi
 
   if [[ "$SIMULAR" == "si" ]]; then
     info "Modo --simular: no se tocó ningún recurso real. Ejecuta sin la bandera para crearlos."
@@ -525,7 +582,7 @@ mostrar_cierre() {
   info "IP pública: ${ip}"
   info "Tamaño real del disco del sistema operativo: ${disco} GiB"
 
-  mostrar_comando_siguiente "$ip"
+  mostrar_comando_siguiente "$ip" "$regla_vieja_existe"
 }
 
 principal() {

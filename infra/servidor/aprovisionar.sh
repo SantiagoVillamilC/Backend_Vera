@@ -18,6 +18,13 @@ source "${DIRECTORIO_SCRIPT}/lib/comun.sh"
 # shellcheck source=imagen-fijada.sh
 source "${DIRECTORIO_SCRIPT}/imagen-fijada.sh"
 
+# Única fuente de verdad del puerto SSH fijado. Se carga aquí, justo después
+# de imagen-fijada.sh y por la misma razón: no dentro de 10-ssh.sh, para que
+# cualquier paso futuro (no solo el de SSH) pueda usar PUERTO_SSH sin tener
+# que repetir el source.
+# shellcheck source=red-fijada.sh
+source "${DIRECTORIO_SCRIPT}/red-fijada.sh"
+
 # Configuración local opcional, no se versiona (ver infra/servidor/.gitignore).
 ARCHIVO_ENV="${DIRECTORIO_SCRIPT}/aprovisionar.env"
 if [[ -f "${ARCHIVO_ENV}" ]]; then

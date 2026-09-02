@@ -36,6 +36,24 @@ fi
 # shellcheck source=../servidor/imagen-fijada.sh
 source "${RUTA_IMAGEN_FIJADA}"
 
+# El puerto SSH fijado (PUERTO_SSH) tampoco se declara acá, por la misma
+# razón que la imagen fijada de arriba: vive en infra/servidor/red-fijada.sh
+# porque lo necesitan los dos lados de la frontera de despliegue (la regla
+# del NSG de este lado, sshd del otro lado, ver infra/servidor/pasos/10-ssh.sh).
+RUTA_RED_FIJADA="${DIRECTORIO_AZURE}/../servidor/red-fijada.sh"
+
+# Mismo manejo de error que arriba para RUTA_IMAGEN_FIJADA: un mensaje
+# legible en vez de un error crudo de bash si infra/azure/ se copia o se
+# mueve sin infra/servidor/.
+if [[ ! -r "$RUTA_RED_FIJADA" ]]; then
+  printf '[error] No se encontró %s\n' "$RUTA_RED_FIJADA" >&2
+  # shellcheck disable=SC2317
+  return 1 2>/dev/null || exit 1
+fi
+
+# shellcheck source=../servidor/red-fijada.sh
+source "${RUTA_RED_FIJADA}"
+
 # --- Región y tamaño ---
 #
 # northcentralus está permitida por la política "Allowed resource deployment
@@ -100,19 +118,32 @@ source "${RUTA_IMAGEN_FIJADA}"
 # "~" en vez de una ruta absoluta, bash no la expande dentro de comillas.
 : "${LLAVES_SSH_PUBLICAS:=${HOME}/.ssh/id_ed25519.pub}"
 
-# ORIGEN_SSH acota de dónde se acepta SSH (puerto 22) en la regla del NSG.
-# No tiene valor por defecto a propósito: crear-servidor.sh se niega a
-# ejecutar si está vacía, porque un default abierto es un default inseguro
-# que la prisa termina aceptando en producción. Para definirla, obtén tu IP
-# pública con "curl -fsS https://ifconfig.me" y ejecuta:
+# ORIGEN_SSH acota de dónde se acepta SSH en la regla del NSG. Vale "*" por
+# defecto: DECISIÓN QUE REVIERTE una anterior, en la que esta variable no
+# tenía default y crear-servidor.sh se negaba a correr si valía "*" o
+# quedaba vacía. Se revirtió por una razón concreta: las redes domésticas
+# de los cuatro integrantes del equipo cambian de IP al apagarse, así que
+# una regla anclada a una IP los deja a todos por fuera, no solo una vez
+# sino de forma recurrente, cada vez que alguien se conecta desde otra red.
+#
+# La protección real contra acceso no autorizado NO es esta variable: es la
+# autenticación exclusivamente por llave pública que fija
+# infra/servidor/pasos/10-ssh.sh (PasswordAuthentication no,
+# PubkeyAuthentication yes). Mover el puerto SSH al fijado en
+# infra/servidor/red-fijada.sh (PUERTO_SSH) reduce el ruido de bots que
+# escanean el puerto 22 por defecto, pero NO reduce el riesgo: un "nmap"
+# sobre el rango completo de puertos encuentra el puerto nuevo en segundos.
+# Presentarlo como una medida de seguridad sería falso.
+#
+# La variable sigue existiendo para quien quiera acotar el origen a
+# propósito (una IP fija, una VPN del equipo): si se define, tiene que ser
+# una IPv4 o un CIDR, porque el problema de la sustitución de comando que
+# falla a medias (portal cautivo, respuesta truncada, una página HTML de
+# error) no desapareció. infra/azure/crear-servidor.sh sigue validando ese
+# formato (validar_formato_origen_ssh), pero solo cuando ORIGEN_SSH no vale
+# "*". Para acotarlo:
 #   ORIGEN_SSH=$(curl -fsS https://ifconfig.me) bash infra/azure/crear-servidor.sh
-# Acepta una IP individual, un rango CIDR, o varios valores separados por
-# espacio. Salida de escape deliberada para casos muy concretos:
-#   PERMITIR_SSH_ABIERTO=si bash infra/azure/crear-servidor.sh
-# Este patrón es el mismo que OMITIR_VERIFICACION_SISTEMA en
-# infra/servidor/pasos/00-verificar-sistema.sh. SCRUM-28 endurece el acceso
-# de forma definitiva.
-: "${ORIGEN_SSH:=}"
+: "${ORIGEN_SSH:=*}"
 
 # --- Nombres de recursos ---
 #

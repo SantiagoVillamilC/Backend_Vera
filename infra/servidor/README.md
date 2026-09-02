@@ -22,7 +22,7 @@ actual y solo aplican un cambio cuando el estado real difiere del esperado.
 
 ```bash
 scp -r infra/servidor usuario@servidor:/tmp/infra-servidor
-ssh usuario@servidor 'sudo bash /tmp/infra-servidor/aprovisionar.sh'
+ssh usuario@servidor 'sudo mkdir -p /opt/centinela && sudo cp -rT /tmp/infra-servidor /opt/centinela/infra-servidor && sudo bash /opt/centinela/infra-servidor/aprovisionar.sh'
 ```
 
 La copia va por `scp` sobre la conexión SSH existente, en lugar de `rsync`.
@@ -31,6 +31,19 @@ necesita el binario en los dos extremos de la conexión: si falta en el destino,
 el comando falla. `scp` no requiere paquetes extra en el invitado y funciona
 igual que la caja de Vagrant (ver el Vagrantfile, que también copia por `scp`
 a través del provisionador `file`).
+
+El destino final es `/opt/centinela/infra-servidor`, no `/tmp`: se comprobó
+en la VM real que Debian limpia `/tmp` en cada arranque, así que todo lo
+copiado ahí se pierde cada vez que la VM se reinicia. Con SCRUM-29
+encendiendo y apagando la VM a diario, eso deja de ser un detalle menor.
+`/tmp` sigue siendo la escala obligatoria de `scp`: corre como el usuario
+administrador (`centinela`, no root), que no puede escribir directamente en
+`/opt`. Por eso la copia real a `/opt/centinela` la hace un `sudo cp -rT`
+dentro de la misma sesión `ssh`, después de que `scp` ya dejó los archivos
+en `/tmp`, no `scp` apuntando a `/opt` directamente. `infra/azure/crear-servidor.sh`
+imprime este mismo comando (con el usuario, la IP y, cuando ya no quede la
+regla NSG del puerto 22, el puerto de conexión correctos) al final de su
+ejecución.
 
 ### VM local con Vagrant
 
@@ -156,7 +169,7 @@ en `.gitignore`).
 | Archivo | Paso | Tarjeta | Estado |
 |---|---|---|---|
 | `00-verificar-sistema.sh` | Verificar que el sistema es el fijado | SCRUM-27 | Implementado |
-| `10-ssh.sh` | Endurecer el acceso por SSH | SCRUM-28 | Pendiente |
+| `10-ssh.sh` | Endurecer el acceso por SSH | SCRUM-28 | Implementado |
 | `20-docker.sh` | Instalar Docker y Docker Compose | SCRUM-31 | Pendiente |
 | `30-nginx.sh` | Instalar y configurar nginx como proxy inverso | SCRUM-32 | Pendiente |
 | `40-postgres.sh` | Instalar y configurar Postgres en contenedor | SCRUM-33 | Pendiente |
@@ -178,6 +191,22 @@ pueden usar sus variables.
 la máquina local, hace `source` de este archivo (resuelto con `BASH_SOURCE`, no con una
 ruta relativa al directorio de trabajo) en vez de duplicar los valores. **Si
 cambia la imagen fijada, este es el único archivo que hay que tocar.**
+
+### `red-fijada.sh`
+
+Mismo patrón y mismo criterio que `imagen-fijada.sh`: única fuente de verdad
+del puerto SSH (`PUERTO_SSH`, por defecto `22022`), solo declaraciones
+`: "${VAR:=valor}"`, sin lógica. Vive dentro de `infra/servidor/` por la
+misma razón: lo necesitan los dos lados de la frontera de despliegue (la
+regla del NSG en `infra/azure/crear-servidor.sh`, y sshd en el servidor real
+vía `infra/servidor/pasos/10-ssh.sh`), y `infra/azure/` no viaja al
+servidor, así que el archivo tiene que estar del lado que sí viaja.
+`infra/azure/variables.sh` lo lee cruzando la frontera con `BASH_SOURCE`,
+igual que ya hace con `imagen-fijada.sh`. Documenta por qué `22022` (se
+descartó `2222` por ser el puerto alternativo obvio, y todo lo que pase de
+32767 por chocar con el rango efímero de salida del kernel) y deja escrita
+la advertencia de que mover el puerto reduce el ruido de bots que escanean
+el 22 por defecto, pero no reduce el riesgo.
 
 ### `00-verificar-sistema.sh`
 
@@ -201,3 +230,52 @@ El gate es en sí mismo un paso más, pero `aprovisionar.sh --solo <otro-paso>`
 sí lo ejecuta primero (a menos que el paso pedido sea el propio gate, para no
 duplicarlo): ninguna corrida dirigida a un paso puntual se salta la
 verificación de sistema.
+
+### `10-ssh.sh`
+
+Fija en `/etc/ssh/sshd_config.d/10-centinela.conf` el puerto de
+`PUERTO_SSH` (ver `red-fijada.sh` arriba) y la autenticación exclusivamente
+por llave pública: `PasswordAuthentication no`, `PubkeyAuthentication yes`,
+`PermitRootLogin no`, `KbdInteractiveAuthentication no`. `PasswordAuthentication no`
+se fija explícitamente aunque cloud-init ya lo haya puesto en
+`50-cloud-init.conf`: ese archivo puede cambiar con una actualización de la
+imagen o editarse a mano, y el aprovisionamiento tiene que dejar el estado
+explícito y verificable, no heredado de otro archivo.
+
+El número `10-` (menor que el `50-` de cloud-init) no es cosmético: sshd
+incluye `sshd_config.d/*.conf` al principio de `sshd_config` y procesa esos
+archivos en orden alfabético, y `sshd_config(5)` es explícito en que gana
+el **primer** valor obtenido, no el último (al revés de la intuición que
+viene de runlevels o de los sitios de nginx). Pero el número por sí solo es
+solo una apuesta razonable: otra versión de cloud-init podría usar un
+número más chico y volver a ganar la precedencia en silencio. La garantía
+real es que el paso relee la configuración efectiva con `sshd -T` **antes**
+de reiniciar sshd y compara cada directiva contra lo esperado (incluyendo
+un chequeo aparte para `Port`, que `sshd_config(5)` documenta como
+directiva que admite múltiples valores a la vez, no "primer valor gana");
+si algo no cuadra, corta con `error_fatal` sin tocar el servicio.
+
+Antes de escribir nada, comprueba `systemctl is-enabled ssh.socket`: con
+activación por socket, la directiva `Port` de `sshd_config` se ignora en
+silencio (systemd es quien escucha el puerto, no sshd), así que el paso
+cortaría con `error_fatal` en vez de reportar éxito sobre una configuración
+que nunca tomó efecto. Si `systemctl` no existe (el contenedor de prueba de
+`probar-en-docker.sh`), se omite el paso completo con un `aviso`, igual que
+`asegurar_servicio_activo`.
+
+El reinicio de sshd es condicional: solo ocurre si `resumen_cambios`
+aumentó al escribir las directivas. Si nada cambió, el paso lo dice con
+`info` y no reinicia nada, para no romper la regla de 0 cambios en la
+segunda corrida. Cuando sí reinicia, después de reiniciar además confirma
+con `ss -tln` que sshd de verdad quedó escuchando en el puerto nuevo (la
+comparación contra `sshd -T` solo prueba que el archivo ganaría esa
+precedencia, no que el proceso reiniciado haya podido abrir ese socket).
+
+La secuencia de transición que evita quedarse sin acceso: la regla NSG
+vieja del puerto 22 (`permitir-ssh`) y la nueva (`permitir-ssh-${PUERTO_SSH}`,
+ver `infra/azure/crear-servidor.sh`) coexisten a propósito mientras dura la
+transición. El paso termina con un `aviso` muy visible: verificar desde
+otra terminal que la conexión funciona por el puerto nuevo antes de cerrar
+la sesión actual, y solo después borrar la regla vieja del NSG (a mano,
+nunca desde un script: la política es que una regla existente no se edita
+ni se borra desde código).
