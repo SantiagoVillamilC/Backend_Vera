@@ -31,17 +31,37 @@ Vagrant.configure("2") do |config|
   config.vm.box = "cloud-image/debian-13"
   config.vm.box_version = "20260831.2587.0"
 
-  # 2048 MB de RAM y 1 vCPU en los dos proveedores, para reflejar el
-  # Standard_B1ms de Azure (1 vCPU, 2 GB) que es el destino real del
-  # aprovisionamiento. El objetivo es parecerse al servidor real, no ir rápido.
+  # 4096 MB de RAM y 2 vCPU en los dos proveedores, para reflejar el
+  # Standard_B2als_v2 de Azure (2 vCPU, 4 GB) que es el destino real del
+  # aprovisionamiento. El salto de 2048/1 a 4096/2 no fue una elección de
+  # diseño: la suscripción de Azure no ofrece la generación Bv1 (ver
+  # infra/azure/variables.sh), así que el destino real subió de tamaño y la
+  # VM local lo sigue. El objetivo es parecerse al servidor real, no ir
+  # rápido.
   config.vm.provider "libvirt" do |lv|
-    lv.memory = 2048
-    lv.cpus = 1
+    lv.memory = 4096
+    lv.cpus = 2
+
+    # El disco de la caja trae 10 GiB por defecto, heredado en silencio,
+    # mientras la VM de Azure queda en 30 GiB (TAMANO_DISCO_GB en
+    # infra/azure/variables.sh). El defecto que se corrige acá no era el
+    # número 10 en sí: era que el disco fuera la única de las tres
+    # dimensiones de la máquina (RAM, CPU, disco) que nadie declaraba,
+    # expuesta a que una actualización de la caja la cambiara sin que nadie
+    # se enterara.
+    #
+    # En VirtualBox no hay un equivalente directo: haría falta
+    # "vb.customize" o el plugin vagrant-disksize, y de cualquier forma el
+    # sistema de archivos del invitado tendría que crecer para aprovechar el
+    # espacio nuevo, algo que las imágenes cloud suelen resolver con
+    # "growpart" de cloud-init. Ninguna de las dos cosas está verificada en
+    # esta caja todavía: queda como pendiente conocido, no implementado.
+    lv.machine_virtual_size = 30
   end
 
   config.vm.provider "virtualbox" do |vb|
-    vb.memory = 2048
-    vb.cpus = 1
+    vb.memory = 4096
+    vb.cpus = 2
   end
 
   # Sin carpeta compartida: vagrant-libvirt, a diferencia de virtualbox, no

@@ -32,9 +32,11 @@ vagrant up
 ```
 
 Levanta la caja `cloud-image/debian-13` (versión `20260831.2587.0`) definida
-en el `Vagrantfile` de la raíz del repositorio, con 2048 MB de RAM y 1 vCPU
-(para reflejar el `Standard_B1ms` de Azure). El arranque local sigue este
-orden:
+en el `Vagrantfile` de la raíz del repositorio, con 4096 MB de RAM y 2 vCPU
+(para reflejar el `Standard_B2als_v2` de Azure), y un disco de 30 GiB
+(`lv.machine_virtual_size` en el proveedor `libvirt`; en `virtualbox` no hay
+equivalente configurado, ver el comentario del `Vagrantfile`). El arranque
+local sigue este orden:
 
 1. Vagrant crea la VM y la arranca con la caja fijada.
 2. El `Vagrantfile` desactiva el montaje por defecto de `/vagrant`

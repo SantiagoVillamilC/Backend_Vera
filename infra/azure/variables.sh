@@ -44,13 +44,75 @@ source "${RUTA_IMAGEN_FIJADA}"
 # southcentralus, brazilsouth y centralus.
 : "${REGION:=northcentralus}"
 
-# Standard_B1ms: 1 vCPU, 2 GB de RAM. Refleja el tamaño real del servidor.
+# Standard_B2als_v2: 2 vCPU, 4 GB de RAM, arquitectura x64/AMD. No es una
+# elección de diseño: Standard_B1ms existe en la región pero está
+# "NotAvailableForSubscription" para esta suscripción (verificado con
+# az vm list-skus -l northcentralus --size Standard_B1 --all), igual que
+# B1s y B1ls. La suscripción solo ofrece la generación Bv2, y su tamaño
+# más chico ya es de 2 vCPU.
+#
+# Se descartaron los SKU con "p" (B2pls_v2, B2ps_v2): son ARM64. Además de
+# romper la paridad amd64 con la VM local (ver el Vagrantfile de la raíz) y
+# con la imagen fijada de infra/servidor/imagen-fijada.sh, cuestan 14 % más
+# a especificaciones iguales (0.0428 contra 0.0376 USD/h).
+#
+# Se descartó B2ats_v2 (2 vCPU, 1 GB): Postgres más el demonio de Docker no
+# caben en 1 GB de RAM.
+#
+# Se descartaron los B4: la cuota de la familia Standard BS es de 4 vCPU, y
+# un B4 la consumiría entera, cerrando la puerta a la VM de medición que
+# anticipa la propuesta del tablero de plataforma (fuera de este
+# repositorio, sección "La trampa que sí afecta la tesis"): esa VM también
+# sale de la misma familia y necesita cupo libre.
+#
 # La cuota de la suscripción en esta región es 6 vCPU regionales y 4 de la
-# familia Standard BS (verificado con az vm list-usage); un B1ms consume 1
-# vCPU de cada cupo.
-: "${SKU_VM:=Standard_B1ms}"
+# familia Standard BS (verificado con az vm list-usage); un B2als_v2 consume
+# 2 de cada cupo, contra 1 que consumía el B1ms anterior.
+: "${SKU_VM:=Standard_B2als_v2}"
 
-: "${TAMANO_DISCO_GB:=16}"
+# 30 GiB es el disco propio de la imagen de Debian, medido creando un disco
+# desde la referencia de la imagen (az disk create --image-reference) y
+# leyendo diskSizeGB. --os-disk-size-gb solo agranda, nunca achica, así que
+# 30 es un piso que impone el editor de la imagen, no una elección propia.
+# Debian instalado ocupa unos 700 MB: lo que mide 30 GiB es el disco, no el
+# contenido.
+: "${TAMANO_DISCO_GB:=30}"
+
+# Sin especificarlo, el CLI crea el disco como Premium_LRS, que en el
+# escalón P4 cuesta 5.28 USD/mes contra 2.40 del Standard SSD (E4). Se
+# descartó Standard HDD (S4, 1.54 USD/mes) porque agregarle latencia de
+# disco giratorio a Postgres sería un segundo factor confundido en las
+# mediciones de la tesis, además del hecho ya conocido de que la instancia
+# es burstable.
+: "${SKU_DISCO:=StandardSSD_LRS}"
+
+# --- Acceso administrativo ---
+#
+# Azure rechaza nombres de usuario administrador reservados: admin,
+# administrator, root y guest.
+: "${USUARIO_ADMIN:=centinela}"
+
+# Lista separada por espacios de archivos de llave pública SSH. Solo la del
+# operador que ejecuta crear-servidor.sh por defecto: las llaves del resto
+# del equipo se agregan en SCRUM-28, y agregar una llave después no exige
+# recrear la VM, así que no bloquea la creación de hoy. Nota: "${HOME}" se
+# expande al momento del source; si alguien sobrescribe esta variable con
+# "~" en vez de una ruta absoluta, bash no la expande dentro de comillas.
+: "${LLAVES_SSH_PUBLICAS:=${HOME}/.ssh/id_ed25519.pub}"
+
+# ORIGEN_SSH acota de dónde se acepta SSH (puerto 22) en la regla del NSG.
+# No tiene valor por defecto a propósito: crear-servidor.sh se niega a
+# ejecutar si está vacía, porque un default abierto es un default inseguro
+# que la prisa termina aceptando en producción. Para definirla, obtén tu IP
+# pública con "curl -fsS https://ifconfig.me" y ejecuta:
+#   ORIGEN_SSH=$(curl -fsS https://ifconfig.me) bash infra/azure/crear-servidor.sh
+# Acepta una IP individual, un rango CIDR, o varios valores separados por
+# espacio. Salida de escape deliberada para casos muy concretos:
+#   PERMITIR_SSH_ABIERTO=si bash infra/azure/crear-servidor.sh
+# Este patrón es el mismo que OMITIR_VERIFICACION_SISTEMA en
+# infra/servidor/pasos/00-verificar-sistema.sh. SCRUM-28 endurece el acceso
+# de forma definitiva.
+: "${ORIGEN_SSH:=}"
 
 # --- Nombres de recursos ---
 #
@@ -66,3 +128,4 @@ source "${RUTA_IMAGEN_FIJADA}"
 : "${NOMBRE_SUBRED:=${PREFIJO_RECURSOS}-subnet}"
 : "${NOMBRE_GRUPO_SEGURIDAD:=${PREFIJO_RECURSOS}-nsg}"
 : "${NOMBRE_IP_PUBLICA:=${PREFIJO_RECURSOS}-ip}"
+: "${NOMBRE_NIC:=${PREFIJO_RECURSOS}-nic}"
