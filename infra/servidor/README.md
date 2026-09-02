@@ -259,9 +259,11 @@ Antes de escribir nada, comprueba `systemctl is-enabled ssh.socket`: con
 activación por socket, la directiva `Port` de `sshd_config` se ignora en
 silencio (systemd es quien escucha el puerto, no sshd), así que el paso
 cortaría con `error_fatal` en vez de reportar éxito sobre una configuración
-que nunca tomó efecto. Si `systemctl` no existe (el contenedor de prueba de
-`probar-en-docker.sh`), se omite el paso completo con un `aviso`, igual que
-`asegurar_servicio_activo`.
+que nunca tomó efecto. Si systemd no es el proceso 1 (no existe `/run/systemd/system`, el caso del
+contenedor de prueba de `probar-en-docker.sh`, e incluso de una VM real
+donde `systemctl` ya haya quedado instalado como dependencia de otro
+paquete pero systemd todavía no haya arrancado), se omite el paso completo
+con un `aviso`, igual que `asegurar_servicio_activo`.
 
 El reinicio de sshd es condicional: solo ocurre si `resumen_cambios`
 aumentó al escribir las directivas. Si nada cambió, el paso lo dice con

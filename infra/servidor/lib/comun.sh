@@ -146,8 +146,17 @@ asegurar_servicio_activo() {
   local habilitado="no"
   local activo="no"
 
-  if ! command -v systemctl &>/dev/null; then
-    aviso "systemctl no está disponible en este sistema, se omite ${servicio}."
+  # No se usa "command -v systemctl" para decidir si hay servicio que tocar:
+  # ese binario puede quedar instalado como dependencia de otro paquete (por
+  # ejemplo docker.io, que trae systemd y systemd-sysv) sin que systemd sea
+  # de verdad el proceso 1, como pasa en el contenedor de
+  # infra/servidor/probar-en-docker.sh. Ahí "systemctl enable --now" se
+  # niega con "--now cannot be used when systemd is not running", lo que
+  # aborta toda la corrida. /run/systemd/system solo existe cuando systemd
+  # es el proceso 1: es la misma comprobación que usa sd_booted() de
+  # libsystemd.
+  if [[ ! -d /run/systemd/system ]]; then
+    aviso "systemd no es el proceso 1 en este sistema (no existe /run/systemd/system), se omite ${servicio}."
     return 0
   fi
 

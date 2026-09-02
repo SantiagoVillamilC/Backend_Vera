@@ -41,14 +41,16 @@ _ssh10_listar_declaraciones() {
   done
 }
 
-if ! command -v systemctl &>/dev/null; then
-  # El contenedor de prueba de infra/servidor/probar-en-docker.sh no tiene
-  # systemd: ni siquiera existe el binario systemctl. Sin él no hay forma de
-  # comprobar el estado de ssh.socket ni de reiniciar sshd, así que este
-  # paso completo se omite acá y se deja su verificación real para la VM
-  # (Azure o Vagrant), igual que ya hace asegurar_servicio_activo en
-  # lib/comun.sh.
-  aviso "systemctl no está disponible en este sistema: se omite por completo el endurecimiento de SSH. Verifícalo en la VM real (Azure o Vagrant)."
+if [[ ! -d /run/systemd/system ]]; then
+  # No se usa "command -v systemctl": ese binario puede quedar instalado
+  # como dependencia de otro paquete (por ejemplo systemd y systemd-sysv,
+  # que llegan con docker.io) sin que systemd sea de verdad el proceso 1,
+  # como pasa en el contenedor de infra/servidor/probar-en-docker.sh. Sin
+  # systemd como proceso 1 no hay forma de comprobar el estado de
+  # ssh.socket ni de reiniciar sshd, así que este paso completo se omite
+  # acá y se deja su verificación real para la VM (Azure o Vagrant), igual
+  # que ya hace asegurar_servicio_activo en lib/comun.sh.
+  aviso "systemd no es el proceso 1 en este sistema (no existe /run/systemd/system): se omite por completo el endurecimiento de SSH. Verifícalo en la VM real (Azure o Vagrant)."
 else
   # ssh.socket habilitado es un caso fatal, no uno que se pueda avisar y
   # seguir: con activación por socket, la directiva "Port" de sshd_config se
