@@ -334,10 +334,15 @@ aceptando conexiones por el socket, la misma distinción que `10-ssh.sh`
 hace verificando con `ss -tln` después de reiniciar sshd en vez de confiar
 solo en lo que reporta `systemctl`.
 
-Nota pendiente de confirmar contra la VM real: el paquete `docker.io` de
-Debian suele dejar el servicio `docker` habilitado y activo desde su propio
-postinst, así que es probable que `asegurar_servicio_activo docker` tome
-la rama trivial ("ya está habilitado y activo") incluso en la primera
-corrida, y no la rama de `systemctl enable --now` que sigue sin
-ejercitarse de verdad. Se confirma la primera vez que este paso corra
-contra la VM de Azure.
+Confirmado contra la VM real de Azure (`centinela-vm`, 2 de septiembre de
+2026): el paquete `docker.io` de Debian sí deja el servicio `docker`
+habilitado y activo desde su propio postinst
+(`Created symlink '/etc/systemd/system/multi-user.target.wants/docker.service'`
+en la salida de `apt-get install`), así que `asegurar_servicio_activo
+docker` tomó la rama trivial ("El servicio docker ya está habilitado y
+activo") desde la primera corrida. La rama de `systemctl enable --now`
+sigue sin ejercitarse de verdad contra ningún sistema: solo se probaría si
+algún día `docker.io` dejara de habilitar su propio servicio. Primera
+corrida contra la VM real: `Cambios aplicados: 3` (los tres paquetes).
+Segunda corrida: `Cambios aplicados: 0`, con `docker info` confirmando el
+daemon real en las dos.
