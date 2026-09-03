@@ -225,6 +225,36 @@ asegurar_servicio_compose() {
     return 0
   fi
 
+  # "$archivo_compose" ya NO se usa como "el" archivo de compose: desde que
+  # Postgres (40-postgres.sh, SCRUM-33) empezó a declarar su propio
+  # compose.postgres.yaml en vez de compartir compose.yaml con nginx
+  # (30-nginx.sh), este helper necesita fusionar TODOS los fragmentos del
+  # directorio, no solo el que recibió como argumento. Se usa el argumento
+  # únicamente para derivar el directorio con dirname, y de ahí se arma un
+  # arreglo de banderas "-f <archivo>" con cada compose*.yaml que exista ahí
+  # (mismo patrón de glob con "[[ -f ... ]]" filtrando que ya usa
+  # mostrar_lista() en aprovisionar.sh para listar pasos/NN-*.sh). docker
+  # compose fusiona las claves de nivel superior (name, networks, services)
+  # entre todos los "-f" que reciba en una misma invocación, así que pasar
+  # todos los fragmentos encontrados reproduce el mismo resultado que un
+  # único compose.yaml grande, sin que un paso tenga que reescribir el
+  # bloque "services:" de otro. Cuando compose.postgres.yaml todavía no
+  # existe (por ejemplo, la primera vez que corre 30-nginx.sh en una
+  # instalación nueva), el glob solo encuentra compose.yaml, así que el
+  # comportamiento para ese call site queda idéntico al de antes de este
+  # cambio.
+  local directorio archivo
+  local -a banderas_compose=()
+  directorio="$(dirname "$archivo_compose")"
+  for archivo in "${directorio}"/compose*.yaml; do
+    [[ -f "$archivo" ]] || continue
+    banderas_compose+=(-f "$archivo")
+  done
+
+  if [[ "${#banderas_compose[@]}" -eq 0 ]]; then
+    error_fatal "No se encontró ningún archivo compose*.yaml en ${directorio}."
+  fi
+
   # No se usa un chequeo previo de "¿ya está corriendo?" para decidir si
   # llamar "docker compose up -d": eso dejaría pasar sin aplicar un cambio
   # de configuración (imagen, volúmenes, red) en un servicio que ya estaba
@@ -233,15 +263,15 @@ asegurar_servicio_compose() {
   # algo cambió); lo único que hace falta es medir si de verdad hizo algo,
   # comparando el ID del contenedor y su estado antes y después.
   local id_antes id_despues estado_antes
-  id_antes="$(docker compose -f "$archivo_compose" ps -q "$servicio" 2>/dev/null || true)"
+  id_antes="$(docker compose "${banderas_compose[@]}" ps -q "$servicio" 2>/dev/null || true)"
   estado_antes="inexistente"
   if [[ -n "$id_antes" ]]; then
     estado_antes="$(docker inspect -f '{{.State.Status}}' "$id_antes" 2>/dev/null || echo "inexistente")"
   fi
 
-  docker compose -f "$archivo_compose" up -d "$servicio"
+  docker compose "${banderas_compose[@]}" up -d "$servicio"
 
-  id_despues="$(docker compose -f "$archivo_compose" ps -q "$servicio" 2>/dev/null || true)"
+  id_despues="$(docker compose "${banderas_compose[@]}" ps -q "$servicio" 2>/dev/null || true)"
 
   if [[ -z "$id_despues" ]]; then
     error_fatal "docker compose up -d ${servicio} no dejó ningún contenedor corriendo."
@@ -253,4 +283,99 @@ asegurar_servicio_compose() {
   else
     info "El contenedor ${servicio} ya estaba corriendo con la configuración actual."
   fi
+}
+
+# Genera una cadena de 32 caracteres alfanuméricos aptos para usarse sin
+# escapar dentro de un archivo de entorno o en una URL de conexión sin
+# codificar: nunca contiene "/", "+" ni "=", los tres caracteres que sí
+# puede producir el alfabeto estándar de base64.
+#
+# Se piden 128 bytes de /dev/urandom, no 24 (que darían justo 32 caracteres
+# de base64 antes de filtrar): al convertir a base64 y descartar los
+# caracteres fuera de [A-Za-z0-9] (unos 3 de cada 64 símbolos del alfabeto
+# caen), sobra margen de sobra para quedarse con los primeros 32 caracteres
+# alfanuméricos sin tener que repetir la generación ni comprobar cuántos
+# sobrevivieron al filtro.
+#
+# El recorte a 32 caracteres se hace con expansión de parámetros de bash
+# ("${crudo:0:32}"), no con un "head -c 32" al final de la tubería: cortar
+# ahí cerraría la entrada de "tr" antes de que "base64" (y, más arriba,
+# "head -c 128 /dev/urandom") terminaran de escribir toda su salida, lo que
+# manda SIGPIPE al proceso anterior. aprovisionar.sh declara
+# "set -euo pipefail", y ese "pipefail" se hereda en todo lo que se carga
+# con source (incluido este archivo): bajo esa opción, un SIGPIPE a mitad
+# de tubería vuelve fallido el código de salida de la tubería completa,
+# aunque la cadena generada fuera perfectamente válida. Truncar con
+# expansión de parámetros, después de que la tubería ya terminó de correr
+# completa, evita ese fallo intermitente.
+#
+# "/dev/urandom" en vez de "$RANDOM" de bash: "$RANDOM" es un generador
+# pseudoaleatorio simple, no pensado para secretos. "base64" (paquete
+# coreutils) y "/dev/urandom" (expuesto por el kernel) no dependen de un
+# paquete extra como "openssl", que podría faltar en la imagen mínima que
+# instala 20-docker.sh con --no-install-recommends. Verificado el 3 de
+# septiembre de 2026 con "docker run --rm debian:13 which base64" y
+# "docker run --rm debian:13 test -e /dev/urandom": los dos existen en esa
+# imagen.
+generar_secreto() {
+  local crudo
+
+  crudo="$(head -c 128 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')"
+
+  if [[ "${#crudo}" -lt 32 ]]; then
+    error_fatal "No se pudieron generar 32 caracteres alfanuméricos a partir de /dev/urandom."
+  fi
+
+  printf '%s' "${crudo:0:32}"
+}
+
+# Crea "$ruta" con una única línea "$nombre_variable=<secreto de 32
+# caracteres>" la primera vez que se llama, y no hace nada si el archivo ya
+# existe. Ese "si ya existe, no tocarlo" es lo que vuelve idempotente este
+# helper por diseño, no por comparación de contenido: a diferencia de
+# asegurar_archivo_con_contenido, que reescribe el archivo cuando su
+# contenido no coincide con el esperado, acá el contenido esperado no se
+# puede recalcular (es aleatorio), así que la única pregunta posible es "el
+# archivo ya existe", nunca "el secreto que tiene es el correcto".
+#
+# El valor que queda en "$ruta" solo importa en el primer arranque del
+# contenedor que lo consuma con "env_file:": la imagen oficial de Postgres
+# usa esa variable para inicializar el rol y la base con "initdb" la
+# primera vez que ve el directorio de datos vacío. Editar el archivo
+# después de ese primer arranque no cambia nada en la base ya inicializada,
+# la contraseña quedó grabada dentro de Postgres, no en este archivo.
+# Rotarla de verdad requiere "ALTER ROLE ... WITH PASSWORD ..." dentro de
+# la base, y recién después actualizar este archivo para que vuelva a
+# coincidir.
+asegurar_archivo_con_secreto() {
+  local ruta="$1"
+  local nombre_variable="$2"
+  local secreto
+
+  if [[ -f "$ruta" ]]; then
+    info "El archivo ${ruta} ya existe: no se regenera ${nombre_variable}."
+    return 0
+  fi
+
+  # El secreto se captura en una variable propia, no se interpola
+  # "$(generar_secreto)" directo dentro del "printf" de más abajo: un
+  # "error_fatal" (exit 1) dentro de una sustitución de comando que forma
+  # parte de los argumentos de otro comando no dispara "set -e" (el código
+  # de salida que "set -e" ve es el del comando completo, "printf", que
+  # sigue siendo 0 aunque la sustitución interna haya fallado). Como
+  # asignación simple ("secreto=..."), en cambio, el código de salida de la
+  # sustitución sí se propaga, así que un fallo de generar_secreto corta acá
+  # con "set -e" antes de escribir nada. El chequeo de longitud explícito de
+  # abajo es una segunda red, no la única: cubre el caso (hoy inalcanzable
+  # en la práctica, ver generar_secreto) de que la sustitución haya
+  # devuelto éxito con una cadena más corta de lo esperado.
+  secreto="$(generar_secreto)"
+  if [[ "${#secreto}" -ne 32 ]]; then
+    error_fatal "generar_secreto no devolvió una cadena de 32 caracteres para ${ruta}."
+  fi
+
+  asegurar_directorio "$(dirname "$ruta")" "700"
+  printf '%s=%s\n' "$nombre_variable" "$secreto" > "$ruta"
+  chmod 600 "$ruta"
+  registrar_cambio
 }

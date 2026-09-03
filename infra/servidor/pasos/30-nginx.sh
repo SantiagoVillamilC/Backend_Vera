@@ -112,11 +112,19 @@ asegurar_archivo_con_contenido "${DIRECTORIO_NGINX}/snippets/raiz-http.conf" "${
 contenido_compose="$(cat <<EOF
 # infra/servidor/compose.yaml
 #
-# Único archivo de compose para todo lo que corre como contenedor Docker en
-# el servidor: nginx (SCRUM-32) y, a futuro, Postgres (SCRUM-33). Cada paso
-# de infra/servidor/pasos/ es dueño de su propio bloque bajo "services:" y
-# corre "docker compose up -d <servicio>" sobre el suyo, sin tocar el
-# bloque de otro paso.
+# Fragmento de compose dueño de nginx (SCRUM-32). Ya no es el único archivo
+# de compose del servidor: Postgres (40-postgres.sh, SCRUM-33) escribe el
+# suyo propio, compose.postgres.yaml, con solamente su bloque
+# "services: postgres:". Este archivo sigue siendo, sin embargo, la única
+# fuente de "name:" y del bloque top-level "networks:", que comparten TODOS
+# los servicios del proyecto, no solo nginx: compose.postgres.yaml no los
+# repite. asegurar_servicio_compose (lib/comun.sh) es quien arma, en tiempo
+# de "up -d", la lista de "-f" con TODOS los archivos compose*.yaml que
+# encuentre en este directorio, y docker compose fusiona las claves de
+# nivel superior entre ellos. Cada paso de infra/servidor/pasos/ sigue
+# siendo dueño de su propio bloque bajo "services:" y corriendo
+# "docker compose up -d <servicio>" solo sobre el suyo, sin tocar el bloque
+# de otro paso ni el archivo que ese otro paso escribió.
 #
 # Generado por infra/servidor/pasos/30-nginx.sh con
 # asegurar_archivo_con_contenido, no versionado como archivo estático
