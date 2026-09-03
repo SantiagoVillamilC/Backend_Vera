@@ -171,7 +171,7 @@ en `.gitignore`).
 | `00-verificar-sistema.sh` | Verificar que el sistema es el fijado | SCRUM-27 | Implementado |
 | `10-ssh.sh` | Endurecer el acceso por SSH | SCRUM-28 | Implementado |
 | `20-docker.sh` | Instalar Docker y Docker Compose | SCRUM-31 | Implementado |
-| `30-nginx.sh` | Instalar y configurar nginx como proxy inverso | SCRUM-32 | Pendiente |
+| `30-nginx.sh` | Instalar y configurar nginx como proxy inverso | SCRUM-32 | Implementado |
 | `40-postgres.sh` | Instalar y configurar Postgres en contenedor | SCRUM-33 | Pendiente |
 | `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Pendiente |
 
@@ -207,6 +207,24 @@ descartó `2222` por ser el puerto alternativo obvio, y todo lo que pase de
 32767 por chocar con el rango efímero de salida del kernel) y deja escrita
 la advertencia de que mover el puerto reduce el ruido de bots que escanean
 el 22 por defecto, pero no reduce el riesgo.
+
+### `dominio-fijado.sh`
+
+Mismo patrón y mismo criterio que `imagen-fijada.sh` y `red-fijada.sh`: única
+fuente de verdad del dominio del servidor (`DOMINIO_SERVIDOR`), solo
+declaraciones `: "${VAR:=valor}"`, sin lógica. La necesitan
+`infra/servidor/pasos/30-nginx.sh` (el `server_name` de
+`nginx/conf.d/centinela.conf`) y, a futuro,
+`infra/servidor/pasos/50-certbot.sh` (a qué dominio emitirle el
+certificado).
+
+El valor por defecto es `_`, el comodín de nginx para "acepta cualquier
+Host": SCRUM-24 (la tarjeta que consigue el dominio `.dev`) sigue en curso,
+y mientras no exista un dominio real, el servidor se sirve solo por IP.
+Cuando SCRUM-24 cierre, `DOMINIO_SERVIDOR` es la única variable que hay que
+cambiar (editando este archivo o pasándola por entorno), y `30-nginx.sh` la
+propaga sola al siguiente aprovisionamiento sin tocar el resto de la
+configuración.
 
 ### `00-verificar-sistema.sh`
 
@@ -346,3 +364,87 @@ algún día `docker.io` dejara de habilitar su propio servicio. Primera
 corrida contra la VM real: `Cambios aplicados: 3` (los tres paquetes).
 Segunda corrida: `Cambios aplicados: 0`, con `docker info` confirmando el
 daemon real en las dos.
+
+### `30-nginx.sh`
+
+Instala y configura nginx como proxy inverso corriendo como contenedor
+Docker, no como paquete de apt: decisión de equipo, consistente con
+Postgres (`40-postgres.sh`, tarjeta SCRUM-33, todavía esqueleto) y con la
+app, que ya trae su propio `Dockerfile` con `EXPOSE 8080`. El razonamiento
+completo, con los pros y contras de la alternativa descartada (paquete de
+apt), vive en el comentario de Jira de la tarjeta SCRUM-32 y en la
+bitácora técnica del proyecto de grado, no se repite acá.
+
+nginx comparte con Postgres un único `compose.yaml` en la raíz de
+`infra/servidor/`: cada paso es dueño de su propio bloque bajo
+`services:` y corre `docker compose up -d <servicio>` solo sobre el suyo,
+sin tocar el bloque del otro. Ese archivo, igual que
+`nginx/conf.d/centinela.conf` y `nginx/snippets/raiz-http.conf`, no es un
+archivo estático versionado aparte: los arma `30-nginx.sh` en tiempo de
+aprovisionamiento con `asegurar_archivo_con_contenido` (`lib/comun.sh`), a
+partir de heredocs embebidos en el propio script. Lo que viaja al
+servidor por `scp` como parte de `infra/servidor/` es el script que arma
+esos tres archivos, no los tres archivos ya armados; el próximo
+aprovisionamiento los sobreescribe si el contenido esperado cambió. El
+campo `name: centinela` de `compose.yaml` está fijo, no derivado del
+nombre del directorio, porque `infra/servidor/` se copia a rutas
+distintas según el destino (`/opt/centinela/infra-servidor` en Azure,
+`/tmp/infra-servidor` en Vagrant, `/root/infra-servidor` en el contenedor
+de prueba de `probar-en-docker.sh`), y sin ese campo el nombre del
+proyecto (y por lo tanto el prefijo de los contenedores) cambiaría según
+dónde se ejecute.
+
+El gotcha real de este paso está en `nginx/snippets/raiz-http.conf`:
+`proxy_pass http://api:8080;` con el nombre de host a secas hace que
+`nginx -t` y el arranque del contenedor fallen con "host not found in
+upstream" mientras no exista ningún contenedor `api` en la red
+`centinela`, y hoy no existe ninguno: no hay todavía ningún paso de
+`infra/servidor/pasos/` que despliegue la app. Se resuelve difiriendo la
+resolución del nombre a tiempo de petición, con el DNS embebido de
+Docker, en vez de a tiempo de carga de la configuración:
+`resolver 127.0.0.11 valid=10s;` seguido de `set $api http://api:8080;` y
+`proxy_pass $api;`. Verificado de forma directa, no solo leído: sin que
+exista siquiera la red `centinela` ni ningún contenedor `api` en ninguna
+parte, `docker run --rm ... nginx -t` (sin declarar `--network`, así que
+ni siquiera comparte red con el contenedor real) pasa igual, y ya con el
+contenedor de compose arriba, `curl -sI http://localhost/` devuelve
+`502 Bad Gateway` (nginx arriba, snippet cargado, sin backend real
+detrás), no un fallo de arranque.
+
+El reparto de archivos con la tarjeta SCRUM-30 (certbot, todavía
+esqueleto) es deliberado. `nginx/conf.d/centinela.conf` (el bloque
+`server { listen 80 ... }` con el `location /.well-known/acme-challenge/`)
+es dueño de esta tarjeta, SCRUM-32, y SCRUM-30 no lo va a tocar. El
+`location /` vive aparte, en `nginx/snippets/raiz-http.conf`, incluido
+desde `centinela.conf` con `include`, porque SCRUM-30 va a sobreescribir
+ese snippet completo con una redirección a HTTPS en cuanto exista el
+certificado, sin tocar el resto de `centinela.conf`. Mientras tanto,
+`nginx/snippets/raiz-http.conf` con el truco del `resolver` es el único
+punto de entrada real al backend.
+
+El dominio del `server_name` sale de `DOMINIO_SERVIDOR`
+(`dominio-fijado.sh`, ver más abajo), hoy `_` porque SCRUM-24 sigue en
+curso: el servidor se sirve solo por IP mientras tanto.
+
+La regresión real de cobertura que deja este paso: el contenedor de
+prueba de `probar-en-docker.sh` no tiene acceso al socket de Docker (no
+monta `/var/run/docker.sock`, no corre `--privileged`), así que, aunque
+tuviera systemd como proceso 1 (tampoco lo tiene), no podría levantar el
+contenedor nginx de todos modos. Esa prueba se limita a confirmar que los
+tres archivos (`compose.yaml`, `centinela.conf`, `raiz-http.conf`) se
+generan con el contenido esperado y que la segunda corrida no vuelve a
+escribirlos; que el contenedor nginx de verdad arranca, que `nginx -t`
+pasa contra la imagen pinneada, y que el puerto 80 queda escuchando pasa
+a depender enteramente de la VM real (Azure o Vagrant), todavía sin
+verificar contra `centinela-vm` a la fecha de este párrafo (2 de
+septiembre de 2026). Sí se corrió una vez de punta a punta contra un
+sistema con systemd de verdad, aunque no sea la VM: la máquina de
+desarrollo (Arch Linux, systemd como proceso 1, daemon de Docker local).
+Primera corrida: creó la red `centinela`, el contenedor `centinela-nginx`
+y los tres archivos; `nginx -t` pasó, `ss -tln` confirmó el puerto 80
+escuchando y `curl -sI http://localhost/` devolvió `502 Bad Gateway`.
+Segunda corrida: `Cambios aplicados: 0`, con el mensaje "El contenedor
+nginx ya estaba corriendo con la configuración actual". Es la misma
+honestidad que ya deja escrita `20-docker.sh` sobre la rama de
+`systemctl enable --now`, que tampoco se ha ejercitado nunca contra un
+sistema real.
