@@ -2,21 +2,34 @@
 # infra/azure/automatizar-horario.sh
 #
 # Tarjeta SCRUM-29 ("Automatizar el encendido y el apagado diario de la
-# máquina"). Crea en Azure una cuenta de Automation con identidad
-# administrada, dos runbooks de PowerShell (encender/apagar centinela-vm) y
-# dos horarios diarios vinculados a ellos. Reemplaza TANTO el auto-shutdown
-# nativo de Azure como una GitHub Action programada: un solo mecanismo
-# controla los dos horarios (encendido y apagado), en vez de dos sistemas
-# distintos.
+# máquina"). Crea en Azure dos Logic Apps (plan Consumption), cada uno con
+# identidad administrada system-assigned, un trigger de Recurrence diario y
+# una acción HTTP contra la API de Azure Resource Manager para
+# encender/apagar (deallocate) centinela-vm. Reemplaza TANTO el
+# auto-shutdown nativo de Azure como una GitHub Action programada: un solo
+# mecanismo controla los dos horarios (encendido y apagado), en vez de dos
+# sistemas distintos.
 #
 # Horario: todos los días, 08:00 a 12:00 hora Colombia (COT, UTC-5,
 # Colombia nunca tiene horario de verano). Encender a las 08:00 COT (13:00
 # UTC), apagar (deallocate, no shutdown del sistema operativo) a las 12:00
 # COT (17:00 UTC).
 #
-# Por qué Automation Account + identidad administrada en vez de una GitHub
-# Action con "az vm start" (el diseño original de la tarjeta): el tenant de
-# Entra ID de este proyecto (UCompensar) tiene
+# Por qué Logic Apps y no Automation Account (el diseño original de esta
+# tarjeta, todavía visible en el historial de git de este archivo):
+# Automation Account para suscripciones "Azure for Students" solo se puede
+# crear en un conjunto de regiones (eastus, eastus2, westus, northeurope,
+# southeastasia, japanwest) que no tiene ninguna intersección con las
+# regiones que permite la política de esta suscripción (chilecentral,
+# northcentralus, southcentralus, brazilsouth, centralus). Bloqueo de
+# plataforma sin solución, verificado en vivo el 3 de septiembre de 2026 al
+# intentar crear la cuenta contra Azure real. Detalle completo en
+# proyecto-fin-de-grado/bitacora-tecnica/2026-09-03-automation-account-choque-region.md
+# (repo de tesis, no este). Logic Apps (plan Consumption) sí se puede crear
+# en northcentralus, la misma región de la VM.
+#
+# Por qué identidad administrada en vez de OIDC/service principal clásico:
+# el tenant de Entra ID de este proyecto (UCompensar) tiene
 # allowedToCreateApps=false (verificado con
 # az rest --method get --url "https://graph.microsoft.com/v1.0/policies/authorizationPolicy"
 # --query "defaultUserRolePermissions.allowedToCreateApps" -o tsv) y el
@@ -25,34 +38,42 @@
 # --query "value[].displayName" -o tsv, vacío). Sin poder crear un App
 # Registration, ni OIDC federado ni "az ad sp create-for-rbac" son viables:
 # los dos necesitan crear un App Registration. Una identidad administrada de
-# un Automation Account no tiene esa restricción: la crea el propio recurso
-# de Azure, no Entra ID.
+# un Logic App no tiene esa restricción: la crea el propio recurso de
+# Azure, no Entra ID. Cada Logic App tiene su PROPIA identidad (dos
+# principalId distintos, uno por recurso): a diferencia de la cuenta de
+# Automation compartida del diseño anterior, acá no hay un solo principal
+# que cubra los dos horarios.
 #
-# Por qué PowerShell y no Python para los runbooks: Microsoft recomienda
-# PowerShell 7.4 LTS para runbooks nuevos, y no hay precedente de Python en
-# este repositorio.
+# Por qué dos Logic Apps propios y no la solución empaquetada "Start/Stop
+# VMs v2" de Microsoft: esa solución agrega Function App, Storage Account,
+# otro Logic App y Application Insights, pensada para flotas de VMs en
+# varias suscripciones. Para una sola VM es sobre-ingeniería.
 #
-# Por qué dos runbooks propios y no la solución empaquetada "Start/Stop VMs
-# v2" de Microsoft: esa solución agrega Function App, Storage Account, Logic
-# App y Application Insights, pensada para flotas de VMs en varias
-# suscripciones. Para una sola VM es sobre-ingeniería.
+# Secuencia obligatoria al crear o habilitar un Logic App: Disabled -> rol
+# "Virtual Machine Contributor" sobre la VM -> esperar propagación de RBAC
+# -> Enabled, y además, una definición con "startTime" resuelto en el
+# futuro. Las dos son defensas contra la MISMA familia de problema (una
+# corrida automática disparada fuera de lo esperado) pero para dos causas
+# distintas, las dos verificadas en vivo hoy: sin el orden Disabled->rol,
+# la primera corrida falla con Forbidden; sin "startTime", crear, habilitar
+# o incluso actualizar la definición de un Logic App ya Enabled dispara una
+# corrida de inmediato, sin importar la hora programada. Ver los
+# comentarios de asegurar_estado_habilitado_logic_app y
+# calcular_start_time_logic_app para el detalle de cada una.
 #
 # Corre en el portátil del operador, igual que infra/azure/crear-servidor.sh
 # (ver la cabecera de ese archivo): nunca en el servidor real.
 #
 # Banderas: --simular y --ayuda. A diferencia de crear-servidor.sh, este
-# script NO tiene --registrar-proveedores: la tarjeta no lo pidió. El
-# proveedor Microsoft.Automation aparece HOY como NotRegistered en esta
-# suscripción (verificado con az provider show -n Microsoft.Automation
-# --query registrationState -o tsv), a diferencia de Microsoft.Compute y
-# Microsoft.Network, que crear-servidor.sh ya dejó Registered. Azure suele
-# registrar un proveedor de forma implícita en la primera escritura real
-# contra él, así que "az automation account create" puede resolverlo solo;
-# si no lo hace, va a fallar con un mensaje explícito pidiendo el registro,
-# y ahí un humano decide si lo registra (az provider register -n
-# Microsoft.Automation --wait), igual que con Microsoft.Storage en
-# crear-servidor.sh: es un cambio a nivel de suscripción que comparte el
-# equipo, no algo para automatizar en silencio.
+# script NO tiene --registrar-proveedores: la tarjeta no lo pidió. Los
+# proveedores Microsoft.Automation y Microsoft.Logic quedaron Registered en
+# esta suscripción como efecto colateral de la sesión de hoy (el primero,
+# del intento fallido con Automation Account; el segundo, del despliegue
+# real de Logic Apps), así que no hace falta registrarlos para lo que este
+# script hace hoy. Si algún día se necesitara en una suscripción nueva,
+# sigue siendo decisión de un humano (az provider register -n <proveedor>
+# --wait), no algo que este script automatice en silencio: es un cambio a
+# nivel de suscripción que comparte el equipo.
 #
 # Este script NO incluye ningún camino de rollback ni de teardown, por la
 # misma razón que crear-servidor.sh: borrar recursos en la nube necesita que
@@ -69,232 +90,81 @@ source "${DIRECTORIO_SCRIPT}/variables.sh"
 
 SIMULAR="no"
 
-# principalId de la identidad administrada del Automation Account. La llena
-# asegurar_identidad_administrada y la leen asegurar_rol_vm y (indirectamente,
-# a través del Automation Account ya identificado por nombre) los pasos
-# siguientes. Queda vacía si --simular corre por primera vez, antes de que
-# exista una cuenta real (ver el comentario dentro de esa función).
-PRINCIPAL_ID=""
-
 mostrar_ayuda() {
   cat <<'EOF'
 Uso: automatizar-horario.sh [opciones]
 
 Crea en Azure la automatización de encendido/apagado diario de la VM de
-Centinela (tarjeta SCRUM-29): cuenta de Automation, identidad administrada,
-el rol "Virtual Machine Contributor" sobre la VM, dos runbooks de
-PowerShell y dos horarios diarios vinculados a ellos. Lee su configuración
-de infra/azure/variables.sh.
+Centinela (tarjeta SCRUM-29): dos Logic Apps (plan Consumption), cada uno
+con identidad administrada system-assigned, el rol "Virtual Machine
+Contributor" sobre la VM, un trigger de Recurrence diario y una acción HTTP
+contra Azure Resource Manager para encender o apagar (deallocate)
+centinela-vm. Lee su configuración de infra/azure/variables.sh y las
+definiciones de infra/azure/logic-apps/*.json.
 
 Opciones:
   --simular   Imprime lo que haría, sin ejecutar ningún "az" que escriba.
               Las lecturas sí corren, para que la simulación refleje el
-              estado real de la suscripción. Igual que en
-              infra/azure/crear-servidor.sh, en una corrida --simular contra
-              una suscripción donde todavía no existe la cuenta de
-              Automation, los pasos que dependen de leer su id o su
-              principalId no tienen un valor real que leer: en vez de
-              fallar, avisan que ese dato solo se conoce en una corrida
+              estado real de la suscripción. En una corrida --simular contra
+              una suscripción donde todavía no existe alguno de los dos
+              Logic Apps, los pasos que dependen de leer su principalId o su
+              definición publicada no tienen un valor real que leer: en vez
+              de fallar, avisan que ese dato solo se conoce en una corrida
               real y siguen adelante.
   --ayuda     Muestra esta ayuda.
 
-Sin opciones, corre la verificación previa y crea los recursos que falten.
+Sin opciones, corre la verificación previa y crea (o actualiza) los
+recursos que falten o que hayan cambiado.
+
+Cada Logic App se crea primero en --state Disabled, con su identidad
+administrada ya habilitada; solo después de confirmar (con reintento) que
+el rol "Virtual Machine Contributor" sobre la VM ya se propagó a una
+lectura, este script lo pasa a --state Enabled (un Logic App Enabled sin
+rol propagado dispara una corrida inmediata con Forbidden, verificado en
+vivo). La definición incluye además un "startTime" futuro: sin él, crear,
+habilitar o actualizar el recurso dispara una corrida inmediata fuera de
+horario, incluso con el rol ya en su lugar (verificado en vivo por
+separado). Por eso mismo, la comparación con jq que decide si hace falta un
+"az logic workflow update" ignora tanto los campos calculados que Azure
+agrega al guardar (evaluatedRecurrence) como el propio "startTime" (siempre
+"la próxima ocurrencia futura" calculada hoy): compararlos sin más haría
+que el script creyera que la definición "cambió" en cada corrida.
 
 Variables de entorno relevantes:
   CONFIRMAR_SUSCRIPCION=si  Salta la confirmación interactiva de la
                              suscripción activa. Úsala solo si ya la
                              verificaste por otro medio.
 
-Requiere "az login" vigente, incluso en modo --simular.
+Requiere "az login" vigente y "jq" en el PATH, incluso en modo --simular.
 
 No incluye ningún camino de rollback ni de teardown: borrar recursos en la
 nube necesita que lo decida un humano.
 EOF
 }
 
+# jq no es una dependencia genérica de infra/azure/ (crear-servidor.sh no lo
+# necesita), así que el chequeo vive acá, no en lib/comun.sh: es específico
+# de cómo este script decide si hace falta un "az logic workflow update"
+# (ver asegurar_definicion_logic_app) sin falsos positivos.
+verificar_cli_jq() {
+  command -v jq >/dev/null 2>&1 \
+    || error_fatal "No se encontró jq en el PATH. Es necesario para comparar la definición publicada de cada Logic App sin falsos positivos por los campos calculados que Azure le agrega (evaluatedRecurrence) ni por startTime, que cambia en cada corrida."
+}
+
 verificar_preflight() {
   paso "Verificación previa"
   verificar_cli_az
+  verificar_cli_jq
   confirmar_suscripcion
 }
 
-asegurar_automation_account() {
-  paso "Cuenta de automatización: ${NOMBRE_AUTOMATION}"
-  if recurso_existe automation account show -g "$GRUPO_RECURSOS" -n "$NOMBRE_AUTOMATION"; then
-    registrar_existente "La cuenta de automatización ${NOMBRE_AUTOMATION}"
-    return 0
-  fi
-  ejecutar_cambio "la cuenta de automatización ${NOMBRE_AUTOMATION}" \
-    az automation account create -g "$GRUPO_RECURSOS" -n "$NOMBRE_AUTOMATION" -l "$REGION" --sku Basic
-}
-
-# La extensión "automation" del CLI (1.0.0b2, la última disponible) no tiene
-# un subcomando "identity" dedicado (no existe
-# "az automation account identity assign"). "az resource update --set
-# identity.type=SystemAssigned" es el intento principal; el fallback
-# documentado si ese comando fallara es
-# "az rest --method patch --url https://management.azure.com<id>?api-version=2024-10-23
-# --body '{"identity":{"type":"SystemAssigned"}}'". NINGUNO de los dos se
-# pudo ejercitar de verdad en esta implementación: crear la identidad exige
-# que la cuenta de Automation ya exista de verdad, y --simular nunca la
-# crea (ver mostrar_ayuda). Cuál de los dos funciona queda por confirmar en
-# la primera corrida real, sin --simular.
-asegurar_identidad_administrada() {
-  paso "Identidad administrada de ${NOMBRE_AUTOMATION}"
-
-  local id_cuenta tipo_actual
-
-  if recurso_existe automation account show -g "$GRUPO_RECURSOS" -n "$NOMBRE_AUTOMATION"; then
-    id_cuenta="$(az automation account show -g "$GRUPO_RECURSOS" -n "$NOMBRE_AUTOMATION" --query id -o tsv --only-show-errors)" \
-      || error_fatal "No se pudo leer el id de la cuenta de automatización ${NOMBRE_AUTOMATION}."
-    # No se trata como error fatal: si la cuenta nunca tuvo identidad
-    # asignada, este query puede fallar o devolver una cadena vacía en vez
-    # de "None".
-    tipo_actual="$(az automation account show -g "$GRUPO_RECURSOS" -n "$NOMBRE_AUTOMATION" --query identity.type -o tsv --only-show-errors 2>/dev/null || true)"
-  else
-    # Solo pasa bajo --simular, cuando el paso anterior no creó la cuenta de
-    # verdad. El id de un Automation Account es predecible (no lo asigna
-    # Azure al azar), así que igual se puede mostrar en la simulación.
-    id_cuenta="/subscriptions/$(az account show --query id -o tsv --only-show-errors)/resourceGroups/${GRUPO_RECURSOS}/providers/Microsoft.Automation/automationAccounts/${NOMBRE_AUTOMATION}"
-    tipo_actual=""
-  fi
-
-  if [[ "$tipo_actual" == "SystemAssigned" ]]; then
-    registrar_existente "La identidad administrada de ${NOMBRE_AUTOMATION} (SystemAssigned)"
-  else
-    ejecutar_cambio "la identidad administrada de ${NOMBRE_AUTOMATION}" \
-      az resource update --ids "$id_cuenta" --set identity.type=SystemAssigned
-  fi
-
-  if [[ "$SIMULAR" == "si" && "$tipo_actual" != "SystemAssigned" ]]; then
-    info "[simular] La identidad no se asignó de verdad: no hay un principalId real que leer todavía. Una corrida real sí lo tendría antes de continuar con el rol sobre la VM."
-    PRINCIPAL_ID=""
-    return 0
-  fi
-
-  # La propagación de una identidad recién creada a Microsoft Graph/RBAC
-  # puede tardar unos segundos: sin este reintento acotado, la primera
-  # lectura del principalId justo después de crear la identidad suele
-  # devolver vacío. No se generaliza a un helper de reintento en lib/comun.sh
-  # porque, hoy, solo esta función lo necesita.
-  local intento
-  for intento in $(seq 1 9); do
-    PRINCIPAL_ID="$(az automation account show -g "$GRUPO_RECURSOS" -n "$NOMBRE_AUTOMATION" --query identity.principalId -o tsv --only-show-errors 2>/dev/null || true)"
-    if [[ -n "$PRINCIPAL_ID" ]]; then
-      break
-    fi
-    info "Esperando a que se propague el principalId de la identidad administrada (intento ${intento}/9)..."
-    sleep 10
-  done
-
-  [[ -n "$PRINCIPAL_ID" ]] \
-    || error_fatal "La identidad administrada de ${NOMBRE_AUTOMATION} no propagó un principalId después de 90s."
-
-  info "principalId: ${PRINCIPAL_ID}"
-}
-
-# --assignee-object-id + --assignee-principal-type ServicePrincipal en vez
-# de --assignee <principalId> a secas: evita que el CLI intente resolver el
-# principal contra Microsoft Graph por otro campo distinto al id, que puede
-# fallar por la misma demora de propagación de asegurar_identidad_administrada.
-asegurar_rol_vm() {
-  paso "Rol 'Virtual Machine Contributor' sobre ${NOMBRE_VM}"
-
-  local id_vm
-  id_vm="$(az vm show -g "$GRUPO_RECURSOS" -n "$NOMBRE_VM" --query id -o tsv --only-show-errors)" \
-    || error_fatal "No se pudo leer el id de la VM ${NOMBRE_VM}."
-
-  if [[ -z "$PRINCIPAL_ID" ]]; then
-    # Solo pasa bajo --simular en una cuenta de Automation que todavía no
-    # existe de verdad (ver asegurar_identidad_administrada): sin un
-    # principalId real no hay nada que consultar ni que asignar.
-    info "[simular] Sin un principalId real todavía no se puede simular este paso. En una corrida real, asignaría 'Virtual Machine Contributor' sobre ${id_vm} al principal de la identidad administrada."
-    return 0
-  fi
-
-  local asignacion_existente
-  asignacion_existente="$(az role assignment list --assignee-object-id "$PRINCIPAL_ID" --assignee-principal-type ServicePrincipal \
-    --scope "$id_vm" --role "Virtual Machine Contributor" --query "[0].id" -o tsv --only-show-errors 2>/dev/null || true)"
-
-  if [[ -n "$asignacion_existente" ]]; then
-    registrar_existente "El rol 'Virtual Machine Contributor' de ${NOMBRE_AUTOMATION} sobre ${NOMBRE_VM}"
-    return 0
-  fi
-
-  ejecutar_cambio "el rol 'Virtual Machine Contributor' de ${NOMBRE_AUTOMATION} sobre ${NOMBRE_VM}" \
-    az role assignment create --assignee-object-id "$PRINCIPAL_ID" --assignee-principal-type ServicePrincipal \
-    --role "Virtual Machine Contributor" --scope "$id_vm"
-}
-
-# Los dos runbooks (infra/azure/runbooks/encender-vm.ps1 y apagar-vm.ps1) se
-# crean SIN parámetros, ni de PowerShell ni de job-schedule: decisión
-# explícita para eliminar de raíz el riesgo de casing de parámetros al
-# vincular horario+runbook con "az rest" (ver asegurar_vinculo_horario más
-# abajo, cuyo cuerpo JSON no lleva bloque "parameters" por esto mismo). El
-# nombre de la VM y el grupo de recursos quedan escritos literalmente dentro
-# de cada .ps1: este proyecto solo tiene una VM (centinela-vm en
-# centinela-rg), así que parametrizarlo sería una abstracción que nadie va a
-# usar.
-#
-# Pendiente de confirmar en la primera corrida real (nota para la bitácora,
-# no algo que este script resuelva): la versión del runtime de PowerShell
-# del runbook (5.1 legado vs 7.4 con Az). La extensión "automation" del CLI
-# no tiene "--runtime-environment" en "az automation runbook create --help"
-# (verificado), así que solo se puede confirmar corriendo el runbook de
-# verdad y revisando "az automation runtime-environment list" contra la
-# cuenta ya creada.
-#
-# Chequeo de idempotencia por EXISTENCIA (¿hay un runbook con este nombre?)
-# Y por CONTENIDO (¿el contenido publicado es igual al archivo local?),
-# siguiendo el mismo espíritu que asegurar_archivo_con_contenido y
-# asegurar_servicio_compose de infra/servidor/lib/comun.sh: medir el cambio
-# real, no solo si el recurso ya existe.
-#
-# "az automation runbook show" no devuelve el contenido publicado: hay que
-# leerlo con "az rest" contra el endpoint "/content", que responde texto
-# plano, no JSON.
-asegurar_runbook() {
-  local nombre="$1" archivo_local="$2" tipo="${3:-PowerShell}"
-  local contenido_local contenido_remoto id_runbook
-
-  paso "Runbook: ${nombre}"
-
-  contenido_local="$(cat "$archivo_local")"
-
-  if recurso_existe automation runbook show -g "$GRUPO_RECURSOS" --automation-account-name "$NOMBRE_AUTOMATION" -n "$nombre"; then
-    registrar_existente "El runbook ${nombre}"
-    id_runbook="$(az automation runbook show -g "$GRUPO_RECURSOS" --automation-account-name "$NOMBRE_AUTOMATION" -n "$nombre" --query id -o tsv --only-show-errors)" \
-      || error_fatal "No se pudo leer el id del runbook ${nombre}."
-    contenido_remoto="$(az rest --method get --url "https://management.azure.com${id_runbook}/content?api-version=2024-10-23" --only-show-errors 2>/dev/null || true)"
-  else
-    # Bajo --simular contra una cuenta de Automation que todavía no existe
-    # de verdad, este runbook tampoco existe: no hay contenido remoto que
-    # leer, así que se trata como distinto a propósito, para que el resumen
-    # muestre que también se publicaría el contenido, no solo que se
-    # crearía el runbook vacío.
-    ejecutar_cambio "el runbook ${nombre} (creación)" \
-      az automation runbook create -g "$GRUPO_RECURSOS" --automation-account-name "$NOMBRE_AUTOMATION" -n "$nombre" --type "$tipo" -l "$REGION"
-    contenido_remoto=""
-  fi
-
-  if [[ "$contenido_remoto" == "$contenido_local" ]]; then
-    info "El contenido publicado de ${nombre} ya coincide con ${archivo_local}."
-    return 0
-  fi
-
-  ejecutar_cambio "el contenido del runbook ${nombre}" \
-    az automation runbook replace-content --automation-account-name "$NOMBRE_AUTOMATION" -g "$GRUPO_RECURSOS" \
-    -n "$nombre" --content "@${archivo_local}"
-
-  ejecutar_cambio "la publicación del runbook ${nombre}" \
-    az automation runbook publish --automation-account-name "$NOMBRE_AUTOMATION" -g "$GRUPO_RECURSOS" -n "$nombre"
-}
-
 # Devuelve (por stdout) el epoch Unix de la próxima ocurrencia de "hora_utc"
-# (formato "HH:MM"): hoy si esa hora todavía no pasó, mañana si ya pasó.
-# Azure Automation rechaza un start-time en el pasado, así que el horario no
-# puede quedar fijo: cada corrida de este script tiene que recalcularlo,
-# para que sea re-ejecutable sin fallar por una fecha vieja.
+# (formato "HH:MM"): hoy si esa hora todavía no pasó, mañana si ya pasó. La
+# usa calcular_start_time_logic_app para construir el "startTime" del
+# trigger de Recurrence de cada Logic App: un startTime en el pasado no
+# evitaría el disparo inmediato que se busca prevenir, así que cada corrida
+# de este script tiene que recalcularlo, para que sea re-ejecutable sin
+# fallar por una fecha vieja.
 calcular_proxima_ocurrencia() {
   local hora_utc="$1"
   local fecha_hoy epoch_objetivo epoch_ahora
@@ -310,137 +180,319 @@ calcular_proxima_ocurrencia() {
   printf '%s' "$epoch_objetivo"
 }
 
-# Imprime los valores actuales del horario existente (frecuencia, zona,
-# inicio) para que un humano pueda comparar contra lo que se esperaba.
-# Mismo espíritu que mostrar_aviso_regla_existente de crear-servidor.sh: un
-# horario existente NUNCA se edita en su lugar.
-mostrar_aviso_horario_existente() {
-  local nombre="$1" salida
-  local -a campos
-  local frecuencia_actual zona_actual inicio_actual
-
-  salida="$(az automation schedule show --automation-account-name "$NOMBRE_AUTOMATION" -g "$GRUPO_RECURSOS" -n "$nombre" \
-    --query "[frequency,timeZone,startTime]" -o tsv --only-show-errors)" \
-    || error_fatal "No se pudo leer el detalle del horario ${nombre}."
-  mapfile -t campos <<<"$salida"
-  frecuencia_actual="${campos[0]}"
-  zona_actual="${campos[1]}"
-  inicio_actual="${campos[2]}"
-
-  aviso "El horario ${nombre} ya existe con frecuencia=${frecuencia_actual}, zona=${zona_actual}, inicio=${inicio_actual}. No se edita en su lugar: si el equipo necesita otro horario, se borra y se recrea a mano, a propósito, no desde este script."
-}
-
-# Prueba primero --time-zone "America/Bogota" (más legible en el Portal que
-# un horario en UTC). Si Azure lo rechaza, cae a --time-zone "UTC" con el
-# horario ya convertido (13:00 y 17:00 UTC): Colombia nunca tiene horario de
-# verano, así que la conversión es fija y no cambia nada en la práctica. Los
-# dos intentos usan el mismo instante real (el mismo epoch), solo cambia
-# cómo se escribe ese instante para cada zona horaria.
+# Devuelve (por stdout) el "startTime" que exige el bloque "recurrence" de
+# un trigger de Recurrence de Logic Apps para la próxima ocurrencia de
+# "hora_utc": la hora local de Bogotá, calculada a partir del mismo epoch
+# que ya resuelve calcular_proxima_ocurrencia.
 #
-# El offset (%:z: "-05:00" o "+00:00") va SIEMPRE embebido en --start-time,
-# nunca se manda una hora "desnuda" como "2026-09-03T08:00:00": el campo
-# startTime de la API es un date-time, y una hora sin offset se puede leer
-# como UTC del lado del servidor sin que este script se entere. Sin el
-# offset, un "08:00" pensado como hora de Bogotá podría terminar
-# ejecutándose a las 08:00 UTC (3:00 a.m. en Colombia) en silencio: el
-# horario quedaría mal sin que ningún chequeo de este script lo detectara.
-# Con el offset embebido, los dos intentos son instantes absolutos e
-# inequívocos sin importar cómo Azure interprete --time-zone.
-asegurar_horario() {
-  local nombre="$1" hora_utc="$2" descripcion="$3"
+# Un trigger de Recurrence sin "startTime" dispara una corrida de inmediato
+# al crearse, al habilitarse o al actualizar su definición (verificado en
+# vivo hoy contra centinela-apagar, muy lejos de la hora programada), así
+# que este campo no es opcional acá.
+#
+# Formato SIN offset (sin "%:z"), A PROPÓSITO: cuando el trigger ya trae
+# "timeZone" fijado (ver las plantillas de infra/azure/logic-apps/), Azure
+# rechaza un startTime con offset embebido con
+# "InvalidWorkflowTriggerRecurrence" (verificado en vivo:
+# "2026-09-03T12:00:00-05:00" rechazado, "2026-09-03T12:00:00" aceptado).
+# Es lo opuesto de lo que exige "--start-time" en "az automation schedule
+# create" para Automation Account (que sí necesita el offset embebido,
+# porque ahí no hay un "timeZone" fijado de antemano de la misma forma): no
+# "arreglar" esto copiando el patrón del otro lado, son dos reglas
+# opuestas, cada una verificada por separado.
+calcular_start_time_logic_app() {
+  local hora_utc="$1" epoch_proximo
 
-  paso "Horario: ${nombre} (${hora_utc} UTC)"
-
-  if recurso_existe automation schedule show --automation-account-name "$NOMBRE_AUTOMATION" -g "$GRUPO_RECURSOS" -n "$nombre"; then
-    registrar_existente "El horario ${nombre}"
-    mostrar_aviso_horario_existente "$nombre"
-    return 0
-  fi
-
-  local epoch_proximo inicio_bogota inicio_utc
   epoch_proximo="$(calcular_proxima_ocurrencia "$hora_utc")"
-  inicio_bogota="$(TZ="America/Bogota" date -d "@${epoch_proximo}" +%Y-%m-%dT%H:%M:%S%:z)"
-  inicio_utc="$(date -u -d "@${epoch_proximo}" +%Y-%m-%dT%H:%M:%S%:z)"
-
-  if [[ "$SIMULAR" == "si" ]]; then
-    info "[simular] Se ejecutaría: az automation schedule create --automation-account-name ${NOMBRE_AUTOMATION} -g ${GRUPO_RECURSOS} -n ${nombre} --frequency Day --interval 1 --start-time ${inicio_bogota} --time-zone America/Bogota --description '${descripcion}' (con fallback a --start-time ${inicio_utc} --time-zone UTC si America/Bogota fuera rechazado)."
-    registrar_cambio
-    RECURSOS_CREADOS+=("el horario ${nombre}")
-    return 0
-  fi
-
-  # Se captura el stderr del primer intento para poder citarlo en el aviso
-  # si hay que caer al fallback: así el log dice lo que Azure respondió de
-  # verdad, no solo que "lo rechazó" sin evidencia.
-  local error_intento_1
-  if error_intento_1="$(az automation schedule create --automation-account-name "$NOMBRE_AUTOMATION" -g "$GRUPO_RECURSOS" \
-      -n "$nombre" --frequency Day --interval 1 --start-time "$inicio_bogota" \
-      --time-zone "America/Bogota" --description "$descripcion" -o none --only-show-errors 2>&1)"; then
-    info "Horario ${nombre} creado con --time-zone America/Bogota."
-  elif az automation schedule create --automation-account-name "$NOMBRE_AUTOMATION" -g "$GRUPO_RECURSOS" \
-      -n "$nombre" --frequency Day --interval 1 --start-time "$inicio_utc" \
-      --time-zone "UTC" --description "$descripcion" -o none --only-show-errors; then
-    aviso "El intento con --time-zone America/Bogota para ${nombre} falló; se creó con --time-zone UTC en su lugar (mismo instante real, Colombia no tiene horario de verano). Respuesta del primer intento: ${error_intento_1}"
-  else
-    error_fatal "No se pudo crear el horario ${nombre} ni con --time-zone America/Bogota ni con UTC. Respuesta del primer intento: ${error_intento_1}"
-  fi
-
-  registrar_cambio
-  RECURSOS_CREADOS+=("el horario ${nombre}")
+  TZ="America/Bogota" date -d "@${epoch_proximo}" +%Y-%m-%dT%H:%M:%S
 }
 
-# La extensión "automation" del CLI no tiene grupo "job-schedule" (solo
-# existen account/configuration/hrwg/job/python3-package/runbook/
-# runtime-environment/schedule/software-update-configuration/source-control),
-# así que el vínculo horario-runbook se hace con "az rest" directo contra la
-# API de ARM.
-asegurar_vinculo_horario() {
-  local nombre_horario="$1" nombre_runbook="$2"
-  local suscripcion url_base coincidencias
-
-  paso "Vínculo horario-runbook: ${nombre_horario} -> ${nombre_runbook}"
+# Sustituye los placeholders literales del JSON de plantilla ({SUSCRIPCION},
+# {GRUPO_RECURSOS}, {NOMBRE_VM}, {START_TIME}) por los valores reales de
+# esta corrida y deja el resultado en un archivo temporal SIN envolver (el
+# objeto crudo del workflow: $schema/contentVersion/triggers/actions/
+# outputs). Se resuelve con expansión de parámetros de bash, no con jq: los
+# placeholders viven dentro de valores de cadena (la URI, el startTime), no
+# son una estructura que jq tendría que reconstruir. El archivo de
+# plantilla en infra/azure/logic-apps/ NUNCA se edita en el disco: solo se
+# lee, la sustitución vive en memoria. Sufijo ".json" en el archivo
+# temporal por prolijidad, no por necesidad real del CLI.
+#
+# Este archivo SIN envolver es el que compara asegurar_definicion_logic_app
+# contra "az logic workflow show --query definition" (que también devuelve
+# el objeto sin envolver, porque ahí "definition" ya es el nombre de la
+# propiedad). NO se lo pases directo a "--definition": verificado en vivo
+# que esta versión instalada del CLI (extensión "logic" 1.1.0) rechaza un
+# archivo sin envolver con "--definition does not contain a 'definition'
+# key". Para eso existe envolver_definicion_logic_app, que envuelve ESTE
+# archivo en uno aparte justo antes de cada "create"/"update".
+resolver_definicion_logic_app() {
+  local archivo_plantilla="$1" hora_utc="$2"
+  local suscripcion contenido start_time archivo_salida
 
   suscripcion="$(az account show --query id -o tsv --only-show-errors)" \
     || error_fatal "No se pudo leer el id de la suscripción activa."
-  url_base="https://management.azure.com/subscriptions/${suscripcion}/resourceGroups/${GRUPO_RECURSOS}/providers/Microsoft.Automation/automationAccounts/${NOMBRE_AUTOMATION}"
+  start_time="$(calcular_start_time_logic_app "$hora_utc")"
 
-  # Vacío (o "[]") tanto si de verdad no hay vínculo como si la cuenta de
-  # Automation todavía no existe (--simular contra infraestructura nueva):
-  # en los dos casos, lo correcto es seguir como si no existiera todavía.
-  coincidencias="$(az rest --method get --url "${url_base}/jobSchedules?api-version=2024-10-23" \
-    --query "value[?properties.schedule.name=='${nombre_horario}' && properties.runbook.name=='${nombre_runbook}']" \
-    -o json --only-show-errors 2>/dev/null || true)"
+  contenido="$(cat "$archivo_plantilla")"
+  contenido="${contenido//\{SUSCRIPCION\}/$suscripcion}"
+  contenido="${contenido//\{GRUPO_RECURSOS\}/$GRUPO_RECURSOS}"
+  contenido="${contenido//\{NOMBRE_VM\}/$NOMBRE_VM}"
+  contenido="${contenido//\{START_TIME\}/$start_time}"
 
-  if [[ -n "$coincidencias" && "$coincidencias" != "[]" ]]; then
-    registrar_existente "El vínculo ${nombre_horario} -> ${nombre_runbook}"
+  archivo_salida="$(mktemp --suffix=.json)"
+  printf '%s' "$contenido" >"$archivo_salida"
+  printf '%s' "$archivo_salida"
+}
+
+# Envuelve el archivo SIN envolver de resolver_definicion_logic_app en uno
+# nuevo con la clave literal "definition" al nivel superior, en un archivo
+# temporal aparte (nunca modifica archivo_sin_envolver). Es el único
+# formato que esta versión instalada del CLI acepta para
+# "az logic workflow create/update --definition" (verificado en vivo,
+# az-cli 2.89.1 con la extensión "logic" 1.1.0: sin envolver, el comando
+# falla ANTES de llamar la API con "--definition does not contain a
+# 'definition' key"; con --slurpfile de abajo, verificado que sí funciona
+# tanto para "create" como para "update" contra un Logic App real
+# descartable, borrado después de la prueba). No envolver también el
+# archivo de plantilla en infra/azure/logic-apps/ ni el que produce
+# resolver_definicion_logic_app: asegurar_definicion_logic_app necesita esa
+# versión sin envolver para compararla contra "az logic workflow show
+# --query definition", que devuelve el objeto YA sin envolver.
+envolver_definicion_logic_app() {
+  local archivo_sin_envolver="$1"
+  local archivo_envuelto
+
+  archivo_envuelto="$(mktemp --suffix=.json)"
+  jq -n --slurpfile def "$archivo_sin_envolver" '{definition: $def[0]}' >"$archivo_envuelto" \
+    || error_fatal "No se pudo envolver la definición de ${archivo_sin_envolver} para pasarla a --definition."
+
+  printf '%s' "$archivo_envuelto"
+}
+
+# Crea el Logic App si no existe todavía, en --state Disabled y con
+# identidad administrada system-assigned habilitada desde la creación. Se
+# crea Disabled a propósito, nunca Enabled: ver la cabecera del archivo y
+# asegurar_estado_habilitado_logic_app para el detalle completo de por qué
+# (Forbidden por RBAC sin propagar, y por separado, disparo inmediato sin
+# startTime).
+asegurar_logic_app_recurso() {
+  local nombre="$1" archivo_definicion="$2"
+  local archivo_envuelto
+
+  paso "Recurso: ${nombre}"
+
+  if recurso_existe logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre"; then
+    registrar_existente "El Logic App ${nombre}"
     return 0
   fi
 
-  local guid cuerpo
-  guid="$(uuidgen)"
-  # Sin bloque "parameters": los runbooks de este script no toman
-  # parámetros a propósito (ver el comentario sobre asegurar_runbook más
-  # arriba), así que no hay nada que pasarles al vincularlos.
-  cuerpo="$(printf '{"properties":{"schedule":{"name":"%s"},"runbook":{"name":"%s"}}}' "$nombre_horario" "$nombre_runbook")"
+  archivo_envuelto="$(envolver_definicion_logic_app "$archivo_definicion")"
+  ejecutar_cambio "el Logic App ${nombre} (Disabled, con identidad administrada)" \
+    az logic workflow create -g "$GRUPO_RECURSOS" -n "$nombre" -l "$REGION" \
+    --definition "$archivo_envuelto" --state Disabled --mi-system-assigned true
+  rm -f "$archivo_envuelto"
+}
 
-  ejecutar_cambio "el vínculo ${nombre_horario} -> ${nombre_runbook}" \
-    az rest --method put --url "${url_base}/jobSchedules/${guid}?api-version=2024-10-23" --body "$cuerpo"
+# Lee (con reintento) el principalId de la identidad administrada del Logic
+# App. Mismo patrón de reintento (9 intentos/10s) que usaba
+# asegurar_identidad_administrada para el Automation Account del diseño
+# anterior: la propagación a Microsoft Graph/RBAC de una identidad recién
+# creada puede tardar unos segundos, y sin reintento la primera lectura
+# justo después de crear el recurso suele devolver vacío.
+leer_principal_id_logic_app() {
+  local nombre="$1" principal_id intento
+
+  if ! recurso_existe logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre"; then
+    # Solo pasa bajo --simular contra un Logic App que todavía no existe de
+    # verdad: no hay un principalId real que leer todavía.
+    return 0
+  fi
+
+  for intento in $(seq 1 9); do
+    principal_id="$(az logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre" --query identity.principalId -o tsv --only-show-errors 2>/dev/null || true)"
+    if [[ -n "$principal_id" ]]; then
+      printf '%s' "$principal_id"
+      return 0
+    fi
+    info "Esperando a que se propague el principalId de ${nombre} (intento ${intento}/9)..."
+    sleep 10
+  done
+
+  error_fatal "La identidad administrada de ${nombre} no propagó un principalId después de 90s."
+}
+
+# A diferencia de "az role assignment create", que sí acepta
+# --assignee-principal-type, "az role assignment list" lo RECHAZA con
+# "unrecognized arguments" (verificado en este entorno, az-cli 2.89.1): por
+# eso el chequeo de existencia de abajo usa solo --assignee-object-id, sin
+# ese flag, aunque la creación sí lo use. Este es un ajuste sobre el patrón
+# del diseño anterior (asegurar_rol_vm para Automation Account), que sí
+# combinaba los dos flags en el "list" y por eso el chequeo de existencia
+# ahí nunca funcionó de verdad (el "2>/dev/null || true" que lo rodeaba
+# ocultaba el error, así que ese script habría reintentado crear el rol en
+# cada corrida sin fallar nunca lo bastante fuerte como para notarlo).
+asegurar_rol_logic_app() {
+  local nombre="$1" principal_id="$2"
+  local id_vm asignacion_existente
+
+  paso "Rol 'Virtual Machine Contributor' de ${nombre} sobre ${NOMBRE_VM}"
+
+  if [[ -z "$principal_id" ]]; then
+    info "[simular] Sin un principalId real todavía no se puede simular este paso."
+    return 0
+  fi
+
+  id_vm="$(az vm show -g "$GRUPO_RECURSOS" -n "$NOMBRE_VM" --query id -o tsv --only-show-errors)" \
+    || error_fatal "No se pudo leer el id de la VM ${NOMBRE_VM}."
+
+  asignacion_existente="$(az role assignment list --assignee-object-id "$principal_id" \
+    --scope "$id_vm" --role "Virtual Machine Contributor" --query "[0].id" -o tsv --only-show-errors 2>/dev/null || true)"
+
+  if [[ -n "$asignacion_existente" ]]; then
+    registrar_existente "El rol 'Virtual Machine Contributor' de ${nombre} sobre ${NOMBRE_VM}"
+    return 0
+  fi
+
+  ejecutar_cambio "el rol 'Virtual Machine Contributor' de ${nombre} sobre ${NOMBRE_VM}" \
+    az role assignment create --assignee-object-id "$principal_id" --assignee-principal-type ServicePrincipal \
+    --role "Virtual Machine Contributor" --scope "$id_vm"
+
+  [[ "$SIMULAR" == "si" ]] && return 0
+
+  esperar_propagacion_rol "$principal_id" "$id_vm"
+}
+
+# Reintento acotado (9 intentos/10s, mismo patrón que
+# leer_principal_id_logic_app) para confirmar que el rol recién asignado ya
+# es una lectura estable antes de habilitar el Logic App: habilitar
+# demasiado pronto es justo lo que produjo el Forbidden observado en la
+# prueba en vivo de hoy (ver la cabecera del archivo).
+esperar_propagacion_rol() {
+  local principal_id="$1" id_vm="$2"
+  local intento asignacion
+
+  for intento in $(seq 1 9); do
+    asignacion="$(az role assignment list --assignee-object-id "$principal_id" \
+      --scope "$id_vm" --role "Virtual Machine Contributor" --query "[0].id" -o tsv --only-show-errors 2>/dev/null || true)"
+    [[ -n "$asignacion" ]] && return 0
+    info "Esperando a que se propague el rol asignado (intento ${intento}/9)..."
+    sleep 10
+  done
+
+  error_fatal "El rol 'Virtual Machine Contributor' no se propagó a una lectura después de 90s."
+}
+
+# Compara solo el subconjunto de la definición que de verdad importa
+# (frequency, interval, timeZone, schedule.hours y actions), no el objeto
+# completo: Azure agrega campos calculados al guardar la definición de un
+# Logic App (por ejemplo triggers.Recurrence.evaluatedRecurrence), y
+# "startTime" cambia en cada corrida porque siempre es "la próxima
+# ocurrencia futura" calculada hoy (ver calcular_start_time_logic_app). Una
+# comparación cruda de cualquiera de los dos SIEMPRE diría "distinto" y
+# reintentaría la escritura en cada corrida, incluso sin cambios reales.
+asegurar_definicion_logic_app() {
+  local nombre="$1" archivo_definicion="$2"
+  local relevante_local relevante_remoto archivo_envuelto
+
+  paso "Definición: ${nombre}"
+
+  if ! recurso_existe logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre"; then
+    info "[simular] Sin un Logic App real todavía no se puede comparar su definición."
+    return 0
+  fi
+
+  relevante_local="$(jq -S '{recurrence: (.triggers.Recurrence.recurrence | del(.startTime)), actions: .actions}' "$archivo_definicion")"
+  relevante_remoto="$(az logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre" --query definition -o json --only-show-errors \
+    | jq -S '{recurrence: (.triggers.Recurrence.recurrence | del(.startTime)), actions: .actions}')" \
+    || error_fatal "No se pudo leer la definición publicada de ${nombre}."
+
+  if [[ "$relevante_local" == "$relevante_remoto" ]]; then
+    info "La definición relevante de ${nombre} ya coincide (sin contar startTime, ver arriba)."
+    return 0
+  fi
+
+  # Un "update" de la definición de un Logic App ya Enabled podría, en
+  # teoría, volver a disparar el trigger igual que crear o habilitar: se
+  # verificó en vivo que el startTime futuro que ya trae archivo_definicion
+  # también cubre este caso (ninguna corrida nueva apareció al actualizar
+  # centinela-apagar con su startTime puesto), pero queda documentado acá
+  # porque es la única defensa real contra eso, no una garantía aparte.
+  archivo_envuelto="$(envolver_definicion_logic_app "$archivo_definicion")"
+  ejecutar_cambio "la definición del Logic App ${nombre}" \
+    az logic workflow update -g "$GRUPO_RECURSOS" -n "$nombre" --definition "$archivo_envuelto"
+  rm -f "$archivo_envuelto"
+}
+
+# Último paso de la secuencia Disabled -> rol -> Enabled: solo llega acá
+# después de que asegurar_rol_logic_app confirmó (con reintento) que el rol
+# ya es una lectura estable, así que habilitar acá no repite el Forbidden
+# de la prueba en vivo de hoy. Ese orden por sí solo, sin embargo, NO basta
+# para evitar que el Logic App ejecute su acción real fuera de horario: se
+# verificó en vivo que habilitar un Logic App (no solo crearlo) también
+# dispara su trigger de inmediato si la definición no trae "startTime". La
+# defensa real contra eso es el startTime futuro que ya viene resuelto en
+# archivo_definicion desde que se creó o actualizó (ver
+# calcular_start_time_logic_app y asegurar_definicion_logic_app), no el
+# orden Disabled->Enabled de esta función.
+asegurar_estado_habilitado_logic_app() {
+  local nombre="$1" principal_id="$2"
+  local estado_actual
+
+  paso "Estado: ${nombre}"
+
+  if [[ -z "$principal_id" ]]; then
+    info "[simular] Sin un principalId real todavía no se puede simular este paso."
+    return 0
+  fi
+
+  estado_actual="$(az logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre" --query state -o tsv --only-show-errors)" \
+    || error_fatal "No se pudo leer el estado de ${nombre}."
+
+  if [[ "$estado_actual" == "Enabled" ]]; then
+    registrar_existente "El estado Enabled del Logic App ${nombre}"
+    return 0
+  fi
+
+  ejecutar_cambio "habilitar el Logic App ${nombre}" \
+    az logic workflow update -g "$GRUPO_RECURSOS" -n "$nombre" --state Enabled
+}
+
+# Orquesta la creación/actualización idempotente de un Logic App: recurso
+# (Disabled + identidad) -> rol sobre la VM -> definición -> habilitado. Ver
+# el comentario de cada asegurar_* para el porqué de cada paso y del orden.
+asegurar_logic_app() {
+  local nombre="$1" archivo_plantilla="$2" hora_utc="$3"
+  local archivo_definicion principal_id
+
+  paso "Logic App: ${nombre}"
+
+  archivo_definicion="$(resolver_definicion_logic_app "$archivo_plantilla" "$hora_utc")"
+
+  asegurar_logic_app_recurso "$nombre" "$archivo_definicion"
+
+  principal_id="$(leer_principal_id_logic_app "$nombre")"
+  asegurar_rol_logic_app "$nombre" "$principal_id"
+
+  asegurar_definicion_logic_app "$nombre" "$archivo_definicion"
+  asegurar_estado_habilitado_logic_app "$nombre" "$principal_id"
+
+  # Limpieza del archivo temporal de resolver_definicion_logic_app: es un
+  # archivo propio de este script, creado y consumido en la misma corrida,
+  # no un archivo del usuario, así que un "rm -f" directo es lo correcto
+  # acá (a diferencia de un borrado interactivo, que en este equipo pasa
+  # por trash-put).
+  rm -f "$archivo_definicion"
 }
 
 crear_recursos() {
-  asegurar_automation_account
-  asegurar_identidad_administrada
-  asegurar_rol_vm
-
-  asegurar_runbook "encender-vm" "${DIRECTORIO_SCRIPT}/runbooks/encender-vm.ps1"
-  asegurar_runbook "apagar-vm" "${DIRECTORIO_SCRIPT}/runbooks/apagar-vm.ps1"
-
-  # 13:00 UTC = 08:00 COT (encendido) · 17:00 UTC = 12:00 COT (apagado).
-  asegurar_horario "encender-vm-diario" "13:00" "Enciende ${NOMBRE_VM} todos los días a las 08:00 COT (SCRUM-29)."
-  asegurar_horario "apagar-vm-diario" "17:00" "Apaga (deallocate) ${NOMBRE_VM} todos los días a las 12:00 COT (SCRUM-29)."
-
-  asegurar_vinculo_horario "encender-vm-diario" "encender-vm"
-  asegurar_vinculo_horario "apagar-vm-diario" "apagar-vm"
+  # 13:00 UTC = 08:00 COT (encendido) · 17:00 UTC = 12:00 COT (apagado). El
+  # mismo hora_utc alimenta el "startTime" (calcular_start_time_logic_app);
+  # el "schedule.hours" (8 y 12, hora de Bogotá) ya está fijo en cada
+  # plantilla JSON. Si el horario cambia algún día, los dos tienen que
+  # actualizarse juntos.
+  asegurar_logic_app "$NOMBRE_LOGIC_ENCENDER" "${DIRECTORIO_SCRIPT}/logic-apps/encender-vm.json" "13:00"
+  asegurar_logic_app "$NOMBRE_LOGIC_APAGAR" "${DIRECTORIO_SCRIPT}/logic-apps/apagar-vm.json" "17:00"
 }
 
 mostrar_resumen_cambios() {

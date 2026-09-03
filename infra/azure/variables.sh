@@ -160,4 +160,12 @@ source "${RUTA_RED_FIJADA}"
 : "${NOMBRE_GRUPO_SEGURIDAD:=${PREFIJO_RECURSOS}-nsg}"
 : "${NOMBRE_IP_PUBLICA:=${PREFIJO_RECURSOS}-ip}"
 : "${NOMBRE_NIC:=${PREFIJO_RECURSOS}-nic}"
-: "${NOMBRE_AUTOMATION:=${PREFIJO_RECURSOS}-automation}"
+# NOMBRE_AUTOMATION (Automation Account) ya no aplica: la tarjeta SCRUM-29
+# pivotó a Azure Logic Apps por un bloqueo de región sin solución en la
+# suscripción "Azure for Students" (detalle completo en
+# infra/azure/automatizar-horario.sh y en
+# proyecto-fin-de-grado/bitacora-tecnica/2026-09-03-automation-account-choque-region.md,
+# repo de tesis). Con centinela-encender y centinela-apagar, los nombres ya
+# desplegados de verdad en Azure hoy.
+: "${NOMBRE_LOGIC_ENCENDER:=${PREFIJO_RECURSOS}-encender}"
+: "${NOMBRE_LOGIC_APAGAR:=${PREFIJO_RECURSOS}-apagar}"

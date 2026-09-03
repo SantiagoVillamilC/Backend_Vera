@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "triggers": {
+    "Recurrence": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "Day",
+        "interval": 1,
+        "timeZone": "SA Pacific Standard Time",
+        "startTime": "{START_TIME}",
+        "schedule": {
+          "hours": ["12"]
+        }
+      }
+    }
+  },
+  "actions": {
+    "Apagar_VM": {
+      "type": "Http",
+      "inputs": {
+        "method": "POST",
+        "uri": "https://management.azure.com/subscriptions/{SUSCRIPCION}/resourceGroups/{GRUPO_RECURSOS}/providers/Microsoft.Compute/virtualMachines/{NOMBRE_VM}/deallocate?api-version=2024-07-01",
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://management.azure.com/"
+        }
+      }
+    }
+  },
+  "outputs": {}
+}
