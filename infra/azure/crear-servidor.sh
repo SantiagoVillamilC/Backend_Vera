@@ -20,10 +20,16 @@
 # contador pensado para el lado del servidor: compartirlo cruzaría la
 # frontera de despliegue con estado, no solo con configuración, que es
 # justo lo que infra/azure/variables.sh evita al hacer source de
-# infra/servidor/imagen-fijada.sh en vez de duplicarlo. Por eso los cuatro
-# helpers de presentación (paso, info, aviso, error_fatal) y un contador de
-# cambios propio se copian aquí abajo: es la misma forma que lib/comun.sh
-# pero un archivo con un propósito distinto, no una duplicación descuidada.
+# infra/servidor/imagen-fijada.sh en vez de duplicarlo. Esa razón sigue
+# siendo válida hoy.
+#
+# Lo que sí cambió (tarjeta SCRUM-29): ahora existe infra/azure/lib/comun.sh,
+# propio de este lado del operador, con los mismos helpers de presentación y
+# el mismo contador de cambios que antes vivían copiados aquí abajo. Este
+# archivo pasa a consumirlo con source, junto con infra/azure/automatizar-horario.sh,
+# que necesita exactamente los mismos helpers. La razón de fondo no cambia:
+# lo que sigue sin compartirse es infra/servidor/lib/comun.sh, no la idea de
+# tener un lib compartido del lado del operador.
 #
 # Banderas: --simular (nueva de este script, no existe en
 # infra/servidor/aprovisionar.sh, cuyas banderas son --lista, --solo y
@@ -36,56 +42,14 @@
 # decida un humano, no un script.
 set -euo pipefail
 
-# --- Helpers de presentación, copiados de infra/servidor/lib/comun.sh ---
-# Ver la nota de cabecera de arriba: la copia es intencional, no un olvido.
-
-paso() {
-  printf '==> %s\n' "$1"
-}
-
-info() {
-  printf '    %s\n' "$1"
-}
-
-aviso() {
-  printf '[aviso] %s\n' "$1"
-}
-
-error_fatal() {
-  printf '[error] %s\n' "$1" >&2
-  exit 1
-}
-
-# Contador de cambios propio de este script, independiente del contador de
-# infra/servidor/lib/comun.sh (ver la nota de cabecera). Los dos arreglos de
-# abajo acompañan al contador para que el resumen final pueda nombrar los
-# recursos, no solo decir cuántos: "3 cambios" no le dice a un humano si el
-# tercero fue la VM o una regla del NSG.
-_CREAR_CAMBIOS=0
-RECURSOS_CREADOS=()
-RECURSOS_EXISTENTES=()
-
-registrar_cambio() {
-  _CREAR_CAMBIOS=$((_CREAR_CAMBIOS + 1))
-}
-
-resumen_cambios() {
-  printf '%s\n' "${_CREAR_CAMBIOS}"
-}
-
-# Registra un recurso que ya existía (se llama desde cada asegurar_* antes
-# de su "return 0" temprano), para que el resumen final liste tanto lo
-# creado como lo que ya estaba, no solo el conteo de cambios.
-registrar_existente() {
-  info "$1 ya existe."
-  RECURSOS_EXISTENTES+=("$1")
-}
-
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Resuelto con BASH_SOURCE, no con una ruta relativa al directorio de
 # trabajo, para que este script funcione sin importar desde dónde se invoque
 # (igual que infra/azure/variables.sh resuelve infra/servidor/imagen-fijada.sh).
+# shellcheck source=lib/comun.sh
+source "${DIRECTORIO_SCRIPT}/lib/comun.sh"
+
 # shellcheck source=variables.sh
 source "${DIRECTORIO_SCRIPT}/variables.sh"
 
@@ -144,81 +108,10 @@ nube necesita que lo decida un humano.
 EOF
 }
 
-# Ejecuta "az $@" en modo lectura y traduce el código de salida a existe/no
-# existe, sin volcar nada a stdout ni stderr: cada asegurar_* solo tiene que
-# ramificar por el resultado, igual que el paso 00-verificar-sistema.sh de
-# infra/servidor/ ramifica por sus propios chequeos.
-recurso_existe() {
-  az "$@" -o none --only-show-errors >/dev/null 2>&1
-}
-
-# Envoltorio único de escritura: en --simular imprime el comando en vez de
-# ejecutarlo, y de cualquier forma cuenta el cambio, para que el resumen
-# final reporte "cambios que se aplicarían" con el mismo número que
-# aplicaría una corrida real. Fuera de --simular, revisa el código de salida
-# y corta con error_fatal nombrando el recurso, no el volcado crudo del CLI.
-ejecutar_cambio() {
-  local descripcion="$1"
-  shift
-
-  if [[ "$SIMULAR" == "si" ]]; then
-    info "[simular] Se ejecutaría: $*"
-    registrar_cambio
-    RECURSOS_CREADOS+=("$descripcion")
-    return 0
-  fi
-
-  if ! "$@" -o none --only-show-errors; then
-    error_fatal "No se pudo crear ${descripcion}."
-  fi
-  registrar_cambio
-  RECURSOS_CREADOS+=("$descripcion")
-}
-
-verificar_cli_az() {
-  command -v az >/dev/null 2>&1 \
-    || error_fatal "No se encontró el CLI de az en el PATH. Instálalo y ejecuta 'az login' antes de continuar."
-}
-
-# Imprime la suscripción activa y exige confirmación interactiva antes de
-# seguir: crear recursos en la suscripción equivocada es el error caro de
-# esta tarjeta, y a diferencia de un recurso mal nombrado no se corrige con
-# un rerun idempotente.
-confirmar_suscripcion() {
-  local salida respuesta
-  local -a campos
-  local nombre id
-
-  salida="$(az account show --query "[name,id]" -o tsv --only-show-errors)" \
-    || error_fatal "No se pudo consultar la suscripción activa de Azure. Verifica que 'az login' esté vigente."
-  # El formato tsv de az emite una línea por campo, no campos separados por
-  # tabulador en una sola línea, así que mapfile lee cada línea en un elemento
-  # del arreglo en vez de dejar vacíos los campos posteriores al primero.
-  mapfile -t campos <<<"$salida"
-  nombre="${campos[0]}"
-  id="${campos[1]}"
-
-  info "Suscripción activa: ${nombre} (${id})"
-
-  if [[ "$SIMULAR" == "si" ]]; then
-    info "Modo --simular: no se va a crear nada, se omite la confirmación interactiva."
-    return 0
-  fi
-
-  if [[ "${CONFIRMAR_SUSCRIPCION:-}" == "si" ]]; then
-    info "CONFIRMAR_SUSCRIPCION=si: se omite la confirmación interactiva."
-    return 0
-  fi
-
-  [[ -t 0 ]] \
-    || error_fatal "No hay terminal interactiva para confirmar la suscripción. Define CONFIRMAR_SUSCRIPCION=si si ya la verificaste por otro medio."
-
-  read -r -p "¿Es esta la suscripción correcta para crear el servidor? Escribe 's' o 'si' para continuar: " respuesta
-  case "${respuesta,,}" in
-    s | si | sí) ;;
-    *) error_fatal "Confirmación no recibida: se detiene antes de crear ningún recurso." ;;
-  esac
-}
+# recurso_existe, ejecutar_cambio, verificar_cli_az y confirmar_suscripcion
+# ahora vienen de infra/azure/lib/comun.sh (ver el source de la cabecera):
+# ya no se definen acá. confirmar_suscripcion sigue leyendo SIMULAR por
+# nombre de variable, así que basta con que esté definida antes de llamarla.
 
 # Verifica un proveedor de recurso contra el registro de la suscripción.
 # "obligatorio" en "si" corta con error_fatal si no está Registered (o lo
