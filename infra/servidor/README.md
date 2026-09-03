@@ -172,7 +172,7 @@ en `.gitignore`).
 | `10-ssh.sh` | Endurecer el acceso por SSH | SCRUM-28 | Implementado |
 | `20-docker.sh` | Instalar Docker y Docker Compose | SCRUM-31 | Implementado |
 | `30-nginx.sh` | Instalar y configurar nginx como proxy inverso | SCRUM-32 | Implementado |
-| `40-postgres.sh` | Instalar y configurar Postgres en contenedor | SCRUM-33 | Pendiente |
+| `40-postgres.sh` | Instalar y configurar Postgres en contenedor | SCRUM-33 | Implementado |
 | `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Pendiente |
 
 ### `imagen-fijada.sh`
@@ -369,16 +369,18 @@ daemon real en las dos.
 
 Instala y configura nginx como proxy inverso corriendo como contenedor
 Docker, no como paquete de apt: decisión de equipo, consistente con
-Postgres (`40-postgres.sh`, tarjeta SCRUM-33, todavía esqueleto) y con la
-app, que ya trae su propio `Dockerfile` con `EXPOSE 8080`. El razonamiento
+Postgres (`40-postgres.sh`, tarjeta SCRUM-33, implementado, ver
+`### 40-postgres.sh` más abajo) y con la app, que ya trae su propio
+`Dockerfile` con `EXPOSE 8080`. El razonamiento
 completo, con los pros y contras de la alternativa descartada (paquete de
 apt), vive en el comentario de Jira de la tarjeta SCRUM-32 y en la
 bitácora técnica del proyecto de grado, no se repite acá.
 
-nginx comparte con Postgres un único `compose.yaml` en la raíz de
-`infra/servidor/`: cada paso es dueño de su propio bloque bajo
-`services:` y corre `docker compose up -d <servicio>` solo sobre el suyo,
-sin tocar el bloque del otro. Ese archivo, igual que
+nginx es dueño de `compose.yaml`, en la raíz de `infra/servidor/`, donde
+también declara `name: centinela` y el bloque top-level `networks:` que
+comparten el resto de los servicios del proyecto (ver `### 40-postgres.sh`
+más abajo, que documenta por qué Postgres NO reescribe este mismo archivo
+sino que escribe el suyo propio). Ese archivo, igual que
 `nginx/conf.d/centinela.conf` y `nginx/snippets/raiz-http.conf`, no es un
 archivo estático versionado aparte: los arma `30-nginx.sh` en tiempo de
 aprovisionamiento con `asegurar_archivo_con_contenido` (`lib/comun.sh`), a
@@ -386,13 +388,12 @@ partir de heredocs embebidos en el propio script. Lo que viaja al
 servidor por `scp` como parte de `infra/servidor/` es el script que arma
 esos tres archivos, no los tres archivos ya armados; el próximo
 aprovisionamiento los sobreescribe si el contenido esperado cambió. El
-campo `name: centinela` de `compose.yaml` está fijo, no derivado del
-nombre del directorio, porque `infra/servidor/` se copia a rutas
-distintas según el destino (`/opt/centinela/infra-servidor` en Azure,
-`/tmp/infra-servidor` en Vagrant, `/root/infra-servidor` en el contenedor
-de prueba de `probar-en-docker.sh`), y sin ese campo el nombre del
-proyecto (y por lo tanto el prefijo de los contenedores) cambiaría según
-dónde se ejecute.
+campo `name: centinela` está fijo, no derivado del nombre del directorio,
+porque `infra/servidor/` se copia a rutas distintas según el destino
+(`/opt/centinela/infra-servidor` en Azure, `/tmp/infra-servidor` en
+Vagrant, `/root/infra-servidor` en el contenedor de prueba de
+`probar-en-docker.sh`), y sin ese campo el nombre del proyecto (y por lo
+tanto el prefijo de los contenedores) cambiaría según dónde se ejecute.
 
 El gotcha real de este paso está en `nginx/snippets/raiz-http.conf`:
 `proxy_pass http://api:8080;` con el nombre de host a secas hace que
@@ -435,16 +436,154 @@ tres archivos (`compose.yaml`, `centinela.conf`, `raiz-http.conf`) se
 generan con el contenido esperado y que la segunda corrida no vuelve a
 escribirlos; que el contenedor nginx de verdad arranca, que `nginx -t`
 pasa contra la imagen pinneada, y que el puerto 80 queda escuchando pasa
-a depender enteramente de la VM real (Azure o Vagrant), todavía sin
-verificar contra `centinela-vm` a la fecha de este párrafo (2 de
-septiembre de 2026). Sí se corrió una vez de punta a punta contra un
-sistema con systemd de verdad, aunque no sea la VM: la máquina de
-desarrollo (Arch Linux, systemd como proceso 1, daemon de Docker local).
+a depender enteramente de la VM real (Azure o Vagrant). Confirmado
+contra Azure el 3 de septiembre de 2026 (ver más abajo); la VM local de
+Vagrant sigue sin verificarse. Antes de esa confirmación se había corrido
+una vez de punta a punta contra un sistema con systemd de verdad, aunque
+no fuera la VM: la máquina de desarrollo (Arch Linux, systemd como
+proceso 1, daemon de Docker local).
 Primera corrida: creó la red `centinela`, el contenedor `centinela-nginx`
 y los tres archivos; `nginx -t` pasó, `ss -tln` confirmó el puerto 80
 escuchando y `curl -sI http://localhost/` devolvió `502 Bad Gateway`.
 Segunda corrida: `Cambios aplicados: 0`, con el mensaje "El contenedor
-nginx ya estaba corriendo con la configuración actual". Es la misma
-honestidad que ya deja escrita `20-docker.sh` sobre la rama de
-`systemctl enable --now`, que tampoco se ha ejercitado nunca contra un
-sistema real.
+nginx ya estaba corriendo con la configuración actual".
+
+Confirmado contra la VM real de Azure (`centinela-vm`, 3 de septiembre de
+2026, vía SSH en el puerto `22022`): primera corrida de
+`aprovisionar.sh`, `nginx -t` validó la configuración, se creó la red
+`centinela` y el contenedor `centinela-nginx`, y `ss -tln` confirmó el
+puerto 80 escuchando (`Cambios aplicados: 1`, el contenedor). Segunda
+corrida inmediata: `Cambios aplicados: 0` (idempotencia confirmada contra
+la VM real, no solo contra la máquina de desarrollo). `curl -I` contra la
+IP pública del servidor devolvió `502 Bad Gateway`, el mismo resultado
+esperado que en local: nginx arriba y sirviendo, sin contenedor `api`
+todavía. Evidencia completa en el comentario de la tarjeta SCRUM-32 en
+Jira. Es la misma honestidad que ya deja escrita `20-docker.sh` sobre la
+rama de `systemctl enable --now`, que tampoco se ha ejercitado nunca
+contra un sistema real.
+
+### `40-postgres.sh`
+
+Instala y configura Postgres en contenedor Docker (tarjeta SCRUM-33). El
+texto literal de la tarjeta fija la decisión de diseño: "El volumen va
+declarado fuera del contenedor. Un docker compose down -v mal dado borra
+la base." El volumen de datos es un bind mount a
+`/opt/centinela/postgres/datos`, montado en `/var/lib/postgresql/data`
+dentro del contenedor, fuera por completo del árbol que gestiona
+`docker compose down -v` (que solo alcanza volúmenes NOMBRADOS declarados
+en un `compose*.yaml`) y fuera también de `infra/servidor/` (que viaja
+completo por `scp` a rutas distintas según el destino, y cuyo equivalente
+en `/tmp` además se limpia en cada reinicio de Debian, ver la sección
+"VM de Azure" más arriba). El
+directorio se crea con permiso `700` y sin dueño asignado desde el script:
+la imagen oficial de Postgres arranca su contenedor como root y hace
+`chown` del datadir al usuario `postgres` dentro de su propio entrypoint,
+antes de bajar privilegios para `initdb`; ese `chown` ocurre DENTRO del
+contenedor, y verificarlo sin el contenedor corriendo no era posible (ver
+más abajo la verificación real que sí lo confirmó).
+
+Diseño multi-archivo de compose: esto era justo el problema que la
+bitácora técnica del proyecto (`2026-09-02-nginx-contenedor-vs-paquete.md`,
+sección "Qué queda abierto") dejaba explícitamente pendiente al cerrar
+SCRUM-32, sin resolverlo todavía en ese momento. Se resolvió con el
+mecanismo nativo de `docker compose` de fusionar varios archivos con
+`-f`, no reescribiendo el `compose.yaml` de nginx. `30-nginx.sh` sigue
+siendo dueño exclusivo de `compose.yaml` (con `name: centinela` y el
+bloque top-level `networks:`, compartidos por todos los servicios);
+`40-postgres.sh` escribe su propio `compose.postgres.yaml`, con
+solamente `services: postgres:`, sin repetir ninguna de esas dos claves.
+`asegurar_servicio_compose` (`lib/comun.sh`) dejó de recibir "el" archivo
+de compose como argumento fijo: ahora deriva el directorio del argumento
+que recibe y arma, con un glob `compose*.yaml`, la lista completa de
+fragmentos que encuentre ahí, pasándolos todos como banderas `-f` tanto al
+`ps -q` de "antes" como al `up -d`. Ningún paso reescribe el bloque
+`services:` de otro, y el orden en que corran los dos pasos no importa: el
+que dispare `up -d` primero fusiona lo que ya exista en ese momento. El
+glob ordena `compose.postgres.yaml` antes que `compose.yaml`
+(alfabéticamente, "p" antes que "y"), y se verificó con
+`docker compose -f compose.postgres.yaml -f compose.yaml config` que ese
+orden igual resuelve `name: centinela` y ambos servicios correctamente: la
+fusión de claves de nivel superior de `docker compose` no depende de cuál
+archivo declare `name:` esté primero o segundo en la lista de `-f`.
+
+La contraseña de Postgres se genera una sola vez y se persiste en
+`/opt/centinela/postgres/postgres.env` (variable `POSTGRES_PASSWORD`,
+permisos `600`), fuera de `infra/servidor/` por la misma razón que el
+directorio de datos. `asegurar_archivo_con_secreto` y `generar_secreto`
+(`lib/comun.sh`) son los helpers nuevos: el primero no hace nada si el
+archivo ya existe (es la propia existencia del archivo, no una variable de
+estado aparte, la que decide si "ya se generó" o no, lo que lo vuelve
+idempotente por diseño), y el segundo arma 32 caracteres alfanuméricos a
+partir de `/dev/urandom` y `base64` (los dos confirmados presentes en la
+imagen mínima `debian:13`, sin depender de `openssl`), con el recorte a 32
+caracteres hecho con expansión de parámetros de bash en vez de con
+`head -c 32` al final de la tubería, para no exponerse a un SIGPIPE
+intermitente bajo el `set -o pipefail` que hereda todo lo que se carga con
+`source` desde `aprovisionar.sh`. El valor de ese archivo solo importa en
+el primer arranque del contenedor (`initdb` lo usa para crear el rol
+`centinela`); editarlo después no cambia nada en la base ya inicializada,
+y rotar la contraseña de verdad requiere `ALTER ROLE` dentro de la base,
+no solo tocar el archivo. `compose.postgres.yaml` no publica ningún
+`ports:`: Postgres solo lo consume la app (contenedor `api`, todavía sin
+ningún paso que lo despliegue) dentro de la red `centinela`, por nombre de
+contenedor, el mismo argumento de seguridad que ya usa `30-nginx.sh` para
+no publicar el 8080 de `api` hacia el host.
+
+La verificación, a diferencia de la de nginx (que confirma un puerto
+publicado), es en parte negativa: además de reintentar
+`docker exec centinela-postgres pg_isready -U centinela -d centinela
+-h localhost` en una ventana acotada (30 intentos, 2 segundos entre cada
+uno, porque `docker compose up -d` devuelve el control en cuanto el
+contenedor arranca, no cuando `initdb` termina de inicializar la primera
+vez), también confirma con `ss -tln` que el puerto 5432 NO aparece
+escuchando en el host. El `healthcheck` del propio
+`compose.postgres.yaml` usa `pg_isready` sin `-h`, a propósito distinto de
+la verificación del script: ese test lo evalúa Docker desde dentro del
+contenedor a intervalos regulares, no una sola vez bajo presión de tiempo
+como la verificación del script, donde forzar `-h localhost` evita que un
+`pg_isready` sin argumentos reporte "listo" contra el servidor temporal
+que el entrypoint de la imagen levanta por socket Unix mientras todavía
+está inicializando, antes de que el servidor real esté aceptando
+conexiones.
+
+La misma honestidad de cobertura que ya usan las demás secciones de este
+README: `probar-en-docker.sh` no tiene acceso al socket de Docker, así que
+se limita a confirmar que `compose.postgres.yaml` se genera con el
+contenido esperado (junto con el directorio de datos y el archivo de
+secreto) y que la segunda corrida no vuelve a escribir nada (`Cambios
+aplicados: 0`, verificado el 3 de septiembre de 2026: en la primera
+corrida, este paso por sí solo aplicó 4 cambios (el directorio de datos,
+las dos escrituras de `asegurar_archivo_con_secreto` sobre el directorio y
+el archivo de secreto, y `compose.postgres.yaml`); el total de la corrida
+completa del pipeline depende de qué otros archivos ya existieran en el
+árbol montado, no es un número fijo de este paso). Que el contenedor Postgres arranca de
+verdad, que `pg_isready` responde, y que el puerto 5432 no queda expuesto
+SÍ se verificó de forma directa ese mismo día, pero no contra la VM real
+de Azure ni contra Vagrant (esas dos siguen pendientes): se construyó un
+contenedor `debian:13` efímero con `systemd` real como proceso 1
+(`/sbin/init`, `--privileged --cgroupns=host` y `/sys/fs/cgroup` montado)
+y Docker anidado propio (instalado por el mismo `20-docker.sh`, sin montar
+el socket del Docker del anfitrión), y se corrió
+`aprovisionar.sh --solo 20-docker.sh`, luego `--solo 30-nginx.sh` y luego
+`--solo 40-postgres.sh`, en ese orden, dentro de ese contenedor. Resultado:
+`centinela-postgres` quedó `Up ... (healthy)` según `docker compose ps`,
+`pg_isready -h localhost` confirmó `accepting connections`,
+`docker compose -f compose.postgres.yaml -f compose.yaml config` mostró la
+fusión correcta (`name: centinela`, ambos servicios, la red compartida), y
+`ss -tln` no mostró el 5432. El datadir, después de que el entrypoint de
+la imagen lo tocara, quedó con `uid=70` y `gid=0`, modo `700`. Se
+inspeccionó el entrypoint mismo para confirmar que ese resultado no es
+casualidad (`docker run --rm --entrypoint cat postgres:16.15-alpine3.24
+/usr/local/bin/docker-entrypoint.sh`): hace `chmod 00700 "$PGDATA" || :`
+(exactamente el modo que ya deja `asegurar_directorio` desde este script,
+así que el chmod del entrypoint es un no-op sobre el estado que este paso
+ya dejó) y `find "$PGDATA" \! -user postgres -exec chown postgres '{}' +`,
+que cambia el usuario a `postgres` (UID 70 en esta imagen `-alpine`, 999
+en las variantes basadas en Debian) SIN tocar el grupo, de ahí el
+`gid=0` observado. Correr `--solo 40-postgres.sh` una segunda vez contra ese
+mismo contenedor ya corriendo reportó `Cambios aplicados: 0`, con "El
+contenedor postgres ya estaba corriendo con la configuración actual", y
+`pg_isready` y `ss -tln` se repitieron limpios. El contenedor efímero
+(imagen y `docker run`) se destruyó al terminar la prueba; no dejó rastro
+en `/opt/centinela` de la máquina de desarrollo real, que nunca instaló
+nada de esto directamente.
