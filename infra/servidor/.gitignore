@@ -1,1 +1,7 @@
 aprovisionar.env
+
+# Generados en tiempo de aprovisionamiento por infra/servidor/pasos/30-nginx.sh
+# (SCRUM-32) a partir de sus heredocs y de infra/servidor/dominio-fijado.sh. No
+# son artefactos estáticos: la fuente de verdad es el paso que los escribe.
+compose.yaml
+nginx/

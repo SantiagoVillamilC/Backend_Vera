@@ -193,3 +193,64 @@ paso_pendiente() {
   aviso "Paso pendiente de implementar (tarjeta ${tarjeta}). No se aplicó ningún cambio."
   _APROV_PASOS_PENDIENTES=$((_APROV_PASOS_PENDIENTES + 1))
 }
+
+asegurar_archivo_con_contenido() {
+  local ruta="$1"
+  local contenido="$2"
+
+  if [[ -f "$ruta" ]] && [[ "$(cat "$ruta")" == "$contenido" ]]; then
+    info "El archivo ${ruta} ya tiene el contenido esperado."
+    return 0
+  fi
+
+  asegurar_directorio "$(dirname "$ruta")"
+  printf '%s\n' "$contenido" > "$ruta"
+  registrar_cambio
+}
+
+asegurar_servicio_compose() {
+  local archivo_compose="$1"
+  local servicio="$2"
+
+  # Mismo criterio que asegurar_servicio_activo: sin systemd como proceso 1
+  # no hay daemon de Docker que alcanzar (docker.io nunca llegó a arrancar
+  # su servicio), así que no tiene sentido intentar "docker compose up".
+  # Esto es lo que hace que este helper se salte por completo dentro de
+  # infra/servidor/probar-en-docker.sh (ese contenedor de prueba tampoco
+  # tiene acceso al socket de Docker, así que aunque systemd sí fuera el
+  # proceso 1 ahí, esto seguiría sin poder correr; en la práctica ninguna
+  # de las dos condiciones se cumple dentro de esa prueba).
+  if [[ ! -d /run/systemd/system ]]; then
+    aviso "systemd no es el proceso 1 en este sistema (no existe /run/systemd/system), se omite el contenedor ${servicio}."
+    return 0
+  fi
+
+  # No se usa un chequeo previo de "¿ya está corriendo?" para decidir si
+  # llamar "docker compose up -d": eso dejaría pasar sin aplicar un cambio
+  # de configuración (imagen, volúmenes, red) en un servicio que ya estaba
+  # corriendo con la versión VIEJA de compose.yaml. "docker compose up -d"
+  # ya es idempotente por diseño (no hace nada si nada cambió, recrea si
+  # algo cambió); lo único que hace falta es medir si de verdad hizo algo,
+  # comparando el ID del contenedor y su estado antes y después.
+  local id_antes id_despues estado_antes
+  id_antes="$(docker compose -f "$archivo_compose" ps -q "$servicio" 2>/dev/null || true)"
+  estado_antes="inexistente"
+  if [[ -n "$id_antes" ]]; then
+    estado_antes="$(docker inspect -f '{{.State.Status}}' "$id_antes" 2>/dev/null || echo "inexistente")"
+  fi
+
+  docker compose -f "$archivo_compose" up -d "$servicio"
+
+  id_despues="$(docker compose -f "$archivo_compose" ps -q "$servicio" 2>/dev/null || true)"
+
+  if [[ -z "$id_despues" ]]; then
+    error_fatal "docker compose up -d ${servicio} no dejó ningún contenedor corriendo."
+  fi
+
+  if [[ "$id_despues" != "$id_antes" || "$estado_antes" != "running" ]]; then
+    info "El contenedor ${servicio} se creó o se recreó."
+    registrar_cambio
+  else
+    info "El contenedor ${servicio} ya estaba corriendo con la configuración actual."
+  fi
+}

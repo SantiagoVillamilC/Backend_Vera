@@ -25,6 +25,14 @@ source "${DIRECTORIO_SCRIPT}/imagen-fijada.sh"
 # shellcheck source=red-fijada.sh
 source "${DIRECTORIO_SCRIPT}/red-fijada.sh"
 
+# Única fuente de verdad del dominio del servidor. Se carga aquí, junto con
+# imagen-fijada.sh y red-fijada.sh, por la misma razón que esos dos: no
+# dentro de 30-nginx.sh, para que cualquier paso futuro (no solo el de
+# nginx, también 50-certbot.sh a futuro) pueda usar DOMINIO_SERVIDOR sin
+# tener que repetir el source.
+# shellcheck source=dominio-fijado.sh
+source "${DIRECTORIO_SCRIPT}/dominio-fijado.sh"
+
 # Configuración local opcional, no se versiona (ver infra/servidor/.gitignore).
 ARCHIVO_ENV="${DIRECTORIO_SCRIPT}/aprovisionar.env"
 if [[ -f "${ARCHIVO_ENV}" ]]; then
