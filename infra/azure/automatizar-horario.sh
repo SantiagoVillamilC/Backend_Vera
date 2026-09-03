@@ -51,15 +51,27 @@
 #
 # Secuencia obligatoria al crear o habilitar un Logic App: Disabled -> rol
 # "Virtual Machine Contributor" sobre la VM -> esperar propagación de RBAC
-# -> Enabled, y además, una definición con "startTime" resuelto en el
-# futuro. Las dos son defensas contra la MISMA familia de problema (una
-# corrida automática disparada fuera de lo esperado) pero para dos causas
-# distintas, las dos verificadas en vivo hoy: sin el orden Disabled->rol,
-# la primera corrida falla con Forbidden; sin "startTime", crear, habilitar
-# o incluso actualizar la definición de un Logic App ya Enabled dispara una
-# corrida de inmediato, sin importar la hora programada. Ver los
-# comentarios de asegurar_estado_habilitado_logic_app y
-# calcular_start_time_logic_app para el detalle de cada una.
+# -> Enabled, y además, una definición con "startTime" fijo en el pasado
+# (no calculado por corrida) más "minutes" explícito en "schedule". Las dos
+# son defensas contra la MISMA familia de problema (una corrida automática
+# disparada fuera de lo esperado) pero para dos causas distintas, las dos
+# verificadas en vivo hoy: sin el orden Disabled->rol, la primera corrida
+# falla con Forbidden; sin "startTime", crear, habilitar o incluso
+# actualizar la definición de un Logic App ya Enabled dispara una corrida
+# de inmediato, sin importar la hora programada.
+#
+# "startTime" fijo, no calculado, por un bug real de Azure Logic Apps
+# verificado en vivo hoy (3 de septiembre de 2026) contra centinela-encender
+# y centinela-apagar en centinela-rg: cuando "startTime" cae EXACTAMENTE
+# sobre una hora que también está en "schedule.hours", Azure excluye ese
+# turno específico y agenda el disparo un día completo después de lo
+# esperado (probado con el turno de hoy y con el turno de mañana, los dos
+# saltados). Un "startTime" fijo en el pasado que nunca coincide con una
+# ejecución futura, sumado a "minutes": ["0"] explícito, evita el problema
+# sin necesidad de recalcular nada por corrida (probado en vivo:
+# "nextExecutionTime" cayó en el turno real esperado, sin saltarse ningún
+# día). Ver el comentario de asegurar_definicion_logic_app para el detalle
+# de cómo se compara ahora ese valor fijo.
 #
 # Corre en el portátil del operador, igual que infra/azure/crear-servidor.sh
 # (ver la cabecera de ese archivo): nunca en el servidor real.
@@ -121,14 +133,18 @@ administrada ya habilitada; solo después de confirmar (con reintento) que
 el rol "Virtual Machine Contributor" sobre la VM ya se propagó a una
 lectura, este script lo pasa a --state Enabled (un Logic App Enabled sin
 rol propagado dispara una corrida inmediata con Forbidden, verificado en
-vivo). La definición incluye además un "startTime" futuro: sin él, crear,
-habilitar o actualizar el recurso dispara una corrida inmediata fuera de
-horario, incluso con el rol ya en su lugar (verificado en vivo por
-separado). Por eso mismo, la comparación con jq que decide si hace falta un
-"az logic workflow update" ignora tanto los campos calculados que Azure
-agrega al guardar (evaluatedRecurrence) como el propio "startTime" (siempre
-"la próxima ocurrencia futura" calculada hoy): compararlos sin más haría
-que el script creyera que la definición "cambió" en cada corrida.
+vivo). La definición incluye además un "startTime" fijo en el pasado
+(constante, la misma en cada corrida) más "minutes" explícito en
+"schedule": sin "startTime", crear, habilitar o actualizar el recurso
+dispara una corrida inmediata fuera de horario (verificado en vivo por
+separado), y si "startTime" coincidiera EXACTO con una hora de
+"schedule.hours", Azure salta esa ocurrencia y agenda el disparo un día
+después (también verificado en vivo, ver la cabecera del archivo). Por eso
+mismo, la comparación con jq que decide si hace falta un
+"az logic workflow update" ignora solo los campos calculados que Azure
+agrega al guardar (evaluatedRecurrence): con "startTime" ahora fijo, sí se
+compara, para que el diff detecte también si alguien cambia ese valor por
+error.
 
 Variables de entorno relevantes:
   CONFIRMAR_SUSCRIPCION=si  Salta la confirmación interactiva de la
@@ -148,7 +164,7 @@ EOF
 # (ver asegurar_definicion_logic_app) sin falsos positivos.
 verificar_cli_jq() {
   command -v jq >/dev/null 2>&1 \
-    || error_fatal "No se encontró jq en el PATH. Es necesario para comparar la definición publicada de cada Logic App sin falsos positivos por los campos calculados que Azure le agrega (evaluatedRecurrence) ni por startTime, que cambia en cada corrida."
+    || error_fatal "No se encontró jq en el PATH. Es necesario para comparar la definición publicada de cada Logic App sin falsos positivos por los campos calculados que Azure le agrega (evaluatedRecurrence)."
 }
 
 verificar_preflight() {
@@ -158,65 +174,21 @@ verificar_preflight() {
   confirmar_suscripcion
 }
 
-# Devuelve (por stdout) el epoch Unix de la próxima ocurrencia de "hora_utc"
-# (formato "HH:MM"): hoy si esa hora todavía no pasó, mañana si ya pasó. La
-# usa calcular_start_time_logic_app para construir el "startTime" del
-# trigger de Recurrence de cada Logic App: un startTime en el pasado no
-# evitaría el disparo inmediato que se busca prevenir, así que cada corrida
-# de este script tiene que recalcularlo, para que sea re-ejecutable sin
-# fallar por una fecha vieja.
-calcular_proxima_ocurrencia() {
-  local hora_utc="$1"
-  local fecha_hoy epoch_objetivo epoch_ahora
-
-  fecha_hoy="$(date -u +%Y-%m-%d)"
-  epoch_objetivo="$(date -u -d "${fecha_hoy}T${hora_utc}:00Z" +%s)"
-  epoch_ahora="$(date -u +%s)"
-
-  if [[ "$epoch_objetivo" -le "$epoch_ahora" ]]; then
-    epoch_objetivo=$((epoch_objetivo + 86400))
-  fi
-
-  printf '%s' "$epoch_objetivo"
-}
-
-# Devuelve (por stdout) el "startTime" que exige el bloque "recurrence" de
-# un trigger de Recurrence de Logic Apps para la próxima ocurrencia de
-# "hora_utc": la hora local de Bogotá, calculada a partir del mismo epoch
-# que ya resuelve calcular_proxima_ocurrencia.
-#
-# Un trigger de Recurrence sin "startTime" dispara una corrida de inmediato
-# al crearse, al habilitarse o al actualizar su definición (verificado en
-# vivo hoy contra centinela-apagar, muy lejos de la hora programada), así
-# que este campo no es opcional acá.
-#
-# Formato SIN offset (sin "%:z"), A PROPÓSITO: cuando el trigger ya trae
-# "timeZone" fijado (ver las plantillas de infra/azure/logic-apps/), Azure
-# rechaza un startTime con offset embebido con
-# "InvalidWorkflowTriggerRecurrence" (verificado en vivo:
-# "2026-09-03T12:00:00-05:00" rechazado, "2026-09-03T12:00:00" aceptado).
-# Es lo opuesto de lo que exige "--start-time" en "az automation schedule
-# create" para Automation Account (que sí necesita el offset embebido,
-# porque ahí no hay un "timeZone" fijado de antemano de la misma forma): no
-# "arreglar" esto copiando el patrón del otro lado, son dos reglas
-# opuestas, cada una verificada por separado.
-calcular_start_time_logic_app() {
-  local hora_utc="$1" epoch_proximo
-
-  epoch_proximo="$(calcular_proxima_ocurrencia "$hora_utc")"
-  TZ="America/Bogota" date -d "@${epoch_proximo}" +%Y-%m-%dT%H:%M:%S
-}
-
 # Sustituye los placeholders literales del JSON de plantilla ({SUSCRIPCION},
-# {GRUPO_RECURSOS}, {NOMBRE_VM}, {START_TIME}) por los valores reales de
-# esta corrida y deja el resultado en un archivo temporal SIN envolver (el
-# objeto crudo del workflow: $schema/contentVersion/triggers/actions/
-# outputs). Se resuelve con expansión de parámetros de bash, no con jq: los
-# placeholders viven dentro de valores de cadena (la URI, el startTime), no
-# son una estructura que jq tendría que reconstruir. El archivo de
-# plantilla en infra/azure/logic-apps/ NUNCA se edita en el disco: solo se
-# lee, la sustitución vive en memoria. Sufijo ".json" en el archivo
-# temporal por prolijidad, no por necesidad real del CLI.
+# {GRUPO_RECURSOS}, {NOMBRE_VM}) por los valores reales de esta corrida y
+# deja el resultado en un archivo temporal SIN envolver (el objeto crudo
+# del workflow: $schema/contentVersion/triggers/actions/outputs). Se
+# resuelve con expansión de parámetros de bash, no con jq: los placeholders
+# viven dentro de valores de cadena (la URI), no son una estructura que jq
+# tendría que reconstruir. El archivo de plantilla en infra/azure/logic-apps/
+# NUNCA se edita en el disco: solo se lee, la sustitución vive en memoria.
+# Sufijo ".json" en el archivo temporal por prolijidad, no por necesidad
+# real del CLI.
+#
+# "startTime" y "schedule.minutes" YA vienen fijos, literales, en la propia
+# plantilla JSON (igual que "schedule.hours"): no son un placeholder que
+# esta función resuelva. Ver la cabecera del archivo para el porqué de un
+# "startTime" fijo en el pasado en vez de calculado por corrida.
 #
 # Este archivo SIN envolver es el que compara asegurar_definicion_logic_app
 # contra "az logic workflow show --query definition" (que también devuelve
@@ -227,18 +199,16 @@ calcular_start_time_logic_app() {
 # key". Para eso existe envolver_definicion_logic_app, que envuelve ESTE
 # archivo en uno aparte justo antes de cada "create"/"update".
 resolver_definicion_logic_app() {
-  local archivo_plantilla="$1" hora_utc="$2"
-  local suscripcion contenido start_time archivo_salida
+  local archivo_plantilla="$1"
+  local suscripcion contenido archivo_salida
 
   suscripcion="$(az account show --query id -o tsv --only-show-errors)" \
     || error_fatal "No se pudo leer el id de la suscripción activa."
-  start_time="$(calcular_start_time_logic_app "$hora_utc")"
 
   contenido="$(cat "$archivo_plantilla")"
   contenido="${contenido//\{SUSCRIPCION\}/$suscripcion}"
   contenido="${contenido//\{GRUPO_RECURSOS\}/$GRUPO_RECURSOS}"
   contenido="${contenido//\{NOMBRE_VM\}/$NOMBRE_VM}"
-  contenido="${contenido//\{START_TIME\}/$start_time}"
 
   archivo_salida="$(mktemp --suffix=.json)"
   printf '%s' "$contenido" >"$archivo_salida"
@@ -274,8 +244,8 @@ envolver_definicion_logic_app() {
 # identidad administrada system-assigned habilitada desde la creación. Se
 # crea Disabled a propósito, nunca Enabled: ver la cabecera del archivo y
 # asegurar_estado_habilitado_logic_app para el detalle completo de por qué
-# (Forbidden por RBAC sin propagar, y por separado, disparo inmediato sin
-# startTime).
+# (Forbidden por RBAC sin propagar, y por separado, disparo inmediato o
+# fuera de horario sin un "startTime" fijo en el pasado).
 asegurar_logic_app_recurso() {
   local nombre="$1" archivo_definicion="$2"
   local archivo_envuelto
@@ -384,13 +354,18 @@ esperar_propagacion_rol() {
 }
 
 # Compara solo el subconjunto de la definición que de verdad importa
-# (frequency, interval, timeZone, schedule.hours y actions), no el objeto
-# completo: Azure agrega campos calculados al guardar la definición de un
-# Logic App (por ejemplo triggers.Recurrence.evaluatedRecurrence), y
-# "startTime" cambia en cada corrida porque siempre es "la próxima
-# ocurrencia futura" calculada hoy (ver calcular_start_time_logic_app). Una
-# comparación cruda de cualquiera de los dos SIEMPRE diría "distinto" y
-# reintentaría la escritura en cada corrida, incluso sin cambios reales.
+# (triggers.Recurrence.recurrence completo, con frequency, interval,
+# timeZone, startTime y schedule, más actions), no el objeto completo:
+# Azure agrega campos calculados al guardar la definición de un Logic App
+# (por ejemplo triggers.Recurrence.evaluatedRecurrence), y una comparación
+# cruda del objeto completo SIEMPRE diría "distinto" y reintentaría la
+# escritura en cada corrida, incluso sin cambios reales.
+#
+# "startTime" YA se incluye en esta comparación (a diferencia del diseño
+# anterior, que lo excluía con "del(.startTime)"): ahora es una constante
+# fija en el pasado, la misma en cada corrida (ver la cabecera del
+# archivo), así que un diff que lo incluya detecta también si alguien
+# cambia ese valor por error, sin producir falsos positivos por corrida.
 asegurar_definicion_logic_app() {
   local nombre="$1" archivo_definicion="$2"
   local relevante_local relevante_remoto archivo_envuelto
@@ -402,19 +377,19 @@ asegurar_definicion_logic_app() {
     return 0
   fi
 
-  relevante_local="$(jq -S '{recurrence: (.triggers.Recurrence.recurrence | del(.startTime)), actions: .actions}' "$archivo_definicion")"
+  relevante_local="$(jq -S '{recurrence: .triggers.Recurrence.recurrence, actions: .actions}' "$archivo_definicion")"
   relevante_remoto="$(az logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre" --query definition -o json --only-show-errors \
-    | jq -S '{recurrence: (.triggers.Recurrence.recurrence | del(.startTime)), actions: .actions}')" \
+    | jq -S '{recurrence: .triggers.Recurrence.recurrence, actions: .actions}')" \
     || error_fatal "No se pudo leer la definición publicada de ${nombre}."
 
   if [[ "$relevante_local" == "$relevante_remoto" ]]; then
-    info "La definición relevante de ${nombre} ya coincide (sin contar startTime, ver arriba)."
+    info "La definición relevante de ${nombre} ya coincide."
     return 0
   fi
 
   # Un "update" de la definición de un Logic App ya Enabled podría, en
   # teoría, volver a disparar el trigger igual que crear o habilitar: se
-  # verificó en vivo que el startTime futuro que ya trae archivo_definicion
+  # verificó en vivo que el startTime fijo que ya trae archivo_definicion
   # también cubre este caso (ninguna corrida nueva apareció al actualizar
   # centinela-apagar con su startTime puesto), pero queda documentado acá
   # porque es la única defensa real contra eso, no una garantía aparte.
@@ -431,10 +406,10 @@ asegurar_definicion_logic_app() {
 # para evitar que el Logic App ejecute su acción real fuera de horario: se
 # verificó en vivo que habilitar un Logic App (no solo crearlo) también
 # dispara su trigger de inmediato si la definición no trae "startTime". La
-# defensa real contra eso es el startTime futuro que ya viene resuelto en
-# archivo_definicion desde que se creó o actualizó (ver
-# calcular_start_time_logic_app y asegurar_definicion_logic_app), no el
-# orden Disabled->Enabled de esta función.
+# defensa real contra eso es el startTime fijo en el pasado que ya viene
+# literal en la plantilla JSON desde que se creó o actualizó (ver la
+# cabecera del archivo y asegurar_definicion_logic_app), no el orden
+# Disabled->Enabled de esta función.
 asegurar_estado_habilitado_logic_app() {
   local nombre="$1" principal_id="$2"
   local estado_actual
@@ -462,12 +437,12 @@ asegurar_estado_habilitado_logic_app() {
 # (Disabled + identidad) -> rol sobre la VM -> definición -> habilitado. Ver
 # el comentario de cada asegurar_* para el porqué de cada paso y del orden.
 asegurar_logic_app() {
-  local nombre="$1" archivo_plantilla="$2" hora_utc="$3"
+  local nombre="$1" archivo_plantilla="$2"
   local archivo_definicion principal_id
 
   paso "Logic App: ${nombre}"
 
-  archivo_definicion="$(resolver_definicion_logic_app "$archivo_plantilla" "$hora_utc")"
+  archivo_definicion="$(resolver_definicion_logic_app "$archivo_plantilla")"
 
   asegurar_logic_app_recurso "$nombre" "$archivo_definicion"
 
@@ -486,13 +461,13 @@ asegurar_logic_app() {
 }
 
 crear_recursos() {
-  # 13:00 UTC = 08:00 COT (encendido) · 17:00 UTC = 12:00 COT (apagado). El
-  # mismo hora_utc alimenta el "startTime" (calcular_start_time_logic_app);
-  # el "schedule.hours" (8 y 12, hora de Bogotá) ya está fijo en cada
-  # plantilla JSON. Si el horario cambia algún día, los dos tienen que
-  # actualizarse juntos.
-  asegurar_logic_app "$NOMBRE_LOGIC_ENCENDER" "${DIRECTORIO_SCRIPT}/logic-apps/encender-vm.json" "13:00"
-  asegurar_logic_app "$NOMBRE_LOGIC_APAGAR" "${DIRECTORIO_SCRIPT}/logic-apps/apagar-vm.json" "17:00"
+  # 08:00 COT (encendido) y 12:00 COT (apagado), hora de Bogotá: el
+  # "schedule.hours" (8 y 12) y el "timeZone" ("SA Pacific Standard Time")
+  # ya están fijos en cada plantilla JSON, igual que "startTime" y
+  # "schedule.minutes". Si el horario cambia algún día, edita la plantilla
+  # correspondiente en infra/azure/logic-apps/ directamente.
+  asegurar_logic_app "$NOMBRE_LOGIC_ENCENDER" "${DIRECTORIO_SCRIPT}/logic-apps/encender-vm.json"
+  asegurar_logic_app "$NOMBRE_LOGIC_APAGAR" "${DIRECTORIO_SCRIPT}/logic-apps/apagar-vm.json"
 }
 
 mostrar_resumen_cambios() {
