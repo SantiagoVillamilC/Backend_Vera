@@ -1,95 +1,7 @@
 #!/usr/bin/env bash
 # infra/azure/automatizar-horario.sh
-#
-# Tarjeta SCRUM-29 ("Automatizar el encendido y el apagado diario de la
-# máquina"). Crea en Azure dos Logic Apps (plan Consumption), cada uno con
-# identidad administrada system-assigned, un trigger de Recurrence diario y
-# una acción HTTP contra la API de Azure Resource Manager para
-# encender/apagar (deallocate) centinela-vm. Reemplaza TANTO el
-# auto-shutdown nativo de Azure como una GitHub Action programada: un solo
-# mecanismo controla los dos horarios (encendido y apagado), en vez de dos
-# sistemas distintos.
-#
-# Horario: todos los días, 08:00 a 12:00 hora Colombia (COT, UTC-5,
-# Colombia nunca tiene horario de verano). Encender a las 08:00 COT (13:00
-# UTC), apagar (deallocate, no shutdown del sistema operativo) a las 12:00
-# COT (17:00 UTC).
-#
-# Por qué Logic Apps y no Automation Account (el diseño original de esta
-# tarjeta, todavía visible en el historial de git de este archivo):
-# Automation Account para suscripciones "Azure for Students" solo se puede
-# crear en un conjunto de regiones (eastus, eastus2, westus, northeurope,
-# southeastasia, japanwest) que no tiene ninguna intersección con las
-# regiones que permite la política de esta suscripción (chilecentral,
-# northcentralus, southcentralus, brazilsouth, centralus). Bloqueo de
-# plataforma sin solución, verificado en vivo el 3 de septiembre de 2026 al
-# intentar crear la cuenta contra Azure real. Detalle completo en
-# proyecto-fin-de-grado/bitacora-tecnica/2026-09-03-automation-account-choque-region.md
-# (repo de tesis, no este). Logic Apps (plan Consumption) sí se puede crear
-# en northcentralus, la misma región de la VM.
-#
-# Por qué identidad administrada en vez de OIDC/service principal clásico:
-# el tenant de Entra ID de este proyecto (UCompensar) tiene
-# allowedToCreateApps=false (verificado con
-# az rest --method get --url "https://graph.microsoft.com/v1.0/policies/authorizationPolicy"
-# --query "defaultUserRolePermissions.allowedToCreateApps" -o tsv) y el
-# usuario no tiene ningún rol de directorio elevado (verificado con
-# az rest --method get --url "https://graph.microsoft.com/v1.0/me/transitiveMemberOf/microsoft.graph.directoryRole"
-# --query "value[].displayName" -o tsv, vacío). Sin poder crear un App
-# Registration, ni OIDC federado ni "az ad sp create-for-rbac" son viables:
-# los dos necesitan crear un App Registration. Una identidad administrada de
-# un Logic App no tiene esa restricción: la crea el propio recurso de
-# Azure, no Entra ID. Cada Logic App tiene su PROPIA identidad (dos
-# principalId distintos, uno por recurso): a diferencia de la cuenta de
-# Automation compartida del diseño anterior, acá no hay un solo principal
-# que cubra los dos horarios.
-#
-# Por qué dos Logic Apps propios y no la solución empaquetada "Start/Stop
-# VMs v2" de Microsoft: esa solución agrega Function App, Storage Account,
-# otro Logic App y Application Insights, pensada para flotas de VMs en
-# varias suscripciones. Para una sola VM es sobre-ingeniería.
-#
-# Secuencia obligatoria al crear o habilitar un Logic App: Disabled -> rol
-# "Virtual Machine Contributor" sobre la VM -> esperar propagación de RBAC
-# -> Enabled, y además, una definición con "startTime" fijo en el pasado
-# (no calculado por corrida) más "minutes" explícito en "schedule". Las dos
-# son defensas contra la MISMA familia de problema (una corrida automática
-# disparada fuera de lo esperado) pero para dos causas distintas, las dos
-# verificadas en vivo hoy: sin el orden Disabled->rol, la primera corrida
-# falla con Forbidden; sin "startTime", crear, habilitar o incluso
-# actualizar la definición de un Logic App ya Enabled dispara una corrida
-# de inmediato, sin importar la hora programada.
-#
-# "startTime" fijo, no calculado, por un bug real de Azure Logic Apps
-# verificado en vivo hoy (3 de septiembre de 2026) contra centinela-encender
-# y centinela-apagar en centinela-rg: cuando "startTime" cae EXACTAMENTE
-# sobre una hora que también está en "schedule.hours", Azure excluye ese
-# turno específico y agenda el disparo un día completo después de lo
-# esperado (probado con el turno de hoy y con el turno de mañana, los dos
-# saltados). Un "startTime" fijo en el pasado que nunca coincide con una
-# ejecución futura, sumado a "minutes": ["0"] explícito, evita el problema
-# sin necesidad de recalcular nada por corrida (probado en vivo:
-# "nextExecutionTime" cayó en el turno real esperado, sin saltarse ningún
-# día). Ver el comentario de asegurar_definicion_logic_app para el detalle
-# de cómo se compara ahora ese valor fijo.
-#
-# Corre en el portátil del operador, igual que infra/azure/crear-servidor.sh
-# (ver la cabecera de ese archivo): nunca en el servidor real.
-#
-# Banderas: --simular y --ayuda. A diferencia de crear-servidor.sh, este
-# script NO tiene --registrar-proveedores: la tarjeta no lo pidió. Los
-# proveedores Microsoft.Automation y Microsoft.Logic quedaron Registered en
-# esta suscripción como efecto colateral de la sesión de hoy (el primero,
-# del intento fallido con Automation Account; el segundo, del despliegue
-# real de Logic Apps), así que no hace falta registrarlos para lo que este
-# script hace hoy. Si algún día se necesitara en una suscripción nueva,
-# sigue siendo decisión de un humano (az provider register -n <proveedor>
-# --wait), no algo que este script automatice en silencio: es un cambio a
-# nivel de suscripción que comparte el equipo.
-#
-# Este script NO incluye ningún camino de rollback ni de teardown, por la
-# misma razón que crear-servidor.sh: borrar recursos en la nube necesita que
-# lo decida un humano.
+# SCRUM-29: crea dos Logic Apps en Azure para encender y apagar centinela-vm
+# a diario (08:00 y 12:00 hora Colombia). Corre en el portátil del operador.
 set -euo pipefail
 
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -158,10 +70,8 @@ nube necesita que lo decida un humano.
 EOF
 }
 
-# jq no es una dependencia genérica de infra/azure/ (crear-servidor.sh no lo
-# necesita), así que el chequeo vive acá, no en lib/comun.sh: es específico
-# de cómo este script decide si hace falta un "az logic workflow update"
-# (ver asegurar_definicion_logic_app) sin falsos positivos.
+# jq no es dependencia genérica de infra/azure/ (crear-servidor.sh no lo
+# necesita): es específico de este script.
 verificar_cli_jq() {
   command -v jq >/dev/null 2>&1 \
     || error_fatal "No se encontró jq en el PATH. Es necesario para comparar la definición publicada de cada Logic App sin falsos positivos por los campos calculados que Azure le agrega (evaluatedRecurrence)."
@@ -174,30 +84,8 @@ verificar_preflight() {
   confirmar_suscripcion
 }
 
-# Sustituye los placeholders literales del JSON de plantilla ({SUSCRIPCION},
-# {GRUPO_RECURSOS}, {NOMBRE_VM}) por los valores reales de esta corrida y
-# deja el resultado en un archivo temporal SIN envolver (el objeto crudo
-# del workflow: $schema/contentVersion/triggers/actions/outputs). Se
-# resuelve con expansión de parámetros de bash, no con jq: los placeholders
-# viven dentro de valores de cadena (la URI), no son una estructura que jq
-# tendría que reconstruir. El archivo de plantilla en infra/azure/logic-apps/
-# NUNCA se edita en el disco: solo se lee, la sustitución vive en memoria.
-# Sufijo ".json" en el archivo temporal por prolijidad, no por necesidad
-# real del CLI.
-#
-# "startTime" y "schedule.minutes" YA vienen fijos, literales, en la propia
-# plantilla JSON (igual que "schedule.hours"): no son un placeholder que
-# esta función resuelva. Ver la cabecera del archivo para el porqué de un
-# "startTime" fijo en el pasado en vez de calculado por corrida.
-#
-# Este archivo SIN envolver es el que compara asegurar_definicion_logic_app
-# contra "az logic workflow show --query definition" (que también devuelve
-# el objeto sin envolver, porque ahí "definition" ya es el nombre de la
-# propiedad). NO se lo pases directo a "--definition": verificado en vivo
-# que esta versión instalada del CLI (extensión "logic" 1.1.0) rechaza un
-# archivo sin envolver con "--definition does not contain a 'definition'
-# key". Para eso existe envolver_definicion_logic_app, que envuelve ESTE
-# archivo en uno aparte justo antes de cada "create"/"update".
+# Sustituye placeholders con expansión de bash (nunca edita la plantilla en
+# disco). Queda SIN envolver: usa envolver_definicion_logic_app antes de --definition.
 resolver_definicion_logic_app() {
   local archivo_plantilla="$1"
   local suscripcion contenido archivo_salida
@@ -215,20 +103,8 @@ resolver_definicion_logic_app() {
   printf '%s' "$archivo_salida"
 }
 
-# Envuelve el archivo SIN envolver de resolver_definicion_logic_app en uno
-# nuevo con la clave literal "definition" al nivel superior, en un archivo
-# temporal aparte (nunca modifica archivo_sin_envolver). Es el único
-# formato que esta versión instalada del CLI acepta para
-# "az logic workflow create/update --definition" (verificado en vivo,
-# az-cli 2.89.1 con la extensión "logic" 1.1.0: sin envolver, el comando
-# falla ANTES de llamar la API con "--definition does not contain a
-# 'definition' key"; con --slurpfile de abajo, verificado que sí funciona
-# tanto para "create" como para "update" contra un Logic App real
-# descartable, borrado después de la prueba). No envolver también el
-# archivo de plantilla en infra/azure/logic-apps/ ni el que produce
-# resolver_definicion_logic_app: asegurar_definicion_logic_app necesita esa
-# versión sin envolver para compararla contra "az logic workflow show
-# --query definition", que devuelve el objeto YA sin envolver.
+# Envuelve en {"definition": ...}: el CLI lo exige en --definition, si no
+# falla con "does not contain a 'definition' key".
 envolver_definicion_logic_app() {
   local archivo_sin_envolver="$1"
   local archivo_envuelto
@@ -240,12 +116,8 @@ envolver_definicion_logic_app() {
   printf '%s' "$archivo_envuelto"
 }
 
-# Crea el Logic App si no existe todavía, en --state Disabled y con
-# identidad administrada system-assigned habilitada desde la creación. Se
-# crea Disabled a propósito, nunca Enabled: ver la cabecera del archivo y
-# asegurar_estado_habilitado_logic_app para el detalle completo de por qué
-# (Forbidden por RBAC sin propagar, y por separado, disparo inmediato o
-# fuera de horario sin un "startTime" fijo en el pasado).
+# Crea en --state Disabled, nunca Enabled: habilitar antes de que el rol
+# se propague produce Forbidden.
 asegurar_logic_app_recurso() {
   local nombre="$1" archivo_definicion="$2"
   local archivo_envuelto
@@ -264,18 +136,13 @@ asegurar_logic_app_recurso() {
   rm -f "$archivo_envuelto"
 }
 
-# Lee (con reintento) el principalId de la identidad administrada del Logic
-# App. Mismo patrón de reintento (9 intentos/10s) que usaba
-# asegurar_identidad_administrada para el Automation Account del diseño
-# anterior: la propagación a Microsoft Graph/RBAC de una identidad recién
-# creada puede tardar unos segundos, y sin reintento la primera lectura
-# justo después de crear el recurso suele devolver vacío.
+# Reintento (9 intentos/10s): el principalId recién creado puede tardar
+# unos segundos en propagar a RBAC.
 leer_principal_id_logic_app() {
   local nombre="$1" principal_id intento
 
   if ! recurso_existe logic workflow show -g "$GRUPO_RECURSOS" -n "$nombre"; then
-    # Solo pasa bajo --simular contra un Logic App que todavía no existe de
-    # verdad: no hay un principalId real que leer todavía.
+    # Bajo --simular sin un Logic App real, no hay principalId que leer.
     return 0
   fi
 
@@ -292,16 +159,8 @@ leer_principal_id_logic_app() {
   error_fatal "La identidad administrada de ${nombre} no propagó un principalId después de 90s."
 }
 
-# A diferencia de "az role assignment create", que sí acepta
-# --assignee-principal-type, "az role assignment list" lo RECHAZA con
-# "unrecognized arguments" (verificado en este entorno, az-cli 2.89.1): por
-# eso el chequeo de existencia de abajo usa solo --assignee-object-id, sin
-# ese flag, aunque la creación sí lo use. Este es un ajuste sobre el patrón
-# del diseño anterior (asegurar_rol_vm para Automation Account), que sí
-# combinaba los dos flags en el "list" y por eso el chequeo de existencia
-# ahí nunca funcionó de verdad (el "2>/dev/null || true" que lo rodeaba
-# ocultaba el error, así que ese script habría reintentado crear el rol en
-# cada corrida sin fallar nunca lo bastante fuerte como para notarlo).
+# "az role assignment list" rechaza --assignee-principal-type (a diferencia
+# de "create"): el chequeo de abajo usa solo --assignee-object-id.
 asegurar_rol_logic_app() {
   local nombre="$1" principal_id="$2"
   local id_vm asignacion_existente
@@ -333,11 +192,8 @@ asegurar_rol_logic_app() {
   esperar_propagacion_rol "$principal_id" "$id_vm"
 }
 
-# Reintento acotado (9 intentos/10s, mismo patrón que
-# leer_principal_id_logic_app) para confirmar que el rol recién asignado ya
-# es una lectura estable antes de habilitar el Logic App: habilitar
-# demasiado pronto es justo lo que produjo el Forbidden observado en la
-# prueba en vivo de hoy (ver la cabecera del archivo).
+# Reintento (9 intentos/10s): confirma que el rol ya es una lectura
+# estable antes de habilitar, o produce Forbidden.
 esperar_propagacion_rol() {
   local principal_id="$1" id_vm="$2"
   local intento asignacion
@@ -353,19 +209,8 @@ esperar_propagacion_rol() {
   error_fatal "El rol 'Virtual Machine Contributor' no se propagó a una lectura después de 90s."
 }
 
-# Compara solo el subconjunto de la definición que de verdad importa
-# (triggers.Recurrence.recurrence completo, con frequency, interval,
-# timeZone, startTime y schedule, más actions), no el objeto completo:
-# Azure agrega campos calculados al guardar la definición de un Logic App
-# (por ejemplo triggers.Recurrence.evaluatedRecurrence), y una comparación
-# cruda del objeto completo SIEMPRE diría "distinto" y reintentaría la
-# escritura en cada corrida, incluso sin cambios reales.
-#
-# "startTime" YA se incluye en esta comparación (a diferencia del diseño
-# anterior, que lo excluía con "del(.startTime)"): ahora es una constante
-# fija en el pasado, la misma en cada corrida (ver la cabecera del
-# archivo), así que un diff que lo incluya detecta también si alguien
-# cambia ese valor por error, sin producir falsos positivos por corrida.
+# Compara solo recurrence+actions, no el objeto completo: Azure agrega
+# campos calculados (evaluatedRecurrence) que darían siempre "distinto".
 asegurar_definicion_logic_app() {
   local nombre="$1" archivo_definicion="$2"
   local relevante_local relevante_remoto archivo_envuelto
@@ -387,29 +232,16 @@ asegurar_definicion_logic_app() {
     return 0
   fi
 
-  # Un "update" de la definición de un Logic App ya Enabled podría, en
-  # teoría, volver a disparar el trigger igual que crear o habilitar: se
-  # verificó en vivo que el startTime fijo que ya trae archivo_definicion
-  # también cubre este caso (ninguna corrida nueva apareció al actualizar
-  # centinela-apagar con su startTime puesto), pero queda documentado acá
-  # porque es la única defensa real contra eso, no una garantía aparte.
+  # Un update sobre un Logic App ya Enabled podría re-disparar el trigger;
+  # el startTime fijo es la defensa real.
   archivo_envuelto="$(envolver_definicion_logic_app "$archivo_definicion")"
   ejecutar_cambio "la definición del Logic App ${nombre}" \
     az logic workflow update -g "$GRUPO_RECURSOS" -n "$nombre" --definition "$archivo_envuelto"
   rm -f "$archivo_envuelto"
 }
 
-# Último paso de la secuencia Disabled -> rol -> Enabled: solo llega acá
-# después de que asegurar_rol_logic_app confirmó (con reintento) que el rol
-# ya es una lectura estable, así que habilitar acá no repite el Forbidden
-# de la prueba en vivo de hoy. Ese orden por sí solo, sin embargo, NO basta
-# para evitar que el Logic App ejecute su acción real fuera de horario: se
-# verificó en vivo que habilitar un Logic App (no solo crearlo) también
-# dispara su trigger de inmediato si la definición no trae "startTime". La
-# defensa real contra eso es el startTime fijo en el pasado que ya viene
-# literal en la plantilla JSON desde que se creó o actualizó (ver la
-# cabecera del archivo y asegurar_definicion_logic_app), no el orden
-# Disabled->Enabled de esta función.
+# Último paso Disabled -> rol -> Enabled: evita Forbidden, pero la defensa
+# real contra un disparo fuera de horario es el startTime fijo de la plantilla.
 asegurar_estado_habilitado_logic_app() {
   local nombre="$1" principal_id="$2"
   local estado_actual
@@ -433,9 +265,8 @@ asegurar_estado_habilitado_logic_app() {
     az logic workflow update -g "$GRUPO_RECURSOS" -n "$nombre" --state Enabled
 }
 
-# Orquesta la creación/actualización idempotente de un Logic App: recurso
-# (Disabled + identidad) -> rol sobre la VM -> definición -> habilitado. Ver
-# el comentario de cada asegurar_* para el porqué de cada paso y del orden.
+# Orquesta un Logic App: recurso (Disabled+identidad) -> rol -> definición
+# -> habilitado.
 asegurar_logic_app() {
   local nombre="$1" archivo_plantilla="$2"
   local archivo_definicion principal_id
@@ -452,20 +283,14 @@ asegurar_logic_app() {
   asegurar_definicion_logic_app "$nombre" "$archivo_definicion"
   asegurar_estado_habilitado_logic_app "$nombre" "$principal_id"
 
-  # Limpieza del archivo temporal de resolver_definicion_logic_app: es un
-  # archivo propio de este script, creado y consumido en la misma corrida,
-  # no un archivo del usuario, así que un "rm -f" directo es lo correcto
-  # acá (a diferencia de un borrado interactivo, que en este equipo pasa
-  # por trash-put).
+  # Archivo temporal propio del script: "rm -f" directo está bien acá, no
+  # pasa por trash-put (no es un archivo de usuario).
   rm -f "$archivo_definicion"
 }
 
 crear_recursos() {
-  # 08:00 COT (encendido) y 12:00 COT (apagado), hora de Bogotá: el
-  # "schedule.hours" (8 y 12) y el "timeZone" ("SA Pacific Standard Time")
-  # ya están fijos en cada plantilla JSON, igual que "startTime" y
-  # "schedule.minutes". Si el horario cambia algún día, edita la plantilla
-  # correspondiente en infra/azure/logic-apps/ directamente.
+  # 08:00/12:00 hora Colombia ya vienen fijos en cada plantilla JSON. Para
+  # cambiar el horario, edita la plantilla en logic-apps/.
   asegurar_logic_app "$NOMBRE_LOGIC_ENCENDER" "${DIRECTORIO_SCRIPT}/logic-apps/encender-vm.json"
   asegurar_logic_app "$NOMBRE_LOGIC_APAGAR" "${DIRECTORIO_SCRIPT}/logic-apps/apagar-vm.json"
 }

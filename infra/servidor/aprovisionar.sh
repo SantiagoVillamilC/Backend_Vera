@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # infra/servidor/aprovisionar.sh
 #
-# Orquestador del aprovisionamiento del servidor. Recorre infra/servidor/pasos/
-# en orden numérico y hace source de cada archivo, para que todos compartan el
-# contador de cambios y los helpers de infra/servidor/lib/comun.sh.
+# Orquestador del aprovisionamiento: recorre infra/servidor/pasos/ en orden
+# numérico y hace source de cada archivo (ver infra/servidor/README.md).
 set -euo pipefail
 
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,24 +11,12 @@ DIRECTORIO_PASOS="${DIRECTORIO_SCRIPT}/pasos"
 # shellcheck source=lib/comun.sh
 source "${DIRECTORIO_SCRIPT}/lib/comun.sh"
 
-# Única fuente de verdad del sistema operativo y la imagen fijados. Se carga
-# aquí, no dentro del gate, para que todos los pasos (no solo
-# 00-verificar-sistema.sh) puedan usar sus variables.
 # shellcheck source=imagen-fijada.sh
 source "${DIRECTORIO_SCRIPT}/imagen-fijada.sh"
 
-# Única fuente de verdad del puerto SSH fijado. Se carga aquí, justo después
-# de imagen-fijada.sh y por la misma razón: no dentro de 10-ssh.sh, para que
-# cualquier paso futuro (no solo el de SSH) pueda usar PUERTO_SSH sin tener
-# que repetir el source.
 # shellcheck source=red-fijada.sh
 source "${DIRECTORIO_SCRIPT}/red-fijada.sh"
 
-# Única fuente de verdad del dominio del servidor. Se carga aquí, junto con
-# imagen-fijada.sh y red-fijada.sh, por la misma razón que esos dos: no
-# dentro de 30-nginx.sh, para que cualquier paso futuro (no solo el de
-# nginx, también 50-certbot.sh a futuro) pueda usar DOMINIO_SERVIDOR sin
-# tener que repetir el source.
 # shellcheck source=dominio-fijado.sh
 source "${DIRECTORIO_SCRIPT}/dominio-fijado.sh"
 
@@ -41,9 +28,7 @@ if [[ -f "${ARCHIVO_ENV}" ]]; then
 fi
 
 _APROV_TOTAL_PASOS=0
-# Archivo del gate de entrada (infra/servidor/pasos/00-verificar-sistema.sh).
-# --solo lo ejecuta primero cuando el paso pedido es otro, para que ninguna
-# corrida dirigida se salte la verificación de sistema por accidente.
+# Paso 00, el gate de entrada.
 ARCHIVO_GATE="00-verificar-sistema.sh"
 
 mostrar_ayuda() {
@@ -61,9 +46,8 @@ Sin opciones, ejecuta todos los pasos de pasos/ en orden numérico.
 EOF
 }
 
-# Lee NOMBRE_PASO y TARJETA de cada archivo de paso sin ejecutar su cuerpo, para
-# que --lista sea siempre de solo lectura aunque un paso futuro ya esté
-# implementado de verdad.
+# Lee NOMBRE_PASO y TARJETA sin ejecutar el cuerpo del paso, para que
+# --lista sea siempre de solo lectura.
 mostrar_lista() {
   paso "Pasos disponibles"
 
@@ -76,9 +60,8 @@ mostrar_lista() {
   done
 }
 
-# Hace source de un archivo de paso. Se limpian NOMBRE_PASO y TARJETA antes,
-# porque al compartir el mismo shell un paso que olvide declararlas heredaría
-# por error los valores del paso anterior.
+# Limpia NOMBRE_PASO y TARJETA antes del source: comparten el mismo shell, y
+# un paso que las olvide heredaría las del paso anterior.
 ejecutar_paso() {
   local archivo="$1"
 
@@ -98,9 +81,7 @@ imprimir_resumen() {
   local cambios
   local pasos_aplicados
   cambios="$(resumen_cambios)"
-  # _APROV_TOTAL_PASOS cuenta todo paso que se ejecutó, esté implementado o
-  # pendiente. Los pasos aplicados son los que sí están implementados, es
-  # decir el total menos los que se saltaron por estar pendientes.
+  # Pasos aplicados = total ejecutados menos los pendientes por implementar.
   pasos_aplicados=$((_APROV_TOTAL_PASOS - _APROV_PASOS_PENDIENTES))
 
   paso "Resumen de aprovisionamiento"
@@ -113,9 +94,8 @@ imprimir_resumen() {
   printf 'CAMBIOS_APLICADOS=%s\n' "${cambios}"
 }
 
-# Recorre todos los pasos, o uno solo si modo es "unico", y al final imprime el
-# resumen. Devuelve 0 aunque queden pasos pendientes: solo falla si un paso
-# implementado revienta de verdad.
+# Recorre todos los pasos (o uno solo si modo es "unico") e imprime el
+# resumen; solo falla si un paso implementado revienta de verdad.
 ejecutar_todo() {
   local modo="$1"
   local archivo_unico="$2"

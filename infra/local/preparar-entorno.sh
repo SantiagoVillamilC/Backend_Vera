@@ -1,41 +1,11 @@
 #!/usr/bin/env bash
-# infra/local/preparar-entorno.sh
-#
-# Diagnostica (o, con --instalar, instala) las herramientas que necesita un
-# integrante del equipo para trabajar en Backend_Centinela: Go (el backend),
-# Docker con el plugin compose (entorno local y Postgres en contenedor), el
-# linter shellcheck (revisar los scripts de infra/ antes del PR), Vagrant con
-# su proveedor de virtualización (VM local para probar el aprovisionamiento) y
-# Azure CLI (los scripts de infra/azure/).
-#
-# El proveedor no se limita a los paquetes: también verifica (e instala) lo
-# que "vagrant up --provider=libvirt" necesita para funcionar de verdad
-# (grupo libvirt del usuario, socket/servicio activo, red "default" activa,
-# plugin vagrant-libvirt). Ver la sección "Proveedor libvirt/KVM" más abajo.
-#
-# Distribuciones soportadas: Arch Linux y Debian/Ubuntu. Windows queda fuera de
-# este script a propósito: un .sh no le sirve. En Windows la vía es abrir una
-# distribución WSL2 (donde este mismo script corre como si fuera Debian o
-# Ubuntu) o instalar cada herramienta a mano; ver infra/servidor/README.md.
-#
-# Este script solo instala el proveedor libvirt/KVM: es lo que corresponde a
-# un anfitrión Linux (está en el árbol del kernel, no necesita módulos DKMS
-# ni repositorios de terceros). VirtualBox solo hace falta en anfitriones
-# Windows, que no pasan por este script: ahí se instala con el instalador de
-# Windows y se usa directo desde el Vagrantfile de la raíz.
-#
-# Por defecto solo diagnostica: revisa qué hay, qué falta, e imprime el comando
-# exacto de instalación para la distribución detectada. No instala nada sin que
-# se pida explícitamente con --instalar. Nunca ejecuta sudo en silencio: el
-# comando que necesita sudo se muestra completo antes de ejecutarse, o el
-# script dice explícitamente que lo va a pedir.
+# infra/local/preparar-entorno.sh (SCRUM-27)
+# Diagnostica (o instala, con --instalar) Go, Docker, shellcheck, Vagrant/libvirt y Azure CLI.
 set -euo pipefail
 
 MODO_INSTALAR="no"
 HUBO_FALLO=0
-# El proveedor de Vagrant es libvirt/KVM en las dos distribuciones que cubre
-# este script (ver el comentario de cabecera): no hay rama por distro para
-# esta etiqueta.
+# libvirt/KVM es el proveedor en las dos distribuciones: no hay rama por distro para esta etiqueta.
 ETIQUETA_PROVEEDOR="Proveedor Vagrant (libvirt/KVM)"
 
 paso() { printf '==> %s\n' "$1"; }
@@ -47,9 +17,7 @@ comando_existe() {
   command -v "$1" &>/dev/null
 }
 
-# Ejecuta el comando pasado como "$@" y traduce su código de salida a "si" o
-# "no" sin que un resultado negativo dispare set -e: esta función siempre
-# termina con un printf que sale con estado 0.
+# Traduce el código de salida de "$@" a si/no sin disparar set -e: siempre termina en printf, estado 0.
 estado_si_no() {
   if "$@"; then
     printf 'si'
@@ -76,9 +44,7 @@ herramienta a mano (ver infra/servidor/README.md).
 EOF
 }
 
-# Lee /etc/os-release en un subshell para no contaminar las variables de este
-# script con el ID/ID_LIKE del sistema. Devuelve "arch", "debian" o
-# "desconocida" por stdout.
+# Lee /etc/os-release en un subshell para no pisar variables del script; devuelve arch, debian o desconocida.
 detectar_distribucion() {
   if [[ ! -r /etc/os-release ]]; then
     printf 'desconocida'
@@ -106,10 +72,7 @@ detectar_distribucion() {
   esac
 }
 
-# En Arch, Vagrant y Azure CLI se resuelven distinto: Azure CLI está en el
-# repositorio oficial "extra" (verificado con pacman -Si azure-cli), pero
-# Vagrant solo está en AUR (pacman -Si vagrant falla). Por eso solo Vagrant
-# necesita un ayudante de AUR.
+# En Arch, Azure CLI está en el repositorio oficial; Vagrant solo en AUR, por eso solo Vagrant necesita ayudante.
 ayudante_aur() {
   if comando_existe yay; then
     printf 'yay'
@@ -143,9 +106,7 @@ verificar_grupo_libvirt() {
   id -nG | grep -qw libvirt
 }
 
-# libvirtd.socket (activación por socket) es la unidad recomendada en systemd
-# moderno; libvirtd.service es el respaldo en distribuciones que todavía no
-# la traen. Ninguna de las dos existe hasta que se instala el proveedor.
+# libvirtd.socket es la unidad recomendada en systemd moderno; libvirtd.service es el respaldo. Ninguna existe sin el proveedor instalado.
 detectar_unidad_libvirt() {
   if systemctl list-unit-files libvirtd.socket --no-legend 2>/dev/null | grep -q .; then
     printf 'libvirtd.socket'
@@ -163,22 +124,38 @@ verificar_socket_libvirt() {
 }
 
 # Sin privilegios, solo lo intenta si el usuario ya está en el grupo libvirt.
-# No se decide mirando el texto de error de virsh: se probó en un contenedor
-# sin D-Bus del sistema y el mensaje fue "Unable to get system bus
-# connection", no un "Permission denied" reconocible; el texto además puede
-# venir traducido según el idioma del sistema. El grupo es la señal
-# confiable, no depende de idioma ni de qué tan roto esté el entorno.
 verificar_red_default() {
   local activa
-  # "|| true" para que un virsh que falla (red inexistente, sin conexión) no
-  # dispare set -e por sí solo: esta asignación tiene que poder seguir hasta
-  # el "[[ ]]" de abajo pase lo que pase.
+  # "|| true": un virsh que falla no debe disparar set -e antes del "[[ ]]" de abajo.
   activa="$(virsh -c qemu:///system net-info default 2>/dev/null | awk '/^Active:/ {print $2}' || true)"
   [[ "$activa" == "yes" ]]
 }
 
 verificar_plugin_libvirt() {
   comando_existe vagrant && vagrant plugin list 2>/dev/null | grep -q '^vagrant-libvirt '
+}
+
+# El bridge de vagrant-libvirt lo asigna libvirt dinámicamente (no siempre "virbr1"): se consulta con virsh, nunca se asume.
+detectar_bridge_vagrant_libvirt() {
+  virsh -c qemu:///system net-info vagrant-libvirt 2>/dev/null | awk '/^Bridge:/ {print $2}' || true
+}
+
+# Requiere root (iptables sin atajo de grupo): quien llama debe verificar antes con hay_sudo_cacheado para no disparar un prompt.
+verificar_forward_docker_libvirt() {
+  local bridge="$1"
+  sudo iptables -C DOCKER-USER -i "$bridge" -j ACCEPT &>/dev/null \
+    && sudo iptables -C DOCKER-USER -o "$bridge" -j ACCEPT &>/dev/null
+}
+
+# Prueba no interactiva (sudo -n): nunca pide contraseña, solo indica si hay credencial vigente.
+hay_sudo_cacheado() {
+  sudo -n true &>/dev/null
+}
+
+comando_instalar_forward_docker_libvirt() {
+  local bridge="$1"
+  printf 'sudo iptables -C DOCKER-USER -i %s -j ACCEPT 2>/dev/null || sudo iptables -I DOCKER-USER -i %s -j ACCEPT; sudo iptables -C DOCKER-USER -o %s -j ACCEPT 2>/dev/null || sudo iptables -I DOCKER-USER -o %s -j ACCEPT' \
+    "$bridge" "$bridge" "$bridge" "$bridge"
 }
 
 comando_instalar_go() {
@@ -189,13 +166,6 @@ comando_instalar_go() {
   fi
 }
 
-# En Debian 12 no existe un paquete "docker-compose-v2": apt-cache policy
-# confirma que el repositorio principal solo trae docker-compose (v1,
-# obsoleto). Por eso en Debian/Ubuntu se usa el script de conveniencia oficial
-# de Docker (get.docker.com), que instala docker-ce, containerd y el plugin
-# docker-compose-plugin (v2) juntos, y ya habilita el servicio por su cuenta.
-# Verificado de punta a punta en un contenedor debian:12: "docker compose
-# version" respondió "Docker Compose version v5.5.0" tras la instalación.
 comando_instalar_docker() {
   if [[ "$1" == "arch" ]]; then
     printf 'sudo pacman -S --needed --noconfirm docker docker-compose && sudo systemctl enable --now docker.service'
@@ -229,16 +199,7 @@ comando_instalar_vagrant() {
   fi
 }
 
-# El proveedor es libvirt/KVM en las dos distribuciones: está en el árbol del
-# kernel, no necesita módulos DKMS ni repositorios de terceros (a diferencia
-# de VirtualBox, que en Debian/Ubuntu exigiría agregar el repositorio de
-# Oracle). Nombres de paquete verificados en un contenedor debian:13 limpio:
-# libvirt-daemon-system, qemu-system-x86 y dnsmasq instalan sin problema, y
-# vagrant-libvirt (empaquetado en Debian, a diferencia de Arch) queda
-# registrado como plugin de sistema: "vagrant plugin list" lo muestra como
-# "vagrant-libvirt (versión, system)". Esta función ya NO habilita el
-# servicio: eso lo cubre comando_instalar_socket_libvirt, como un paso propio
-# y verificable aparte.
+# Mismo proveedor en las dos distros, solo cambia el gestor de paquetes; ya no habilita el servicio, eso lo hace comando_instalar_socket_libvirt aparte.
 comando_instalar_proveedor() {
   if [[ "$1" == "arch" ]]; then
     printf 'sudo pacman -S --needed --noconfirm libvirt qemu-desktop dnsmasq'
@@ -247,9 +208,7 @@ comando_instalar_proveedor() {
   fi
 }
 
-# "id -un" en vez de "$USER": en un entorno mínimo (por ejemplo, un
-# contenedor sin sesión de login) $USER puede llegar vacío aunque el usuario
-# real sí exista, y "usermod -aG libvirt ''" fallaría con un nombre vacío.
+# "id -un" en vez de "$USER": en un entorno mínimo $USER puede llegar vacío y usermod fallaría con un nombre vacío.
 usuario_actual() {
   id -un
 }
@@ -352,10 +311,30 @@ diagnosticar_plugin_libvirt() {
   info "El plugin vagrant-libvirt compila extensiones nativas al instalarse: es el paso del proveedor que más se rompe."
 }
 
-# Verificación final de que "vagrant up --provider=libvirt" tiene chance de
-# funcionar de verdad: los paquetes instalados no bastan. Reporta cada item
-# por separado, nunca con un mensaje global, en el orden que pidió el equipo:
-# grupo, socket, red, plugin.
+diagnosticar_forward_docker_libvirt() {
+  if ! comando_existe docker; then
+    imprimir_fila "Reenvío Docker->vagrant-libvirt" "no" "(depende de que Docker esté instalado)"
+    return 0
+  fi
+
+  local bridge
+  bridge="$(detectar_bridge_vagrant_libvirt)"
+  if [[ -z "$bridge" ]]; then
+    imprimir_fila_incierta "Reenvío Docker->vagrant-libvirt" "la red vagrant-libvirt todavía no existe (la crea 'vagrant up' la primera vez)"
+    return 0
+  fi
+
+  if ! hay_sudo_cacheado; then
+    imprimir_fila_incierta "Reenvío Docker->vagrant-libvirt (${bridge})" "sin privilegios: iptables -C exige root, sin atajo de grupo como libvirt"
+    return 0
+  fi
+
+  local presente
+  presente="$(estado_si_no verificar_forward_docker_libvirt "$bridge")"
+  imprimir_fila "Reenvío Docker->vagrant-libvirt (${bridge})" "$presente" "$(comando_instalar_forward_docker_libvirt "$bridge")"
+}
+
+# Verifica que "vagrant up --provider=libvirt" pueda funcionar de verdad: reporta cada ítem por separado (grupo, socket, red, plugin), nunca un mensaje global.
 verificar_usabilidad_proveedor() {
   paso "¿El proveedor libvirt/KVM queda usable para \"vagrant up\"?"
 
@@ -390,6 +369,22 @@ verificar_usabilidad_proveedor() {
   else
     aviso "Plugin vagrant-libvirt: falta. \"vagrant up --provider=libvirt\" no funciona sin él."
   fi
+
+  if ! comando_existe docker; then
+    info "Reenvío Docker->vagrant-libvirt: no aplica, Docker no está instalado."
+    return 0
+  fi
+  local bridge
+  bridge="$(detectar_bridge_vagrant_libvirt)"
+  if [[ -z "$bridge" ]]; then
+    info "Reenvío Docker->vagrant-libvirt: no se puede verificar todavía, la red la crea \"vagrant up\" la primera vez."
+  elif ! hay_sudo_cacheado; then
+    aviso "Reenvío Docker->vagrant-libvirt: no se pudo verificar sin privilegios (iptables -C exige root). Corre este script con --instalar para aplicarlo, o revísalo a mano con sudo."
+  elif verificar_forward_docker_libvirt "$bridge"; then
+    info "Reenvío Docker->vagrant-libvirt (${bridge}): permitido."
+  else
+    aviso "Reenvío Docker->vagrant-libvirt (${bridge}): bloqueado. Docker deja \"policy drop\" en su cadena FORWARD y nunca agrega una regla para este bridge: la VM va a arrancar y responder SSH, pero cualquier conexión saliente DESDE DENTRO de la VM (apt-get, curl) se va a colgar sin error. Corre este script con --instalar para agregar la regla."
+  fi
 }
 
 diagnosticar() {
@@ -420,6 +415,7 @@ diagnosticar() {
   diagnosticar_socket_libvirt
   diagnosticar_red_default
   diagnosticar_plugin_libvirt
+  diagnosticar_forward_docker_libvirt
 
   presente="$(estado_si_no verificar_az)"
   imprimir_fila "Azure CLI (az)" "$presente" "$(comando_instalar_az "$distro")"
@@ -428,9 +424,7 @@ diagnosticar() {
   verificar_usabilidad_proveedor
 }
 
-# Ejecuta el comando de instalación mostrándolo primero, para que sudo nunca
-# se invoque en silencio: el integrante ve el comando completo (con sudo
-# incluido cuando hace falta) antes de que corra.
+# Muestra el comando completo antes de ejecutarlo: sudo nunca se invoca en silencio.
 ejecutar_instalacion() {
   local descripcion="$1"
   local comando="$2"
@@ -497,14 +491,7 @@ instalar_vagrant() {
   ejecutar_instalacion "Vagrant" "${ayudante} -S vagrant" || HUBO_FALLO=1
 }
 
-# Se llama para las dos distribuciones, pero en la práctica solo actúa en
-# Arch: en Debian/Ubuntu, comando_instalar_proveedor ya instala vagrant-libvirt
-# como paquete apt, y "vagrant plugin list" lo muestra registrado como
-# "vagrant-libvirt (versión, system)" apenas se instala, así que esta función
-# encuentra el plugin listo y no hace nada. En Arch no existe ese paquete: el
-# plugin se instala con el gestor de plugins propio de Vagrant, sin sudo:
-# los plugins de Vagrant se instalan por usuario, y con sudo quedarían donde
-# el usuario no los ve.
+# Solo actúa en Arch: en Debian llega empaquetado con el proveedor. Sin sudo: los plugins de Vagrant son por usuario.
 instalar_plugin_libvirt() {
   if ! verificar_vagrant; then
     aviso "Vagrant no está instalado, se omite el plugin vagrant-libvirt."
@@ -518,9 +505,7 @@ instalar_plugin_libvirt() {
   ejecutar_instalacion "plugin vagrant-libvirt" "vagrant plugin install vagrant-libvirt" || HUBO_FALLO=1
 }
 
-# Solo agrega al usuario si el grupo ya existe (lo crea el paquete del
-# proveedor). Un cambio de grupo no aplica a la sesión en curso: el script no
-# puede fingir que ya quedó listo, así que siempre avisa qué hacer después.
+# Solo agrega si el grupo ya existe; un cambio de grupo no aplica a la sesión en curso, así que siempre avisa qué hacer después.
 instalar_grupo_libvirt() {
   if verificar_grupo_libvirt; then
     info "El usuario ya pertenece al grupo libvirt."
@@ -551,12 +536,7 @@ instalar_socket_libvirt() {
   ejecutar_instalacion "Socket/servicio libvirtd (${unidad})" "sudo systemctl enable --now ${unidad}" || HUBO_FALLO=1
 }
 
-# La red "default" queda definida pero inactiva y sin autoarranque justo
-# después de instalar el proveedor: es la causa típica de que "vagrant up"
-# falle con "Network default is not active". El chequeo previo usa sudo
-# (--instalar ya lo tiene disponible de forma interactiva): net-start se
-# omite si ya está activa, así que nunca falla por eso; net-autostart se
-# ejecuta siempre porque repetirlo no tiene efectos.
+# net-start se omite si la red ya está activa (nunca falla por eso); net-autostart se ejecuta siempre, repetirlo no tiene efecto.
 instalar_red_default() {
   if ! comando_existe virsh; then
     aviso "virsh no está instalado (el proveedor no se instaló), se omite activar la red default."
@@ -565,9 +545,7 @@ instalar_red_default() {
 
   local activa
   info "Ejecutando: sudo virsh net-info default (para revisar el estado antes de decidir)"
-  # "|| true": esta función se llama sin ningún if/&&/|| que la proteja, así
-  # que un virsh que falla (red sin definir, libvirtd recién arrancando)
-  # dispararía set -e aquí mismo si no se contiene.
+  # "|| true": sin protección de if/&&/||, un virsh que falla dispararía set -e aquí mismo.
   activa="$(sudo virsh -c qemu:///system net-info default 2>/dev/null | awk '/^Active:/ {print $2}' || true)"
 
   if [[ "$activa" == "yes" ]]; then
@@ -576,6 +554,38 @@ instalar_red_default() {
     ejecutar_instalacion "Red libvirt default" "sudo virsh net-start default" || HUBO_FALLO=1
   fi
   ejecutar_instalacion "Autoarranque de la red default" "sudo virsh net-autostart default" || HUBO_FALLO=1
+}
+
+# A diferencia de instalar_*, esta función sí necesita sudo para su propio chequeo de idempotencia; siempre visible en el "Ejecutando: ...".
+instalar_forward_docker_libvirt() {
+  if ! comando_existe docker; then
+    info "Docker no está instalado, se omite el reenvío Docker->vagrant-libvirt."
+    return 0
+  fi
+
+  local bridge
+  bridge="$(detectar_bridge_vagrant_libvirt)"
+  if [[ -z "$bridge" ]]; then
+    aviso "La red vagrant-libvirt todavía no existe (la crea 'vagrant up' la primera vez). Vuelve a correr --instalar después de un primer 'vagrant up' si la VM se queda sin red saliente."
+    return 0
+  fi
+
+  if ! sudo iptables -L DOCKER-USER -n &>/dev/null; then
+    # No se distingue el motivo (Docker sin arrancar o sudo sin autenticar): mismo criterio que con virsh, no se adivina la causa.
+    aviso "No se pudo confirmar la cadena DOCKER-USER (Docker sin arrancar, o sudo sin autenticar). Se omite el reenvío Docker->vagrant-libvirt; vuelve a correr --instalar si persiste."
+    return 0
+  fi
+
+  if verificar_forward_docker_libvirt "$bridge"; then
+    info "El reenvío Docker->vagrant-libvirt (${bridge}) ya está permitido."
+    return 0
+  fi
+
+  if ejecutar_instalacion "Reenvío Docker->vagrant-libvirt" "$(comando_instalar_forward_docker_libvirt "$bridge")"; then
+    aviso "Regla de iptables agregada, pero NO sobrevive un reinicio del host (no hay netfilter-persistent/iptables-services de por medio, a propósito, para no interferir con el firewall que ya tenga cada integrante). Si 'vagrant up' se queda sin red saliente después de reiniciar, vuelve a correr 'preparar-entorno.sh --instalar'."
+  else
+    HUBO_FALLO=1
+  fi
 }
 
 instalar_proveedor() {
@@ -591,6 +601,7 @@ instalar_proveedor() {
   instalar_grupo_libvirt
   instalar_red_default
   instalar_plugin_libvirt
+  instalar_forward_docker_libvirt
   diagnosticar_kvm
 }
 

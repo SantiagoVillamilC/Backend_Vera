@@ -1,21 +1,7 @@
 #!/usr/bin/env bash
 # infra/servidor/pasos/30-nginx.sh
-#
-# Instala y configura nginx como proxy inverso (tarjeta SCRUM-32), corriendo
-# como contenedor Docker en vez de como paquete de apt. Decisión de equipo,
-# no de este script: consistente con Postgres (SCRUM-33, todavía esqueleto)
-# y con la app (que ya trae Dockerfile propio, EXPOSE 8080). El razonamiento
-# completo, con los pros y contras de la alternativa descartada (paquete de
-# apt), vive en el comentario de Jira de SCRUM-32 y en la bitácora técnica
-# del proyecto de grado, no se repite acá.
-#
-# nginx comparte con Postgres un único infra/servidor/compose.yaml (ver ese
-# archivo): cada paso es dueño de su propio bloque bajo "services:" y corre
-# "docker compose up -d <servicio>" solo sobre el suyo.
-#
-# Este archivo se carga con source desde aprovisionar.sh, no se ejecuta como
-# proceso aparte (misma nota que 10-ssh.sh y 20-docker.sh sobre por qué no
-# usa "return" para salir temprano).
+# Instala y configura nginx como proxy inverso, en contenedor Docker
+# (SCRUM-32). Se carga con source: nunca "exit" para salir temprano.
 
 NOMBRE_PASO="Instalar y configurar nginx como proxy inverso"
 TARJETA="SCRUM-32"
@@ -25,37 +11,17 @@ paso "${NOMBRE_PASO} (${TARJETA})"
 ARCHIVO_COMPOSE="${DIRECTORIO_SCRIPT}/compose.yaml"
 DIRECTORIO_NGINX="${DIRECTORIO_SCRIPT}/nginx"
 
-# Verificado el 2 de septiembre de 2026 con:
-#   docker pull nginx:1.27.5-alpine
-#   docker inspect --format '{{index .RepoDigests 0}}' nginx:1.27.5-alpine
-# Digest resuelto: nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
-# (ese mismo día, el tag flotante de minor "1.27-alpine" resolvía al mismo
-# digest; se fija acá la versión de parche explícita, no la minor, para no
-# depender de que ese tag se mueva solo el día que nginx publique 1.27.6).
-# Declarada una sola vez acá, no repetida en compose.yaml: se interpola en
-# el heredoc de compose.yaml de más abajo y en la verificación con
-# "docker run ... nginx -t", para que el tag no pueda quedar desincronizado
-# entre los dos usos.
+# Versión de parche fijada a propósito: no cambiar a un tag flotante de minor.
 IMAGEN_NGINX="nginx:1.27.5-alpine"
 
-# Se escriben siempre, sin gate de systemd: son solo archivos de texto, no
-# necesitan ni Docker ni systemd para crearse. La única fuente de verdad de
-# su contenido son los heredocs de acá abajo, no un archivo estático aparte
-# versionado en el repositorio.
+# Los tres archivos se escriben siempre: no dependen de systemd ni de Docker.
 
 # ${DOMINIO_SERVIDOR} (infra/servidor/dominio-fijado.sh) sí se interpola acá,
 # por eso el heredoc va SIN comillas en el delimitador.
 contenido_centinela_conf="$(cat <<EOF
-# infra/servidor/nginx/conf.d/centinela.conf
+# infra/servidor/nginx/conf.d/centinela.conf (generado por 30-nginx.sh, no editar a mano)
 #
-# Generado por infra/servidor/pasos/30-nginx.sh (SCRUM-32) a partir de
-# DOMINIO_SERVIDOR (infra/servidor/dominio-fijado.sh). No editar a mano: el
-# próximo aprovisionamiento lo sobreescribe.
-#
-# El bloque "location /" vive en un archivo aparte
-# (nginx/snippets/raiz-http.conf, incluido más abajo) a propósito: cuando
-# SCRUM-30 (certbot) agregue el bloque 443, va a sobreescribir SOLO ese
-# snippet con la redirección a HTTPS, sin tocar este archivo.
+# location / vive en snippets/raiz-http.conf: SCRUM-30 solo reemplaza ese archivo.
 server {
     listen 80 default_server;
     server_name ${DOMINIO_SERVIDOR};
@@ -70,29 +36,13 @@ EOF
 )"
 asegurar_archivo_con_contenido "${DIRECTORIO_NGINX}/conf.d/centinela.conf" "${contenido_centinela_conf}"
 
-# raiz-http.conf NO tiene ninguna variable de bash que interpolar, pero SÍ
-# tiene variables de nginx ($host, $remote_addr, $scheme, $api,
-# $proxy_add_x_forwarded_for). Por eso este heredoc va CON comillas en el
-# delimitador ("<<'EOF'"): sin las comillas, bash intentaría expandir esas
-# variables de nginx como si fueran suyas, y como no están definidas en
-# este script, las reemplazaría por cadenas vacías (por ejemplo
-# "proxy_set_header Host ;" en vez de "proxy_set_header Host $host;"). Ese
-# error es sintácticamente válido para "nginx -t" (no lo detecta), pero
-# rompe el proxy en producción.
+# CON comillas en el delimitador: el contenido usa variables de nginx
+# ($host, $api...), no de bash; sin comillas, bash las expandiría a vacío.
 contenido_raiz_http="$(cat <<'EOF'
-# infra/servidor/nginx/snippets/raiz-http.conf
+# infra/servidor/nginx/snippets/raiz-http.conf (generado por 30-nginx.sh, no editar a mano)
 #
-# Generado por infra/servidor/pasos/30-nginx.sh (SCRUM-32). SCRUM-30 va a
-# sobreescribir este archivo con una redirección a HTTPS cuando exista el
-# certificado; hasta entonces, este es el único punto de entrada real al
-# backend.
-#
-# "resolver 127.0.0.11" + "set $api" difieren la resolución del nombre
-# "api" a tiempo de petición en vez de a tiempo de carga de la
-# configuración: sin esto, "nginx -t" y el arranque del contenedor fallan
-# con "host not found in upstream" mientras no exista ningún contenedor
-# "api" en la red "centinela" (todavía no hay ningún paso que lo
-# despliegue, ver infra/servidor/README.md).
+# resolver + set $api difieren la resolución de "api" a tiempo de petición:
+# ver infra/servidor/README.md.
 location / {
     resolver 127.0.0.11 valid=10s;
     set $api http://api:8080;
@@ -106,39 +56,12 @@ EOF
 )"
 asegurar_archivo_con_contenido "${DIRECTORIO_NGINX}/snippets/raiz-http.conf" "${contenido_raiz_http}"
 
-# compose.yaml tampoco tiene ninguna variable de nginx que proteger, así
-# que puede ir sin comillas en el delimitador: solo interpola
-# ${IMAGEN_NGINX}, declarada arriba.
+# Sin variables de nginx que proteger: puede ir sin comillas en el delimitador.
 contenido_compose="$(cat <<EOF
-# infra/servidor/compose.yaml
+# infra/servidor/compose.yaml (generado por 30-nginx.sh, no versionado, no editar a mano)
 #
-# Fragmento de compose dueño de nginx (SCRUM-32). Ya no es el único archivo
-# de compose del servidor: Postgres (40-postgres.sh, SCRUM-33) escribe el
-# suyo propio, compose.postgres.yaml, con solamente su bloque
-# "services: postgres:". Este archivo sigue siendo, sin embargo, la única
-# fuente de "name:" y del bloque top-level "networks:", que comparten TODOS
-# los servicios del proyecto, no solo nginx: compose.postgres.yaml no los
-# repite. asegurar_servicio_compose (lib/comun.sh) es quien arma, en tiempo
-# de "up -d", la lista de "-f" con TODOS los archivos compose*.yaml que
-# encuentre en este directorio, y docker compose fusiona las claves de
-# nivel superior entre ellos. Cada paso de infra/servidor/pasos/ sigue
-# siendo dueño de su propio bloque bajo "services:" y corriendo
-# "docker compose up -d <servicio>" solo sobre el suyo, sin tocar el bloque
-# de otro paso ni el archivo que ese otro paso escribió.
-#
-# Generado por infra/servidor/pasos/30-nginx.sh con
-# asegurar_archivo_con_contenido, no versionado como archivo estático
-# aparte: lo que viaja al servidor por scp como parte de infra/servidor/
-# (ver infra/servidor/README.md) es el SCRIPT que arma este archivo, no
-# este archivo ya armado. El próximo aprovisionamiento lo sobreescribe si
-# el contenido esperado cambió.
-#
-# "name:" fijo en vez de dejar que compose lo derive del nombre del
-# directorio: infra/servidor/ se copia a rutas distintas según el destino
-# (/opt/centinela/infra-servidor en Azure, /tmp/infra-servidor en Vagrant,
-# /root/infra-servidor en el contenedor de prueba de probar-en-docker.sh),
-# y sin este campo el nombre del proyecto (y por lo tanto el prefijo de
-# los contenedores) cambiaría según el destino.
+# Dueño único de "name:" y "networks:" top-level. Postgres agrega su propio
+# compose.postgres.yaml con solo su bloque "services:": ver infra/servidor/README.md.
 name: centinela
 
 networks:
@@ -162,30 +85,14 @@ EOF
 )"
 asegurar_archivo_con_contenido "${ARCHIVO_COMPOSE}" "${contenido_compose}"
 
-# Vacío por ahora: lo usa certbot a futuro (SCRUM-30) para dejar ahí el
-# archivo de verificación del reto ACME que nginx sirve desde
-# /.well-known/acme-challenge/ (ver centinela.conf arriba).
+# Vacío por ahora: SCRUM-30 (certbot) lo va a usar para el reto ACME.
 asegurar_directorio "${DIRECTORIO_NGINX}/webroot"
 
 if [[ ! -d /run/systemd/system ]]; then
-  # Mismo criterio que 10-ssh.sh y asegurar_servicio_activo (lib/comun.sh):
-  # sin systemd como proceso 1 no hay daemon de Docker que alcanzar, así
-  # que ni la prueba de configuración contra un contenedor real ni
-  # "docker compose up -d nginx" pueden correr acá. Es el caso del
-  # contenedor de infra/servidor/probar-en-docker.sh, que además no monta
-  # el socket de Docker (ver la nota de cabecera de asegurar_servicio_compose
-  # en lib/comun.sh). Los archivos de configuración sí quedaron escritos
-  # arriba; lo que se omite es todo lo que depende del daemon: la prueba de
-  # "nginx -t" contra un contenedor real, el contenedor nginx en sí, y la
-  # verificación del puerto 80. Hay que verificarlo en la VM real (Azure o
-  # Vagrant).
   aviso "systemd no es el proceso 1 en este sistema (no existe /run/systemd/system): se omite por completo la prueba de configuración y el contenedor nginx. Verifícalo en la VM real (Azure o Vagrant)."
 else
-  # Prueba de configuración SIN necesitar el contenedor de compose corriendo
-  # todavía: un "docker run --rm" suelto, con los mismos volúmenes de solo
-  # lectura que declara compose.yaml para conf.d/ y snippets/, así se
-  # detecta un error de sintaxis (o el gotcha del resolver, si algún día se
-  # rompe) antes de tocar el contenedor que ya esté corriendo.
+  # nginx -t contra un "docker run --rm" suelto, antes de tocar el
+  # contenedor de compose que ya esté corriendo.
   salida_prueba_nginx=""
   if ! salida_prueba_nginx="$(docker run --rm \
     -v "${DIRECTORIO_NGINX}/conf.d:/etc/nginx/conf.d:ro" \
@@ -198,10 +105,8 @@ ${salida_prueba_nginx}"
 
   asegurar_servicio_compose "${ARCHIVO_COMPOSE}" nginx
 
-  # Confirmación final de que el contenedor de verdad quedó escuchando en
-  # el puerto 80: mismo patrón que 10-ssh.sh verificando sshd con "ss -tln"
-  # después de reiniciarlo, en vez de confiar solo en que "docker compose
-  # up" haya salido con código 0.
+  # ss -tln confirma que nginx de verdad quedó escuchando, no solo que
+  # docker compose devolvió 0.
   if command -v ss &>/dev/null; then
     if ! ss -tln 2>/dev/null | grep -q ':80 '; then
       error_fatal "El contenedor nginx está corriendo según docker compose, pero ss -tln no lo muestra escuchando en el puerto 80. Revisa el estado del contenedor antes de continuar."

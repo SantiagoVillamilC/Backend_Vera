@@ -1,17 +1,6 @@
 #!/usr/bin/env bash
 # infra/servidor/probar-en-docker.sh
-#
-# Prueba de idempotencia sin gastar crédito de Azure y sin depender de Vagrant
-# (Vagrant no está instalado en esta máquina). Levanta un único contenedor
-# debian:13 (Debian 13 trixie, la misma versión de la imagen de Azure y de la
-# caja de Vagrant; ver infra/azure/variables.sh), monta infra/servidor/ dentro
-# y ejecuta aprovisionar.sh dos veces seguidas en ese mismo contenedor. La
-# segunda corrida tiene que reportar 0 cambios aplicados.
-#
-# El contenedor no tiene systemd, así que asegurar_servicio_activo se limita a
-# avisar y seguir. Los pasos que de verdad dependan de systemd (nginx, postgres,
-# certbot, cuando se implementen) se deben verificar aparte en la VM real
-# (Azure o Vagrant), no en esta prueba.
+# Prueba de idempotencia en un contenedor Docker efímero. Ver infra/servidor/README.md.
 set -euo pipefail
 
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,9 +16,7 @@ docker run -d --name "${NOMBRE_CONTENEDOR}" \
   -v "${DIRECTORIO_SCRIPT}:/infra-servidor:ro" \
   debian:13 sleep infinity >/dev/null
 
-# Se copia a una ruta propia del contenedor porque el montaje es de solo
-# lectura: así ningún paso futuro puede modificar por accidente los archivos
-# del repositorio en el equipo anfitrión.
+# Se copia a una ruta propia: el montaje original es de solo lectura.
 echo "==> Primera corrida"
 docker exec "${NOMBRE_CONTENEDOR}" bash -c '
   set -euo pipefail

@@ -1,52 +1,13 @@
 #!/usr/bin/env bash
 # infra/azure/crear-servidor.sh
-#
-# Consumidor de infra/azure/variables.sh (tarjeta SCRUM-26). Crea en Azure
-# los recursos explícitos del servidor real de Centinela: grupo de recursos,
-# red virtual, grupo de seguridad de red con sus reglas, IP pública, tarjeta
-# de red y la máquina virtual, en ese orden.
-#
-# Corre en el portátil del operador, no en el servidor: infra/azure/ está al
-# lado de infra/servidor/ que sí viaja en el despliegue (ver infra/servidor/README.md
-# e infra/azure/variables.sh), pero este archivo se queda de este lado de la
-# frontera de despliegue.
-#
-# Por qué este script NO hace source de infra/servidor/lib/comun.sh, aunque
-# ese archivo ya resuelve paso/info/aviso/error_fatal y un contador de
-# cambios: sus otros helpers asumen que corren dentro del servidor real como
-# root. exigir_root corta si EUID != 0, y este script corre como el usuario
-# normal del operador en su portátil. instalar_paquetes usa dpkg y apt-get,
-# que no tienen sentido acá. registrar_cambio y resumen_cambios mutan un
-# contador pensado para el lado del servidor: compartirlo cruzaría la
-# frontera de despliegue con estado, no solo con configuración, que es
-# justo lo que infra/azure/variables.sh evita al hacer source de
-# infra/servidor/imagen-fijada.sh en vez de duplicarlo. Esa razón sigue
-# siendo válida hoy.
-#
-# Lo que sí cambió (tarjeta SCRUM-29): ahora existe infra/azure/lib/comun.sh,
-# propio de este lado del operador, con los mismos helpers de presentación y
-# el mismo contador de cambios que antes vivían copiados aquí abajo. Este
-# archivo pasa a consumirlo con source, junto con infra/azure/automatizar-horario.sh,
-# que necesita exactamente los mismos helpers. La razón de fondo no cambia:
-# lo que sigue sin compartirse es infra/servidor/lib/comun.sh, no la idea de
-# tener un lib compartido del lado del operador.
-#
-# Banderas: --simular (nueva de este script, no existe en
-# infra/servidor/aprovisionar.sh, cuyas banderas son --lista, --solo y
-# --ayuda), --registrar-proveedores y --ayuda. Ver mostrar_ayuda más abajo
-# para el detalle de cada una.
-#
-# Este script NO incluye ningún camino de rollback ni de teardown: está
-# fuera del alcance de la tarjeta SCRUM-26, y un teardown a medio escribir es
-# más peligroso que ninguno. Borrar recursos en la nube necesita que lo
-# decida un humano, no un script.
+# Crea en Azure los recursos del servidor de Centinela: grupo de recursos, red
+# virtual, NSG con sus reglas, IP pública, NIC y VM, en ese orden (SCRUM-26).
 set -euo pipefail
 
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Resuelto con BASH_SOURCE, no con una ruta relativa al directorio de
-# trabajo, para que este script funcione sin importar desde dónde se invoque
-# (igual que infra/azure/variables.sh resuelve infra/servidor/imagen-fijada.sh).
+# Usa su propio lib/comun.sh, no el de infra/servidor/: esos helpers asumen
+# que corren como root en el servidor.
 # shellcheck source=lib/comun.sh
 source "${DIRECTORIO_SCRIPT}/lib/comun.sh"
 
@@ -108,19 +69,11 @@ nube necesita que lo decida un humano.
 EOF
 }
 
-# recurso_existe, ejecutar_cambio, verificar_cli_az y confirmar_suscripcion
-# ahora vienen de infra/azure/lib/comun.sh (ver el source de la cabecera):
-# ya no se definen acá. confirmar_suscripcion sigue leyendo SIMULAR por
-# nombre de variable, así que basta con que esté definida antes de llamarla.
+# confirmar_suscripcion lee SIMULAR por nombre de variable: basta con que
+# esté definida antes de llamarla.
 
-# Verifica un proveedor de recurso contra el registro de la suscripción.
-# "obligatorio" en "si" corta con error_fatal si no está Registered (o lo
-# registra, bajo --registrar-proveedores); en "no" solo avisa. Microsoft.Storage
-# entra como no obligatorio: hoy nada lo necesita (los discos son
-# administrados y van bajo Compute, y el diagnóstico de arranque
-# administrado no usa cuenta de almacenamiento), pero se reporta en vez de
-# callarlo, porque va a importar cuando el respaldo de la base se vaya a
-# Blob.
+# obligatorio=si corta con error_fatal si el proveedor no está Registered
+# (o lo registra con --registrar-proveedores); en no, solo avisa.
 verificar_proveedor() {
   local proveedor="$1" obligatorio="$2" estado
 
@@ -132,9 +85,8 @@ verificar_proveedor() {
   fi
 
   if [[ "$obligatorio" == "si" && "$REGISTRAR_PROVEEDORES" == "si" ]]; then
-    # --wait: el registro es asíncrono y queda en "Registering" varios
-    # minutos. Sin esperar acá, el resto del script seguiría con el
-    # proveedor todavía sin quedar Registered.
+    # --wait: el registro es asíncrono; sin esperar, el resto del script
+    # seguiría sin el proveedor Registered.
     ejecutar_cambio "el registro del proveedor ${proveedor}" \
       az provider register -n "$proveedor" --wait
     return 0
@@ -158,20 +110,8 @@ verificar_llaves_ssh() {
   done
 }
 
-# Valida que cada elemento de ORIGEN_SSH sea una IPv4 o un CIDR válido.
-# Se llama solo cuando ORIGEN_SSH no vale "*" (ver verificar_origen_ssh):
-# con "*" no hay nada que validar, porque abierto es ahora el valor por
-# defecto y esperado (ver infra/azure/variables.sh). Cuando alguien sí
-# define un origen a propósito, el riesgo sigue siendo el mismo de antes:
-# ORIGEN_SSH suele venir de una sustitución de comando (curl -fsS
-# https://ifconfig.me) que puede fallar a medias (portal cautivo, respuesta
-# truncada, una página HTML de error en vez de una IP, o directamente una
-# cadena vacía), y ese fallo no deja ORIGEN_SSH con un valor obviamente
-# inválido, sino con basura plausible o con nada. Por eso el chequeo de
-# vacío vive acá adentro, no en verificar_origen_ssh: "$(read -ra ...)"
-# sobre una cadena vacía produce un arreglo de cero elementos, así que el
-# bucle de abajo no iteraría ni una vez y dejaría pasar la cadena vacía en
-# silencio si no se cortara antes.
+# Valida que cada elemento sea IPv4 o CIDR. El chequeo de vacío va acá
+# adentro: una cadena vacía no dispara el bucle y pasaría en silencio.
 validar_formato_origen_ssh() {
   local origen="$1"
   local elemento
@@ -189,13 +129,8 @@ validar_formato_origen_ssh() {
   done
 }
 
-# ORIGEN_SSH ya no exige acotarse a una IP: DECISIÓN QUE REVIERTE una
-# anterior que rechazaba "*" (ver el comentario completo de ORIGEN_SSH en
-# infra/azure/variables.sh). Acá solo queda decidir si hace falta validar
-# el formato: con "*" (el valor por defecto) no hay nada que validar. Si
-# alguien define un origen a propósito, sigue teniendo que ser una IPv4 o
-# un CIDR, porque el problema de la sustitución de comando que falla a
-# medias no desapareció con la reversión.
+# Con ORIGEN_SSH="*" no hay nada que validar; con un valor explícito, sigue
+# exigiendo IPv4 o CIDR (validar_formato_origen_ssh).
 verificar_origen_ssh() {
   if [[ "$ORIGEN_SSH" == "*" ]]; then
     info "ORIGEN_SSH=* (por defecto): el puerto ${PUERTO_SSH} queda abierto a todo internet. La protección real contra acceso no autorizado es la autenticación exclusivamente por llave que fija infra/servidor/pasos/10-ssh.sh, no el origen de esta regla."
@@ -227,10 +162,8 @@ asegurar_grupo_recursos() {
     az group create -n "$GRUPO_RECURSOS" -l "$REGION"
 }
 
-# No se declara un rango de direcciones propio: se deja el default del CLI
-# (10.0.0.0/16 para la red, 10.0.0.0/24 para la subred). El plan no necesita
-# hoy nada más específico, y agregar variables sin un uso real solo
-# complicaría infra/azure/variables.sh.
+# Usa el rango de direcciones por defecto del CLI (10.0.0.0/16 red,
+# 10.0.0.0/24 subred): no se declara explícito.
 asegurar_red_virtual() {
   paso "Red virtual: ${NOMBRE_RED_VIRTUAL}"
   if recurso_existe network vnet show -g "$GRUPO_RECURSOS" -n "$NOMBRE_RED_VIRTUAL"; then
@@ -252,10 +185,8 @@ asegurar_nsg() {
     az network nsg create -g "$GRUPO_RECURSOS" -n "$NOMBRE_GRUPO_SEGURIDAD" -l "$REGION"
 }
 
-# Imprime los valores actuales de la regla existente (origen, puerto,
-# prioridad) para que un humano pueda comparar contra lo que se esperaba.
-# Aceptar en silencio una regla de SSH con el origen equivocado es una falla
-# de seguridad, no cosmética.
+# Imprime origen, puerto y prioridad de la regla existente: aceptar en
+# silencio una regla SSH con el origen equivocado es una falla de seguridad.
 mostrar_aviso_regla_existente() {
   local nombre="$1" salida
   local -a campos
@@ -264,9 +195,8 @@ mostrar_aviso_regla_existente() {
   salida="$(az network nsg rule show --nsg-name "$NOMBRE_GRUPO_SEGURIDAD" -g "$GRUPO_RECURSOS" -n "$nombre" \
     --query "[sourceAddressPrefix,destinationPortRange,priority]" -o tsv --only-show-errors)" \
     || error_fatal "No se pudo leer el detalle de la regla NSG ${nombre}."
-  # El formato tsv de az emite una línea por campo, no campos separados por
-  # tabulador en una sola línea, así que mapfile lee cada línea en un elemento
-  # del arreglo en vez de dejar vacíos los campos posteriores al primero.
+  # az -o tsv emite una línea por campo, no tabulados en una sola línea: por
+  # eso mapfile, no read.
   mapfile -t campos <<<"$salida"
   origen_actual="${campos[0]}"
   puerto_actual="${campos[1]}"
@@ -275,11 +205,8 @@ mostrar_aviso_regla_existente() {
   aviso "La regla NSG ${nombre} ya existe con origen=${origen_actual}, puerto=${puerto_actual}, prioridad=${prioridad_actual}. No se edita en su lugar: una regla puede existir con el mismo nombre pero otro puerto, otro origen u otra prioridad, y eso lo tiene que revisar una persona."
 }
 
-# Política del NSG: la existencia de la regla se chequea por nombre, y esa
-# existencia basta para no volver a crearla. NUNCA se edita una regla en su
-# lugar (ver mostrar_aviso_regla_existente): si el equipo necesita otro
-# origen o prioridad, se borra y se recrea a mano, a propósito, no desde
-# este script.
+# Nunca se edita una regla existente en su lugar: si cambia origen o
+# prioridad, se borra y se recrea a mano, no desde este script.
 asegurar_regla_nsg() {
   local nombre="$1" prioridad="$2" puerto="$3" origen="$4"
 
@@ -318,10 +245,8 @@ asegurar_nic() {
     --network-security-group "$NOMBRE_GRUPO_SEGURIDAD" --public-ip-address "$NOMBRE_IP_PUBLICA"
 }
 
-# A "az vm create" NO se le pasa --vnet-name, --subnet, --public-ip-address
-# ni --nsg: como la NIC ya se creó explícitamente en asegurar_nic, cualquiera
-# de esas banderas hace que el CLI intente administrar la red él mismo, se
-# invente nombres propios, y choque con lo que este script ya construyó.
+# NO se pasan --vnet-name/--subnet/--public-ip-address/--nsg: con la NIC ya
+# creada, esas banderas hacen que el CLI arme su propia red y choque con esto.
 asegurar_vm() {
   paso "Máquina virtual: ${NOMBRE_VM}"
   if recurso_existe vm show -g "$GRUPO_RECURSOS" -n "$NOMBRE_VM"; then
@@ -336,39 +261,16 @@ asegurar_vm() {
     --storage-sku "$SKU_DISCO"
 }
 
-# Cada recurso se crea explícito y en este orden: nunca se deja que
-# "az vm create" arme la red por su cuenta, porque se inventa nombres
-# propios y rompe la premisa de "un solo grupo con nombres predecibles" que
-# necesita el plan de mover los recursos a otra suscripción (ver
-# propuesta-tablero-plataforma.md, "El plan de relevo cuando se acabe el
-# crédito").
+# Orden fijo y explícito: por qué no se deja que "az vm create" arme la red
+# sola está en asegurar_vm.
 crear_recursos() {
   asegurar_grupo_recursos
   asegurar_red_virtual
   asegurar_nsg
 
-  # Una IP pública de SKU Standard es deny por defecto en entrada, a
-  # diferencia del SKU Basic retirado: sin estas tres reglas explícitas el
-  # SSH no llega y parece que la VM está rota.
-  #
-  # La regla de SSH cambia de nombre Y de puerto: "permitir-ssh-${PUERTO_SSH}"
-  # en vez de "permitir-ssh" a secas. Es a propósito, no un capricho de
-  # nomenclatura: así la regla vieja del puerto 22 (que ya existe en el NSG
-  # real) y esta nueva pueden coexistir mientras dura la transición, que es
-  # justo lo que evita quedarse sin acceso si algo sale mal con el puerto
-  # nuevo. Ver mostrar_cierre para el recordatorio de cuándo borrar la vieja.
-  #
-  # Esquema de prioridades: los saltos de 5 y de 10 dejan espacio para
-  # insertar reglas intermedias sin renumerar las existentes.
-  # - 100: "permitir-ssh" (regla vieja del puerto 22). Existe solo durante la
-  #   transición y la borra un humano cuando confirma que el puerto nuevo
-  #   funciona. No se reutiliza el 100 para la regla nueva precisamente para
-  #   que las dos puedan convivir: Azure rechaza dos reglas con la misma
-  #   prioridad y dirección, y sin convivencia no hay forma segura de migrar
-  #   de puerto.
-  # - 105: "permitir-ssh-${PUERTO_SSH}" (regla nueva del puerto configurable).
-  # - 110: "permitir-http" (puerto 80).
-  # - 120: "permitir-https" (puerto 443).
+  # IP Standard es deny por defecto en entrada: sin estas 3 reglas no hay SSH.
+  # La regla nueva coexiste con la vieja durante la transición (mostrar_cierre).
+  # Prioridades con huecos de 5/10: 100 vieja, 105 nueva, 110 http, 120 https.
   asegurar_regla_nsg "permitir-ssh-${PUERTO_SSH}" 105 "$PUERTO_SSH" "$ORIGEN_SSH"
   asegurar_regla_nsg "permitir-http" 110 80 "*"
   asegurar_regla_nsg "permitir-https" 120 443 "*"
@@ -398,28 +300,10 @@ mostrar_resumen_cambios() {
   fi
 }
 
-# Imprime el comando de despliegue. Usa scp en lugar de rsync porque la imagen
-# cloud de Debian de Azure (y también la caja de Vagrant) no trae rsync en el
-# invitado: rsync necesita el binario en los dos extremos, así que si falta en
-# el destino el comando falla. scp viaja sobre la conexión SSH que ya existe,
-# sin necesitar paquetes extra.
-#
-# El destino final pasa a ser /opt/centinela/infra-servidor, no /tmp: se
-# comprobó en la VM real que Debian limpia /tmp en cada arranque, así que
-# todo lo copiado ahí se pierde cada vez que la VM se reinicia (y SCRUM-29
-# la enciende y apaga a diario). /tmp sigue siendo la escala obligatoria de
-# scp (corre como el usuario administrador, que no puede escribir en /opt),
-# así que la copia real a /opt/centinela la hace un "sudo cp -rT" dentro de
-# la misma sesión ssh, no scp directamente.
-#
-# El puerto de conexión (-p para ssh, -P mayúscula para scp: es la misma
-# inconsistencia histórica de nombres de bandera entre los dos binarios, no
-# un error de tipeo) solo se puede ajustar cuando la transición del puerto
-# ya terminó. Mientras la regla NSG vieja del puerto 22 siga existiendo, no
-# hay forma de saber desde acá si esta VM ya pasó por SCRUM-28 (sshd ya en
-# PUERTO_SSH) o si es la primera vez que se aprovisiona (sshd todavía en el
-# 22, porque 10-ssh.sh corre DENTRO de esta misma sesión ssh): en vez de
-# adivinar, se imprimen las dos variantes rotuladas y la persona elige.
+# Ver infra/servidor/README.md para el porqué de scp y del destino en /opt.
+# -p (ssh) vs -P mayúscula (scp) es inconsistencia real entre los binarios.
+# Se imprimen dos variantes porque, mientras exista la regla NSG vieja del
+# puerto 22, no se sabe desde acá si esta VM ya pasó por SCRUM-28.
 mostrar_comando_siguiente() {
   local ip="$1"
   local regla_vieja_existe="$2"
@@ -450,20 +334,16 @@ EOF
   fi
 }
 
-# Relee el estado real en vez de confiar en lo que este script acaba de
-# pedir: la IP pública nunca se escribe en ningún archivo, y el tamaño del
-# disco se confirma contra lo que Azure reporta, no contra
-# TAMANO_DISCO_GB (que solo agranda, nunca es garantía del tamaño final).
+# Relee el estado real: la IP nunca se guarda en archivo, y el disco se
+# confirma contra lo que Azure reporta (TAMANO_DISCO_GB solo agranda, no
+# garantiza el tamaño final).
 mostrar_cierre() {
   paso "Resumen"
   mostrar_resumen_cambios
 
-  # El recordatorio de borrar la regla vieja del puerto 22 es condicional a
-  # propósito: solo aparece mientras esa regla siga existiendo, así que
-  # desaparece solo cuando la transición se completa, sin que nadie tenga
-  # que acordarse de quitarlo del script. recurso_existe es una lectura
-  # (az ... show), así que corre también en --simular, igual que las demás
-  # lecturas de este script.
+  # El aviso de la regla vieja desaparece solo cuando se borra la regla, sin
+  # que nadie tenga que editar el script. recurso_existe es una lectura, así
+  # que corre también en --simular.
   local regla_vieja_existe="no"
   if recurso_existe network nsg rule show --nsg-name "$NOMBRE_GRUPO_SEGURIDAD" -g "$GRUPO_RECURSOS" -n "permitir-ssh"; then
     regla_vieja_existe="si"
@@ -478,9 +358,8 @@ mostrar_cierre() {
   local ip disco
   ip="$(az network public-ip show -g "$GRUPO_RECURSOS" -n "$NOMBRE_IP_PUBLICA" --query ipAddress -o tsv --only-show-errors)" \
     || error_fatal "No se pudo leer la IP pública de ${NOMBRE_IP_PUBLICA}."
-  # Nota: el campo se llama diskSizeGB (GB en mayúscula). JMESPath distingue
-  # mayúsculas, así que un error de capitalización devuelve cadena vacía en
-  # silencio, sin fallar el query.
+  # Campo diskSizeGB (GB mayúscula): JMESPath distingue mayúsculas, un typo
+  # devuelve cadena vacía en silencio.
   disco="$(az vm show -d -g "$GRUPO_RECURSOS" -n "$NOMBRE_VM" --query storageProfile.osDisk.diskSizeGB -o tsv --only-show-errors)" \
     || error_fatal "No se pudo leer el tamaño del disco de ${NOMBRE_VM}."
 
