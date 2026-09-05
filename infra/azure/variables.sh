@@ -44,7 +44,14 @@ source "${RUTA_RED_FIJADA}"
 # "${HOME}" se expande al hacer source; con "~" bash no lo expande entre comillas.
 : "${LLAVES_SSH_PUBLICAS:=${HOME}/.ssh/id_ed25519.pub}"
 
-# Origen SSH del NSG (CIDR); acotar: ORIGEN_SSH=$(curl -fsS https://ifconfig.me) bash infra/azure/crear-servidor.sh
+# Origen SSH del NSG (CIDR). Por defecto "*" (abierto a todo internet) a
+# propósito, ya es una decisión tomada: el equipo se conecta desde IPs
+# residenciales que rotan, sin una IP fija que pinear y todavía sin VPN ni
+# Tailscale montados. La protección real contra acceso no autorizado no es
+# el origen de esta regla, es la autenticación exclusiva por llave SSH que
+# fija infra/servidor/pasos/10-ssh.sh (SCRUM-28: PasswordAuthentication no).
+# Sigue siendo sobreescribible por corrida para quien sí tenga una IP fija:
+# ORIGEN_SSH=$(curl -fsS https://ifconfig.me) bash infra/azure/crear-servidor.sh
 : "${ORIGEN_SSH:=*}"
 
 # --- Nombres de recursos ---
