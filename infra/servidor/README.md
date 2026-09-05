@@ -146,6 +146,19 @@ Si algún paso necesita variables propias del servidor, se crea un archivo
 `aprovisionar.env` junto a `aprovisionar.sh`. Ese archivo no se versiona (está
 en `.gitignore`).
 
+`50-certbot.sh` (SCRUM-30) lee de ahí dos variables:
+
+- `CORREO_CERTBOT`: el correo que certbot registra ante Let's Encrypt. No
+  tiene default: un correo no es una constante del proyecto (a diferencia de
+  `DOMINIO_SERVIDOR`, que sí vive en `dominio-fijado.sh`). Si falta, el paso
+  entero se omite con un `aviso` (no falla con `exigir_variable`), para que
+  `probar-en-docker.sh` siga en verde sin definir nada de esto.
+- `CERTBOT_STAGING`: opcional, por defecto `no`. En `si`, agrega `--staging`
+  a `certonly` para probar contra el entorno de pruebas de Let's Encrypt sin
+  gastar el límite real (5 validaciones fallidas por hora, 5 certificados
+  duplicados por semana). Ver la advertencia de la sección `50-certbot.sh`
+  más abajo antes de alternar entre `si` y `no` sobre el mismo dominio.
+
 ## Cómo agregar un paso nuevo
 
 1. Crear `pasos/NN-nombre.sh` con el siguiente número de dos dígitos
@@ -173,7 +186,7 @@ en `.gitignore`).
 | `20-docker.sh` | Instalar Docker y Docker Compose | SCRUM-31 | Implementado |
 | `30-nginx.sh` | Instalar y configurar nginx como proxy inverso | SCRUM-32 | Implementado |
 | `40-postgres.sh` | Instalar y configurar Postgres en contenedor | SCRUM-33 | Implementado |
-| `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Pendiente |
+| `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Implementado |
 
 ### `imagen-fijada.sh`
 
@@ -214,15 +227,18 @@ Mismo patrón y mismo criterio que `imagen-fijada.sh` y `red-fijada.sh`: única
 fuente de verdad del dominio del servidor (`DOMINIO_SERVIDOR`), solo
 declaraciones `: "${VAR:=valor}"`, sin lógica. La necesitan
 `infra/servidor/pasos/30-nginx.sh` (el `server_name` de
-`nginx/conf.d/centinela.conf`) y, a futuro,
-`infra/servidor/pasos/50-certbot.sh` (a qué dominio emitirle el
-certificado).
+`nginx/conf.d/centinela.conf`, y desde SCRUM-30 también el predicado que
+decide qué snippet incluye) y `infra/servidor/pasos/50-certbot.sh` (a qué
+dominio emitirle el certificado).
 
-El valor por defecto es `_`, el comodín de nginx para "acepta cualquier
-Host": SCRUM-24 (la tarjeta que consigue el dominio `.dev`) sigue en curso,
-y mientras no exista un dominio real, el servidor se sirve solo por IP.
-Cuando SCRUM-24 cierre, `DOMINIO_SERVIDOR` es la única variable que hay que
-cambiar (editando este archivo o pasándola por entorno), y `30-nginx.sh` la
+El valor por defecto es `veraapp.tech`: SCRUM-24 (la tarjeta que consiguió el
+dominio) ya cerró, el DNS ya apunta a la IP estática del servidor (verificado
+con `dig`, propagado en Cloudflare y Google), y el dominio es definitivo. El
+comodín de nginx `_` ("acepta cualquier Host") ya no es el default; si hiciera
+falta servir solo por IP de nuevo (por ejemplo, mientras se prueba un cambio),
+`DOMINIO_SERVIDOR=_` sigue funcionando pasado por entorno o por
+`aprovisionar.env`, sin tocar este archivo. Si el dominio cambiara a futuro,
+esta sigue siendo la única variable que hay que actualizar, y `30-nginx.sh` la
 propaga sola al siguiente aprovisionamiento sin tocar el resto de la
 configuración.
 
@@ -424,8 +440,74 @@ certificado, sin tocar el resto de `centinela.conf`. Mientras tanto,
 punto de entrada real al backend.
 
 El dominio del `server_name` sale de `DOMINIO_SERVIDOR`
-(`dominio-fijado.sh`, ver más abajo), hoy `_` porque SCRUM-24 sigue en
-curso: el servidor se sirve solo por IP mientras tanto.
+(`dominio-fijado.sh`, ver más abajo), `veraapp.tech` desde que SCRUM-24
+cerró (ver la sección `dominio-fijado.sh`).
+
+#### Revisión de propiedad frente a SCRUM-30 (certbot)
+
+El reparto de archivos descrito arriba (`raiz-http.conf` aparte,
+`SCRUM-30 lo sobreescribe completo`) no sobrevivió intacto a la
+implementación real de `50-certbot.sh`. Tres razones, verificadas contra el
+código antes de escribir una sola línea de la tarjeta:
+
+1. Si `50-certbot.sh` reescribiera `raiz-http.conf` con la redirección, y
+   `30-nginx.sh` lo reescribe con el contenido de proxy en cada corrida (vía
+   `asegurar_archivo_con_contenido`), una corrida completa de
+   `aprovisionar.sh` reportaría siempre 2 cambios (30 revierte, 50 reaplica),
+   rompiendo la regla de idempotencia del propio README.
+2. En cuanto existiera cualquier `.conf` en `conf.d/` que referenciara
+   `/etc/letsencrypt/live/.../fullchain.pem`, el propio chequeo `nginx -t` de
+   este paso (que solo montaba `conf.d` y `snippets`, no el directorio de
+   certificados) fallaría con "cannot load certificate" en cada corrida
+   futura, incluida la primera vez que existiera ese archivo antes de que
+   hubiera un certificado real.
+3. nginx solo autoincluye `conf.d/*.conf`, así que el bloque TLS del puerto
+   443 no puede vivir en otra parte que no sea `conf.d/`.
+
+La solución, ya implementada: este paso agrega UN solo predicado,
+`[[ -f /opt/centinela/letsencrypt/live/${DOMINIO_SERVIDOR}/fullchain.pem ]]`
+(variables `DIRECTORIO_LETSENCRYPT` y `ARCHIVO_FULLCHAIN_TLS`), que decide
+las tres cosas que le tocaban a este paso:
+
+- **(a) Qué snippet incluye `centinela.conf`**: `raiz-http.conf` (proxy
+  directo, propiedad de este mismo paso) mientras no exista el certificado,
+  `raiz-redirigir.conf` (redirección a HTTPS, propiedad de `50-certbot.sh`,
+  nunca escrito por este paso) en cuanto exista.
+- **(b) Si el chequeo suelto de `nginx -t` de este paso monta
+  `/etc/letsencrypt`**: solo si el certificado ya existe. Sin este mount
+  condicional, el chequeo fallaría en cuanto `50-certbot.sh` hubiera escrito
+  `centinela-tls.conf` (que si referencia esas rutas), exactamente el
+  síntoma del punto 2 de arriba.
+- **(c) Un reload condicional del contenedor** (`docker kill -s HUP
+  centinela-nginx`) cuando el CONTENIDO de `centinela.conf` cambió (el
+  predicado volteó de snippet) pero `asegurar_servicio_compose` no recreó el
+  contenedor. Mismo patrón que el reinicio condicional de sshd en
+  `10-ssh.sh`: se mide `resumen_cambios` antes y después de escribir los
+  archivos, y aparte antes y después de `asegurar_servicio_compose`, y solo
+  se dispara el reload si lo primero aumentó y lo segundo no.
+
+`raiz-http.conf` sigue siendo 100 % propiedad de este paso: `50-certbot.sh`
+nunca lo toca, solo agrega su propio `raiz-redirigir.conf` y decide (este
+paso, no aquel) cuál de los dos se incluye.
+
+**Por qué la rama de reload (c) casi nunca se ejercita en la secuencia real
+de emisión, y por qué se mantiene de todos modos.** `50-certbot.sh` (que
+corre en la posición `50`, después de este paso) escribe
+`compose.certbot.yaml` (el fragmento que agrega el puerto 443 al servicio
+`nginx`) en la MISMA corrida en la que emite el certificado por primera vez.
+Como este paso ya corrió ANTES en esa misma corrida (con el certificado
+todavía inexistente), el efecto completo (snippet de redirección + puerto
+443) no se aplica hasta la SIGUIENTE corrida completa de `aprovisionar.sh`.
+En esa corrida siguiente, este paso ve el certificado por primera vez Y ve
+`compose.certbot.yaml` por primera vez, en el mismo momento: el cambio de
+contenido de `centinela.conf` coincide con un cambio real a nivel de
+compose, así que `asegurar_servicio_compose` ya recrea el contenedor (que
+de por sí monta el archivo nuevo), y la rama de reload nunca llega a
+dispararse en ESTE camino específico. La rama sigue siendo necesaria para
+el caso general (cualquier cambio de contenido de `centinela.conf` que no
+venga acompañado de un cambio de compose), y quedó verificada en aislamiento
+forzando ese escenario a mano (ver `50-certbot.sh` más abajo para los
+números exactos de las tres corridas).
 
 La regresión real de cobertura que deja este paso: el contenedor de
 prueba de `probar-en-docker.sh` no tiene acceso al socket de Docker (no
@@ -587,3 +669,353 @@ contenedor postgres ya estaba corriendo con la configuración actual", y
 (imagen y `docker run`) se destruyó al terminar la prueba; no dejó rastro
 en `/opt/centinela` de la máquina de desarrollo real, que nunca instaló
 nada de esto directamente.
+
+### `50-certbot.sh`
+
+Emite el certificado TLS con certbot y programa su renovación (tarjeta
+SCRUM-30). El dominio ya es definitivo (`veraapp.tech`, ver
+`dominio-fijado.sh`) y el DNS ya apunta a la IP estática del servidor. La
+revisión de propiedad de archivos frente a `30-nginx.sh` que este paso
+necesitó está documentada en la sección `30-nginx.sh` de arriba
+("Revisión de propiedad frente a SCRUM-30"), no se repite acá.
+
+Este paso NUNCA toca el contenedor `nginx` ni escribe `raiz-http.conf`: solo
+deja archivos en el disco (`compose.certbot.yaml`,
+`nginx/conf.d/centinela-tls.conf`, `nginx/snippets/raiz-redirigir.conf`) y
+gestiona el ciclo de vida del certificado y de su temporizador de
+renovación. Es `30-nginx.sh`, dueño único del contenedor `nginx` y que
+corre en cada `aprovisionar.sh` completo, quien recoge esos archivos la
+próxima vez que corra. Esto difiere en una corrida la activación real del
+puerto 443 y de la redirección a HTTPS: la corrida que emite el
+certificado por primera vez deja `compose.certbot.yaml` escrito pero el
+contenedor nginx sigue solo con el puerto 80 (ya estaba arriba desde antes
+de que el certificado existiera); recién la SIGUIENTE corrida completa, en
+la que `30-nginx.sh` ve el certificado y `compose.certbot.yaml` por primera
+vez a la vez, aplica los dos cambios juntos (el snippet de redirección y el
+puerto 443), con `asegurar_servicio_compose` recreando el contenedor. Números
+exactos, medidos invocando cada paso por separado con `--solo` (no una
+corrida completa de `aprovisionar.sh`; el 4 de la corrida 1 incluye la
+creación de la red `centinela`, que en un pipeline completo ocurriría
+igual dentro de `30-nginx.sh`, sin cambiar el argumento): corrida 1 de
+`--solo 30-nginx.sh` (sin certificado) aplica 4 cambios; `--solo
+50-certbot.sh` con el certificado ya presente aplica 5; corrida 2 de
+`--solo 30-nginx.sh` (certificado y `compose.certbot.yaml` ya presentes
+juntos por primera vez) aplica 2 cambios (contenido de `centinela.conf` +
+recreate del contenedor); corrida 3 en adelante, 0 cambios. Es un desfase
+estructural, no un defecto: `30-nginx.sh` (posición `30`) tiene que correr
+ANTES que este paso (posición `50`) para que nginx ya esté sirviendo el
+puerto 80 (con el webroot montado) cuando certbot intenta el reto ACME la
+primera vez.
+
+**Guards de salto**, en orden, cada uno con su propio `aviso` (nunca
+fatales, para que `probar-en-docker.sh` siga en verde sin definir nada de
+esto): (1) `systemd` no es el proceso 1 (mismo criterio que el resto del
+pipeline); (2) `DOMINIO_SERVIDOR` sigue siendo el comodín `_`; (3) falta
+`CORREO_CERTBOT` en `aprovisionar.env` (ver "Configuración local" más
+arriba). El primero que aplica corta el resto: en
+`probar-en-docker.sh`, el guard de `systemd` siempre gana primero, porque
+ese contenedor nunca tiene `/run/systemd/system`.
+
+**Emisión**: contenedor efímero `docker run --rm` (no un servicio de
+compose de larga duración) con el plugin webroot, montando
+`nginx/webroot` (sin `:ro`: certbot necesita escribir el reto ahí; nginx ya
+lo monta de solo lectura en `compose.yaml`, contenedores distintos, mismo
+path de host) y `/etc/letsencrypt` COMPLETO (no solo `live/`: `live/` son
+symlinks hacia `archive/`, montar solo `live/` rompe esos symlinks dentro
+del contenedor). Idempotente por existencia del archivo, mismo criterio que
+`asegurar_archivo_con_secreto`: si `fullchain.pem` ya existe, no se vuelve a
+invocar `certonly` (que de todos modos no reemitiría un certificado
+válido), y el cambio no se cuenta dos veces.
+
+**Trampa de `CERTBOT_STAGING`**: un certificado de staging queda en la
+MISMA ruta (`live/${DOMINIO_SERVIDOR}/fullchain.pem`) que uno real. Como la
+idempotencia de este paso decide por la existencia del archivo, no por su
+origen, alternar `CERTBOT_STAGING=si` a `no` sobre un dominio que ya tiene
+un certificado de staging NO dispara una reemisión real: el paso lo deja
+pasar en silencio. El paso imprime un `aviso` explícito cada vez que
+`CERTBOT_STAGING=si` está activo, recordando que hay que borrar a mano
+`live/`, `archive/` y `renewal/*.conf` del dominio antes de volver a pedir
+el certificado real. Confirmado en la práctica contra Let's Encrypt real el
+5 de septiembre de 2026 (staging y, en el mismo cutover, producción): ver
+"Confirmado contra la VM real de Azure" más abajo.
+
+**Imagen fijada por tag, mismo criterio que nginx y Postgres**:
+`certbot/certbot:v5.8.0`, la versión estable más reciente el 5 de
+septiembre de 2026 (no `latest`, tag flotante, ni `nightly`), confirmada por
+dos vías independientes ese mismo día: la API de tags de Docker Hub
+(ordenada por `last_updated`, `v5.8.0` es la última no-nightly) y
+`docker pull certbot/certbot:v5.8.0` + `docker inspect` directo, que
+resolvió el dígest `sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20`
+(manifest list multi-arquitectura; `docker manifest inspect` confirmó
+`amd64`/`arm`/`arm64` entre las plataformas). Igual que nginx y Postgres, el
+`docker run` del script usa el tag, no el dígest completo; el dígest queda
+documentado acá como evidencia de qué imagen exacta se fijó, no embebido en
+el comando.
+
+**Puerto 443 y volumen de certificados, vía `compose.certbot.yaml`**:
+agrega `ports: ["443:443"]` y `volumes:
+["/opt/centinela/letsencrypt:/etc/letsencrypt:ro"]` al servicio `nginx`
+(dueño en `compose.yaml`), sin declarar `name:` ni `networks:` (esas siguen
+siendo exclusivas de `compose.yaml`), mismo patrón que
+`compose.postgres.yaml`. Verificado, no solo leído: el glob de
+`asegurar_servicio_compose` ordena `compose*.yaml` alfabéticamente, y con
+los tres fragmentos presentes ese orden real es
+`compose.certbot.yaml`, `compose.postgres.yaml`, `compose.yaml` (`c` < `p`
+< `y`), NO el orden `compose.yaml` + `compose.certbot.yaml` que parecía más
+natural leyendo la tarjeta. Se corrió
+`docker compose -f compose.certbot.yaml -f compose.postgres.yaml -f compose.yaml config`
+contra archivos con el contenido real de los tres pasos (en un directorio
+de prueba aparte, sin tocar `/opt/centinela` de la máquina de desarrollo): el
+servicio `nginx` resultante fusiona los dos puertos (443 y 80), los cuatro
+volúmenes (incluido `/etc/letsencrypt`), y `name: centinela` y la red
+compartida quedan intactos. La fusión de campos tipo lista (`ports`,
+`volumes`) no depende de qué archivo de la lista de `-f` declare el
+servicio primero.
+
+**Timer de renovación con systemd, NO con cron**: `OnBootSec=15min` +
+`OnUnitActiveSec=24h` en el `.timer`, nunca `OnCalendar=daily` +
+`Persistent=true`. Razón verificable: SCRUM-29 apaga la VM a diario (Azure
+deallocate), y `Persistent=true` solo dispara una corrida perdida si existe
+un stamp de una activación previa, cosa que no hay la primera vez que el
+timer se activa después de que la VM estuvo apagada a las 00:00.
+`OnBootSec`+`OnUnitActiveSec` sí garantiza una corrida temprana en cada
+encendido diario. El `.service` declara DOS `ExecStart`: primero
+`docker run --rm ... certbot/certbot:v5.8.0 renew --webroot -w
+/var/www/certbot`, y si ese comando sale con código 0, `docker kill -s HUP
+centinela-nginx` (comportamiento por defecto de systemd con `Type=oneshot`:
+si el primer `ExecStart` falla, el segundo no se ejecuta). El hook de
+despliegue de certbot (`--deploy-hook`) no sirve para esto: corre DENTRO del
+propio contenedor efímero de certbot, que no tiene acceso al socket de
+Docker del host, así que no podría recargar nginx; el reload se dispara
+desde el host, después del `docker run`, no desde dentro de certbot. Nota
+de honestidad: `certbot renew` sale con código 0 incluso cuando ningún
+certificado estaba vencido (no hay nada que renovar), así que este segundo
+`ExecStart` se ejecuta en CADA disparo del timer que no falle, no
+exclusivamente cuando de verdad renovó un certificado; el reload es barato
+(recarga en caliente, sin caída de conexiones) así que el costo de este
+comportamiento es bajo, pero es explícitamente lo que hace, no lo que
+"debería" hacer un reload más preciso.
+
+**Qué se verificó de forma directa** (5 de septiembre de 2026), sin tocar
+la VM real de Azure ni Let's Encrypt real: se construyó el mismo tipo de
+contenedor `debian:13` efímero con `systemd` real como proceso 1
+(`/sbin/init`, `--privileged --cgroupns=host`, `/sys/fs/cgroup` montado) que
+ya usó la verificación de `40-postgres.sh`, con Docker anidado propio
+(`--solo 20-docker.sh`). Sobre ese contenedor:
+
+- Se generó un certificado AUTOFIRMADO (con `openssl req -x509`, NUNCA
+  contra Let's Encrypt real) en la ruta exacta donde `certonly` habría
+  dejado uno real (`/opt/centinela/letsencrypt/live/veraapp.tech/`), para
+  ejercitar todo lo que depende de "el certificado ya existe" sin gastar
+  ningún límite de Let's Encrypt ni depender de red externa. La rama de
+  emisión real (`docker run ... certonly`) no se ejercitó: solo se leyó el
+  código.
+- Primera corrida de `--solo 30-nginx.sh` (sin certificado): contenedor
+  `centinela-nginx` creado, modo proxy, puerto 80. `Cambios aplicados: 4`.
+- `--solo 50-certbot.sh` con el certificado falso ya presente: la emisión se
+  omitió (existencia del archivo), se escribieron los tres archivos nuevos
+  (`compose.certbot.yaml`, `centinela-tls.conf`, `raiz-redirigir.conf`) y las
+  dos unidades systemd, con `daemon-reload` + `enable --now` (contenido
+  nuevo). `Cambios aplicados: 5`. `systemd-analyze verify` sobre las dos
+  unidades: sin errores. `systemctl list-timers` confirmó el próximo
+  disparo a 15 minutos del arranque del contenedor (`OnBootSec=15min`).
+  Segunda corrida de `--solo 50-certbot.sh` (sin cambiar nada):
+  `Cambios aplicados: 0`.
+- Segunda corrida de `--solo 30-nginx.sh` (certificado y
+  `compose.certbot.yaml` ya presentes): `centinela.conf` cambió de contenido
+  (predicado volteó a `raiz-redirigir.conf`), `nginx -t` pasó CON el mount de
+  `/etc/letsencrypt`, y el contenedor se RECREÓ (`asegurar_servicio_compose`
+  detectó el puerto 443 nuevo). `ss -tln` confirmó `443` y `80` escuchando.
+  `Cambios aplicados: 2`. La rama de reload por SIGHUP NO se disparó en esta
+  corrida (el recreate ya cubría el cambio), tal como se esperaba.
+- `openssl s_client -connect localhost:443` contra el certificado
+  autofirmado: handshake aceptado, nginx respondió `502 Bad Gateway` (nginx
+  arriba, proxy configurado, sin contenedor `api` real, el mismo resultado
+  que ya documenta `30-nginx.sh` para el puerto 80). Una petición cruda por
+  el puerto 80 (`/dev/tcp`) confirmó la redirección real:
+  `301 Moved Permanently` con `Location: https://veraapp.tech/`.
+- Tercera corrida de `--solo 30-nginx.sh` (nada cambió):
+  `Cambios aplicados: 0`, confirmando la convergencia a partir de la
+  corrida 3 descrita arriba.
+- La rama de reload condicional (SIGHUP) se verificó EN AISLAMIENTO,
+  forzando a mano una diferencia de contenido en `centinela.conf` sin tocar
+  nada a nivel de compose (no cambiando `DOMINIO_SERVIDOR`, que arrastra el
+  problema no relacionado de que `centinela-tls.conf` quedaría apuntando a
+  un dominio viejo): el paso detectó la diferencia, no recreó el contenedor
+  (`asegurar_servicio_compose` ya lo veía corriendo con la configuración
+  actual) y disparó `docker kill -s HUP centinela-nginx` con éxito
+  confirmado. La corrida siguiente volvió a dar `Cambios aplicados: 0`.
+- Se confirmó `/usr/bin/docker` como ruta real del binario dentro de este
+  mismo contenedor (paquete `docker.io` de Debian), la ruta que usan los
+  `ExecStart=` del `.service` de renovación.
+- **Se invocó el `.service` de renovación una vez, de verdad**, con
+  `systemctl start centinela-certbot-renovar.service` (no solo se leyó su
+  contenido): los dos `ExecStart` corrieron y salieron
+  `status=0/SUCCESS`. `certbot renew` reportó "No renewals were attempted."
+  (el certificado autofirmado no tiene entrada en
+  `/etc/letsencrypt/renewal/`, así que no había nada que renovar) y, aun
+  así, el segundo `ExecStart` corrió y el log de Docker confirmó el kill
+  real (`docker[PID]: centinela-nginx`, la salida que imprime `docker kill`
+  al tener éxito). Esto confirma en systemd real, no solo por
+  documentación, tanto la cadena de dos `ExecStart` (el segundo depende de
+  que el primero haya salido 0) como que `Requires=docker.service` alcanza
+  para arrancar el daemon aunque `docker.socket` esté activado por socket
+  (`systemctl show docker.socket` mostró `RequiredBy=docker.service`,
+  `WantedBy=sockets.target`; con el daemon ya activo en la prueba, `Requires`
+  simplemente confirmó la dependencia sin necesitar arrancar nada).
+- El contenedor y la imagen efímeros se destruyeron al terminar la prueba;
+  no dejaron rastro en `/opt/centinela` de la máquina de desarrollo real.
+
+**Confirmado contra la VM real de Azure** (`centinela-vm`, 5 de septiembre de
+2026), en dos partes: primero una corrida completa con `CERTBOT_STAGING=si`,
+después el cutover real a producción.
+
+Corrida 1, `aprovisionar.sh` completo (los 6 pasos), con staging activo en
+`aprovisionar.env`: `Cambios aplicados: 12`. Certificado de staging emitido
+de verdad contra la API de Let's Encrypt (reto webroot,
+`certbot/certbot:v5.8.0`), confirmado con
+`openssl s_client -connect veraapp.tech:443 -servername veraapp.tech |
+openssl x509 -noout -subject -issuer -dates`:
+`issuer=C=US, O=Let's Encrypt, CN=(STAGING) Artificial Amaranth YE1`, vence
+2026-12-04. Esta corrida confirmó en vivo, contra la VM real y no solo
+contra el contenedor efímero de arriba, el diseño de "una corrida de
+diferimiento" ya documentado: en ESTA primera corrida `30-nginx.sh` corrió
+antes de que el certificado existiera (`50-certbot.sh` todavía no lo había
+emitido en esa misma pasada), así que nginx quedó recreado sin el puerto 443
+activo esa vez.
+
+Corrida 2 completa (mismo `aprovisionar.sh`, sin cambiar nada):
+`Cambios aplicados: 2` (`centinela.conf` cambió de `raiz-http.conf` a
+`raiz-redirigir.conf` porque el predicado ya vio el certificado, y el
+contenedor nginx se recreó porque `compose.certbot.yaml` ya aportaba el
+puerto 443 y el volumen al merge). Corrida 3: `Cambios aplicados: 0`.
+
+Verificado desde afuera de la VM (máquina de desarrollo, no la VM misma):
+`curl -sI http://veraapp.tech/` devolvió `301 Moved Permanently` con
+`Location: https://veraapp.tech/`; `curl -skI https://veraapp.tech/` devolvió
+`HTTP/2 502` (esperado: sigue sin existir un contenedor `api` desplegado, el
+mismo comportamiento que ya documenta la sección `30-nginx.sh` para el
+puerto 80, desde antes de que existiera certbot).
+`systemctl list-timers centinela-certbot-renovar.timer` mostró el timer
+activo, con el próximo disparo calculado por `OnBootSec=15min` desde el
+arranque real de la VM.
+
+**Ciclo real de apagado y encendido de Azure**, entre la parte de staging y
+el cutover a producción (`az vm deallocate` seguido de `az vm start`, sin
+volver a correr `aprovisionar.sh` en el medio): `docker ps`, recién
+arrancada la VM, mostró los contenedores `Up 3 seconds`. Confirma contra la
+VM real, no solo por lectura de la documentación de Docker, que `restart:
+unless-stopped` recupera los contenedores solo con un apagado y encendido
+real de Azure, sin intervención humana ni una corrida nueva de
+aprovisionamiento.
+
+**Cutover de staging a producción**, mismo día y misma VM: se borró
+`CERTBOT_STAGING=si` de `aprovisionar.env` y, a mano,
+`/opt/centinela/letsencrypt/{live,archive}/veraapp.tech` y
+`/opt/centinela/letsencrypt/renewal/veraapp.tech.conf`. Esto confirma en la
+práctica, contra Let's Encrypt real, la "Trampa de `CERTBOT_STAGING`" ya
+documentada arriba: alternar la variable sin borrar esos tres artefactos no
+dispara ninguna reemisión, porque la idempotencia de este paso decide por la
+existencia del archivo, no por su origen.
+
+En este punto apareció un gap real que no estaba cubierto por el predicado
+de `30-nginx.sh` (ver la subsección siguiente). Se evitó ejercitarlo
+corriendo `aprovisionar.sh --solo 50-certbot.sh` en vez de una corrida
+completa: el modo `--solo` corre únicamente el gate
+`00-verificar-sistema.sh` más el paso pedido, así que `30-nginx.sh` no se
+ejecutó en absoluto. Reemitió el certificado real sin tocar `nginx -t` para
+nada. Salida real: `Cambios aplicados: 1`, con "Emitiendo el certificado
+para veraapp.tech (correo ccrubio@ucompensar.edu.co, imagen
+certbot/certbot:v5.8.0, staging=no)" y "Successfully received certificate"
+de certbot.
+
+Como `50-certbot.sh` nunca toca el contenedor nginx directamente (por
+diseño, ver "Revisión de propiedad frente a SCRUM-30" en la sección
+`30-nginx.sh`), y en este cutover ni el compose ni el contenido de
+`centinela.conf` cambiaron (el predicado ya veía "el certificado existe"
+antes y después: primero el de staging, luego el real), nginx seguía
+sirviendo en memoria el certificado VIEJO después de que el disco ya tenía
+el nuevo. Se recargó a mano con `docker kill -s HUP centinela-nginx` (el
+mismo mecanismo que ya usa el `.service` de renovación), y de inmediato
+`openssl s_client` mostró `issuer=C=US, O=Let's Encrypt, CN=YE1` (sin
+"STAGING") y `curl -sI https://veraapp.tech/` SIN `-k` pasó limpio (cadena
+de confianza válida verificada, no solo el handshake). Corrida completa de
+`aprovisionar.sh` una vez más después del cutover: `Cambios aplicados: 0`,
+confirmando la idempotencia con el certificado de producción real en su
+lugar, no solo con el de staging.
+
+#### Limitación conocida: `nginx -t` puede fallar en un cutover de staging a producción
+
+El predicado de `30-nginx.sh` que decide si monta `/etc/letsencrypt` en su
+propio chequeo suelto de `nginx -t` (punto (b) de "Revisión de propiedad
+frente a SCRUM-30", arriba) mira solo si `fullchain.pem` existe. Ese chequeo
+asume implícitamente que `centinela-tls.conf` (el archivo que sí referencia
+esas rutas de certificado) solo existe cuando el certificado también existe,
+porque los dos nacen juntos la primera vez: `50-certbot.sh` escribe
+`centinela-tls.conf` en la MISMA corrida en la que emite el certificado por
+primera vez.
+
+Ese supuesto se rompe en un cutover como el de esta sesión: se borró el
+certificado a mano (`live/`, `archive/`, `renewal/*.conf`) para forzar una
+reemisión real, pero nada borra `centinela-tls.conf`, que quedó en disco
+desde la corrida anterior. En ese estado intermedio, el predicado de
+`30-nginx.sh` ve "el certificado no existe" y decide NO montar
+`/etc/letsencrypt` en su chequeo de `nginx -t`, mientras `centinela-tls.conf`
+sigue ahí exigiendo esas mismas rutas: el chequeo habría fallado con "cannot
+load certificate", el mismo síntoma que ya motivó el diseño del predicado,
+pero por el lado contrario (el certificado desaparece con el `.conf`
+todavía presente, en vez de aparecer el `.conf` antes que el certificado).
+
+Esto NO se probó a propósito: se evitó activamente, usando
+`aprovisionar.sh --solo 50-certbot.sh` como se describe arriba, que nunca
+ejecuta `30-nginx.sh` ni su chequeo de `nginx -t`. **Forma recomendada de
+hacer este cutover mientras nadie automatice el reload o el gate**: reemitir
+con `aprovisionar.sh --solo 50-certbot.sh` y recargar nginx a mano con
+`docker kill -s HUP centinela-nginx` inmediatamente después, en vez de
+correr `aprovisionar.sh` completo. Arreglar el predicado en código (por
+ejemplo, que también borre o ignore `centinela-tls.conf` cuando el
+certificado no existe, o que el chequeo de `nginx -t` de `30-nginx.sh` monte
+`/etc/letsencrypt` de forma incondicional) quedó fuera de alcance hoy: fue
+una decisión de resolver el cutover del día, no de rediseñar el predicado
+(ver la entrada de la bitácora técnica del proyecto de grado
+`2026-09-05-certbot-cutover-nginx-tls-huerfano.md` sobre este mismo gap).
+
+**Qué falta verificar contra la VM real** (Azure o Vagrant), después de esta
+sesión:
+
+- Que una renovación real dispare el segundo `ExecStart` reemplazando de
+  verdad un certificado próximo a vencer: el certificado de producción
+  recién emitido vence en diciembre de 2026 (el periodo estándar de 90 días
+  de Let's Encrypt, el mismo que ya mostró el certificado de staging:
+  2026-12-04), así que sigue sin existir un certificado real con
+  vencimiento próximo contra el cual ejercitar este camino. Es el único
+  hueco de cobertura que queda: la emisión real (staging y producción), que
+  el DNS resuelva desde la perspectiva de Let's Encrypt (implícito en que la
+  emisión real tuvo éxito por el reto webroot), el NSG del puerto 443 y un
+  reboot real de Azure con recuperación automática de contenedores ya se
+  confirmaron contra la VM real, ver arriba.
+- Que el timer `centinela-certbot-renovar.timer` en sí (no solo los
+  contenedores Docker, ya confirmados) sobreviva y recalcule su próximo
+  disparo después de un apagado y encendido real de Azure: se confirmó que
+  `systemctl list-timers` lo muestra activo justo después de que
+  `50-certbot.sh` lo habilita (`enable --now`), y que los contenedores con
+  `restart: unless-stopped` vuelven solos tras el ciclo
+  `deallocate`/`start`, pero no se repitió `systemctl list-timers` sobre
+  esta unidad específica después de ese mismo reboot.
+- El comportamiento exacto de `docker.socket` cuando `OnBootSec=15min`
+  dispara antes de que Docker haya terminado de arrancar en un boot real de
+  Azure: se confirmó que el daemon y los contenedores vuelven solos dentro
+  de una ventana corta después del arranque (`docker ps` los mostró
+  `Up 3 seconds`), pero no se cronometró el disparo real del timer contra
+  ese arranque.
+- Los otros dos guards de salto de este paso (`DOMINIO_SERVIDOR=_` y falta
+  `CORREO_CERTBOT`) siguen sin ejercitarse contra un sistema con systemd
+  real: en `probar-en-docker.sh` siempre gana primero el guard de
+  `systemd`, y en esta sesión contra la VM real `CORREO_CERTBOT` y
+  `DOMINIO_SERVIDOR` estuvieron siempre definidos para poder ejercitar el
+  resto.
+
+La emisión real, el cutover de staging a producción y un reboot real de la
+VM ya se ejercitaron contra Azure (ver arriba). Lo único que sigue sin poder
+ejercitarse sin esperar a que este certificado esté próximo a vencer es la
+renovación real que sí reemplaza un certificado.
