@@ -264,13 +264,25 @@ asegurar_vm() {
 # Orden fijo y explícito: por qué no se deja que "az vm create" arme la red
 # sola está en asegurar_vm.
 crear_recursos() {
+  # Se guarda antes de crear nada: es la única forma de distinguir "primer
+  # run contra esta VM" de "rerun", y de eso depende si toca abrir el 22.
+  local vm_ya_existia="no"
+  if recurso_existe vm show -g "$GRUPO_RECURSOS" -n "$NOMBRE_VM"; then
+    vm_ya_existia="si"
+  fi
+
   asegurar_grupo_recursos
   asegurar_red_virtual
   asegurar_nsg
 
-  # IP Standard es deny por defecto en entrada: sin estas 3 reglas no hay SSH.
-  # La regla nueva coexiste con la vieja durante la transición (mostrar_cierre).
-  # Prioridades con huecos de 5/10: 100 vieja, 105 nueva, 110 http, 120 https.
+  # IP Standard es deny por defecto en entrada: sin "permitir-ssh" no hay
+  # forma de llegar a una VM recién creada para correr 10-ssh.sh (SCRUM-28).
+  # Regla de arranque: este script la crea solo en el primer run (VM
+  # inexistente); no se recrea si ya se cerró a mano (mostrar_cierre).
+  # Prioridades con huecos de 5/10: 100 arranque, 105 definitiva, 110 http, 120 https.
+  if [[ "$vm_ya_existia" == "no" ]]; then
+    asegurar_regla_nsg "permitir-ssh" 100 22 "$ORIGEN_SSH"
+  fi
   asegurar_regla_nsg "permitir-ssh-${PUERTO_SSH}" 105 "$PUERTO_SSH" "$ORIGEN_SSH"
   asegurar_regla_nsg "permitir-http" 110 80 "*"
   asegurar_regla_nsg "permitir-https" 120 443 "*"
