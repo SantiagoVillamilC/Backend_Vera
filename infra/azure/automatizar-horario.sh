@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # infra/azure/automatizar-horario.sh
-# SCRUM-29: crea dos Logic Apps en Azure para encender y apagar centinela-vm
-# a diario (08:00 y 12:00 hora Colombia). Corre en el portátil del operador.
+# SCRUM-29: crea un Logic App en Azure para reiniciar centinela-vm a diario
+# (05:00 hora Colombia). La VM corre 24/7, este script no la apaga. Corre
+# en el portátil del operador.
 set -euo pipefail
 
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,29 +19,29 @@ mostrar_ayuda() {
   cat <<'EOF'
 Uso: automatizar-horario.sh [opciones]
 
-Crea en Azure la automatización de encendido/apagado diario de la VM de
-Centinela (tarjeta SCRUM-29): dos Logic Apps (plan Consumption), cada uno
-con identidad administrada system-assigned, el rol "Virtual Machine
-Contributor" sobre la VM, un trigger de Recurrence diario y una acción HTTP
-contra Azure Resource Manager para encender o apagar (deallocate)
-centinela-vm. Lee su configuración de infra/azure/variables.sh y las
-definiciones de infra/azure/logic-apps/*.json.
+Crea en Azure el reinicio diario de la VM de Centinela (tarjeta SCRUM-29):
+un Logic App (plan Consumption) con identidad administrada
+system-assigned, el rol "Virtual Machine Contributor" sobre la VM, un
+trigger de Recurrence diario y una acción HTTP contra Azure Resource
+Manager para reiniciar (restart) centinela-vm. La VM corre 24/7, este
+script no la apaga. Lee su configuración de infra/azure/variables.sh y la
+definición de infra/azure/logic-apps/reiniciar-vm.json.
 
 Opciones:
   --simular   Imprime lo que haría, sin ejecutar ningún "az" que escriba.
               Las lecturas sí corren, para que la simulación refleje el
               estado real de la suscripción. En una corrida --simular contra
-              una suscripción donde todavía no existe alguno de los dos
-              Logic Apps, los pasos que dependen de leer su principalId o su
-              definición publicada no tienen un valor real que leer: en vez
-              de fallar, avisan que ese dato solo se conoce en una corrida
-              real y siguen adelante.
+              una suscripción donde todavía no existe el Logic App, los
+              pasos que dependen de leer su principalId o su definición
+              publicada no tienen un valor real que leer: en vez de fallar,
+              avisan que ese dato solo se conoce en una corrida real y
+              siguen adelante.
   --ayuda     Muestra esta ayuda.
 
 Sin opciones, corre la verificación previa y crea (o actualiza) los
 recursos que falten o que hayan cambiado.
 
-Cada Logic App se crea primero en --state Disabled, con su identidad
+El Logic App se crea primero en --state Disabled, con su identidad
 administrada ya habilitada; solo después de confirmar (con reintento) que
 el rol "Virtual Machine Contributor" sobre la VM ya se propagó a una
 lectura, este script lo pasa a --state Enabled (un Logic App Enabled sin
@@ -51,10 +52,12 @@ vivo). La definición incluye además un "startTime" fijo en el pasado
 dispara una corrida inmediata fuera de horario (verificado en vivo por
 separado), y si "startTime" coincidiera EXACTO con una hora de
 "schedule.hours", Azure salta esa ocurrencia y agenda el disparo un día
-después (también verificado en vivo, ver la cabecera del archivo). Por eso
-mismo, la comparación con jq que decide si hace falta un
-"az logic workflow update" ignora solo los campos calculados que Azure
-agrega al guardar (evaluatedRecurrence): con "startTime" ahora fijo, sí se
+después (también verificado en vivo, ver la bitácora). Con la VM 24/7 ese
+disparo inmediato ya no prende ni apaga fuera de horario: reinicia
+producción a mitad de una request, por eso el startTime fijo sigue siendo
+la defensa real. Por lo mismo, la comparación con jq que decide si hace
+falta un "az logic workflow update" ignora solo los campos calculados que
+Azure agrega al guardar (evaluatedRecurrence): con "startTime" fijo, sí se
 compara, para que el diff detecte también si alguien cambia ese valor por
 error.
 
@@ -289,10 +292,9 @@ asegurar_logic_app() {
 }
 
 crear_recursos() {
-  # 08:00/12:00 hora Colombia ya vienen fijos en cada plantilla JSON. Para
-  # cambiar el horario, edita la plantilla en logic-apps/.
-  asegurar_logic_app "$NOMBRE_LOGIC_ENCENDER" "${DIRECTORIO_SCRIPT}/logic-apps/encender-vm.json"
-  asegurar_logic_app "$NOMBRE_LOGIC_APAGAR" "${DIRECTORIO_SCRIPT}/logic-apps/apagar-vm.json"
+  # 05:00 hora Colombia ya viene fijo en la plantilla JSON. Para cambiar el
+  # horario, edita la plantilla en logic-apps/.
+  asegurar_logic_app "$NOMBRE_LOGIC_REINICIAR" "${DIRECTORIO_SCRIPT}/logic-apps/reiniciar-vm.json"
 }
 
 mostrar_resumen_cambios() {
