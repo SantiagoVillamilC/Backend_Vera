@@ -1,0 +1,16 @@
+aprovisionar.env
+
+# Generados en tiempo de aprovisionamiento por infra/servidor/pasos/30-nginx.sh
+# (SCRUM-32), infra/servidor/pasos/40-postgres.sh (SCRUM-33) e
+# infra/servidor/pasos/50-certbot.sh (SCRUM-30) a partir de sus heredocs y de
+# infra/servidor/dominio-fijado.sh. No son artefactos estáticos: la fuente de
+# verdad es el paso que los escribe. El patrón cubre todos los fragmentos
+# compose*.yaml (compose.yaml de nginx, compose.postgres.yaml de Postgres,
+# compose.certbot.yaml de certbot), uno por paso, fusionados en tiempo de
+# "up -d" por asegurar_servicio_compose (ver lib/comun.sh). "nginx/" también
+# cubre los archivos que 50-certbot.sh agrega ahí (conf.d/centinela-tls.conf,
+# snippets/raiz-redirigir.conf): certbot no tiene su propio directorio
+# versionado aparte, escribe dentro del mismo árbol nginx/ que 30-nginx.sh ya
+# ignora completo.
+compose*.yaml
+nginx/

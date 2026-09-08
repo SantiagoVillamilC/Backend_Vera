@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "triggers": {
+    "Recurrence": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "Day",
+        "interval": 1,
+        "timeZone": "SA Pacific Standard Time",
+        "startTime": "2026-09-01T00:00:00",
+        "schedule": {
+          "hours": ["5"],
+          "minutes": ["0"]
+        }
+      }
+    }
+  },
+  "actions": {
+    "Reiniciar_VM": {
+      "type": "Http",
+      "inputs": {
+        "method": "POST",
+        "uri": "https://management.azure.com/subscriptions/{SUSCRIPCION}/resourceGroups/{GRUPO_RECURSOS}/providers/Microsoft.Compute/virtualMachines/{NOMBRE_VM}/restart?api-version=2024-07-01",
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://management.azure.com/"
+        }
+      }
+    }
+  },
+  "outputs": {}
+}
