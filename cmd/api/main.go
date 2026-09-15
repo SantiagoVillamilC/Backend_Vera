@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 )
 
 func main() {
@@ -26,6 +28,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Desde acá cada línea es estructurada, incluidos los errores que run devuelve a main.
+	slog.SetDefault(slog.New(logging.WithRequestID(newHandler(cfg))))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -41,8 +45,10 @@ func run() error {
 		Handler:           httpserver.NewRouter(pool, cfg.JWTSecret),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// Debe superar authedTimeout (60s) del grupo autenticado, si no el server corta el
+		// socket antes de que el Timeout del router alcance a responder un 504.
+		WriteTimeout: 90 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
