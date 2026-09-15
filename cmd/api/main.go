@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
@@ -39,6 +40,16 @@ func run() error {
 		return fmt.Errorf("pool: %w", err)
 	}
 	defer pool.Close()
+
+	// El núcleo nace sin rutas ni disparadores: las unidades de negocio le agregan los
+	// métodos y quien los exponga. Acá queda construido con sus dependencias reales y con
+	// los rellenos de las piezas que todavía no existen (riel NF-A2-06, custodio NF-A5-01).
+	_ = nucleo.NewServicio(
+		pool,
+		nucleo.KYCNoDisponible{},
+		nucleo.RielNoDisponible{},
+		nucleo.CustodioNoDisponible{},
+	)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
