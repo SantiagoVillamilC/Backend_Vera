@@ -12,15 +12,17 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
+	"github.com/go-chi/chi/v5"
 )
 
-const testJWTSecret = "0123456789abcdef0123456789abcdef"
-
-// newTestRouter arma el router con un pool nil. Ninguna de las rutas que ejercitan estos
-// tests toca la base, así que el pool no se usa.
+// newTestRouter arma el router con un pool nil y el adaptador de usuario de prueba, el mismo
+// que main inyecta. Ninguna de las rutas que ejercitan estos tests toca la base, así que el
+// pool no se usa.
 func newTestRouter() http.Handler {
-	return NewRouter(nil, testJWTSecret)
+	return NewRouter(nil, auth.UsuarioDePrueba{})
 }
 
 func decodeEnvelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
@@ -70,7 +72,7 @@ func TestLoginWithoutTokenIsPublic(t *testing.T) {
 	_ = decodeEnvelope(t, rec)
 }
 
-func TestAuthedRouteWithoutTokenReturnsEnvelope401(t *testing.T) {
+func TestAuthedRouteWithoutTestCredentialReturnsEnvelope401(t *testing.T) {
 	r := newTestRouter()
 	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
 	rec := httptest.NewRecorder()
@@ -80,25 +82,89 @@ func TestAuthedRouteWithoutTokenReturnsEnvelope401(t *testing.T) {
 	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
 }
 
-func TestAuthedRouteRejectsMalformedAuthorization(t *testing.T) {
-	tests := map[string]string{
-		"basic scheme":       "Basic eA==",
-		"bearer no space":    "Bearer",
-		"empty bearer token": "Bearer ",
-		"lowercase scheme":   "bearer abc",
+func TestAuthedRouteRejectsMissingTestCredential(t *testing.T) {
+	tests := map[string]func(*http.Request){
+		"empty header":  func(req *http.Request) { req.Header.Set(auth.CabeceraUsuarioDePrueba, "") },
+		"blank header":  func(req *http.Request) { req.Header.Set(auth.CabeceraUsuarioDePrueba, "  ") },
+		"otra cabecera": func(req *http.Request) { req.Header.Set("X-Otra-Cosa", "1") },
 	}
 
-	for name, header := range tests {
+	for name, preparar := range tests {
 		t.Run(name, func(t *testing.T) {
 			r := newTestRouter()
 			req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
-			req.Header.Set("Authorization", header)
+			preparar(req)
 			rec := httptest.NewRecorder()
 
 			r.ServeHTTP(rec, req)
 
 			assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
 		})
+	}
+}
+
+// Un bearer bien formado no basta en la fase 0: la credencial de prueba es la cabecera
+// X-Test-User. Si no se exige, quedaría abierto un bypass silencioso a la espera del JWT real.
+func TestAuthedRouteRejectsWellFormedBearerWithoutTestHeader(t *testing.T) {
+	r := newTestRouter()
+	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
+	req.Header.Set("Authorization", "Bearer cualquier-token")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
+}
+
+// Con la credencial de prueba, el grupo autenticado deja pasar la petición: el handler de
+// /copilot responde 400 por el cuerpo vacío, nunca 401.
+func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
+	r := newTestRouter()
+	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
+	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("con la credencial de prueba no debe dar 401 (cuerpo %q)", rec.Body.String())
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, quiero 400 por el cuerpo vacío (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+}
+
+// Una ruta del grupo autenticado ve el usuario_id que dejó RequireAuth, resuelto por el
+// adaptador de prueba. Se arma con el mismo middleware y el mismo adaptador que usa el
+// router para poder observar el valor desde un handler.
+func TestAuthenticatedRouteSeesTestUserID(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(RequireAuth(auth.UsuarioDePrueba{}))
+	r.Get("/quien-soy", func(w http.ResponseWriter, req *http.Request) {
+		usuarioID, ok := identidad.UsuarioIDDeContexto(req.Context())
+		if !ok {
+			api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Sin usuario en el contexto.", nil)
+			return
+		}
+		api.WriteData(w, http.StatusOK, map[string]string{"user_id": usuarioID}, nil)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/quien-soy", nil)
+	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	env := decodeEnvelope(t, rec)
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data ausente o con forma rara en %q", rec.Body.String())
+	}
+	if got := data["user_id"]; got != auth.UsuarioDePruebaID {
+		t.Fatalf("user_id = %v, quiero %s", got, auth.UsuarioDePruebaID)
 	}
 }
 

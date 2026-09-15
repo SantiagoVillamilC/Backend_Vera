@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
@@ -51,9 +52,12 @@ func run() error {
 		nucleo.CustodioNoDisponible{},
 	)
 
+	// Fase 0: la identidad del grupo autenticado es el adaptador de usuario de prueba. El
+	// swap a JWT real es construir acá otro IdentidadDeLaPeticion con cfg.JWTSecret; el router
+	// y los handlers no cambian.
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouter(pool, cfg.JWTSecret),
+		Handler:           httpserver.NewRouter(pool, auth.UsuarioDePrueba{}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del grupo autenticado, si no el server corta el

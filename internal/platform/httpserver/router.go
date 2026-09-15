@@ -32,7 +32,10 @@ const (
 // limit (que exceptúa /healthz y /readyz para no bloquear a un prober) y por último el
 // envoltorio del 405, que conserva el Allow. Recoverer y Timeout son propios y responden
 // dentro del envelope.
-func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
+//
+// quien resuelve la identidad del grupo autenticado. Lo construye main y lo inyecta: hoy el
+// adaptador de usuario de prueba, mañana el validador de JWT real.
+func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
@@ -42,7 +45,7 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Test-User"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))
@@ -67,7 +70,7 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 	// clientes externos con su propio presupuesto de retry, por eso el Timeout mayor.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
-		r.Use(RequireAuth(jwtSecret))
+		r.Use(RequireAuth(quien))
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
 	})
