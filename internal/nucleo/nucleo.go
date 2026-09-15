@@ -156,10 +156,11 @@ type LectorExtractoCustodio interface {
 // consultar sin haber cambiado a rol_nucleo, y el helper de transacción es el único cuello de
 // botella del cambio de rol.
 type Servicio struct {
-	pool     abridorDeTransacciones
-	kyc      LectorNivelKYC
-	riel     Riel
-	custodio LectorExtractoCustodio
+	pool       abridorDeTransacciones
+	kyc        LectorNivelKYC
+	riel       Riel
+	custodio   LectorExtractoCustodio
+	rastreador RastreadorErrores
 }
 
 // NewServicio arma el Servicio con sus dependencias. main no puede nombrar
@@ -171,12 +172,14 @@ func NewServicio(
 	kyc LectorNivelKYC,
 	riel Riel,
 	custodio LectorExtractoCustodio,
+	rastreador RastreadorErrores,
 ) *Servicio {
 	return &Servicio{
-		pool:     poolDeNucleo{pool: pool},
-		kyc:      kyc,
-		riel:     riel,
-		custodio: custodio,
+		pool:       poolDeNucleo{pool: pool},
+		kyc:        kyc,
+		riel:       riel,
+		custodio:   custodio,
+		rastreador: rastreador,
 	}
 }
 

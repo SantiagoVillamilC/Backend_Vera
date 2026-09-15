@@ -18,6 +18,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/observabilidad"
 )
 
 func main() {
@@ -33,6 +34,7 @@ func run() error {
 	}
 	// Desde acá cada línea es estructurada, incluidos los errores que run devuelve a main.
 	slog.SetDefault(slog.New(logging.WithRequestID(newHandler(cfg))))
+	slog.Info("config loaded", "config", cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -51,6 +53,7 @@ func run() error {
 		nucleo.KYCNoDisponible{},
 		nucleo.RielNoDisponible{},
 		nucleo.CustodioNoDisponible{},
+		observabilidad.RastreadorSlog{},
 	)
 
 	// River dispara DespacharOutbox y Conciliar sobre el mismo pool y el mismo núcleo. Start con
