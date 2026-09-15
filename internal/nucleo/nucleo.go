@@ -152,7 +152,8 @@ type LectorExtractoCustodio interface {
 }
 
 // Servicio es el núcleo financiero completo: la única puerta a sus tablas y a su frontera
-// transaccional. No expone ningún tipo de pgx ni del repositorio en sus firmas.
+// transaccional. Guarda el pool y el Querier del núcleo, pero lo que no expone fuera del
+// paquete es el Querier de sus tablas.
 type Servicio struct {
 	pool     *pgxpool.Pool
 	q        *repositorio.Queries

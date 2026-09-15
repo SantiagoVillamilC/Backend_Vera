@@ -16,8 +16,9 @@ sql:
         wrap_errors: true
   # Repositorio del núcleo financiero. Vive dentro de internal/nucleo para que el segundo
   # internal de Go impida que cualquier paquete de fuera importe su Querier.
+  # El esquema del núcleo todavía no existe: lo crea NF-A1-01, que declara `schema` como la
+  # lista de los archivos del núcleo dentro de bd/migraciones, nunca el directorio compartido.
   - engine: postgresql
-    schema: bd/migraciones
     queries: bd/consultas-nucleo
     gen:
       go:
