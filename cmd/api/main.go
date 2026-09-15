@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 )
 
 func main() {
@@ -26,6 +28,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Desde acá cada línea es estructurada, incluidos los errores que run devuelve a main.
+	slog.SetDefault(slog.New(logging.WithRequestID(newHandler(cfg))))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
