@@ -49,6 +49,10 @@ func TestEnTransaccionEjecutaComoRolNucleoYRestauraElRolBase(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT current_user").Scan(&rolBase); err != nil {
 		t.Fatalf("leer el rol base del pool: %v", err)
 	}
+	if rolBase != "rol_api" {
+		t.Fatalf("rol base del pool (APP_DATABASE_URL) = %q, want %q: la prueba exige el rol de login "+
+			"de la API, no el dueño del esquema", rolBase, "rol_api")
+	}
 
 	var rolDentro, sesionDentro string
 	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
