@@ -10,33 +10,33 @@ import (
 
 // Config reúne los valores de entorno que el proceso necesita para arrancar.
 type Config struct {
-	Port         string
-	DatabaseURL  string
-	JWTSecret    string
-	GroqAPIKey   string
-	OpenAIAPIKey string
-	OCRWorkerURL string
-	LogLevel     string
-	LogFormat    string
+	Port           string
+	AppDatabaseURL string
+	JWTSecret      string
+	GroqAPIKey     string
+	OpenAIAPIKey   string
+	OCRWorkerURL   string
+	LogLevel       string
+	LogFormat      string
 }
 
 // LoadConfig lee el entorno, valida la forma de cada variable y reporta todos los errores
 // juntos para no obligar a un despliegue por cada variable mal puesta.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		Port:         envOr("PORT", "8080"),
-		DatabaseURL:  os.Getenv("DATABASE_URL"),
-		JWTSecret:    os.Getenv("JWT_SECRET"),
-		GroqAPIKey:   os.Getenv("GROQ_API_KEY"),
-		OpenAIAPIKey: os.Getenv("OPENAI_API_KEY"),
-		OCRWorkerURL: os.Getenv("OCR_WORKER_URL"),
-		LogLevel:     envOr("LOG_LEVEL", "info"),
-		LogFormat:    envOr("LOG_FORMAT", "json"),
+		Port:           envOr("PORT", "8080"),
+		AppDatabaseURL: os.Getenv("APP_DATABASE_URL"),
+		JWTSecret:      os.Getenv("JWT_SECRET"),
+		GroqAPIKey:     os.Getenv("GROQ_API_KEY"),
+		OpenAIAPIKey:   os.Getenv("OPENAI_API_KEY"),
+		OCRWorkerURL:   os.Getenv("OCR_WORKER_URL"),
+		LogLevel:       envOr("LOG_LEVEL", "info"),
+		LogFormat:      envOr("LOG_FORMAT", "json"),
 	}
 
 	var errs []error
 	required := []struct{ name, value string }{
-		{"DATABASE_URL", cfg.DatabaseURL},
+		{"APP_DATABASE_URL", cfg.AppDatabaseURL},
 		{"JWT_SECRET", cfg.JWTSecret},
 	}
 	for _, r := range required {
@@ -68,7 +68,7 @@ func LoadConfig() (*Config, error) {
 func (c Config) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("port", c.Port),
-		slog.Bool("database_url_set", c.DatabaseURL != ""),
+		slog.Bool("app_database_url_set", c.AppDatabaseURL != ""),
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
 		slog.Bool("openai_api_key_set", c.OpenAIAPIKey != ""),

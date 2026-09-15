@@ -52,10 +52,13 @@ backend/
 │       └── errors/
 │           └── errors.go            # Tipos de error comunes de la API
 │
-├── migrations/
-│   ├── 0001_create_users.sql
-│   ├── 0002_create_wallets.sql
-│   └── 0003_create_transactions.sql
+├── bd/
+│   ├── migraciones/
+│   │   ├── 0001_create_users.sql
+│   │   ├── 0002_create_wallets.sql
+│   │   ├── 0003_create_transactions.sql
+│   │   └── 0004_create_nucleo_schema_and_role.sql
+│   └── embed.go                     # Migraciones embebidas en cmd/migrate
 │
 ├── Dockerfile
 ├── .env.example
@@ -68,11 +71,16 @@ backend/
 ```env
 PORT=8080
 DATABASE_URL=postgres://user:password@host:5432/dbname
+APP_DATABASE_URL=postgres://rol_api:password@host:5432/dbname
 JWT_SECRET=
 GROQ_API_KEY=
 OPENAI_API_KEY=
 OCR_WORKER_URL=http://localhost:8000
 ```
+
+`DATABASE_URL` es el DSN del rol dueño del esquema y lo usa `cmd/migrate` para correr goose;
+`APP_DATABASE_URL` es el del pool de `cmd/api`, con el rol `rol_api` (no dueño), que baja a
+`rol_nucleo` con `SET LOCAL ROLE` en cada transacción del núcleo.
 
 ## Ejemplo de referencia — cómo debe verse un `handler.go`
 

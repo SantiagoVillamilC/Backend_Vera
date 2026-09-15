@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -152,19 +151,21 @@ type LectorExtractoCustodio interface {
 }
 
 // Servicio es el núcleo financiero completo: la única puerta a sus tablas y a su frontera
-// transaccional. Guarda el pool y el Querier del núcleo, pero lo que no expone fuera del
-// paquete es el Querier de sus tablas.
+// transaccional. Guarda el pool (por la interfaz estrecha de enTransaccion) y las dependencias
+// hacia afuera. No guarda un Querier ligado al pool a propósito: eso abriría un camino para
+// consultar sin haber cambiado a rol_nucleo, y el helper de transacción es el único cuello de
+// botella del cambio de rol.
 type Servicio struct {
-	pool     *pgxpool.Pool
-	q        *repositorio.Queries
+	pool     abridorDeTransacciones
 	kyc      LectorNivelKYC
 	riel     Riel
 	custodio LectorExtractoCustodio
 }
 
-// NewServicio arma el Servicio con sus dependencias. El Querier del núcleo se construye acá
-// a partir del pool: main no puede nombrar internal/repositorio porque el segundo internal
-// de Go se lo prohíbe, y esa es justamente la pared que protege las tablas del núcleo.
+// NewServicio arma el Servicio con sus dependencias. main no puede nombrar
+// internal/nucleo/internal/repositorio porque el segundo internal de Go se lo prohíbe, y esa es
+// justamente la pared que protege las tablas del núcleo: el Querier se construye por transacción
+// dentro de enTransaccion.
 func NewServicio(
 	pool *pgxpool.Pool,
 	kyc LectorNivelKYC,
@@ -172,8 +173,7 @@ func NewServicio(
 	custodio LectorExtractoCustodio,
 ) *Servicio {
 	return &Servicio{
-		pool:     pool,
-		q:        repositorio.New(pool),
+		pool:     poolDeNucleo{pool: pool},
 		kyc:      kyc,
 		riel:     riel,
 		custodio: custodio,
