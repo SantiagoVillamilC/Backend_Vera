@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
 	"github.com/google/uuid"
@@ -150,21 +151,27 @@ func (tw *timeoutWriter) flush(w http.ResponseWriter) {
 	_, _ = w.Write(tw.body.Bytes())
 }
 
-// RequireAuth exige un bearer token bien formado en el grupo autenticado: exactamente el
-// prefijo "Bearer " seguido de un token no vacío. Cualquier otra forma (Basic x, "Bearer"
-// sin espacio, vacío) da 401.
+// RequireAuth exige una identidad válida en el grupo autenticado: le pregunta a la
+// implementación inyectada quién es el usuario de la petición y, si la responde, deja su
+// usuario_id en el contexto con identidad.ConUsuarioID. Cualquier error o un id vacío da 401
+// dentro del envelope, de modo que ningún handler autenticado corre sin usuario.
 //
-// TODO: la validación real del JWT sigue pendiente en internal/auth (ValidateJWT); hasta
-// entonces esto solo verifica la forma del header.
-func RequireAuth(jwtSecret string) func(http.Handler) http.Handler {
+// La credencial concreta la decide el adaptador, no este middleware: hoy es la cabecera de
+// prueba de auth.UsuarioDePrueba; cuando exista el JWT real, main inyecta el validador que lea
+// Authorization y este código no cambia.
+func RequireAuth(quien IdentidadDeLaPeticion) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if jwtSecret == "" || !ok || strings.TrimSpace(token) == "" {
+			if quien == nil {
 				api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 				return
 			}
-			next.ServeHTTP(w, r)
+			usuarioID, err := quien.UsuarioID(r)
+			if err != nil || strings.TrimSpace(usuarioID) == "" {
+				api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(identidad.ConUsuarioID(r.Context(), usuarioID)))
 		})
 	}
 }
