@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testJWTSecret = "0123456789abcdef0123456789abcdef"
@@ -71,6 +72,72 @@ func TestAuthedRouteWithoutTokenReturnsEnvelope401(t *testing.T) {
 	r.ServeHTTP(rec, req)
 
 	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
+}
+
+func TestAuthedRouteRejectsMalformedAuthorization(t *testing.T) {
+	tests := map[string]string{
+		"basic scheme":       "Basic eA==",
+		"bearer no space":    "Bearer",
+		"empty bearer token": "Bearer ",
+		"lowercase scheme":   "bearer abc",
+	}
+
+	for name, header := range tests {
+		t.Run(name, func(t *testing.T) {
+			r := newTestRouter()
+			req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
+			req.Header.Set("Authorization", header)
+			rec := httptest.NewRecorder()
+
+			r.ServeHTTP(rec, req)
+
+			assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
+		})
+	}
+}
+
+func TestPanicRecoveredInsideEnvelope(t *testing.T) {
+	handler := Recoverer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assertErrorEnvelope(t, rec, http.StatusInternalServerError, "InternalError")
+}
+
+func TestTimeoutReturnsEnvelope(t *testing.T) {
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
+	handler := Timeout(20 * time.Millisecond)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		<-release
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assertErrorEnvelope(t, rec, http.StatusGatewayTimeout, "Timeout")
+}
+
+func TestServerIgnoresIncomingRequestID(t *testing.T) {
+	r := newTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("X-Request-Id", "client-controlled")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	got := rec.Header().Get("X-Request-Id")
+	if got == "" {
+		t.Fatal("la respuesta no trae X-Request-Id")
+	}
+	if got == "client-controlled" {
+		t.Fatalf("el servidor aceptó el X-Request-Id del cliente: %q", got)
+	}
 }
 
 func TestUnknownRouteReturnsEnvelope404(t *testing.T) {

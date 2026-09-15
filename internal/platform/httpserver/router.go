@@ -26,27 +26,26 @@ const (
 
 // NewRouter arma el árbol de rutas con la cadena de middleware y el envelope común.
 //
-// El orden de la cadena es deliberado: RequestID primero, luego un único ClientIPFrom*
-// (nginx sobrescribe X-Real-IP con el peer TCP en infra/servidor/pasos/30-nginx.sh y el
-// puerto de la API no se publica, así que el header no es falsificable desde fuera), el
-// logger de acceso, Recoverer, CORS en la raíz y por último el rate limit, para que un
-// 429 siga trayendo los headers de CORS.
+// El orden de la cadena es deliberado: RequestID (server-generated) primero, luego un
+// único ClientIPFrom* (nginx sobrescribe X-Real-IP con el peer TCP en
+// infra/servidor/pasos/30-nginx.sh y el puerto de la API no se publica, así que el header
+// no es falsificable desde fuera), el logger de acceso, Recoverer, CORS en la raíz y por
+// último el rate limit, para que un 429 siga trayendo los headers de CORS. Recoverer y
+// Timeout son propios y responden dentro del envelope.
 func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestID)
+	r.Use(RequestID())
 	r.Use(middleware.ClientIPFromHeader("X-Real-IP"))
 	r.Use(logging.AccessLogger())
-	r.Use(middleware.Recoverer)
+	r.Use(Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 		MaxAge:         300,
 	}))
-	r.Use(httprate.LimitBy(rateLimitRequests, rateLimitWindow, func(r *http.Request) (string, error) {
-		return httprate.CanonicalizeIP(middleware.GetClientIP(r.Context())), nil
-	}, httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) {
+	r.Use(httprate.LimitBy(rateLimitRequests, rateLimitWindow, clientIPKey, httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) {
 		api.WriteError(w, http.StatusTooManyRequests, "TooManyRequests", "Rate limit exceeded.", nil)
 	})))
 
@@ -57,7 +56,7 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Timeout(publicTimeout))
+		r.Use(Timeout(publicTimeout))
 		r.Post("/login", authHandler.Login)
 		r.Post("/register", authHandler.Register)
 		r.Post("/mfa/verify", authHandler.VerifyMFA)
@@ -68,7 +67,7 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 	// Grupo autenticado: Timeout y RequireAuth solo acá. Copilot y receipts llaman
 	// clientes externos con su propio presupuesto de retry, por eso el Timeout mayor.
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Timeout(authedTimeout))
+		r.Use(Timeout(authedTimeout))
 		r.Use(RequireAuth(jwtSecret))
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)

@@ -1,6 +1,7 @@
 package receipts
 
 import (
+	"errors"
 	"io"
 	"net/http"
 
@@ -15,8 +16,18 @@ func NewHandler(s *Service) *Handler { return &Handler{service: s} }
 
 // Create recibe la imagen del recibo en el cuerpo crudo y la procesa.
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	image, err := io.ReadAll(r.Body)
-	if err != nil || len(image) == 0 {
+	if err != nil {
+		var big *http.MaxBytesError
+		if errors.As(err, &big) {
+			api.WriteError(w, http.StatusRequestEntityTooLarge, "PayloadTooLarge", "Request body exceeds 1 MiB.", nil)
+			return
+		}
+		api.WriteError(w, http.StatusBadRequest, "BadRequest", "imagen requerida", nil)
+		return
+	}
+	if len(image) == 0 {
 		api.WriteError(w, http.StatusBadRequest, "BadRequest", "imagen requerida", nil)
 		return
 	}
