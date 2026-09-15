@@ -6,6 +6,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/repositorio"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/transactions"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/wallets"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,7 +15,7 @@ import (
 func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 	mux := http.NewServeMux()
 
-	authHandler := auth.NewHandler(auth.NewService(nil))
+	authHandler := auth.NewHandler(auth.NewService(repositorio.New(pool)))
 	walletService := wallets.NewService(nil)
 	walletHandler := wallets.NewHandler(walletService)
 	transactionHandler := transactions.NewHandler(transactions.NewService(nil, walletService, transactions.NewConfirmationService(nil), nil))
