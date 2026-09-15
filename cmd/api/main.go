@@ -36,7 +36,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := database.NewPool(ctx, cfg.DatabaseURL)
+	pool, err := database.NewPool(ctx, cfg.AppDatabaseURL)
 	if err != nil {
 		return fmt.Errorf("pool: %w", err)
 	}

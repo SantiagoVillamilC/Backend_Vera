@@ -11,15 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// abrirPoolDePrueba devuelve un pool contra el Postgres real que indique DATABASE_URL, con una
-// sola conexión: así la consulta posterior a la transacción reutiliza la misma conexión y
-// demuestra que SET LOCAL ROLE se revirtió al confirmar.
+// abrirPoolDePrueba devuelve un pool contra el Postgres real que indique APP_DATABASE_URL, con
+// una sola conexión: así la consulta posterior a la transacción reutiliza la misma conexión y
+// demuestra que SET LOCAL ROLE se revirtió al confirmar. Esa es la credencial del pool de la API
+// (rol_api, no dueño), así que la prueba corre con el mismo rol base que en producción.
 func abrirPoolDePrueba(tb testing.TB) *pgxpool.Pool {
 	tb.Helper()
 
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := os.Getenv("APP_DATABASE_URL")
 	if dsn == "" {
-		tb.Skip("DATABASE_URL no definida: la prueba de integración necesita un Postgres real")
+		tb.Skip("APP_DATABASE_URL no definida: la prueba de integración necesita un Postgres real")
 	}
 
 	cfg, err := pgxpool.ParseConfig(dsn)

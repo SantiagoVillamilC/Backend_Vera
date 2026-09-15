@@ -12,7 +12,8 @@ import (
 )
 
 // fakeTransaccion es la transacción del núcleo sin Postgres: registra el orden de las sentencias
-// que recibe para poder afirmar que el cambio de rol corre antes de cualquier consulta.
+// que recibe para poder afirmar que el cambio de rol y el search_path corren antes de cualquier
+// consulta.
 type fakeTransaccion struct {
 	eventos   *[]string
 	errExec   error
@@ -72,7 +73,7 @@ func TestEnTransaccionEjecutaElCambioDeRolAntesDeLaOperacion(t *testing.T) {
 		t.Errorf("enTransaccion = %q, want %q", got, "resultado")
 	}
 
-	want := []string{"exec:" + sentenciaCambioDeRol, "operacion", "commit", "rollback"}
+	want := []string{"exec:" + sentenciaCambioDeRol, "exec:" + sentenciaSearchPath, "operacion", "commit", "rollback"}
 	if !slices.Equal(eventos, want) {
 		t.Errorf("orden de eventos = %v, want %v", eventos, want)
 	}
@@ -106,7 +107,7 @@ func TestEnTransaccionNoConfirmaSiFallaLaOperacion(t *testing.T) {
 		t.Fatalf("enTransaccion error = %v, want %v", err, errOperacion)
 	}
 
-	want := []string{"exec:" + sentenciaCambioDeRol, "operacion", "rollback"}
+	want := []string{"exec:" + sentenciaCambioDeRol, "exec:" + sentenciaSearchPath, "operacion", "rollback"}
 	if !slices.Equal(eventos, want) {
 		t.Errorf("orden de eventos = %v, want %v", eventos, want)
 	}
