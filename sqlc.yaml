@@ -1,5 +1,6 @@
 version: "2"
 sql:
+  # Repositorio de auth (SCRUM-52). No se toca.
   - engine: postgresql
     schema: bd/migraciones
     queries: bd/consultas
@@ -7,6 +8,22 @@ sql:
       go:
         package: repositorio
         out: internal/repositorio
+        sql_package: pgx/v5
+        sql_driver: github.com/jackc/pgx/v5
+        emit_interface: true
+        emit_json_tags: true
+        emit_empty_slices: true
+        wrap_errors: true
+  # Repositorio del núcleo financiero. Vive dentro de internal/nucleo para que el segundo
+  # internal de Go impida que cualquier paquete de fuera importe su Querier.
+  # El esquema del núcleo todavía no existe: lo crea NF-A1-01, que declara `schema` como la
+  # lista de los archivos del núcleo dentro de bd/migraciones, nunca el directorio compartido.
+  - engine: postgresql
+    queries: bd/consultas-nucleo
+    gen:
+      go:
+        package: repositorio
+        out: internal/nucleo/internal/repositorio
         sql_package: pgx/v5
         sql_driver: github.com/jackc/pgx/v5
         emit_interface: true
