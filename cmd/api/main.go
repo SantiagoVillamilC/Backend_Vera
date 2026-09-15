@@ -16,6 +16,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 )
 
@@ -42,15 +43,30 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// El núcleo nace sin rutas ni disparadores: las unidades de negocio le agregan los
-	// métodos y quien los exponga. Acá queda construido con sus dependencias reales y con
-	// los rellenos de las piezas que todavía no existen (riel NF-A2-06, custodio NF-A5-01).
-	_ = nucleo.NewServicio(
+	// El núcleo se construye con sus dependencias reales y con los rellenos de las piezas que
+	// todavía no existen (riel NF-A2-06, custodio NF-A5-01). Sus métodos de negocio los agregan
+	// las unidades posteriores.
+	servicio := nucleo.NewServicio(
 		pool,
 		nucleo.KYCNoDisponible{},
 		nucleo.RielNoDisponible{},
 		nucleo.CustodioNoDisponible{},
 	)
+
+	// River dispara DespacharOutbox y Conciliar sobre el mismo pool y el mismo núcleo. Start con
+	// context.Background(), no con ctx: cancelar el contexto de Start es un apagado duro que
+	// cancela los jobs en vuelo. El apagado ordenado va por Stop, después del drenado de HTTP.
+	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
+		OutboxInterval:       cfg.OutboxInterval,
+		ConciliationInterval: cfg.ConciliationInterval,
+		ConciliationWindow:   cfg.ConciliationWindow,
+	})
+	if err != nil {
+		return fmt.Errorf("river: %w", err)
+	}
+	if err := riverClient.Start(context.Background()); err != nil {
+		return fmt.Errorf("river start: %w", err)
+	}
 
 	// Fase 0: la identidad del grupo autenticado es el adaptador de usuario de prueba. El
 	// swap a JWT real es construir acá otro IdentidadDeLaPeticion con cfg.JWTSecret; el router
@@ -83,10 +99,13 @@ func run() error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil { // 1. deja de aceptar y drena la petición en vuelo
 		return fmt.Errorf("http shutdown: %w", err)
 	}
-	pool.Close()
+	if err := riverClient.Stop(shutdownCtx); err != nil { // 2. deja de tomar jobs y termina los que corren
+		return fmt.Errorf("river stop: %w", err)
+	}
+	pool.Close() // 3. último: los dos pasos anteriores todavía necesitan conexiones
 	log.Println("shutdown complete")
 	return nil
 }

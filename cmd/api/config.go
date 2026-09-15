@@ -6,18 +6,22 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"time"
 )
 
 // Config reúne los valores de entorno que el proceso necesita para arrancar.
 type Config struct {
-	Port           string
-	AppDatabaseURL string
-	JWTSecret      string
-	GroqAPIKey     string
-	OpenAIAPIKey   string
-	OCRWorkerURL   string
-	LogLevel       string
-	LogFormat      string
+	Port                 string
+	AppDatabaseURL       string
+	JWTSecret            string
+	GroqAPIKey           string
+	OpenAIAPIKey         string
+	OCRWorkerURL         string
+	LogLevel             string
+	LogFormat            string
+	OutboxInterval       time.Duration
+	ConciliationInterval time.Duration
+	ConciliationWindow   time.Duration
 }
 
 // LoadConfig lee el entorno, valida la forma de cada variable y reporta todos los errores
@@ -57,6 +61,19 @@ func LoadConfig() (*Config, error) {
 	if cfg.LogFormat != "json" && cfg.LogFormat != "text" {
 		errs = append(errs, fmt.Errorf("LOG_FORMAT must be json or text, got %q", cfg.LogFormat))
 	}
+	var errDuracion error
+	cfg.OutboxInterval, errDuracion = durationOr("OUTBOX_INTERVAL", "5s")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
+	cfg.ConciliationInterval, errDuracion = durationOr("CONCILIATION_INTERVAL", "60s")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
+	cfg.ConciliationWindow, errDuracion = durationOr("CONCILIATION_WINDOW", "5m")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("config: %w", errors.Join(errs...))
 	}
@@ -75,6 +92,9 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("ocr_worker_url_set", c.OCRWorkerURL != ""),
 		slog.String("log_level", c.LogLevel),
 		slog.String("log_format", c.LogFormat),
+		slog.String("outbox_interval", c.OutboxInterval.String()),
+		slog.String("conciliation_interval", c.ConciliationInterval.String()),
+		slog.String("conciliation_window", c.ConciliationWindow.String()),
 	)
 }
 
@@ -85,4 +105,15 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// durationOr lee una duración en el formato de time.ParseDuration y exige que sea positiva, para
+// que una cadencia mal puesta detenga el arranque en vez de dejar un job sin programar.
+func durationOr(key, fallback string) (time.Duration, error) {
+	v := envOr(key, fallback)
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration (e.g. 5s, 1m), got %q", key, v)
+	}
+	return d, nil
 }
