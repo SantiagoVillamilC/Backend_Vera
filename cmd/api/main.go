@@ -45,8 +45,10 @@ func run() error {
 		Handler:           httpserver.NewRouter(pool, cfg.JWTSecret),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// Debe superar authedTimeout (60s) del grupo autenticado, si no el server corta el
+		// socket antes de que el Timeout del router alcance a responder un 504.
+		WriteTimeout: 90 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	errCh := make(chan error, 1)

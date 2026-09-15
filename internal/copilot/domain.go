@@ -22,6 +22,6 @@ type Request struct {
 
 // Response es la respuesta del copilot.
 type Response struct {
-	Intent  Intent
-	Message string
+	Intent  Intent `json:"intent"`
+	Message string `json:"message"`
 }

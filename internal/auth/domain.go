@@ -2,20 +2,20 @@ package auth
 
 // User es la identidad mínima que devuelve el service.
 type User struct {
-	ID    string
-	Email string
+	ID    string `json:"id"`
+	Email string `json:"email"`
 }
 
 // Session es la sesión emitida al autenticar, con su token y su usuario.
 type Session struct {
-	Token string
-	User  User
+	Token string `json:"token"`
+	User  User   `json:"user"`
 }
 
 // MFAConfig describe el estado de MFA de un usuario.
 type MFAConfig struct {
-	Enabled bool
-	Secret  string
+	Enabled bool   `json:"enabled"`
+	Secret  string `json:"secret"`
 }
 
 // LoginRequest es el cuerpo de /login y /register.

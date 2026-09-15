@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,9 +28,10 @@ const (
 // El orden de la cadena es deliberado: RequestID (server-generated) primero, luego un
 // único ClientIPFrom* (nginx sobrescribe X-Real-IP con el peer TCP en
 // infra/servidor/pasos/30-nginx.sh y el puerto de la API no se publica, así que el header
-// no es falsificable desde fuera), el logger de acceso, Recoverer, CORS en la raíz y por
-// último el rate limit, para que un 429 siga trayendo los headers de CORS. Recoverer y
-// Timeout son propios y responden dentro del envelope.
+// no es falsificable desde fuera), el logger de acceso, Recoverer, CORS en la raíz, el rate
+// limit (que exceptúa /healthz y /readyz para no bloquear a un prober) y por último el
+// envoltorio del 405, que conserva el Allow. Recoverer y Timeout son propios y responden
+// dentro del envelope.
 func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 	r := chi.NewRouter()
 
@@ -45,9 +45,8 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 		MaxAge:         300,
 	}))
-	r.Use(httprate.LimitBy(rateLimitRequests, rateLimitWindow, clientIPKey, httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) {
-		api.WriteError(w, http.StatusTooManyRequests, "TooManyRequests", "Rate limit exceeded.", nil)
-	})))
+	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))
+	r.Use(MethodNotAllowedEnvelope)
 
 	authHandler := auth.NewHandler(auth.NewService(repositorio.New(pool)))
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
@@ -73,12 +72,10 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) http.Handler {
 		r.Post("/receipts", receiptHandler.Create)
 	})
 
-	// Los handlers por defecto de chi responden texto plano, que rompería el envelope.
+	// Los handlers por defecto de chi responden texto plano, que rompería el envelope. El
+	// 405 se envuelve con MethodNotAllowedEnvelope (arriba) para conservar el header Allow.
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		api.WriteError(w, http.StatusNotFound, "NotFound", "Resource not found.", nil)
-	})
-	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
-		api.WriteError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Method not allowed.", nil)
 	})
 
 	return r

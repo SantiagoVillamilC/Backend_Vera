@@ -1,12 +1,18 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
 )
 
 const testJWTSecret = "0123456789abcdef0123456789abcdef"
@@ -155,7 +161,7 @@ func TestRateLimitedResponseKeepsCORSHeaders(t *testing.T) {
 
 	var rec *httptest.ResponseRecorder
 	for i := 0; i <= rateLimitRequests; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		req := httptest.NewRequest(http.MethodGet, "/no-existe", nil)
 		req.Header.Set("Origin", "https://example.com")
 		rec = httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
@@ -168,4 +174,85 @@ func TestRateLimitedResponseKeepsCORSHeaders(t *testing.T) {
 		t.Fatalf("el 429 no trae CORS: Access-Control-Allow-Origin = %q", got)
 	}
 	assertErrorEnvelope(t, rec, http.StatusTooManyRequests, "TooManyRequests")
+}
+
+func TestProbesAreExemptFromRateLimit(t *testing.T) {
+	r := newTestRouter()
+
+	for i := 0; i <= rateLimitRequests+5; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("el probe /healthz fue rate-limited en la petición %d", i)
+		}
+	}
+}
+
+func TestMethodNotAllowedKeepsAllowHeader(t *testing.T) {
+	r := newTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assertErrorEnvelope(t, rec, http.StatusMethodNotAllowed, "MethodNotAllowed")
+	if allow := rec.Header().Values("Allow"); !slices.Contains(allow, http.MethodPost) {
+		t.Fatalf("Allow = %v, quiero que contenga POST", allow)
+	}
+}
+
+func TestTimeoutClientCancelWritesNoResponse(t *testing.T) {
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
+	handler := Timeout(time.Second)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		<-release
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusGatewayTimeout {
+		t.Fatal("un contexto cancelado por el cliente no debe responder 504")
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("no se esperaba cuerpo en un contexto cancelado, body = %q", rec.Body.String())
+	}
+}
+
+func TestResponseDTOsSerializeWithLowercaseKeys(t *testing.T) {
+	tests := map[string]struct {
+		value any
+		keys  []string
+	}{
+		"auth.User":            {auth.User{ID: "u1", Email: "a@b.com"}, []string{"id", "email"}},
+		"auth.Session":         {auth.Session{Token: "t", User: auth.User{}}, []string{"token", "user"}},
+		"auth.MFAConfig":       {auth.MFAConfig{Enabled: true, Secret: "s"}, []string{"enabled", "secret"}},
+		"copilot.Response":     {copilot.Response{Intent: copilot.IntentQuery, Message: "m"}, []string{"intent", "message"}},
+		"receipts.Receipt":     {receipts.Receipt{ID: "r", UserID: "u", Merchant: "m", Total: 1, Items: []receipts.ReceiptItem{}}, []string{"id", "user_id", "merchant", "total", "items"}},
+		"receipts.ReceiptItem": {receipts.ReceiptItem{Name: "n", Quantity: 1, Price: 2}, []string{"name", "quantity", "price"}},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			raw, err := json.Marshal(tc.value)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			for _, key := range tc.keys {
+				if _, ok := got[key]; !ok {
+					t.Errorf("falta la clave %q en %s", key, raw)
+				}
+			}
+		})
+	}
 }
