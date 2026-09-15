@@ -8,8 +8,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
-// RastreadorSlog es el relleno del puerto hasta que el supervisor elija GlitchTip o Bugsink:
-// registra cada captura como una línea ERROR del logger global.
+// RastreadorSlog es el relleno del puerto: una línea ERROR del logger global.
 type RastreadorSlog struct{}
 
 // Capturar emite la captura por slog a nivel error.
@@ -17,7 +16,7 @@ func (RastreadorSlog) Capturar(ctx context.Context, err error, contexto nucleo.C
 	capturar(slog.Default(), ctx, err, contexto)
 }
 
-// capturar separa la emisión del logger para poder probarla sin el global.
+// capturar separa la emisión para poder probarla sin el logger global.
 func capturar(logger *slog.Logger, ctx context.Context, err error, contexto nucleo.ContextoError) {
 	campos := make([]slog.Attr, 0, len(contexto.Campos))
 	for _, c := range contexto.Campos {

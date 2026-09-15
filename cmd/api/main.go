@@ -32,7 +32,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// Desde acá cada línea es estructurada, incluidos los errores que run devuelve a main.
+	// Desde acá el log es estructurado.
 	slog.SetDefault(slog.New(logging.WithRequestID(newHandler(cfg))))
 	slog.Info("config loaded", "config", cfg)
 
@@ -45,9 +45,7 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// El núcleo se construye con sus dependencias reales y con los rellenos de las piezas que
-	// todavía no existen (riel NF-A2-06, custodio NF-A5-01). Sus métodos de negocio los agregan
-	// las unidades posteriores.
+	// Rellenos de lo que aún no existe (riel NF-A2-06, custodio NF-A5-01).
 	servicio := nucleo.NewServicio(
 		pool,
 		nucleo.KYCNoDisponible{},
@@ -56,9 +54,7 @@ func run() error {
 		observabilidad.RastreadorSlog{},
 	)
 
-	// River dispara DespacharOutbox y Conciliar sobre el mismo pool y el mismo núcleo. Start con
-	// context.Background(), no con ctx: cancelar el contexto de Start es un apagado duro que
-	// cancela los jobs en vuelo. El apagado ordenado va por Stop, después del drenado de HTTP.
+	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
 	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
 		OutboxInterval:       cfg.OutboxInterval,
 		ConciliationInterval: cfg.ConciliationInterval,
@@ -71,16 +67,13 @@ func run() error {
 		return fmt.Errorf("river start: %w", err)
 	}
 
-	// Fase 0: la identidad del grupo autenticado es el adaptador de usuario de prueba. El
-	// swap a JWT real es construir acá otro IdentidadDeLaPeticion con cfg.JWTSecret; el router
-	// y los handlers no cambian.
+	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           httpserver.NewRouter(pool, auth.UsuarioDePrueba{}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		// Debe superar authedTimeout (60s) del grupo autenticado, si no el server corta el
-		// socket antes de que el Timeout del router alcance a responder un 504.
+		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.
 		WriteTimeout: 90 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
@@ -102,13 +95,14 @@ func run() error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil { // 1. deja de aceptar y drena la petición en vuelo
+	// Apagado en orden: HTTP, jobs, pool.
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("http shutdown: %w", err)
 	}
-	if err := riverClient.Stop(shutdownCtx); err != nil { // 2. deja de tomar jobs y termina los que corren
+	if err := riverClient.Stop(shutdownCtx); err != nil {
 		return fmt.Errorf("river stop: %w", err)
 	}
-	pool.Close() // 3. último: los dos pasos anteriores todavía necesitan conexiones
+	pool.Close()
 	log.Println("shutdown complete")
 	return nil
 }
