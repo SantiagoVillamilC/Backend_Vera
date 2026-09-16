@@ -63,6 +63,8 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *
 		r.Use(RequireAuth(quien))
 		r.Get("/saldo", nucleoHandler.Saldo)
 		r.Get("/movimientos", nucleoHandler.Movimientos)
+		r.Post("/depositos", nucleoHandler.CrearDeposito)
+		r.Get("/depositos/{id}", nucleoHandler.Deposito)
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
 	})

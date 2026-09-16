@@ -8,6 +8,8 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // MonedaCOP es la moneda de la billetera y la que viaja en la respuesta.
@@ -29,7 +31,25 @@ type RespuestaSaldo struct {
 	CalculadoEn time.Time `json:"calculado_en"`
 }
 
-// Handler expone el saldo del usuario autenticado.
+// crearDepositoRequest es el cuerpo de POST /depositos: monto en centavos, moneda COP y clave del cliente.
+type crearDepositoRequest struct {
+	Monto  Centavos `json:"monto" validate:"required,gt=0"`
+	Moneda string   `json:"moneda" validate:"omitempty,eq=COP"`
+	// Clave del cliente acotada a 128 caracteres: cabe en el índice btree de (usuario_id, idempotency_key).
+	IdempotencyKey string `json:"idempotency_key" validate:"required,max=128"`
+}
+
+// RespuestaDeposito es la intención de depósito que ve el cliente.
+type RespuestaDeposito struct {
+	ID         string    `json:"id"`
+	Referencia string    `json:"referencia"`
+	Monto      Centavos  `json:"monto"`
+	Moneda     string    `json:"moneda"`
+	Estado     string    `json:"estado"`
+	CreadaEn   time.Time `json:"creada_en"`
+}
+
+// Handler sirve el saldo, el historial y las intenciones de depósito del usuario autenticado.
 type Handler struct{ servicio *Servicio }
 
 // NewHandler construye el handler sobre el servicio del núcleo y falla si el servicio es nulo.
@@ -100,6 +120,67 @@ func (h *Handler) Movimientos(w http.ResponseWriter, r *http.Request) {
 		NextCursor: pagina.Siguiente,
 		HasMore:    pagina.HayMas,
 	})
+}
+
+// CrearDeposito responde 201 con la intención nueva y 200 con la ya guardada para la misma clave.
+func (h *Handler) CrearDeposito(w http.ResponseWriter, r *http.Request) {
+	usuarioID, ok := identidad.UsuarioIDDeContexto(r.Context())
+	if !ok {
+		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
+		return
+	}
+	var req crearDepositoRequest
+	if !api.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	intencion, creada, err := h.servicio.CrearIntencionDeposito(r.Context(), usuarioID, req.Monto, req.Moneda, req.IdempotencyKey)
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	estado := http.StatusOK
+	if creada {
+		estado = http.StatusCreated
+	}
+	api.WriteData(w, estado, respuestaDeDeposito(intencion), nil)
+}
+
+// Deposito responde el estado actual de la intención del usuario autenticado.
+func (h *Handler) Deposito(w http.ResponseWriter, r *http.Request) {
+	usuarioID, ok := identidad.UsuarioIDDeContexto(r.Context())
+	if !ok {
+		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		api.WriteError(w, http.StatusNotFound, "NotFound", "Resource not found.", nil)
+		return
+	}
+
+	intencion, err := h.servicio.ConsultarIntencionDeposito(r.Context(), usuarioID, id)
+	if errors.Is(err, ErrDepositoNoEncontrado) {
+		api.WriteError(w, http.StatusNotFound, "NotFound", "Resource not found.", nil)
+		return
+	}
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	api.WriteData(w, http.StatusOK, respuestaDeDeposito(intencion), nil)
+}
+
+// respuestaDeDeposito traduce la intención del núcleo al DTO de la API.
+func respuestaDeDeposito(i IntencionDeposito) RespuestaDeposito {
+	return RespuestaDeposito{
+		ID:         i.ID.String(),
+		Referencia: i.Referencia,
+		Monto:      i.Monto,
+		Moneda:     i.Moneda,
+		Estado:     i.Estado,
+		CreadaEn:   i.CreadaEn,
+	}
 }
 
 // paginacionDeMovimientos lee el cursor y el límite de la URL; un mensaje no vacío es un rechazo.
