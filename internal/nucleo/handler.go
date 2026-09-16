@@ -49,6 +49,15 @@ type RespuestaDeposito struct {
 	CreadaEn   time.Time `json:"creada_en"`
 }
 
+// confirmarDepositoRequest es la señal del custodio simulado sobre una intención pendiente.
+type confirmarDepositoRequest struct {
+	Referencia string    `json:"referencia" validate:"required"`
+	Estado     string    `json:"estado" validate:"required,oneof=aprobado"`
+	Monto      Centavos  `json:"monto" validate:"required,gt=0"`
+	Moneda     string    `json:"moneda"`
+	OcurridoEn time.Time `json:"ocurrido_en" validate:"required"`
+}
+
 // Handler sirve el saldo, el historial y las intenciones de depósito del usuario autenticado.
 type Handler struct{ servicio *Servicio }
 
@@ -165,6 +174,36 @@ func (h *Handler) Deposito(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	api.WriteData(w, http.StatusOK, respuestaDeDeposito(intencion), nil)
+}
+
+// ConfirmarDeposito responde 200 con la intención confirmada, la primera vez y en el reenvío.
+func (h *Handler) ConfirmarDeposito(w http.ResponseWriter, r *http.Request) {
+	var req confirmarDepositoRequest
+	if !api.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	intencion, err := h.servicio.ConfirmarDeposito(r.Context(), ConfirmacionDeposito{
+		Referencia: req.Referencia,
+		Monto:      req.Monto,
+		Moneda:     req.Moneda,
+		OcurridoEn: req.OcurridoEn,
+	})
+	switch {
+	case errors.Is(err, ErrDepositoNoEncontrado):
+		api.WriteError(w, http.StatusNotFound, "DepositNotFound", "Deposit not found.", nil)
+		return
+	case errors.Is(err, ErrConfirmacionConflictiva):
+		api.WriteError(w, http.StatusConflict, "ConfirmationConflict", "Confirmation does not match the deposit.", nil)
+		return
+	case errors.Is(err, ErrConfirmacionTardia):
+		api.WriteError(w, http.StatusConflict, "LateConfirmation", "The deposit is no longer pending.", nil)
+		return
+	case err != nil:
 		api.WriteAPIError(w, r, err)
 		return
 	}

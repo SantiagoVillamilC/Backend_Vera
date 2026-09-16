@@ -12,20 +12,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const confirmarDeposito = `-- name: ConfirmarDeposito :execrows
+const confirmarDeposito = `-- name: ConfirmarDeposito :one
 UPDATE nucleo.deposito
    SET estado = 'confirmada',
        actualizada_en = now()
  WHERE id = $1
    AND estado = 'pendiente'
+RETURNING id, usuario_id, monto, moneda, referencia, idempotency_key, cus, estado, creada_en, actualizada_en
 `
 
-func (q *Queries) ConfirmarDeposito(ctx context.Context, id pgtype.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, confirmarDeposito, id)
+func (q *Queries) ConfirmarDeposito(ctx context.Context, id pgtype.UUID) (Deposito, error) {
+	row := q.db.QueryRow(ctx, confirmarDeposito, id)
+	var i Deposito
+	err := row.Scan(
+		&i.ID,
+		&i.UsuarioID,
+		&i.Monto,
+		&i.Moneda,
+		&i.Referencia,
+		&i.IdempotencyKey,
+		&i.Cus,
+		&i.Estado,
+		&i.CreadaEn,
+		&i.ActualizadaEn,
+	)
 	if err != nil {
-		return 0, fmt.Errorf("query ConfirmarDeposito: %w", err)
+		err = fmt.Errorf("query ConfirmarDeposito: %w", err)
 	}
-	return result.RowsAffected(), nil
+	return i, err
 }
 
 const expiarDeposito = `-- name: ExpiarDeposito :execrows

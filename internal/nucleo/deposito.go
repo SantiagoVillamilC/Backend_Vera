@@ -14,8 +14,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// EstadoDepositoPendiente es el estado con el que nace toda intención de depósito.
-const EstadoDepositoPendiente = "pendiente"
+// Los cuatro estados del ciclo de vida de una intención de depósito.
+const (
+	EstadoDepositoPendiente  = "pendiente"
+	EstadoDepositoConfirmada = "confirmada"
+	EstadoDepositoRechazada  = "rechazada"
+	EstadoDepositoExpirada   = "expirada"
+)
 
 // Las dos restricciones únicas de nucleo.deposito que la creación debe distinguir.
 const (
@@ -31,6 +36,12 @@ var ErrDepositoNoEncontrado = errors.New("nucleo: intención de depósito no enc
 
 // ErrReferenciaDepositoAgotada reporta que ninguna referencia libre se pudo insertar.
 var ErrReferenciaDepositoAgotada = errors.New("nucleo: no se pudo generar una referencia de depósito única")
+
+// ErrConfirmacionConflictiva reporta un monto o una moneda distintos a los de la intención.
+var ErrConfirmacionConflictiva = errors.New("nucleo: la confirmación no coincide con la intención")
+
+// ErrConfirmacionTardia reporta una confirmación sobre una intención rechazada o expirada.
+var ErrConfirmacionTardia = errors.New("nucleo: confirmación tardía sobre una intención no pendiente")
 
 // IntencionDeposito es la vista de una intención de depósito, sin tipos del repositorio.
 type IntencionDeposito struct {
@@ -90,6 +101,109 @@ func (s *Servicio) ConsultarIntencionDeposito(ctx context.Context, usuarioID str
 		return IntencionDeposito{}, ErrDepositoNoEncontrado
 	}
 	return intencionDeDeposito(fila), nil
+}
+
+// ConfirmacionDeposito es la señal del custodio simulado que confirma una intención pendiente.
+type ConfirmacionDeposito struct {
+	Referencia string
+	Monto      Centavos
+	Moneda     string
+	OcurridoEn time.Time
+}
+
+// ConfirmarDeposito confirma la intención, escribe el asiento de fondeo y es idempotente en una sola transacción.
+func (s *Servicio) ConfirmarDeposito(ctx context.Context, confirmacion ConfirmacionDeposito) (IntencionDeposito, error) {
+	moneda := confirmacion.Moneda
+	if moneda == "" {
+		moneda = MonedaCOP
+	}
+	return enTransaccion(ctx, s.pool,
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (IntencionDeposito, error) {
+			intencion, err := q.ObtenerDepositoPorReferencia(ctx, confirmacion.Referencia)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return IntencionDeposito{}, ErrDepositoNoEncontrado
+				}
+				return IntencionDeposito{}, fmt.Errorf("nucleo: leer el depósito %q: %w", confirmacion.Referencia, err)
+			}
+			if !montoYMonedaCoinciden(intencion, confirmacion.Monto, moneda) {
+				return IntencionDeposito{}, ErrConfirmacionConflictiva
+			}
+
+			confirmada, err := q.ConfirmarDeposito(ctx, intencion.ID)
+			if err == nil {
+				return s.asentarFondeo(ctx, q, confirmada, confirmacion.OcurridoEn)
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return IntencionDeposito{}, fmt.Errorf("nucleo: confirmar el depósito %q: %w", confirmacion.Referencia, err)
+			}
+			return resolverConfirmacionRepetida(ctx, q, confirmacion, moneda)
+		})
+}
+
+// montoYMonedaCoinciden compara la confirmación contra los datos inmutables de la intención.
+func montoYMonedaCoinciden(intencion repositorio.Deposito, monto Centavos, moneda string) bool {
+	return intencion.Monto == monto.Int64() && intencion.Moneda == moneda
+}
+
+// resolverConfirmacionRepetida relee la intención tras un compare-and-set sin filas.
+func resolverConfirmacionRepetida(ctx context.Context, q *repositorio.Queries, confirmacion ConfirmacionDeposito, moneda string) (IntencionDeposito, error) {
+	actual, err := q.ObtenerDepositoPorReferencia(ctx, confirmacion.Referencia)
+	if err != nil {
+		return IntencionDeposito{}, fmt.Errorf("nucleo: releer el depósito %q: %w", confirmacion.Referencia, err)
+	}
+	switch actual.Estado {
+	case EstadoDepositoConfirmada:
+		if !montoYMonedaCoinciden(actual, confirmacion.Monto, moneda) {
+			return IntencionDeposito{}, ErrConfirmacionConflictiva
+		}
+		return intencionDeDeposito(actual), nil
+	case EstadoDepositoRechazada, EstadoDepositoExpirada:
+		return IntencionDeposito{}, ErrConfirmacionTardia
+	default:
+		return IntencionDeposito{}, fmt.Errorf("nucleo: el depósito %q quedó en %q tras un compare-and-set fallido", confirmacion.Referencia, actual.Estado)
+	}
+}
+
+// asentarFondeo escribe el asiento de fondeo con débito en custodia y crédito en el disponible.
+func (s *Servicio) asentarFondeo(ctx context.Context, q *repositorio.Queries, intencion repositorio.Deposito, ocurridoEn time.Time) (IntencionDeposito, error) {
+	asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
+		Tipo:       TipoAsientoDeposito,
+		DepositoID: intencion.ID,
+		OcurridoEn: pgtype.Timestamptz{Time: ocurridoEn, Valid: true},
+	})
+	if err != nil {
+		return IntencionDeposito{}, s.falloDeAsiento(ctx, intencion, err)
+	}
+	monto := Centavos(intencion.Monto)
+	credito, err := Centavos(0).Restar(monto)
+	if err != nil {
+		return IntencionDeposito{}, s.falloDeAsiento(ctx, intencion, err)
+	}
+	lineas := []repositorio.InsertarLineaParams{
+		{EntryID: asiento.ID, CuentaID: CuentaCustodiaBanco, Monto: monto.Int64(), Moneda: intencion.Moneda},
+		{EntryID: asiento.ID, CuentaID: NombreCuentaDisponible(intencion.UsuarioID), Monto: credito.Int64(), Moneda: intencion.Moneda},
+	}
+	for _, linea := range lineas {
+		if _, err := q.InsertarLinea(ctx, linea); err != nil {
+			return IntencionDeposito{}, s.falloDeAsiento(ctx, intencion, err)
+		}
+	}
+	return intencionDeDeposito(intencion), nil
+}
+
+// falloDeAsiento captura la falla de escritura del asiento y la devuelve para un 500.
+func (s *Servicio) falloDeAsiento(ctx context.Context, intencion repositorio.Deposito, err error) error {
+	if s.rastreador != nil {
+		s.rastreador.Capturar(ctx, err, ContextoError{
+			Operacion: "confirmar_deposito",
+			Campos: []Campo{
+				{Clave: "referencia", Valor: intencion.Referencia},
+				{Clave: "usuario_id", Valor: intencion.UsuarioID},
+			},
+		})
+	}
+	return fmt.Errorf("nucleo: asentar el fondeo del depósito %q: %w", intencion.Referencia, err)
 }
 
 // insertarIntencionDeposito inserta una intención con referencia nueva en su propia transacción.

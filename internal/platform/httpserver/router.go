@@ -24,8 +24,11 @@ const (
 	rateLimitWindow   = time.Minute
 )
 
-// NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y la identidad inyectada.
-func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *nucleo.Servicio) http.Handler {
+// NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
+func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio) http.Handler {
+	if autenticadorCustodio == nil {
+		panic(ErrCustodioNulo)
+	}
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
@@ -67,6 +70,13 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *
 		r.Get("/depositos/{id}", nucleoHandler.Deposito)
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
+	})
+
+	// Grupo del custodio simulado: token estático, sin identidad de usuario.
+	r.Group(func(r chi.Router) {
+		r.Use(Timeout(authedTimeout))
+		r.Use(RequireCustodio(autenticadorCustodio))
+		r.Post("/depositos/confirmaciones", nucleoHandler.ConfirmarDeposito)
 	})
 
 	// Los handlers por defecto de chi responden texto plano, así que el 404 va dentro del envelope.

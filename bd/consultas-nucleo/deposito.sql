@@ -19,12 +19,13 @@ SELECT id, usuario_id, monto, moneda, referencia, idempotency_key, cus, estado, 
  WHERE usuario_id = @usuario_id
    AND idempotency_key = @idempotency_key;
 
--- name: ConfirmarDeposito :execrows
+-- name: ConfirmarDeposito :one
 UPDATE nucleo.deposito
    SET estado = 'confirmada',
        actualizada_en = now()
  WHERE id = @id
-   AND estado = 'pendiente';
+   AND estado = 'pendiente'
+RETURNING id, usuario_id, monto, moneda, referencia, idempotency_key, cus, estado, creada_en, actualizada_en;
 
 -- name: RechazarDeposito :execrows
 UPDATE nucleo.deposito

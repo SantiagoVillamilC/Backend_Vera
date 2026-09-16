@@ -85,7 +85,7 @@ func TestHU_NF_07_Criterio16_CreacionPendienteConReferenciaSinDiario(t *testing.
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 	clave := "k-" + uuid.NewString()
 
 	asientosAntes, lineasAntes := contarDiario(t, pool)
@@ -151,7 +151,7 @@ func TestHU_NF_07_Criterio2_MontoInvalidoSeRechaza(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -174,7 +174,7 @@ func TestHU_NF_07_Criterio2_ClaveDeIdempotenciaDemasiadoLargaSeRechaza(t *testin
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 	clave := strings.Repeat("k", 3000)
 
 	rec := crearDeposito(t, r, `{"monto":"100000","idempotency_key":"`+clave+`"}`, true)
@@ -192,7 +192,7 @@ func TestHU_NF_07_Criterio3_Moneda(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	ajena := crearDeposito(t, r, `{"monto":"100000","moneda":"USD","idempotency_key":"k-usd"}`, true)
 	assertErrorEnvelope(t, ajena, http.StatusUnprocessableEntity, "ValidationError")
@@ -213,7 +213,7 @@ func TestHU_NF_07_Criterio3_Moneda(t *testing.T) {
 func TestHU_NF_07_Criterio16_3_SinSesionNoSeCreaIntencion(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
-	r := NewRouter(pool, auth.UsuarioDePrueba{}, servicio)
+	r := NewRouter(pool, auth.UsuarioDePrueba{}, servicio, custodioDePrueba)
 
 	antes := contarDepositos(t, pool)
 	rec := crearDeposito(t, r, `{"monto":"100000","idempotency_key":"k"}`, false)
@@ -228,7 +228,7 @@ func TestHU_NF_07_Criterio20_DobleToqueEsUnaSolaIntencion(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 	clave := "k-" + uuid.NewString()
 
 	primera := crearDeposito(t, r, `{"monto":"150000","idempotency_key":"`+clave+`"}`, true)
@@ -264,7 +264,7 @@ func TestHU_NF_07_Criterio20_DobleToqueConcurrenteEsUnaSolaIntencion(t *testing.
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 	clave := "k-" + uuid.NewString()
 	cuerpo := `{"monto":"250000","idempotency_key":"` + clave + `"}`
 
@@ -310,8 +310,8 @@ func TestHU_NF_07_Criterio21_ConsultaEstadoYNoExponeElAjeno(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	propio := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
 	ajeno := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{propio}, servicio)
-	rAjeno := NewRouter(pool, identidadFija{ajeno}, servicio)
+	r := NewRouter(pool, identidadFija{propio}, servicio, custodioDePrueba)
+	rAjeno := NewRouter(pool, identidadFija{ajeno}, servicio, custodioDePrueba)
 
 	creado := crearDeposito(t, r, `{"monto":"300000","idempotency_key":"`+uuid.NewString()+`"}`, true)
 	if creado.Code != http.StatusCreated {

@@ -21,7 +21,7 @@ import (
 
 // newTestRouter arma el router con el adaptador de usuario de prueba y un servicio de saldo real.
 func newTestRouter() http.Handler {
-	return NewRouter(nil, auth.UsuarioDePrueba{}, nucleo.NewServicio(nil, nil, nil, nil, nil))
+	return NewRouter(nil, auth.UsuarioDePrueba{}, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba)
 }
 
 func decodeEnvelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {

@@ -152,7 +152,7 @@ func TestHU_NF_04_Criterio1_SaldoDevuelveCentavosYCOP(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 123456, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	rec := pedirSaldo(t, r, "")
 
@@ -183,7 +183,7 @@ func TestHU_NF_04_Criterio1_SaldoDevuelveCentavosYCOP(t *testing.T) {
 func TestHU_NF_04_Criterio1_SaldoSinCredencialDa401(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
-	r := NewRouter(pool, auth.UsuarioDePrueba{}, servicio)
+	r := NewRouter(pool, auth.UsuarioDePrueba{}, servicio, custodioDePrueba)
 
 	req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
 	rec := httptest.NewRecorder()
@@ -202,7 +202,7 @@ func TestHU_NF_04_Criterio2_SaldoDeOtroUsuarioSeRechaza(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	for name, query := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -221,7 +221,7 @@ func TestHU_NF_04_Criterio3_SaldoSinMovimientosEsCero(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	rec := pedirSaldo(t, r, "")
 
@@ -239,7 +239,7 @@ func TestHU_NF_04_Criterio8_DisponibleNoIncluyeLaRetenida(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 250000)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	rec := pedirSaldo(t, r, "")
 
@@ -257,7 +257,7 @@ func TestHU_NF_04_Criterio5_Criterio6_SaldoAFavorPositivoYExacto(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 9007199254740993, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	rec := pedirSaldo(t, r, "")
 
@@ -275,7 +275,7 @@ func TestHU_NF_04_Criterio11_LaConsultaNoEscribeEnElDiario(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 250000)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
 
 	asientosAntes, lineasAntes := contarDiario(t, pool)
 	rec := pedirSaldo(t, r, "")

@@ -14,6 +14,7 @@ type Config struct {
 	Port                 string
 	AppDatabaseURL       string
 	JWTSecret            string
+	CustodioToken        string
 	GroqAPIKey           string
 	OpenAIAPIKey         string
 	OCRWorkerURL         string
@@ -24,13 +25,13 @@ type Config struct {
 	ConciliationWindow   time.Duration
 }
 
-// LoadConfig lee el entorno, valida la forma de cada variable y reporta todos los errores
-// juntos para no obligar a un despliegue por cada variable mal puesta.
+// LoadConfig valida el entorno y reporta todos los errores juntos.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
 		Port:           envOr("PORT", "8080"),
 		AppDatabaseURL: os.Getenv("APP_DATABASE_URL"),
 		JWTSecret:      os.Getenv("JWT_SECRET"),
+		CustodioToken:  os.Getenv("CUSTODIO_TOKEN"),
 		GroqAPIKey:     os.Getenv("GROQ_API_KEY"),
 		OpenAIAPIKey:   os.Getenv("OPENAI_API_KEY"),
 		OCRWorkerURL:   os.Getenv("OCR_WORKER_URL"),
@@ -42,6 +43,7 @@ func LoadConfig() (*Config, error) {
 	required := []struct{ name, value string }{
 		{"APP_DATABASE_URL", cfg.AppDatabaseURL},
 		{"JWT_SECRET", cfg.JWTSecret},
+		{"CUSTODIO_TOKEN", cfg.CustodioToken},
 	}
 	for _, r := range required {
 		if r.value == "" {
@@ -53,6 +55,12 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.JWTSecret != "" && len(cfg.JWTSecret) < 32 {
 		errs = append(errs, fmt.Errorf("JWT_SECRET must be at least 32 bytes for HS256, got %d", len(cfg.JWTSecret)))
+	}
+	if cfg.CustodioToken != "" && len(cfg.CustodioToken) < 32 {
+		errs = append(errs, fmt.Errorf("CUSTODIO_TOKEN must be at least 32 bytes, got %d", len(cfg.CustodioToken)))
+	}
+	if cfg.CustodioToken != "" && cfg.CustodioToken == cfg.JWTSecret {
+		errs = append(errs, fmt.Errorf("CUSTODIO_TOKEN must differ from JWT_SECRET"))
 	}
 	var lvl slog.Level
 	if err := lvl.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
@@ -80,13 +88,13 @@ func LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-// LogValue hace que cualquier slog call imprima qué variables resolvieron y nunca sus
-// valores, para que un log accidental no filtre el DSN ni el JWT_SECRET.
+// LogValue imprime qué variables resolvieron y nunca sus valores.
 func (c Config) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("port", c.Port),
 		slog.Bool("app_database_url_set", c.AppDatabaseURL != ""),
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
+		slog.Bool("custodio_token_set", c.CustodioToken != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
 		slog.Bool("openai_api_key_set", c.OpenAIAPIKey != ""),
 		slog.Bool("ocr_worker_url_set", c.OCRWorkerURL != ""),
@@ -107,8 +115,7 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// durationOr lee una duración en el formato de time.ParseDuration y exige que sea positiva, para
-// que una cadencia mal puesta detenga el arranque en vez de dejar un job sin programar.
+// durationOr exige una duración positiva para que una cadencia mal puesta detenga el arranque.
 func durationOr(key, fallback string) (time.Duration, error) {
 	v := envOr(key, fallback)
 	d, err := time.ParseDuration(v)

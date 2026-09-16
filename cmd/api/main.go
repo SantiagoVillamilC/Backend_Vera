@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log"
@@ -20,6 +21,14 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/observabilidad"
 )
+
+// tokenEstatico es el token del custodio simulado, comparado en tiempo constante.
+type tokenEstatico []byte
+
+// TokenValido reporta si el token presentado es exactamente el configurado.
+func (t tokenEstatico) TokenValido(presentado string) bool {
+	return subtle.ConstantTimeCompare(t, []byte(presentado)) == 1
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -70,7 +79,7 @@ func run() error {
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouter(pool, auth.UsuarioDePrueba{}, servicio),
+		Handler:           httpserver.NewRouter(pool, auth.UsuarioDePrueba{}, servicio, tokenEstatico(cfg.CustodioToken)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

@@ -11,7 +11,7 @@ import (
 )
 
 type Querier interface {
-	ConfirmarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
+	ConfirmarDeposito(ctx context.Context, id pgtype.UUID) (Deposito, error)
 	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error)
 	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)

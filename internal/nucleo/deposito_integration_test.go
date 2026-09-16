@@ -11,6 +11,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -223,20 +224,19 @@ func TestCompareAndSetDelEstadoDelDeposito(t *testing.T) {
 			t.Errorf("estado inicial = %q, want pendiente", dep.Estado)
 		}
 
-		filas, err := q.ConfirmarDeposito(ctx, dep.ID)
-		if err != nil || filas != 1 {
-			t.Fatalf("primer CAS: filas = %d, err = %v; want 1, nil", filas, err)
-		}
-		t.Logf("ConfirmarDeposito sobre pendiente: filas = %d", filas)
-
-		repeticion, err := q.ConfirmarDeposito(ctx, dep.ID)
+		confirmada, err := q.ConfirmarDeposito(ctx, dep.ID)
 		if err != nil {
 			return err
 		}
-		if repeticion != 0 {
-			t.Errorf("segundo CAS: filas = %d, want 0", repeticion)
+		if confirmada.ID != dep.ID || confirmada.Estado != "confirmada" {
+			t.Errorf("primer CAS: %v, want la misma fila confirmada", confirmada)
 		}
-		t.Logf("segundo ConfirmarDeposito: filas = %d", repeticion)
+		t.Logf("ConfirmarDeposito sobre pendiente: estado = %q", confirmada.Estado)
+
+		if _, err := q.ConfirmarDeposito(ctx, dep.ID); !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("segundo CAS: err = %v, want pgx.ErrNoRows", err)
+		}
+		t.Logf("segundo ConfirmarDeposito: sin filas")
 
 		leido, err := q.ObtenerDeposito(ctx, dep.ID)
 		if err != nil {
