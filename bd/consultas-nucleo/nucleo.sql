@@ -7,3 +7,9 @@ RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion;
 INSERT INTO nucleo.posting (entry_id, cuenta_id, monto, moneda)
 VALUES ($1, $2, $3, $4)
 RETURNING id, entry_id, cuenta_id, monto, moneda;
+
+-- name: InsertarSubcuentasDeUsuario :execrows
+INSERT INTO nucleo.cuenta (id, naturaleza, clase, titular_id)
+VALUES (@disponible, 'pasivo', 'usuario', @titular_id),
+       (@retenido, 'pasivo', 'usuario', @titular_id)
+ON CONFLICT (id) DO NOTHING;

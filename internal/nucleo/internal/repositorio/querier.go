@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error)
 	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error)
+	InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

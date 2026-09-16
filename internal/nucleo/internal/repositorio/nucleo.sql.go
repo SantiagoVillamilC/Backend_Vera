@@ -80,3 +80,24 @@ func (q *Queries) InsertarLinea(ctx context.Context, arg InsertarLineaParams) (P
 	}
 	return i, err
 }
+
+const insertarSubcuentasDeUsuario = `-- name: InsertarSubcuentasDeUsuario :execrows
+INSERT INTO nucleo.cuenta (id, naturaleza, clase, titular_id)
+VALUES ($1, 'pasivo', 'usuario', $2),
+       ($3, 'pasivo', 'usuario', $2)
+ON CONFLICT (id) DO NOTHING
+`
+
+type InsertarSubcuentasDeUsuarioParams struct {
+	Disponible string      `json:"disponible"`
+	TitularID  pgtype.Text `json:"titular_id"`
+	Retenido   string      `json:"retenido"`
+}
+
+func (q *Queries) InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertarSubcuentasDeUsuario, arg.Disponible, arg.TitularID, arg.Retenido)
+	if err != nil {
+		return 0, fmt.Errorf("query InsertarSubcuentasDeUsuario: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
