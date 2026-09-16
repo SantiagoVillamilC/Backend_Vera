@@ -3,3 +3,33 @@
 //   sqlc v1.31.1
 
 package repositorio
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type Cuenta struct {
+	ID         string             `json:"id"`
+	Naturaleza string             `json:"naturaleza"`
+	Clase      string             `json:"clase"`
+	TitularID  pgtype.Text        `json:"titular_id"`
+	Moneda     string             `json:"moneda"`
+	CreadaEn   pgtype.Timestamptz `json:"creada_en"`
+}
+
+type JournalEntry struct {
+	ID              int64              `json:"id"`
+	Tipo            string             `json:"tipo"`
+	TransferenciaID pgtype.UUID        `json:"transferencia_id"`
+	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
+	RegistradoEn    pgtype.Timestamptz `json:"registrado_en"`
+	Descripcion     pgtype.Text        `json:"descripcion"`
+}
+
+type Posting struct {
+	ID       int64  `json:"id"`
+	EntryID  int64  `json:"entry_id"`
+	CuentaID string `json:"cuenta_id"`
+	Monto    int64  `json:"monto"`
+	Moneda   string `json:"moneda"`
+}

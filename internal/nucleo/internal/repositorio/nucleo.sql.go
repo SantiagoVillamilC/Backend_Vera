@@ -8,21 +8,75 @@ package repositorio
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const ping = `-- name: Ping :one
-SELECT 1
+const insertarAsiento = `-- name: InsertarAsiento :one
+INSERT INTO nucleo.journal_entry (tipo, transferencia_id, ocurrido_en, descripcion)
+VALUES ($1, $2, $3, $4)
+RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion
 `
 
-// Placeholder de la fase 0. sqlc no genera un Querier sin al menos una consulta, y el
-// esquema del núcleo todavía no tiene tablas. La primera unidad con consultas de negocio
-// (NF-A1-01) reemplaza este archivo completo.
-func (q *Queries) Ping(ctx context.Context) (int32, error) {
-	row := q.db.QueryRow(ctx, ping)
-	var column_1 int32
-	err := row.Scan(&column_1)
+type InsertarAsientoParams struct {
+	Tipo            string             `json:"tipo"`
+	TransferenciaID pgtype.UUID        `json:"transferencia_id"`
+	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
+	Descripcion     pgtype.Text        `json:"descripcion"`
+}
+
+func (q *Queries) InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error) {
+	row := q.db.QueryRow(ctx, insertarAsiento,
+		arg.Tipo,
+		arg.TransferenciaID,
+		arg.OcurridoEn,
+		arg.Descripcion,
+	)
+	var i JournalEntry
+	err := row.Scan(
+		&i.ID,
+		&i.Tipo,
+		&i.TransferenciaID,
+		&i.OcurridoEn,
+		&i.RegistradoEn,
+		&i.Descripcion,
+	)
 	if err != nil {
-		err = fmt.Errorf("query Ping: %w", err)
+		err = fmt.Errorf("query InsertarAsiento: %w", err)
 	}
-	return column_1, err
+	return i, err
+}
+
+const insertarLinea = `-- name: InsertarLinea :one
+INSERT INTO nucleo.posting (entry_id, cuenta_id, monto, moneda)
+VALUES ($1, $2, $3, $4)
+RETURNING id, entry_id, cuenta_id, monto, moneda
+`
+
+type InsertarLineaParams struct {
+	EntryID  int64  `json:"entry_id"`
+	CuentaID string `json:"cuenta_id"`
+	Monto    int64  `json:"monto"`
+	Moneda   string `json:"moneda"`
+}
+
+func (q *Queries) InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error) {
+	row := q.db.QueryRow(ctx, insertarLinea,
+		arg.EntryID,
+		arg.CuentaID,
+		arg.Monto,
+		arg.Moneda,
+	)
+	var i Posting
+	err := row.Scan(
+		&i.ID,
+		&i.EntryID,
+		&i.CuentaID,
+		&i.Monto,
+		&i.Moneda,
+	)
+	if err != nil {
+		err = fmt.Errorf("query InsertarLinea: %w", err)
+	}
+	return i, err
 }
