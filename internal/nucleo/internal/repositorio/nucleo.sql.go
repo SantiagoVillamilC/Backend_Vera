@@ -13,14 +13,15 @@ import (
 )
 
 const insertarAsiento = `-- name: InsertarAsiento :one
-INSERT INTO nucleo.journal_entry (tipo, transferencia_id, ocurrido_en, descripcion)
-VALUES ($1, $2, $3, $4)
-RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion
+INSERT INTO nucleo.journal_entry (tipo, transferencia_id, deposito_id, ocurrido_en, descripcion)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
 `
 
 type InsertarAsientoParams struct {
 	Tipo            string             `json:"tipo"`
 	TransferenciaID pgtype.UUID        `json:"transferencia_id"`
+	DepositoID      pgtype.UUID        `json:"deposito_id"`
 	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
 }
@@ -29,6 +30,7 @@ func (q *Queries) InsertarAsiento(ctx context.Context, arg InsertarAsientoParams
 	row := q.db.QueryRow(ctx, insertarAsiento,
 		arg.Tipo,
 		arg.TransferenciaID,
+		arg.DepositoID,
 		arg.OcurridoEn,
 		arg.Descripcion,
 	)
@@ -40,6 +42,7 @@ func (q *Queries) InsertarAsiento(ctx context.Context, arg InsertarAsientoParams
 		&i.OcurridoEn,
 		&i.RegistradoEn,
 		&i.Descripcion,
+		&i.DepositoID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query InsertarAsiento: %w", err)

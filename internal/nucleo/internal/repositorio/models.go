@@ -17,6 +17,19 @@ type Cuenta struct {
 	CreadaEn   pgtype.Timestamptz `json:"creada_en"`
 }
 
+type Deposito struct {
+	ID             pgtype.UUID        `json:"id"`
+	UsuarioID      string             `json:"usuario_id"`
+	Monto          int64              `json:"monto"`
+	Moneda         string             `json:"moneda"`
+	Referencia     string             `json:"referencia"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Cus            pgtype.Text        `json:"cus"`
+	Estado         string             `json:"estado"`
+	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
+	ActualizadaEn  pgtype.Timestamptz `json:"actualizada_en"`
+}
+
 type JournalEntry struct {
 	ID              int64              `json:"id"`
 	Tipo            string             `json:"tipo"`
@@ -24,6 +37,7 @@ type JournalEntry struct {
 	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
 	RegistradoEn    pgtype.Timestamptz `json:"registrado_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
+	DepositoID      pgtype.UUID        `json:"deposito_id"`
 }
 
 type Posting struct {

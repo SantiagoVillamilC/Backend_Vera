@@ -6,12 +6,21 @@ package repositorio
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	ConfirmarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
+	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error)
+	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)
 	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error)
 	InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error)
+	ObtenerDeposito(ctx context.Context, id pgtype.UUID) (Deposito, error)
+	ObtenerDepositoPorIdempotencyKey(ctx context.Context, arg ObtenerDepositoPorIdempotencyKeyParams) (Deposito, error)
+	ObtenerDepositoPorReferencia(ctx context.Context, referencia string) (Deposito, error)
+	RechazarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)
