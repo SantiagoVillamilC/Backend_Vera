@@ -1,8 +1,4 @@
 // Package api define el envelope de respuesta compartido por todos los handlers HTTP.
-//
-// Vive en un paquete aparte de internal/platform/httpserver porque los propios handlers
-// (auth, copilot, receipts) escriben su respuesta y httpserver los importa, así que el
-// envelope no puede vivir dentro de httpserver sin crear un ciclo de imports.
 package api
 
 import (
@@ -15,8 +11,7 @@ import (
 	platformerrors "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/errors"
 )
 
-// Envelope es la forma única de toda respuesta, exitosa o fallida. Las cuatro claves
-// siempre se serializan: data, error y meta quedan en null cuando no aplican.
+// Envelope es la forma única de toda respuesta; las cuatro claves siempre se serializan.
 type Envelope[T any] struct {
 	Success bool      `json:"success"`
 	Data    T         `json:"data"`
@@ -24,8 +19,7 @@ type Envelope[T any] struct {
 	Meta    *Meta     `json:"meta"`
 }
 
-// APIError es el objeto de error que viaja dentro del envelope. Code es estable y legible
-// por una máquina, Message es legible por una persona y nunca es un err.Error() en crudo.
+// APIError es el objeto de error del envelope; Code es estable y Message es legible por una persona.
 type APIError struct {
 	Code    string       `json:"code"`
 	Message string       `json:"message"`
@@ -39,11 +33,11 @@ type FieldError struct {
 	Param string `json:"param,omitempty"`
 }
 
-// Meta transporta la paginación. Solo se llena en endpoints de listado.
+// Meta transporta la paginación por cursor. Solo se llena en endpoints de listado.
 type Meta struct {
-	Total int `json:"total"`
-	Page  int `json:"page"`
-	Limit int `json:"limit"`
+	Limit      int    `json:"limit"`
+	NextCursor *int64 `json:"next_cursor"`
+	HasMore    bool   `json:"has_more"`
 }
 
 // WriteData responde con un envelope exitoso. meta se deja en nil salvo en listados.
@@ -56,9 +50,7 @@ func WriteError(w http.ResponseWriter, status int, code, msg string, details []F
 	writeJSON(w, status, Envelope[any]{Success: false, Error: &APIError{Code: code, Message: msg, Details: details}})
 }
 
-// WriteAPIError convierte un error de dominio en respuesta. Un *errors.APIError con
-// status 4xx conserva su código y mensaje, cualquier otro error se registra y sale como
-// 500 genérico para no filtrar detalles internos al cliente.
+// WriteAPIError convierte un error de dominio: un 4xx conserva su código y el resto sale como 500 genérico.
 func WriteAPIError(w http.ResponseWriter, r *http.Request, err error) {
 	var apiErr *platformerrors.APIError
 	if errors.As(err, &apiErr) && apiErr.Status >= http.StatusBadRequest && apiErr.Status < http.StatusInternalServerError {
@@ -70,9 +62,7 @@ func WriteAPIError(w http.ResponseWriter, r *http.Request, err error) {
 	WriteError(w, http.StatusInternalServerError, "InternalError", "Something went wrong.", nil)
 }
 
-// writeJSON serializa el envelope completo en un buffer antes de tocar el ResponseWriter.
-// Un fallo de serialización no puede llegar después de WriteHeader, porque dejaría un 200
-// truncado en el cliente.
+// writeJSON serializa el envelope en un buffer antes de tocar el ResponseWriter, para no dejar un 200 truncado.
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	buf := new(bytes.Buffer)
 	if err := json.NewEncoder(buf).Encode(payload); err != nil {

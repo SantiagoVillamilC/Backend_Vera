@@ -29,7 +29,7 @@ func depositoDePrueba(usuarioID, referencia, clave string) repositorio.InsertarD
 
 func asientoDeDeposito(depositoID pgtype.UUID) repositorio.InsertarAsientoParams {
 	return repositorio.InsertarAsientoParams{
-		Tipo:       "fondeo",
+		Tipo:       TipoAsientoDeposito,
 		DepositoID: depositoID,
 		OcurridoEn: pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true},
 	}

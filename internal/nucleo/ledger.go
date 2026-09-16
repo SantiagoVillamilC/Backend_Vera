@@ -19,6 +19,16 @@ const CuentaLiquidacionPendienteRiel = "pasivo:liquidacion_pendiente:riel"
 // CuentaGMFPorPagar es el gravamen retenido y pendiente de entregar a la autoridad tributaria.
 const CuentaGMFPorPagar = "pasivo:gmf_por_pagar"
 
+// Los seis tipos de asiento del conjunto cerrado del diario (HU-NF-05, Dependencias).
+const (
+	TipoAsientoDeposito              = "deposito"
+	TipoAsientoRetencion             = "retencion"
+	TipoAsientoTransferenciaInterna  = "transferencia_interna"
+	TipoAsientoDespachoRiel          = "despacho_riel"
+	TipoAsientoLiquidacionConfirmada = "liquidacion_confirmada"
+	TipoAsientoCompensacion          = "compensacion"
+)
+
 // ErrUsuarioVacio reporta la apertura de subcuentas sin un usuario_id que las identifique.
 var ErrUsuarioVacio = errors.New("nucleo: el usuario_id no puede estar vacío")
 

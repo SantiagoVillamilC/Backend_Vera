@@ -82,7 +82,8 @@ func sembrarAsiento(t *testing.T, pool *pgxpool.Pool, lineas []linea) {
 
 	var entryID int64
 	if err := tx.QueryRow(ctx,
-		"INSERT INTO journal_entry (tipo, ocurrido_en) VALUES ('fondeo', now()) RETURNING id").Scan(&entryID); err != nil {
+		"INSERT INTO journal_entry (tipo, ocurrido_en) VALUES ($1, now()) RETURNING id",
+		nucleo.TipoAsientoDeposito).Scan(&entryID); err != nil {
 		t.Fatalf("insertar asiento: %v", err)
 	}
 	for _, l := range lineas {

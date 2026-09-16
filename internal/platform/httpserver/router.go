@@ -25,7 +25,7 @@ const (
 )
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y la identidad inyectada.
-func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, saldo *nucleo.Servicio) http.Handler {
+func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *nucleo.Servicio) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
@@ -45,7 +45,7 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, saldo *nucleo.Se
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
-	saldoHandler := nucleo.NewHandler(saldo)
+	nucleoHandler := nucleo.NewHandler(nucleoServicio)
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
@@ -61,7 +61,8 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, saldo *nucleo.Se
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
 		r.Use(RequireAuth(quien))
-		r.Get("/saldo", saldoHandler.Saldo)
+		r.Get("/saldo", nucleoHandler.Saldo)
+		r.Get("/movimientos", nucleoHandler.Movimientos)
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
 	})
