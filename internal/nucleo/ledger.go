@@ -3,6 +3,7 @@ package nucleo
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/google/uuid"
@@ -50,4 +51,16 @@ func (s *Servicio) AbrirSubcuentasDeUsuario(ctx context.Context, usuarioID strin
 				TitularID:  pgtype.Text{String: usuarioID, Valid: true},
 			})
 		})
+}
+
+// Saldo devuelve, con el signo del usuario, lo que puede gastar en una cuenta del diario.
+func (s *Servicio) Saldo(ctx context.Context, cuentaID string) (Centavos, error) {
+	saldo, err := enTransaccion(ctx, s.pool,
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (int64, error) {
+			return q.SaldoDeCuenta(ctx, cuentaID)
+		})
+	if err != nil {
+		return 0, fmt.Errorf("nucleo: consultar saldo de %q: %w", cuentaID, err)
+	}
+	return Centavos(0).Restar(Centavos(saldo))
 }

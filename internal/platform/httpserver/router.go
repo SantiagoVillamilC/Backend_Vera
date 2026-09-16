@@ -6,6 +6,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
@@ -23,19 +24,8 @@ const (
 	rateLimitWindow   = time.Minute
 )
 
-// NewRouter arma el árbol de rutas con la cadena de middleware y el envelope común.
-//
-// El orden de la cadena es deliberado: RequestID (server-generated) primero, luego un
-// único ClientIPFrom* (nginx sobrescribe X-Real-IP con el peer TCP en
-// infra/servidor/pasos/30-nginx.sh y el puerto de la API no se publica, así que el header
-// no es falsificable desde fuera), el logger de acceso, Recoverer, CORS en la raíz, el rate
-// limit (que exceptúa /healthz y /readyz para no bloquear a un prober) y por último el
-// envoltorio del 405, que conserva el Allow. Recoverer y Timeout son propios y responden
-// dentro del envelope.
-//
-// quien resuelve la identidad del grupo autenticado. Lo construye main y lo inyecta: hoy el
-// adaptador de usuario de prueba, mañana el validador de JWT real.
-func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion) http.Handler {
+// NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y la identidad inyectada.
+func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, saldo *nucleo.Servicio) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
@@ -55,6 +45,7 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion) http.Handler {
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
+	saldoHandler := nucleo.NewHandler(saldo)
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
@@ -66,17 +57,16 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion) http.Handler {
 		r.Get("/readyz", health.Ready)
 	})
 
-	// Grupo autenticado: Timeout y RequireAuth solo acá. Copilot y receipts llaman
-	// clientes externos con su propio presupuesto de retry, por eso el Timeout mayor.
+	// Grupo autenticado: RequireAuth deja el usuario en el contexto y solo acá corre.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
 		r.Use(RequireAuth(quien))
+		r.Get("/saldo", saldoHandler.Saldo)
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
 	})
 
-	// Los handlers por defecto de chi responden texto plano, que rompería el envelope. El
-	// 405 se envuelve con MethodNotAllowedEnvelope (arriba) para conservar el header Allow.
+	// Los handlers por defecto de chi responden texto plano, así que el 404 va dentro del envelope.
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		api.WriteError(w, http.StatusNotFound, "NotFound", "Resource not found.", nil)
 	})

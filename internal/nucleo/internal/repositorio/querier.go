@@ -21,6 +21,7 @@ type Querier interface {
 	ObtenerDepositoPorIdempotencyKey(ctx context.Context, arg ObtenerDepositoPorIdempotencyKeyParams) (Deposito, error)
 	ObtenerDepositoPorReferencia(ctx context.Context, referencia string) (Deposito, error)
 	RechazarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
+	SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -104,3 +104,21 @@ func (q *Queries) InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarS
 	}
 	return result.RowsAffected(), nil
 }
+
+const saldoDeCuenta = `-- name: SaldoDeCuenta :one
+SELECT COALESCE(SUM(p.monto), 0)::bigint AS saldo
+  FROM nucleo.posting p
+  JOIN nucleo.cuenta c ON c.id = p.cuenta_id
+ WHERE p.cuenta_id = $1
+   AND p.moneda = c.moneda
+`
+
+func (q *Queries) SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, error) {
+	row := q.db.QueryRow(ctx, saldoDeCuenta, cuentaID)
+	var saldo int64
+	err := row.Scan(&saldo)
+	if err != nil {
+		err = fmt.Errorf("query SaldoDeCuenta: %w", err)
+	}
+	return saldo, err
+}
