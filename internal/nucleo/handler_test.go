@@ -1,6 +1,7 @@
 package nucleo
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -102,6 +103,8 @@ func TestConfirmacionValidaMontoYFuenteCondicionales(t *testing.T) {
 		"aprobado sin ocurrido_en":      {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"1000"}`, valido: false},
 		"aprobado con monto cero":       {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"0",` + fecha + `}`, valido: false},
 		"aprobado completo":             {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"1000",` + fecha + `}`, valido: true},
+		"aprobado con cus de 128":       {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"1000",` + fecha + `,"cus":"` + strings.Repeat("a", 128) + `"}`, valido: true},
+		"aprobado con cus de 129":       {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"1000",` + fecha + `,"cus":"` + strings.Repeat("a", 129) + `"}`, valido: false},
 		"rechazado sin monto ni fuente": {cuerpo: `{"referencia":"dep-x","estado":"rechazado"}`, valido: true},
 		"rechazado con monto cero":      {cuerpo: `{"referencia":"dep-x","estado":"rechazado","monto":"0"}`, valido: true},
 	}
@@ -114,5 +117,31 @@ func TestConfirmacionValidaMontoYFuenteCondicionales(t *testing.T) {
 				t.Fatalf("valido = %v (status %d, cuerpo %q), quiero %v", got, rec.Code, rec.Body.String(), tc.valido)
 			}
 		})
+	}
+}
+
+// abridorContador cuenta las transacciones abiertas sin tocar una base real.
+type abridorContador struct{ llamadas int }
+
+func (a *abridorContador) Begin(context.Context) (transaccionDeNucleo, error) {
+	a.llamadas++
+	return nil, errors.New("sin base en esta prueba")
+}
+
+// HU-NF-07 Criterio 1: un cus de más de 128 caracteres da 422 sin abrir transacción ni asentar.
+func TestConfirmacionConCUSExcesivoNoPersiste(t *testing.T) {
+	abridor := &abridorContador{}
+	handler := NewHandler(&Servicio{pool: abridor})
+
+	cuerpo := `{"referencia":"dep-x","estado":"aprobado","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z","cus":"` +
+		strings.Repeat("a", 129) + `"}`
+	rec := httptest.NewRecorder()
+	handler.ConfirmarDeposito(rec, httptest.NewRequest(http.MethodPost, "/depositos/confirmaciones", strings.NewReader(cuerpo)))
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, quiero 422 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	if abridor.llamadas != 0 {
+		t.Errorf("la base se tocó %d veces, quiero 0", abridor.llamadas)
 	}
 }

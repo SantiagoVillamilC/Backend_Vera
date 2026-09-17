@@ -15,14 +15,20 @@ import (
 const confirmarDeposito = `-- name: ConfirmarDeposito :one
 UPDATE nucleo.deposito
    SET estado = 'confirmada',
+       cus = COALESCE($1, cus),
        actualizada_en = now()
- WHERE id = $1
+ WHERE id = $2
    AND estado = 'pendiente'
 RETURNING id, usuario_id, monto, moneda, referencia, idempotency_key, cus, estado, creada_en, actualizada_en
 `
 
-func (q *Queries) ConfirmarDeposito(ctx context.Context, id pgtype.UUID) (Deposito, error) {
-	row := q.db.QueryRow(ctx, confirmarDeposito, id)
+type ConfirmarDepositoParams struct {
+	Cus pgtype.Text `json:"cus"`
+	ID  pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) ConfirmarDeposito(ctx context.Context, arg ConfirmarDepositoParams) (Deposito, error) {
+	row := q.db.QueryRow(ctx, confirmarDeposito, arg.Cus, arg.ID)
 	var i Deposito
 	err := row.Scan(
 		&i.ID,

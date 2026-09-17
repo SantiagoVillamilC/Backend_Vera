@@ -29,6 +29,21 @@ func cuerpoDeConfirmacionConEstado(referencia, estado, monto, moneda string) str
 	return cuerpo + `,"ocurrido_en":"` + ocurrido + `"}`
 }
 
+func cuerpoDeConfirmacionConCUS(referencia, monto, cus string) string {
+	return `{"referencia":"` + referencia + `","estado":"aprobado","monto":"` + monto + `","cus":"` + cus + `","ocurrido_en":"` +
+		time.Now().UTC().Format(time.RFC3339Nano) + `"}`
+}
+
+func cusDelDeposito(t *testing.T, pool *pgxpool.Pool, depositoID uuid.UUID) *string {
+	t.Helper()
+
+	var cus *string
+	enNucleoDeIntegracion(t, pool, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SELECT cus FROM nucleo.deposito WHERE id = $1", depositoID).Scan(&cus)
+	})
+	return cus
+}
+
 func sembrarIntencion(t *testing.T, s *nucleo.Servicio, usuarioID string, monto int64) nucleo.IntencionDeposito {
 	t.Helper()
 
@@ -141,6 +156,48 @@ func TestHU_NF_07_Criterio6_ConfirmacionAsientaElFondeo(t *testing.T) {
 	}
 	if filas := filasDescuadradas(t, pool); filas != 0 {
 		t.Errorf("el Apéndice C devolvió %d asientos descuadrados, quiero 0", filas)
+	}
+}
+
+// HU-NF-07 Criterio 22: el CUS que devuelve el flujo de PSE se persiste, sin exponerse en la respuesta.
+func TestHU_NF_07_Criterio22_CUSPersistidoSinExponerlo(t *testing.T) {
+	pool := abrirPoolDeIntegracion(t)
+	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
+	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
+	cus := "cus-" + uuid.NewString()
+
+	rec := pedirConfirmacion(t, r, cuerpoDeConfirmacionConCUS(intencion.Referencia, "100000", cus), "Bearer "+tokenCustodioDePrueba)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	persistido := cusDelDeposito(t, pool, intencion.ID)
+	if persistido == nil || *persistido != cus {
+		t.Errorf("deposito.cus = %v, quiero %q", persistido, cus)
+	}
+	if _, expuesto := datosDeDeposito(t, rec)["cus"]; expuesto {
+		t.Error("RespuestaDeposito no debe exponer cus")
+	}
+	if asientos, _, _ := contarAsientoDelDeposito(t, pool, intencion.ID); asientos != 1 {
+		t.Errorf("asientos = %d, quiero 1", asientos)
+	}
+}
+
+// HU-NF-07 Criterio 22: la confirmación sin CUS deja la columna opcional en NULL.
+func TestHU_NF_07_Criterio22_SinCUSLaColumnaQuedaNULL(t *testing.T) {
+	pool := abrirPoolDeIntegracion(t)
+	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
+	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
+
+	rec := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, "100000", ""), "Bearer "+tokenCustodioDePrueba)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	if persistido := cusDelDeposito(t, pool, intencion.ID); persistido != nil {
+		t.Errorf("deposito.cus = %q, quiero NULL", *persistido)
 	}
 }
 

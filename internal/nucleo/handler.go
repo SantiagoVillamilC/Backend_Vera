@@ -59,6 +59,7 @@ type confirmarDepositoRequest struct {
 	Monto      Centavos  `json:"monto" validate:"required_if=Estado aprobado,gte=0"`
 	Moneda     string    `json:"moneda"`
 	OcurridoEn time.Time `json:"ocurrido_en" validate:"required_if=Estado aprobado"`
+	CUS        string    `json:"cus" validate:"omitempty,max=128"`
 }
 
 // Handler sirve el saldo, el historial y las intenciones de depósito del usuario autenticado.
@@ -200,6 +201,7 @@ func (h *Handler) ConfirmarDeposito(w http.ResponseWriter, r *http.Request) {
 			Monto:      req.Monto,
 			Moneda:     req.Moneda,
 			OcurridoEn: req.OcurridoEn,
+			CUS:        req.CUS,
 		})
 	}
 	escribirRespuestaDeConfirmacion(w, r, intencion, err)

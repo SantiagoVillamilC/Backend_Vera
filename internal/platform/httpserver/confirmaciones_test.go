@@ -153,7 +153,7 @@ func TestHU_NF_07_Criterio11_OcurridoEnObligatorio(t *testing.T) {
 // Un cuerpo con un campo desconocido o mal formado es 400, nunca una confirmación a medias.
 func TestConfirmacionConCuerpoInvalidoDa400(t *testing.T) {
 	tests := map[string]string{
-		"campo desconocido": `{"referencia":"dep-x","estado":"aprobado","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z","cus":"x"}`,
+		"campo desconocido": `{"referencia":"dep-x","estado":"aprobado","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z","campo_ajeno":"x"}`,
 		"json mal formado":  `{"referencia":`,
 		"monto json numero": `{"referencia":"dep-x","estado":"aprobado","monto":1000,"ocurrido_en":"2026-09-16T10:00:00Z"}`,
 	}

@@ -224,7 +224,7 @@ func TestCompareAndSetDelEstadoDelDeposito(t *testing.T) {
 			t.Errorf("estado inicial = %q, want pendiente", dep.Estado)
 		}
 
-		confirmada, err := q.ConfirmarDeposito(ctx, dep.ID)
+		confirmada, err := q.ConfirmarDeposito(ctx, repositorio.ConfirmarDepositoParams{ID: dep.ID})
 		if err != nil {
 			return err
 		}
@@ -233,7 +233,7 @@ func TestCompareAndSetDelEstadoDelDeposito(t *testing.T) {
 		}
 		t.Logf("ConfirmarDeposito sobre pendiente: estado = %q", confirmada.Estado)
 
-		if _, err := q.ConfirmarDeposito(ctx, dep.ID); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.ConfirmarDeposito(ctx, repositorio.ConfirmarDepositoParams{ID: dep.ID}); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("segundo CAS: err = %v, want pgx.ErrNoRows", err)
 		}
 		t.Logf("segundo ConfirmarDeposito: sin filas")

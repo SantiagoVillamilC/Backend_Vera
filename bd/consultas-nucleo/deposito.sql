@@ -22,6 +22,7 @@ SELECT id, usuario_id, monto, moneda, referencia, idempotency_key, cus, estado, 
 -- name: ConfirmarDeposito :one
 UPDATE nucleo.deposito
    SET estado = 'confirmada',
+       cus = COALESCE(@cus, cus),
        actualizada_en = now()
  WHERE id = @id
    AND estado = 'pendiente'

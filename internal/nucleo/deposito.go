@@ -109,6 +109,7 @@ type ConfirmacionDeposito struct {
 	Monto      Centavos
 	Moneda     string
 	OcurridoEn time.Time
+	CUS        string
 }
 
 // ConfirmarDeposito confirma la intención, escribe el asiento de fondeo y es idempotente en una sola transacción.
@@ -130,7 +131,10 @@ func (s *Servicio) ConfirmarDeposito(ctx context.Context, confirmacion Confirmac
 				return IntencionDeposito{}, ErrConfirmacionConflictiva
 			}
 
-			confirmada, err := q.ConfirmarDeposito(ctx, intencion.ID)
+			confirmada, err := q.ConfirmarDeposito(ctx, repositorio.ConfirmarDepositoParams{
+				ID:  intencion.ID,
+				Cus: textoONulo(confirmacion.CUS),
+			})
 			if err == nil {
 				return s.asentarFondeo(ctx, q, confirmada, confirmacion.OcurridoEn)
 			}
@@ -139,6 +143,14 @@ func (s *Servicio) ConfirmarDeposito(ctx context.Context, confirmacion Confirmac
 			}
 			return s.resolverConfirmacionRepetida(ctx, q, confirmacion, moneda)
 		})
+}
+
+// textoONulo distingue el texto vacío del ausente para que la columna opcional quede NULL.
+func textoONulo(s string) pgtype.Text {
+	if s == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: s, Valid: true}
 }
 
 // RechazarDeposito deja rechazada una intención pendiente por su referencia, sin escribir el diario.
