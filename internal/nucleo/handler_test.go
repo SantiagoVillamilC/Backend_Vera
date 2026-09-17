@@ -4,7 +4,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 )
 
 // Un Handler sin Servicio es un error de programación: falla al construir, no en la petición.
@@ -66,6 +69,49 @@ func TestHU_NF_05_Criterio10_PaginacionDeMovimientosValidaLosParametros(t *testi
 			}
 			if cursor == nil || *cursor != *tc.wantCursor {
 				t.Fatalf("cursor = %v, quiero %d", cursor, *tc.wantCursor)
+			}
+		})
+	}
+}
+
+// HU-NF-07 Criterio 17: la señal del custodio y el estado persistido se relacionan en un solo lugar.
+func TestEstadoPersistidoTraduceLaSenalDelCustodio(t *testing.T) {
+	t.Parallel()
+
+	casos := map[string]string{
+		"aprobado":  EstadoDepositoConfirmada,
+		"rechazado": EstadoDepositoRechazada,
+	}
+	for senal, quiero := range casos {
+		if got := estadoPersistido(senal); got != quiero {
+			t.Errorf("estadoPersistido(%q) = %q, quiero %q", senal, got, quiero)
+		}
+	}
+}
+
+// HU-NF-07 Criterios 1 y 17: monto y ocurrido_en son obligatorios en la aprobación y opcionales en el rechazo.
+func TestConfirmacionValidaMontoYFuenteCondicionales(t *testing.T) {
+	t.Parallel()
+
+	const fecha = `"ocurrido_en":"2026-09-16T10:00:00Z"`
+	casos := map[string]struct {
+		cuerpo string
+		valido bool
+	}{
+		"aprobado sin monto":            {cuerpo: `{"referencia":"dep-x","estado":"aprobado",` + fecha + `}`, valido: false},
+		"aprobado sin ocurrido_en":      {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"1000"}`, valido: false},
+		"aprobado con monto cero":       {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"0",` + fecha + `}`, valido: false},
+		"aprobado completo":             {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"1000",` + fecha + `}`, valido: true},
+		"rechazado sin monto ni fuente": {cuerpo: `{"referencia":"dep-x","estado":"rechazado"}`, valido: true},
+		"rechazado con monto cero":      {cuerpo: `{"referencia":"dep-x","estado":"rechazado","monto":"0"}`, valido: true},
+	}
+	for nombre, tc := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			var req confirmarDepositoRequest
+			rec := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodPost, "/depositos/confirmaciones", strings.NewReader(tc.cuerpo))
+			if got := api.DecodeAndValidate(rec, r, &req); got != tc.valido {
+				t.Fatalf("valido = %v (status %d, cuerpo %q), quiero %v", got, rec.Code, rec.Body.String(), tc.valido)
 			}
 		})
 	}

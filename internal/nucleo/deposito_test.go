@@ -1,6 +1,7 @@
 package nucleo
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -60,4 +61,60 @@ func TestIntencionDeDepositoEnvuelveLaFilaCruda(t *testing.T) {
 	if !intencion.CreadaEn.Equal(creada) || intencion.CreadaEn.Location() != time.UTC {
 		t.Errorf("CreadaEn = %s (%s), quiero el mismo instante en UTC", intencion.CreadaEn, intencion.CreadaEn.Location())
 	}
+}
+
+// HU-NF-07 Criterio 18: con el plazo apagado (cero) el barrido no abre transacción ni expira nada.
+func TestExpirarIntencionesConPlazoApagadoNoTocaLaBase(t *testing.T) {
+	t.Parallel()
+
+	expiradas, err := (&Servicio{}).ExpirarIntenciones(t.Context(), 0)
+	if err != nil {
+		t.Fatalf("ExpirarIntenciones(0) = %v, quiero nil", err)
+	}
+	if expiradas != 0 {
+		t.Errorf("ExpirarIntenciones(0) = %d, quiero 0", expiradas)
+	}
+}
+
+// HU-NF-07 Criterio 19: la escalada deja la operación, la referencia y el estado por el puerto.
+func TestEscalarConfirmacionTardiaCapturaLaReferencia(t *testing.T) {
+	t.Parallel()
+
+	falso := &rastreadorFalso{}
+	servicio := &Servicio{rastreador: falso}
+	servicio.escalarConfirmacionTardia(t.Context(), repositorio.Deposito{
+		Referencia: "dep-x",
+		UsuarioID:  "u-1",
+		Estado:     EstadoDepositoExpirada,
+	})
+
+	if len(falso.capturas) != 1 {
+		t.Fatalf("capturas = %d, quiero 1", len(falso.capturas))
+	}
+	captura := falso.capturas[0]
+	if captura.contexto.Operacion != "confirmacion_tardia" {
+		t.Errorf("operacion = %q, quiero confirmacion_tardia", captura.contexto.Operacion)
+	}
+	if !errors.Is(captura.err, ErrConfirmacionTardia) {
+		t.Errorf("err = %v, quiero ErrConfirmacionTardia", captura.err)
+	}
+	if !tieneCampo(captura.contexto.Campos, "referencia", "dep-x") {
+		t.Errorf("campos = %v, quiero la referencia dep-x", captura.contexto.Campos)
+	}
+}
+
+// HU-NF-07 Criterio 19: sin rastreador inyectado la escalada no rompe el flujo.
+func TestEscalarConfirmacionTardiaSinRastreadorNoFalla(t *testing.T) {
+	t.Parallel()
+
+	(&Servicio{}).escalarConfirmacionTardia(t.Context(), repositorio.Deposito{Referencia: "dep-x"})
+}
+
+func tieneCampo(campos []Campo, clave, valor string) bool {
+	for _, c := range campos {
+		if c.Clave == clave && c.Valor == valor {
+			return true
+		}
+	}
+	return false
 }

@@ -4,6 +4,7 @@ package httpserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -16,8 +17,12 @@ import (
 )
 
 func cuerpoDeConfirmacion(referencia, monto, moneda string) string {
+	return cuerpoDeConfirmacionConEstado(referencia, "aprobado", monto, moneda)
+}
+
+func cuerpoDeConfirmacionConEstado(referencia, estado, monto, moneda string) string {
 	ocurrido := time.Now().UTC().Format(time.RFC3339Nano)
-	cuerpo := `{"referencia":"` + referencia + `","estado":"aprobado","monto":"` + monto + `"`
+	cuerpo := `{"referencia":"` + referencia + `","estado":"` + estado + `","monto":"` + monto + `"`
 	if moneda != "" {
 		cuerpo += `,"moneda":"` + moneda + `"`
 	}
@@ -344,6 +349,105 @@ func TestHU_NF_07_Criterio19_ConfirmacionTardiaNoAsienta(t *testing.T) {
 			}
 			if asientos, _, _ := contarAsientoDelDeposito(t, pool, intencion.ID); asientos != 0 {
 				t.Errorf("se escribieron %d asientos, quiero 0", asientos)
+			}
+		})
+	}
+}
+
+// HU-NF-07 Criterio 17: el rechazo explícito deja la intención rechazada y no escribe el diario.
+func TestHU_NF_07_Criterio17_RechazoExplicitoNoAsienta(t *testing.T) {
+	pool := abrirPoolDeIntegracion(t)
+	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
+	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
+	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
+	cuerpo := cuerpoDeConfirmacionConEstado(intencion.Referencia, "rechazado", "100000", "")
+
+	rec := pedirConfirmacion(t, r, cuerpo, "Bearer "+tokenCustodioDePrueba)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	if estado := datosDeDeposito(t, rec)["estado"]; estado != nucleo.EstadoDepositoRechazada {
+		t.Errorf("estado = %v, quiero %q", estado, nucleo.EstadoDepositoRechazada)
+	}
+	if estado := estadoDelDeposito(t, pool, intencion.ID); estado != nucleo.EstadoDepositoRechazada {
+		t.Errorf("estado en base = %q, quiero rechazada", estado)
+	}
+	if asientos, lineas, _ := contarAsientoDelDeposito(t, pool, intencion.ID); asientos != 0 || lineas != 0 {
+		t.Errorf("el rechazo escribió asiento=%d líneas=%d, quiero 0 y 0", asientos, lineas)
+	}
+
+	reenvio := pedirConfirmacion(t, r, cuerpo, "Bearer "+tokenCustodioDePrueba)
+	if reenvio.Code != http.StatusOK {
+		t.Fatalf("reenvío: status = %d, quiero 200 (cuerpo %q)", reenvio.Code, reenvio.Body.String())
+	}
+	if reenvio.Body.String() != rec.Body.String() {
+		t.Errorf("el reenvío devolvió %q, quiero el mismo cuerpo %q", reenvio.Body.String(), rec.Body.String())
+	}
+	if asientos, lineas, _ := contarAsientoDelDeposito(t, pool, intencion.ID); asientos != 0 || lineas != 0 {
+		t.Errorf("el reenvío escribió asiento=%d líneas=%d, quiero 0 y 0", asientos, lineas)
+	}
+}
+
+// HU-NF-07 Criterio 17: el rechazo no exige monto ni fuente y deja la intención rechazada.
+func TestHU_NF_07_Criterio17_RechazoAceptaPayloadMinimo(t *testing.T) {
+	cuerpos := map[string]string{
+		"solo referencia y estado": `{"referencia":"%s","estado":"rechazado"}`,
+		"con monto cero":           `{"referencia":"%s","estado":"rechazado","monto":"0"}`,
+	}
+	for nombre, plantilla := range cuerpos {
+		t.Run(nombre, func(t *testing.T) {
+			pool := abrirPoolDeIntegracion(t)
+			servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
+			usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
+			r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+			intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
+
+			rec := pedirConfirmacion(t, r, fmt.Sprintf(plantilla, intencion.Referencia), "Bearer "+tokenCustodioDePrueba)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+			}
+			if estado := datosDeDeposito(t, rec)["estado"]; estado != nucleo.EstadoDepositoRechazada {
+				t.Errorf("estado = %v, quiero %q", estado, nucleo.EstadoDepositoRechazada)
+			}
+			if estado := estadoDelDeposito(t, pool, intencion.ID); estado != nucleo.EstadoDepositoRechazada {
+				t.Errorf("estado en base = %q, quiero rechazada", estado)
+			}
+			if asientos, lineas, _ := contarAsientoDelDeposito(t, pool, intencion.ID); asientos != 0 || lineas != 0 {
+				t.Errorf("el rechazo escribió asiento=%d líneas=%d, quiero 0 y 0", asientos, lineas)
+			}
+		})
+	}
+}
+
+// HU-NF-07 Criterio 17: rechazar una intención confirmada o expirada da 409 y no escribe nada.
+func TestHU_NF_07_Criterio17_RechazoNoPendienteDa409(t *testing.T) {
+	tests := map[string]struct {
+		estado string
+		code   string
+	}{
+		"confirmada": {estado: nucleo.EstadoDepositoConfirmada, code: "ConfirmationConflict"},
+		"expirada":   {estado: nucleo.EstadoDepositoExpirada, code: "LateConfirmation"},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			pool := abrirPoolDeIntegracion(t)
+			servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
+			usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
+			r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+			intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
+			marcarEstadoDelDeposito(t, pool, intencion.ID, tc.estado)
+			asientosAntes, lineasAntes, _ := contarAsientoDelDeposito(t, pool, intencion.ID)
+
+			rec := pedirConfirmacion(t, r, cuerpoDeConfirmacionConEstado(intencion.Referencia, "rechazado", "100000", ""), "Bearer "+tokenCustodioDePrueba)
+			assertErrorEnvelope(t, rec, http.StatusConflict, tc.code)
+
+			if estado := estadoDelDeposito(t, pool, intencion.ID); estado != tc.estado {
+				t.Errorf("estado = %q, quiero %q", estado, tc.estado)
+			}
+			if asientos, lineas, _ := contarAsientoDelDeposito(t, pool, intencion.ID); asientos != asientosAntes || lineas != lineasAntes {
+				t.Errorf("el diario cambió: asientos %d->%d, líneas %d->%d", asientosAntes, asientos, lineasAntes, lineas)
 			}
 		})
 	}

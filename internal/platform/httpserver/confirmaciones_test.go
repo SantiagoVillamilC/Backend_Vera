@@ -116,12 +116,12 @@ func TestHU_NF_07_Criterio1_ReferenciaYMontoObligatorios(t *testing.T) {
 	}
 }
 
-// HU-NF-07 Criterio 17: el estado es obligatorio y solo aprobado confirma.
-func TestHU_NF_07_Criterio17_EstadoObligatorioYAprobado(t *testing.T) {
+// HU-NF-07 Criterio 17: el estado es obligatorio y solo aprobado o rechazado pasan la validación.
+func TestHU_NF_07_Criterio17_EstadoObligatorioYValido(t *testing.T) {
 	tests := map[string]string{
-		"estado ausente":   `{"referencia":"dep-x","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`,
-		"estado rechazado": `{"referencia":"dep-x","estado":"rechazado","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`,
-		"estado distinto":  `{"referencia":"dep-x","estado":"pendiente","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`,
+		"estado ausente":  `{"referencia":"dep-x","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`,
+		"estado distinto": `{"referencia":"dep-x","estado":"pendiente","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`,
+		"estado femenino": `{"referencia":"dep-x","estado":"rechazada","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`,
 	}
 
 	r := routerDeConfirmacion()
@@ -137,7 +137,7 @@ func TestHU_NF_07_Criterio17_EstadoObligatorioYAprobado(t *testing.T) {
 	}
 }
 
-// HU-NF-07 Criterio 11: la marca de la fuente es obligatoria para no mentir en la traza.
+// HU-NF-07 Criterio 11: la marca de la fuente es obligatoria en la aprobación para no mentir en la traza.
 func TestHU_NF_07_Criterio11_OcurridoEnObligatorio(t *testing.T) {
 	r := routerDeConfirmacion()
 	rec := pedirConfirmacion(t, r,

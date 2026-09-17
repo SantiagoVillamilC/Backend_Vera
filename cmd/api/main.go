@@ -68,6 +68,8 @@ func run() error {
 		OutboxInterval:       cfg.OutboxInterval,
 		ConciliationInterval: cfg.ConciliationInterval,
 		ConciliationWindow:   cfg.ConciliationWindow,
+		ExpirationInterval:   cfg.ExpirationInterval,
+		ExpirationTTL:        cfg.ExpirationTTL,
 	})
 	if err != nil {
 		return fmt.Errorf("river: %w", err)

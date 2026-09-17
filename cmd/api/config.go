@@ -23,6 +23,8 @@ type Config struct {
 	OutboxInterval       time.Duration
 	ConciliationInterval time.Duration
 	ConciliationWindow   time.Duration
+	ExpirationInterval   time.Duration
+	ExpirationTTL        time.Duration
 }
 
 // LoadConfig valida el entorno y reporta todos los errores juntos.
@@ -82,6 +84,14 @@ func LoadConfig() (*Config, error) {
 	if errDuracion != nil {
 		errs = append(errs, errDuracion)
 	}
+	cfg.ExpirationTTL, errDuracion = ttlOr("TTL_INTENCION", "60s")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
+	cfg.ExpirationInterval, errDuracion = durationOr("EXPIRACION_INTERVAL", "60s")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("config: %w", errors.Join(errs...))
 	}
@@ -103,6 +113,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("outbox_interval", c.OutboxInterval.String()),
 		slog.String("conciliation_interval", c.ConciliationInterval.String()),
 		slog.String("conciliation_window", c.ConciliationWindow.String()),
+		slog.String("expiration_ttl", c.ExpirationTTL.String()),
+		slog.String("expiration_interval", c.ExpirationInterval.String()),
 	)
 }
 
@@ -121,6 +133,22 @@ func durationOr(key, fallback string) (time.Duration, error) {
 	d, err := time.ParseDuration(v)
 	if err != nil || d <= 0 {
 		return 0, fmt.Errorf("%s must be a positive duration (e.g. 5s, 1m), got %q", key, v)
+	}
+	return d, nil
+}
+
+// ttlOr deja apagar el proceso con cero o vacío y usa el default solo cuando la variable no existe.
+func ttlOr(key, fallback string) (time.Duration, error) {
+	v, presente := os.LookupEnv(key)
+	if !presente {
+		v = fallback
+	}
+	if v == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < 0 {
+		return 0, fmt.Errorf("%s must be zero or a positive duration (e.g. 60s, 0 to disable), got %q", key, v)
 	}
 	return d, nil
 }

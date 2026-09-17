@@ -137,7 +137,63 @@ func (s *Servicio) ConfirmarDeposito(ctx context.Context, confirmacion Confirmac
 			if !errors.Is(err, pgx.ErrNoRows) {
 				return IntencionDeposito{}, fmt.Errorf("nucleo: confirmar el depósito %q: %w", confirmacion.Referencia, err)
 			}
-			return resolverConfirmacionRepetida(ctx, q, confirmacion, moneda)
+			return s.resolverConfirmacionRepetida(ctx, q, confirmacion, moneda)
+		})
+}
+
+// RechazarDeposito deja rechazada una intención pendiente por su referencia, sin escribir el diario.
+func (s *Servicio) RechazarDeposito(ctx context.Context, referencia string) (IntencionDeposito, error) {
+	return enTransaccion(ctx, s.pool,
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (IntencionDeposito, error) {
+			intencion, err := q.ObtenerDepositoPorReferencia(ctx, referencia)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return IntencionDeposito{}, ErrDepositoNoEncontrado
+				}
+				return IntencionDeposito{}, fmt.Errorf("nucleo: leer el depósito %q: %w", referencia, err)
+			}
+			filas, err := q.RechazarDeposito(ctx, intencion.ID)
+			if err != nil {
+				return IntencionDeposito{}, fmt.Errorf("nucleo: rechazar el depósito %q: %w", referencia, err)
+			}
+			if filas == 1 {
+				intencion.Estado = EstadoDepositoRechazada
+				return intencionDeDeposito(intencion), nil
+			}
+			actual, err := q.ObtenerDepositoPorReferencia(ctx, referencia)
+			if err != nil {
+				return IntencionDeposito{}, fmt.Errorf("nucleo: releer el depósito %q: %w", referencia, err)
+			}
+			return resolverRechazoRepetido(actual)
+		})
+}
+
+// resolverRechazoRepetido decide el resultado de un rechazo que no movió ninguna fila.
+func resolverRechazoRepetido(intencion repositorio.Deposito) (IntencionDeposito, error) {
+	switch intencion.Estado {
+	case EstadoDepositoRechazada:
+		return intencionDeDeposito(intencion), nil
+	case EstadoDepositoConfirmada:
+		return IntencionDeposito{}, ErrConfirmacionConflictiva
+	case EstadoDepositoExpirada:
+		return IntencionDeposito{}, ErrConfirmacionTardia
+	default:
+		return IntencionDeposito{}, fmt.Errorf("nucleo: el depósito %q quedó en %q tras un compare-and-set fallido", intencion.Referencia, intencion.Estado)
+	}
+}
+
+// ExpirarIntenciones marca expiradas las intenciones pendientes más viejas que el plazo y devuelve cuántas.
+func (s *Servicio) ExpirarIntenciones(ctx context.Context, ttl time.Duration) (int, error) {
+	if ttl <= 0 {
+		return 0, nil
+	}
+	return enTransaccion(ctx, s.pool,
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (int, error) {
+			filas, err := q.ExpiarDepositosVencidos(ctx, ttl.Seconds())
+			if err != nil {
+				return 0, fmt.Errorf("nucleo: expirar intenciones pendientes: %w", err)
+			}
+			return int(filas), nil
 		})
 }
 
@@ -147,7 +203,7 @@ func montoYMonedaCoinciden(intencion repositorio.Deposito, monto Centavos, moned
 }
 
 // resolverConfirmacionRepetida relee la intención tras un compare-and-set sin filas.
-func resolverConfirmacionRepetida(ctx context.Context, q *repositorio.Queries, confirmacion ConfirmacionDeposito, moneda string) (IntencionDeposito, error) {
+func (s *Servicio) resolverConfirmacionRepetida(ctx context.Context, q *repositorio.Queries, confirmacion ConfirmacionDeposito, moneda string) (IntencionDeposito, error) {
 	actual, err := q.ObtenerDepositoPorReferencia(ctx, confirmacion.Referencia)
 	if err != nil {
 		return IntencionDeposito{}, fmt.Errorf("nucleo: releer el depósito %q: %w", confirmacion.Referencia, err)
@@ -159,10 +215,26 @@ func resolverConfirmacionRepetida(ctx context.Context, q *repositorio.Queries, c
 		}
 		return intencionDeDeposito(actual), nil
 	case EstadoDepositoRechazada, EstadoDepositoExpirada:
+		s.escalarConfirmacionTardia(ctx, actual)
 		return IntencionDeposito{}, ErrConfirmacionTardia
 	default:
 		return IntencionDeposito{}, fmt.Errorf("nucleo: el depósito %q quedó en %q tras un compare-and-set fallido", confirmacion.Referencia, actual.Estado)
 	}
+}
+
+// escalarConfirmacionTardia deja la traza de una confirmación que llegó sobre una intención ya cerrada.
+func (s *Servicio) escalarConfirmacionTardia(ctx context.Context, intencion repositorio.Deposito) {
+	if s.rastreador == nil {
+		return
+	}
+	s.rastreador.Capturar(ctx, ErrConfirmacionTardia, ContextoError{
+		Operacion: "confirmacion_tardia",
+		Campos: []Campo{
+			{Clave: "referencia", Valor: intencion.Referencia},
+			{Clave: "usuario_id", Valor: intencion.UsuarioID},
+			{Clave: "estado", Valor: intencion.Estado},
+		},
+	})
 }
 
 // asentarFondeo escribe el asiento de fondeo con débito en custodia y crédito en el disponible.

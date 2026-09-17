@@ -58,6 +58,22 @@ func (q *Queries) ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, er
 	return result.RowsAffected(), nil
 }
 
+const expiarDepositosVencidos = `-- name: ExpiarDepositosVencidos :execrows
+UPDATE nucleo.deposito
+   SET estado = 'expirada',
+       actualizada_en = now()
+ WHERE estado = 'pendiente'
+   AND creada_en < now() - make_interval(secs => $1)
+`
+
+func (q *Queries) ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error) {
+	result, err := q.db.Exec(ctx, expiarDepositosVencidos, segundos)
+	if err != nil {
+		return 0, fmt.Errorf("query ExpiarDepositosVencidos: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertarDeposito = `-- name: InsertarDeposito :one
 INSERT INTO nucleo.deposito (id, usuario_id, monto, moneda, referencia, idempotency_key, cus)
 VALUES ($1, $2, $3, $4, $5, $6, $7)

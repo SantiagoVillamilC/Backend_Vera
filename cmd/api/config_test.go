@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConfigLogValueNoImprimeSecretos(t *testing.T) {
@@ -83,6 +85,101 @@ func TestLoadConfigExigeElTokenDelCustodio(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// NF-A1-07.3: TTL_INTENCION por defecto en 60s y el apagado con vacío, 0 o 0s.
+func TestLoadConfigTTLIntencion(t *testing.T) {
+	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
+
+	tests := map[string]struct {
+		valor   string
+		omitir  bool
+		quiero  time.Duration
+		wantErr bool
+	}{
+		"por defecto":               {omitir: true, quiero: 60 * time.Second},
+		"plazo propio":              {valor: "30s", quiero: 30 * time.Second},
+		"apagado con cero":          {valor: "0", quiero: 0},
+		"apagado con cero duracion": {valor: "0s", quiero: 0},
+		"apagado vacio":             {valor: "", quiero: 0},
+		"invalido":                  {valor: "pronto", wantErr: true},
+		"negativo":                  {valor: "-1s", wantErr: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+			t.Setenv("JWT_SECRET", jwt)
+			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			if tc.omitir {
+				t.Setenv("TTL_INTENCION", "")
+				if err := os.Unsetenv("TTL_INTENCION"); err != nil {
+					t.Fatalf("unset: %v", err)
+				}
+			} else {
+				t.Setenv("TTL_INTENCION", tc.valor)
+			}
+
+			cfg, err := LoadConfig()
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "TTL_INTENCION") {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga TTL_INTENCION", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.ExpirationTTL != tc.quiero {
+				t.Errorf("ExpirationTTL = %v, quiero %v", cfg.ExpirationTTL, tc.quiero)
+			}
+		})
+	}
+}
+
+// NF-A1-07.3: EXPIRACION_INTERVAL por defecto en 60s y siempre positiva, como las demás cadencias.
+func TestLoadConfigExpiracionInterval(t *testing.T) {
+	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
+
+	tests := map[string]struct {
+		valor   string
+		omitir  bool
+		quiero  time.Duration
+		wantErr bool
+	}{
+		"por defecto": {omitir: true, quiero: 60 * time.Second},
+		"propia":      {valor: "15s", quiero: 15 * time.Second},
+		"cero":        {valor: "0s", wantErr: true},
+		"invalida":    {valor: "ya", wantErr: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+			t.Setenv("JWT_SECRET", jwt)
+			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			if tc.omitir {
+				t.Setenv("EXPIRACION_INTERVAL", "")
+				if err := os.Unsetenv("EXPIRACION_INTERVAL"); err != nil {
+					t.Fatalf("unset: %v", err)
+				}
+			} else {
+				t.Setenv("EXPIRACION_INTERVAL", tc.valor)
+			}
+
+			cfg, err := LoadConfig()
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "EXPIRACION_INTERVAL") {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga EXPIRACION_INTERVAL", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.ExpirationInterval != tc.quiero {
+				t.Errorf("ExpirationInterval = %v, quiero %v", cfg.ExpirationInterval, tc.quiero)
 			}
 		})
 	}

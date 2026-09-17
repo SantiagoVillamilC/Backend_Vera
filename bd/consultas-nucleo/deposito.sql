@@ -40,3 +40,10 @@ UPDATE nucleo.deposito
        actualizada_en = now()
  WHERE id = @id
    AND estado = 'pendiente';
+
+-- name: ExpiarDepositosVencidos :execrows
+UPDATE nucleo.deposito
+   SET estado = 'expirada',
+       actualizada_en = now()
+ WHERE estado = 'pendiente'
+   AND creada_en < now() - make_interval(secs => @segundos);

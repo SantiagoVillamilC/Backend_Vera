@@ -15,6 +15,9 @@ import (
 // MonedaCOP es la moneda de la billetera y la que viaja en la respuesta.
 const MonedaCOP = "COP"
 
+// estadoConfirmacionRechazado es la señal del custodio que rechaza la intención sin asentarla.
+const estadoConfirmacionRechazado = "rechazado"
+
 // Límites del historial: página por defecto 50 y tope 100, como fija la unidad NF-A1-05.
 const (
 	limiteHistorialPorDefecto = 50
@@ -52,10 +55,10 @@ type RespuestaDeposito struct {
 // confirmarDepositoRequest es la señal del custodio simulado sobre una intención pendiente.
 type confirmarDepositoRequest struct {
 	Referencia string    `json:"referencia" validate:"required"`
-	Estado     string    `json:"estado" validate:"required,oneof=aprobado"`
-	Monto      Centavos  `json:"monto" validate:"required,gt=0"`
+	Estado     string    `json:"estado" validate:"required,oneof=aprobado rechazado"`
+	Monto      Centavos  `json:"monto" validate:"required_if=Estado aprobado,gte=0"`
 	Moneda     string    `json:"moneda"`
-	OcurridoEn time.Time `json:"ocurrido_en" validate:"required"`
+	OcurridoEn time.Time `json:"ocurrido_en" validate:"required_if=Estado aprobado"`
 }
 
 // Handler sirve el saldo, el historial y las intenciones de depósito del usuario autenticado.
@@ -180,34 +183,50 @@ func (h *Handler) Deposito(w http.ResponseWriter, r *http.Request) {
 	api.WriteData(w, http.StatusOK, respuestaDeDeposito(intencion), nil)
 }
 
-// ConfirmarDeposito responde 200 con la intención confirmada, la primera vez y en el reenvío.
+// ConfirmarDeposito responde 200 con la intención confirmada o rechazada, la primera vez y en el reenvío.
 func (h *Handler) ConfirmarDeposito(w http.ResponseWriter, r *http.Request) {
 	var req confirmarDepositoRequest
 	if !api.DecodeAndValidate(w, r, &req) {
 		return
 	}
 
-	intencion, err := h.servicio.ConfirmarDeposito(r.Context(), ConfirmacionDeposito{
-		Referencia: req.Referencia,
-		Monto:      req.Monto,
-		Moneda:     req.Moneda,
-		OcurridoEn: req.OcurridoEn,
-	})
+	var intencion IntencionDeposito
+	var err error
+	if estadoPersistido(req.Estado) == EstadoDepositoRechazada {
+		intencion, err = h.servicio.RechazarDeposito(r.Context(), req.Referencia)
+	} else {
+		intencion, err = h.servicio.ConfirmarDeposito(r.Context(), ConfirmacionDeposito{
+			Referencia: req.Referencia,
+			Monto:      req.Monto,
+			Moneda:     req.Moneda,
+			OcurridoEn: req.OcurridoEn,
+		})
+	}
+	escribirRespuestaDeConfirmacion(w, r, intencion, err)
+}
+
+// estadoPersistido traduce el estado que envía el custodio al que persiste el ciclo de vida del depósito.
+func estadoPersistido(estadoSenal string) string {
+	if estadoSenal == estadoConfirmacionRechazado {
+		return EstadoDepositoRechazada
+	}
+	return EstadoDepositoConfirmada
+}
+
+// escribirRespuestaDeConfirmacion traduce el resultado de confirmar o rechazar a la respuesta HTTP.
+func escribirRespuestaDeConfirmacion(w http.ResponseWriter, r *http.Request, intencion IntencionDeposito, err error) {
 	switch {
 	case errors.Is(err, ErrDepositoNoEncontrado):
 		api.WriteError(w, http.StatusNotFound, "DepositNotFound", "Deposit not found.", nil)
-		return
 	case errors.Is(err, ErrConfirmacionConflictiva):
 		api.WriteError(w, http.StatusConflict, "ConfirmationConflict", "Confirmation does not match the deposit.", nil)
-		return
 	case errors.Is(err, ErrConfirmacionTardia):
 		api.WriteError(w, http.StatusConflict, "LateConfirmation", "The deposit is no longer pending.", nil)
-		return
 	case err != nil:
 		api.WriteAPIError(w, r, err)
-		return
+	default:
+		api.WriteData(w, http.StatusOK, respuestaDeDeposito(intencion), nil)
 	}
-	api.WriteData(w, http.StatusOK, respuestaDeDeposito(intencion), nil)
 }
 
 // respuestaDeDeposito traduce la intención del núcleo al DTO de la API.
