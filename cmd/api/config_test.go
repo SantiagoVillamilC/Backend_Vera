@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
 func TestConfigLogValueNoImprimeSecretos(t *testing.T) {
@@ -136,6 +138,138 @@ func TestLoadConfigTTLIntencion(t *testing.T) {
 				t.Errorf("ExpirationTTL = %v, quiero %v", cfg.ExpirationTTL, tc.quiero)
 			}
 		})
+	}
+}
+
+// NF-A6-01: la cifra de posición y el interruptor de A6 cargan del entorno y default apagado.
+func TestLoadConfigA6(t *testing.T) {
+	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
+
+	tests := map[string]struct {
+		posicion string
+		activo   string
+		quiero   nucleo.Centavos
+		activa   bool
+		wantErr  string
+	}{
+		"por defecto":            {},
+		"cifra y apagado":        {posicion: "100000000000", activo: "false", quiero: nucleo.Centavos(100000000000)},
+		"interruptor encendido":  {posicion: "0", activo: "true", activa: true},
+		"cifra malformada":       {posicion: "1000.50", wantErr: "A6_POSICION_LIQUIDACION_CENTAVOS"},
+		"interruptor malformado": {activo: "apagado", wantErr: "A6_PREFONDEO_ACTIVO"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+			t.Setenv("JWT_SECRET", jwt)
+			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			t.Setenv("A6_POSICION_LIQUIDACION_CENTAVOS", tc.posicion)
+			t.Setenv("A6_PREFONDEO_ACTIVO", tc.activo)
+
+			cfg, err := LoadConfig()
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.A6PosicionLiquidacion != tc.quiero {
+				t.Errorf("A6PosicionLiquidacion = %d, quiero %d", cfg.A6PosicionLiquidacion, tc.quiero)
+			}
+			if cfg.A6PrefondeoActivo != tc.activa {
+				t.Errorf("A6PrefondeoActivo = %v, quiero %v", cfg.A6PrefondeoActivo, tc.activa)
+			}
+		})
+	}
+}
+
+// NF-A6-01: la cifra en centavos y en COP conviven y el default no representa presupuesto.
+func TestLoadConfigA6RindeCOP(t *testing.T) {
+	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
+	t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+	t.Setenv("JWT_SECRET", jwt)
+	t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+	t.Setenv("A6_POSICION_LIQUIDACION_CENTAVOS", "100000000000")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := cfg.A6PosicionLiquidacion.PresentarUnidadesMayores(); got != "1000000000.00" {
+		t.Errorf("PresentarUnidadesMayores() = %q, quiero %q", got, "1000000000.00")
+	}
+}
+
+// NF-A6-01: la comprobación previa a la corrida falla con un error que nombra a A6.
+func TestValidarCorridaA6(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		activo  bool
+		wantErr bool
+	}{
+		"apagado":   {},
+		"encendido": {activo: true, wantErr: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidarCorridaA6(&Config{A6PrefondeoActivo: tc.activo})
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ValidarCorridaA6(activo=%v) error = %v, wantErr %v", tc.activo, err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), "A6") {
+				t.Errorf("el error debe nombrar a A6: %v", err)
+			}
+		})
+	}
+}
+
+// NF-A6-01: el arranque rechaza la corrida con el interruptor encendido antes de tocar Postgres.
+func TestRunRechazaA6Encendido(t *testing.T) {
+	t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+	t.Setenv("JWT_SECRET", strings.Repeat("j", 32))
+	t.Setenv("CUSTODIO_TOKEN", strings.Repeat("c", 32))
+	t.Setenv("A6_PREFONDEO_ACTIVO", "true")
+
+	err := run()
+	if err == nil || !strings.Contains(err.Error(), "A6") {
+		t.Fatalf("run() error = %v, quiero un error que nombre a A6", err)
+	}
+}
+
+// NF-A6-01: el registro de la corrida deja constancia de la cifra y del interruptor de A6.
+func TestConfigLogValueRegistraA6(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		A6PosicionLiquidacion: nucleo.Centavos(100000000000),
+		A6PrefondeoActivo:     true,
+	}
+
+	var buf bytes.Buffer
+	slog.New(slog.NewJSONHandler(&buf, nil)).Info("config loaded", "config", cfg)
+
+	var registro map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &registro); err != nil {
+		t.Fatalf("registro inválido: %v (%q)", err, buf.String())
+	}
+	grupo, ok := registro["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("config no se agrupó: %s", buf.String())
+	}
+	if grupo["a6_prefondeo_activo"] != true {
+		t.Errorf("a6_prefondeo_activo = %v, quiero true", grupo["a6_prefondeo_activo"])
+	}
+	if grupo["a6_posicion_liquidacion_centavos"] != "100000000000" {
+		t.Errorf("a6_posicion_liquidacion_centavos = %v, quiero 100000000000", grupo["a6_posicion_liquidacion_centavos"])
+	}
+	if grupo["a6_posicion_liquidacion_cop"] != "1000000000.00" {
+		t.Errorf("a6_posicion_liquidacion_cop = %v, quiero 1000000000.00", grupo["a6_posicion_liquidacion_cop"])
 	}
 }
 

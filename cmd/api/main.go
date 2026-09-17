@@ -41,6 +41,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if err := ValidarCorridaA6(cfg); err != nil {
+		return err
+	}
 	// Desde acá el log es estructurado.
 	slog.SetDefault(slog.New(logging.WithRequestID(newHandler(cfg))))
 	slog.Info("config loaded", "config", cfg)
