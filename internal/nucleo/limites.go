@@ -65,16 +65,23 @@ type ReglaLimite struct {
 	TarifaPPM         int64
 }
 
-// verificarLimite evalúa tope, cupo mensual y GMF dentro de la transacción del envío y devuelve el gravamen (HU-NF-06, criterios 10 a 13).
-func verificarLimite(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, monto Centavos, momento time.Time) (Centavos, error) {
+// contextoDeLimite es lo que el motor lee de la base: las reglas vigentes, la UVT del año y el acumulado del mes.
+type contextoDeLimite struct {
+	reglas    []ReglaLimite
+	valorUVT  int64
+	acumulado Centavos
+}
+
+// leerContextoDeLimite reúne la UVT del año, las reglas vigentes y los débitos del mes del emisor (HU-NF-06, criterios 10 a 13).
+func leerContextoDeLimite(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, momento time.Time) (contextoDeLimite, error) {
 	anio, desde, hasta := ventanaMensualColombia(momento)
 
 	valorUVT, err := q.ValorUVTDelAnio(ctx, int32(anio))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, ErrValorUVTNoVigente
+			return contextoDeLimite{}, ErrValorUVTNoVigente
 		}
-		return 0, fmt.Errorf("nucleo: leer la UVT de %d: %w", anio, err)
+		return contextoDeLimite{}, fmt.Errorf("nucleo: leer la UVT de %d: %w", anio, err)
 	}
 
 	filas, err := q.ReglasLimiteVigentes(ctx, repositorio.ReglasLimiteVigentesParams{
@@ -82,7 +89,7 @@ func verificarLimite(ctx context.Context, q *repositorio.Queries, usuarioID, niv
 		Fecha:    pgtype.Date{Time: momento.In(zonaHorariaCorte), Valid: true},
 	})
 	if err != nil {
-		return 0, fmt.Errorf("nucleo: leer las reglas de límite de %q: %w", nivelKYC, err)
+		return contextoDeLimite{}, fmt.Errorf("nucleo: leer las reglas de límite de %q: %w", nivelKYC, err)
 	}
 	reglas := make([]ReglaLimite, 0, len(filas))
 	for _, fila := range filas {
@@ -101,13 +108,180 @@ func verificarLimite(ctx context.Context, q *repositorio.Queries, usuarioID, niv
 		Hasta:     pgtype.Timestamptz{Time: hasta, Valid: true},
 	})
 	if err != nil {
-		return 0, fmt.Errorf("nucleo: sumar los débitos del mes de %q: %w", usuarioID, err)
+		return contextoDeLimite{}, fmt.Errorf("nucleo: sumar los débitos del mes de %q: %w", usuarioID, err)
 	}
 
-	if err := evaluarLimite(reglas, valorUVT, Centavos(suma), monto); err != nil {
+	return contextoDeLimite{reglas: reglas, valorUVT: valorUVT, acumulado: Centavos(suma)}, nil
+}
+
+// verificarLimite evalúa tope, cupo mensual y GMF dentro de la transacción del envío y devuelve el gravamen (HU-NF-06, criterios 10 a 13).
+func verificarLimite(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, monto Centavos, momento time.Time) (Centavos, error) {
+	contexto, err := leerContextoDeLimite(ctx, q, usuarioID, nivelKYC, momento)
+	if err != nil {
 		return 0, err
 	}
-	return evaluarGMF(reglas, valorUVT, Centavos(suma), monto)
+	if err := evaluarLimite(contexto.reglas, contexto.valorUVT, contexto.acumulado, monto); err != nil {
+		return 0, err
+	}
+	return evaluarGMF(contexto.reglas, contexto.valorUVT, contexto.acumulado, monto)
+}
+
+// MontoMaximoEnviable devuelve lo máximo que el usuario puede enviar sin que el saldo insuficiente por GMF lo sorprenda (HU-NF-06, criterio 14).
+func (s *Servicio) MontoMaximoEnviable(ctx context.Context, usuarioID string, momento time.Time) (Centavos, error) {
+	if s.kyc == nil {
+		return 0, ErrKYCNoDisponible
+	}
+	nivel, err := s.kyc.NivelKYC(ctx, usuarioID)
+	if err != nil {
+		return 0, fmt.Errorf("nucleo: leer el nivel de KYC de %q: %w", usuarioID, err)
+	}
+	return enTransaccion(ctx, s.pool,
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (Centavos, error) {
+			return montoMaximoEnviable(ctx, q, usuarioID, nivel, momento)
+		})
+}
+
+// montoMaximoEnviable lee el contexto del límite y el saldo del emisor, y despeja el mayor monto enviable (HU-NF-06, criterio 14).
+func montoMaximoEnviable(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, momento time.Time) (Centavos, error) {
+	contexto, err := leerContextoDeLimite(ctx, q, usuarioID, nivelKYC, momento)
+	if err != nil {
+		return 0, err
+	}
+	saldo, err := q.SaldoDeCuenta(ctx, NombreCuentaDisponible(usuarioID))
+	if err != nil {
+		return 0, fmt.Errorf("nucleo: leer el saldo de %q: %w", usuarioID, err)
+	}
+	disponible, err := Centavos(0).Restar(Centavos(saldo))
+	if err != nil {
+		return 0, err
+	}
+	return despejeDelTope(contexto, disponible)
+}
+
+// despejeDelTope resuelve los tres casos del criterio y recorta por el tope por operación y el cupo mensual restante (HU-NF-06, criterio 14).
+func despejeDelTope(contexto contextoDeLimite, saldo Centavos) (Centavos, error) {
+	topeMensual, err := topeDeRegla(contexto.reglas, TipoReglaRechaza, VentanaLimiteMensual, contexto.valorUVT)
+	if err != nil {
+		return 0, err
+	}
+	reglaGMF, ok := reglaGMFVigente(contexto.reglas)
+	if !ok {
+		return 0, ErrReglaGMFNoVigente
+	}
+	topeExento, err := centavosDesdeTopeUVT(reglaGMF.TopeUVTCentesimas, contexto.valorUVT)
+	if err != nil {
+		return 0, err
+	}
+	monto, err := montoSinCupo(saldo, contexto.acumulado, topeExento, reglaGMF.TarifaPPM)
+	if err != nil {
+		return 0, err
+	}
+	restante, err := cupoRestante(topeMensual, contexto.acumulado)
+	if err != nil {
+		return 0, err
+	}
+	topeOperacion, err := topeDeRegla(contexto.reglas, TipoReglaRechaza, VentanaLimiteOperacion, contexto.valorUVT)
+	if err != nil {
+		return 0, err
+	}
+	if monto > restante {
+		monto = restante
+	}
+	if monto > topeOperacion {
+		monto = topeOperacion
+	}
+	return monto, nil
+}
+
+// topeDeRegla convierte el tope de la regla vigente del tipo y la ventana pedidos; sin ella falla cerrado (HU-NF-06, criterios 10 y 13).
+func topeDeRegla(reglas []ReglaLimite, tipo, ventana string, valorUVTCentavos int64) (Centavos, error) {
+	for _, regla := range reglas {
+		if regla.Tipo == tipo && regla.Ventana == ventana {
+			return centavosDesdeTopeUVT(regla.TopeUVTCentesimas, valorUVTCentavos)
+		}
+	}
+	if tipo == TipoReglaGrava {
+		return 0, ErrReglaGMFNoVigente
+	}
+	return 0, ErrReglaLimiteNoVigente
+}
+
+// montoSinCupo despeja el mayor monto enviable por saldo y GMF, sin mirar todavía el cupo mensual (HU-NF-06, criterio 14).
+func montoSinCupo(saldo, acumulado, topeExento Centavos, tarifaPPM int64) (Centavos, error) {
+	if saldo <= 0 {
+		return 0, nil
+	}
+	if acumulado < 0 {
+		return 0, ErrMontoInvalido
+	}
+	alcance, err := saldo.Sumar(acumulado)
+	if err != nil {
+		return 0, err
+	}
+	if alcance <= topeExento {
+		return saldo, nil
+	}
+	if acumulado >= topeExento {
+		return despejeConGravamen(saldo, tarifaPPM)
+	}
+	exentoRestante, err := topeExento.Restar(acumulado)
+	if err != nil {
+		return 0, err
+	}
+	resto, err := saldo.Restar(exentoRestante)
+	if err != nil {
+		return 0, err
+	}
+	parteGravada, err := despejeConGravamen(resto, tarifaPPM)
+	if err != nil {
+		return 0, err
+	}
+	return exentoRestante.Sumar(parteGravada)
+}
+
+// cupoRestante es lo que falta del cupo mensual para el acumulado ya aplicado (HU-NF-06, criterio 11).
+func cupoRestante(topeMensual, acumulado Centavos) (Centavos, error) {
+	if acumulado >= topeMensual {
+		return 0, nil
+	}
+	return topeMensual.Restar(acumulado)
+}
+
+// despejeConGravamen es el mayor monto cuyo exigido, el monto más su GMF, no supera el saldo dado (HU-NF-06, criterio 14).
+func despejeConGravamen(saldo Centavos, tarifaPPM int64) (Centavos, error) {
+	if saldo <= 0 {
+		return 0, nil
+	}
+	if saldo.Int64() > math.MaxInt64/ppmEscala {
+		return 0, ErrDesbordamiento
+	}
+	monto := Centavos(saldo.Int64() * ppmEscala / (ppmEscala + tarifaPPM))
+	for {
+		cabe, err := saldoCubre(monto+1, saldo, tarifaPPM)
+		if err != nil {
+			return 0, err
+		}
+		if !cabe {
+			return monto, nil
+		}
+		monto++
+	}
+}
+
+// saldoCubre reporta si el disponible alcanza para el monto más su GMF (HU-NF-06, criterio 13.4).
+func saldoCubre(monto, saldo Centavos, tarifaPPM int64) (bool, error) {
+	if monto <= 0 {
+		return true, nil
+	}
+	gravamen, err := gravamenSobreExceso(monto, tarifaPPM)
+	if err != nil {
+		return false, err
+	}
+	exigido, err := SaldoExigido(monto, gravamen)
+	if err != nil {
+		return false, err
+	}
+	return exigido <= saldo, nil
 }
 
 // evaluarLimite decide sobre reglas ya resueltas: rechaza por operación antes que por mes y solo mira las reglas que rechazan (HU-NF-06, criterios 10 a 12).
@@ -150,23 +324,31 @@ func CuentaExentaGMF(usuarioID string) string {
 	return NombreCuentaDisponible(usuarioID)
 }
 
+// reglaGMFVigente devuelve la regla que grava el mes, la única que aplica el 4x1000 (HU-NF-06, criterio 13).
+func reglaGMFVigente(reglas []ReglaLimite) (ReglaLimite, bool) {
+	for _, regla := range reglas {
+		if regla.Tipo == TipoReglaGrava && regla.Ventana == VentanaLimiteMensual {
+			return regla, true
+		}
+	}
+	return ReglaLimite{}, false
+}
+
 // evaluarGMF devuelve el 4x1000 solo sobre lo que el envío excede del tope exento mensual (HU-NF-06, criterio 13).
 func evaluarGMF(reglas []ReglaLimite, valorUVTCentavos int64, acumulado, monto Centavos) (Centavos, error) {
-	for _, regla := range reglas {
-		if regla.Tipo != TipoReglaGrava || regla.Ventana != VentanaLimiteMensual {
-			continue
-		}
-		topeExento, err := centavosDesdeTopeUVT(regla.TopeUVTCentesimas, valorUVTCentavos)
-		if err != nil {
-			return 0, err
-		}
-		exceso, err := excesoDelEnvio(monto, acumulado, topeExento)
-		if err != nil {
-			return 0, err
-		}
-		return gravamenSobreExceso(exceso, regla.TarifaPPM)
+	regla, ok := reglaGMFVigente(reglas)
+	if !ok {
+		return 0, ErrReglaGMFNoVigente
 	}
-	return 0, ErrReglaGMFNoVigente
+	topeExento, err := centavosDesdeTopeUVT(regla.TopeUVTCentesimas, valorUVTCentavos)
+	if err != nil {
+		return 0, err
+	}
+	exceso, err := excesoDelEnvio(monto, acumulado, topeExento)
+	if err != nil {
+		return 0, err
+	}
+	return gravamenSobreExceso(exceso, regla.TarifaPPM)
 }
 
 // excesoDelEnvio es la parte del envío que cae por encima del tope exento del mes (HU-NF-06, criterio 13).

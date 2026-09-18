@@ -34,6 +34,13 @@ type RespuestaSaldo struct {
 	CalculadoEn time.Time `json:"calculado_en"`
 }
 
+// RespuestaMontoMaximo es el monto máximo enviable en centavos, la moneda y el instante del cálculo (HU-NF-06, criterio 14).
+type RespuestaMontoMaximo struct {
+	Monto       Centavos  `json:"monto"`
+	Moneda      string    `json:"moneda"`
+	CalculadoEn time.Time `json:"calculado_en"`
+}
+
 // crearDepositoRequest es el cuerpo de POST /depositos: monto en centavos, moneda COP y clave del cliente.
 type crearDepositoRequest struct {
 	Monto  Centavos `json:"monto" validate:"required,gt=0"`
@@ -101,6 +108,30 @@ func (h *Handler) Saldo(w http.ResponseWriter, r *http.Request) {
 		Moneda:      MonedaCOP,
 		CalculadoEn: time.Now().UTC(),
 	}, nil)
+}
+
+// MontoMaximo responde cuánto puede enviar el usuario sin que el saldo insuficiente por GMF lo sorprenda (HU-NF-06, criterio 14).
+func (h *Handler) MontoMaximo(w http.ResponseWriter, r *http.Request) {
+	for _, p := range parametrosDeDestino {
+		if r.URL.Query().Has(p) {
+			api.WriteError(w, http.StatusBadRequest, "TargetNotAllowed",
+				"This endpoint only returns the maximum amount of the authenticated user.", nil)
+			return
+		}
+	}
+	usuarioID, ok := identidad.UsuarioIDDeContexto(r.Context())
+	if !ok {
+		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
+		return
+	}
+
+	momento := time.Now().UTC()
+	monto, err := h.servicio.MontoMaximoEnviable(r.Context(), usuarioID, momento)
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	api.WriteData(w, http.StatusOK, RespuestaMontoMaximo{Monto: monto, Moneda: MonedaCOP, CalculadoEn: momento}, nil)
 }
 
 // Movimientos responde una página del historial del usuario autenticado, del más nuevo al más viejo.

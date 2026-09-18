@@ -114,6 +114,17 @@ func TestAuthedRouteRejectsWellFormedBearerWithoutTestHeader(t *testing.T) {
 	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
 }
 
+// La consulta del monto máximo del Criterio 14 vive en el grupo autenticado (HU-NF-06).
+func TestMontoMaximoRouteRequiresAuth(t *testing.T) {
+	r := newTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/transferencias/maximo", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
+}
+
 // Con la credencial de prueba, el handler de /copilot responde 400 por el cuerpo vacío, nunca 401.
 func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 	r := newTestRouter()
