@@ -6,3 +6,4 @@
 .env.local
 custodio.db
 custodio.db-journal
+simulador-custodia.db*

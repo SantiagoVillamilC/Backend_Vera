@@ -62,7 +62,7 @@ func TestRegistrarExtractoCustodioLeeAntesDeLaTransaccionYGuardaLaFila(t *testin
 
 	hecho := make(chan error, 1)
 	go func() {
-		_, err := servicio.RegistrarExtractoCustodio(ctx)
+		_, err := servicio.RegistrarExtractoCustodio(ctx, corte)
 		hecho <- err
 	}()
 
@@ -103,7 +103,7 @@ func TestRegistrarExtractoCustodioSinRespuestaNoEscribeFila(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nucleo.KYCNoDisponible{}, nucleo.RielNoDisponible{},
 		custodiosim.NuevoLectorExtracto(url, nil), nil)
 
-	if _, err := servicio.RegistrarExtractoCustodio(ctx); err == nil {
+	if _, err := servicio.RegistrarExtractoCustodio(ctx, time.Now()); err == nil {
 		t.Fatal("RegistrarExtractoCustodio sin servidor = nil, quiero error para que la corrida siguiente reintente")
 	}
 	if despues := contarExtractos(t, pool); despues != antes {

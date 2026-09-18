@@ -17,20 +17,24 @@ import (
 func TestLectorExtractoLeyElCorteCompleto(t *testing.T) {
 	t.Parallel()
 
-	var metodo, ruta string
+	corte := time.Date(2026, 9, 17, 11, 55, 0, 0, time.UTC)
+	var metodo, ruta, cortePedido string
 	servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		metodo, ruta = r.Method, r.URL.Path
+		metodo, ruta, cortePedido = r.Method, r.URL.Path, r.URL.Query().Get("corte_en")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"corte_en":"2026-09-17T12:00:00Z","saldo_centavos":"9007199254740993","origen":"simulador-custodia"}`)
 	}))
 	defer servidor.Close()
 
-	extracto, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(t.Context())
+	extracto, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(t.Context(), corte)
 	if err != nil {
 		t.Fatalf("Extracto() error = %v", err)
 	}
 	if metodo != http.MethodGet || ruta != "/extracto" {
 		t.Errorf("petición = %s %s, quiero GET /extracto", metodo, ruta)
+	}
+	if cortePedido != corte.Format(time.RFC3339Nano) {
+		t.Errorf("corte_en pedido = %q, quiero %q", cortePedido, corte.Format(time.RFC3339Nano))
 	}
 	if quiero := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC); !extracto.CorteEn.Equal(quiero) {
 		t.Errorf("CorteEn = %v, quiero %v", extracto.CorteEn, quiero)
@@ -68,7 +72,7 @@ func TestLectorExtractoRechazaRespuestasInvalidas(t *testing.T) {
 			}))
 			defer servidor.Close()
 
-			if _, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(t.Context()); err == nil {
+			if _, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(t.Context(), time.Now()); err == nil {
 				t.Fatalf("Extracto() con %s = nil, quiero error", name)
 			}
 		})
@@ -83,7 +87,7 @@ func TestLectorExtractoRechazaUnCuerpoMasGrandeQueElTope(t *testing.T) {
 	}))
 	defer servidor.Close()
 
-	if _, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(t.Context()); err == nil {
+	if _, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(t.Context(), time.Now()); err == nil {
 		t.Fatal("Extracto() con un cuerpo mayor al tope = nil, quiero error")
 	}
 }
@@ -97,7 +101,7 @@ func TestLectorExtractoNoExponeElUserinfoDeLaURL(t *testing.T) {
 	servidor.Close()
 
 	lector := NuevoLectorExtracto("http://usuario:secreto@"+host+"/extracto", &http.Client{Timeout: 2 * time.Second})
-	_, err := lector.Extracto(t.Context())
+	_, err := lector.Extracto(t.Context(), time.Now())
 	if err == nil {
 		t.Fatal("un destino caído debió devolver error")
 	}
@@ -126,7 +130,7 @@ func TestLectorExtractoRespetaElContexto(t *testing.T) {
 	ctx, cancelar := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancelar()
 
-	if _, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(ctx); err == nil {
+	if _, err := NuevoLectorExtracto(servidor.URL+"/extracto", nil).Extracto(ctx, time.Now()); err == nil {
 		t.Fatal("Extracto() con el contexto vencido = nil, quiero error")
 	}
 }

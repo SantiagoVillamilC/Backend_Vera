@@ -109,9 +109,9 @@ type ExtractoCustodio struct {
 	Origen  string
 }
 
-// LectorExtractoCustodio es lo que el núcleo necesita del simulador de custodia.
+// LectorExtractoCustodio es lo que el núcleo necesita del simulador de custodia; el corte lo pide quien llama.
 type LectorExtractoCustodio interface {
-	Extracto(ctx context.Context) (ExtractoCustodio, error)
+	Extracto(ctx context.Context, corteEn time.Time) (ExtractoCustodio, error)
 }
 
 // Servicio es la única puerta a las tablas del núcleo y a su frontera transaccional.
@@ -173,11 +173,11 @@ func (RielNoDisponible) Enviar(context.Context, OrdenRiel) (RespuestaRiel, error
 	return RespuestaRiel{}, ErrRielNoDisponible
 }
 
-// CustodioNoDisponible reemplaza al extracto hasta NF-A5-01.
+// CustodioNoDisponible es el relleno del extracto para las pruebas que no levantan el simulador.
 type CustodioNoDisponible struct{}
 
 // Extracto siempre devuelve ErrCustodioNoDisponible.
-func (CustodioNoDisponible) Extracto(context.Context) (ExtractoCustodio, error) {
+func (CustodioNoDisponible) Extracto(context.Context, time.Time) (ExtractoCustodio, error) {
 	return ExtractoCustodio{}, ErrCustodioNoDisponible
 }
 
@@ -187,8 +187,8 @@ var (
 	ErrKYCNoDisponible = errors.New("nucleo: pendiente: lector de nivel de KYC real")
 	// ErrRielNoDisponible hasta NF-A2-06.
 	ErrRielNoDisponible = errors.New("nucleo: pendiente: NF-A2-06")
-	// ErrCustodioNoDisponible hasta NF-A5-01.
-	ErrCustodioNoDisponible = errors.New("nucleo: pendiente: NF-A5-01")
+	// ErrCustodioNoDisponible reporta que no hay lector de extracto inyectado.
+	ErrCustodioNoDisponible = errors.New("nucleo: extracto del custodio no disponible")
 )
 
 var (

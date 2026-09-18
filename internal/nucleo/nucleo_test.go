@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 )
 
 func TestPresentarUnidadesMayores(t *testing.T) {
@@ -192,7 +193,7 @@ func TestRellenosDevuelvenPendiente(t *testing.T) {
 	if _, err := (RielNoDisponible{}).Enviar(ctx, OrdenRiel{}); !errors.Is(err, ErrRielNoDisponible) {
 		t.Errorf("RielNoDisponible.Enviar error = %v, want ErrRielNoDisponible", err)
 	}
-	if _, err := (CustodioNoDisponible{}).Extracto(ctx); !errors.Is(err, ErrCustodioNoDisponible) {
+	if _, err := (CustodioNoDisponible{}).Extracto(ctx, time.Time{}); !errors.Is(err, ErrCustodioNoDisponible) {
 		t.Errorf("CustodioNoDisponible.Extracto error = %v, want ErrCustodioNoDisponible", err)
 	}
 }

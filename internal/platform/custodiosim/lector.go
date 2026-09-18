@@ -41,9 +41,13 @@ type corteHTTP struct {
 	Origen        string           `json:"origen"`
 }
 
-// Extracto pide el corte completo y rechaza una respuesta sin status 2xx o sin el contrato.
-func (l *LectorExtracto) Extracto(ctx context.Context) (nucleo.ExtractoCustodio, error) {
-	peticion, err := http.NewRequestWithContext(ctx, http.MethodGet, l.url, nil)
+// Extracto pide el corte completo al instante pedido y rechaza una respuesta sin status 2xx o sin el contrato.
+func (l *LectorExtracto) Extracto(ctx context.Context, corteEn time.Time) (nucleo.ExtractoCustodio, error) {
+	destino, err := urlDeCorte(l.url, corteEn)
+	if err != nil {
+		return nucleo.ExtractoCustodio{}, fmt.Errorf("custodiosim: armar la URL del extracto: %w", err)
+	}
+	peticion, err := http.NewRequestWithContext(ctx, http.MethodGet, destino, nil)
 	if err != nil {
 		return nucleo.ExtractoCustodio{}, fmt.Errorf("custodiosim: armar la petición del extracto: %w", err)
 	}
@@ -82,6 +86,18 @@ func (l *LectorExtracto) Extracto(ctx context.Context) (nucleo.ExtractoCustodio,
 		Saldo:   *corte.SaldoCentavos,
 		Origen:  corte.Origen,
 	}, nil
+}
+
+// urlDeCorte agrega el corte pedido como query del endpoint, sin tocar el resto de la URL.
+func urlDeCorte(base string, corteEn time.Time) (string, error) {
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	q.Set("corte_en", corteEn.UTC().Format(time.RFC3339Nano))
+	u.RawQuery = q.Encode()
+	return u.String(), nil
 }
 
 // causaSinURL quita de la causa el *url.Error que arrastraría el userinfo de la URL.
