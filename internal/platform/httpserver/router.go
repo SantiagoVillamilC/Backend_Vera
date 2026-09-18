@@ -68,6 +68,7 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *
 		r.Get("/movimientos", nucleoHandler.Movimientos)
 		r.Get("/transferencias/maximo", nucleoHandler.MontoMaximo)
 		r.Post("/transferencias", nucleoHandler.Transferir)
+		r.Post("/transferencias/interbancarias", nucleoHandler.TransferirInterbancaria)
 		r.Post("/depositos", nucleoHandler.CrearDeposito)
 		r.Get("/depositos/{id}", nucleoHandler.Deposito)
 		r.Post("/copilot", copilotHandler.Chat)

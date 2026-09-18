@@ -361,6 +361,97 @@ func respuestaDeTransferencia(t Transferencia) RespuestaTransferencia {
 	}
 }
 
+// crearTransferenciaInterbancariaRequest es el cuerpo de POST /transferencias/interbancarias: la llave, su tipo, el monto y la clave del cliente.
+type crearTransferenciaInterbancariaRequest struct {
+	TipoLlave      string   `json:"tipo_llave" validate:"required"`
+	Llave          string   `json:"llave" validate:"required,max=320"`
+	Monto          Centavos `json:"monto" validate:"required,gt=0"`
+	Moneda         string   `json:"moneda" validate:"omitempty,eq=COP"`
+	IdempotencyKey string   `json:"idempotency_key" validate:"required,max=128"`
+}
+
+// RespuestaEnvioPorLlave es el envío por llave en proceso que ve el cliente.
+type RespuestaEnvioPorLlave struct {
+	ID            string    `json:"id"`
+	TipoLlave     string    `json:"tipo_llave"`
+	Llave         string    `json:"llave"`
+	Monto         Centavos  `json:"monto"`
+	Moneda        string    `json:"moneda"`
+	Estado        string    `json:"estado"`
+	CreadaEn      time.Time `json:"creada_en"`
+	ActualizadaEn time.Time `json:"actualizada_en"`
+}
+
+// TransferirInterbancaria responde 201 con el envío por llave nuevo y 200 con el ya guardado para la misma clave.
+func (h *Handler) TransferirInterbancaria(w http.ResponseWriter, r *http.Request) {
+	usuarioID, ok := identidad.UsuarioIDDeContexto(r.Context())
+	if !ok {
+		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
+		return
+	}
+	var req crearTransferenciaInterbancariaRequest
+	if !api.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	transferencia, creada, err := h.servicio.TransferirPorLlave(r.Context(), SolicitudEnvioPorLlave{
+		UsuarioID:      usuarioID,
+		CuentaOrigen:   NombreCuentaDisponible(usuarioID),
+		TipoLlave:      req.TipoLlave,
+		Llave:          req.Llave,
+		Monto:          req.Monto,
+		Moneda:         req.Moneda,
+		IdempotencyKey: req.IdempotencyKey,
+	})
+	if err != nil {
+		escribirErrorDeEnvioPorLlave(w, r, err)
+		return
+	}
+	estado := http.StatusOK
+	if creada {
+		estado = http.StatusCreated
+	}
+	api.WriteData(w, estado, respuestaDeEnvioPorLlave(transferencia, req.TipoLlave), nil)
+}
+
+// escribirErrorDeEnvioPorLlave traduce el rechazo del envío por llave al envelope con su código estable.
+func escribirErrorDeEnvioPorLlave(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrLlaveInvalida):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The destination key is not valid.", nil)
+	case errors.Is(err, ErrMontoInvalido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The amount is not a positive integer of minor units.", nil)
+	case errors.Is(err, ErrLlaveNoEncontrada):
+		api.WriteError(w, http.StatusNotFound, "RecipientNotFound", "The destination key does not exist.", nil)
+	case errors.Is(err, ErrDirectorioSinRespuesta), errors.Is(err, ErrDirectorioNoDisponible):
+		api.WriteError(w, http.StatusServiceUnavailable, "DirectoryUnavailable", "The key directory is temporarily unavailable.", nil)
+	case errors.Is(err, ErrSaldoInsuficiente):
+		api.WriteError(w, http.StatusUnprocessableEntity, "InsufficientFunds", "Insufficient funds.", nil)
+	case errors.Is(err, ErrTopeOperacionExcedido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "OperationLimitExceeded", "The amount exceeds the low-balance deposit limit.", nil)
+	case errors.Is(err, ErrCupoMensualExcedido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "MonthlyQuotaExceeded", "The monthly low-balance deposit quota is exhausted.", nil)
+	case errors.Is(err, ErrIdempotenciaEnConflicto):
+		api.WriteError(w, http.StatusConflict, "IdempotencyConflict", "The idempotency key was reused with a different request.", nil)
+	default:
+		api.WriteAPIError(w, r, err)
+	}
+}
+
+// respuestaDeEnvioPorLlave traduce la transferencia del núcleo al DTO de la API, con el tipo de llave de la petición.
+func respuestaDeEnvioPorLlave(t Transferencia, tipoLlave string) RespuestaEnvioPorLlave {
+	return RespuestaEnvioPorLlave{
+		ID:            t.ID.String(),
+		TipoLlave:     tipoLlave,
+		Llave:         t.LlaveDestino,
+		Monto:         t.Monto,
+		Moneda:        t.Moneda,
+		Estado:        t.Estado,
+		CreadaEn:      t.CreadaEn,
+		ActualizadaEn: t.ActualizadaEn,
+	}
+}
+
 // paginacionDeMovimientos lee el cursor y el límite de la URL; un mensaje no vacío es un rechazo.
 func paginacionDeMovimientos(r *http.Request) (*int64, int, string) {
 	limite := limiteHistorialPorDefecto
