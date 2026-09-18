@@ -15,6 +15,63 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ConsentAccion.
+const (
+	ConsentAccionOtorgar ConsentAccion = "otorgar"
+	ConsentAccionRevocar ConsentAccion = "revocar"
+)
+
+// Valid indicates whether the value is a known member of the ConsentAccion enum.
+func (e ConsentAccion) Valid() bool {
+	switch e {
+	case ConsentAccionOtorgar:
+		return true
+	case ConsentAccionRevocar:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsentRequestAccion.
+const (
+	ConsentRequestAccionOtorgar ConsentRequestAccion = "otorgar"
+	ConsentRequestAccionRevocar ConsentRequestAccion = "revocar"
+)
+
+// Valid indicates whether the value is a known member of the ConsentRequestAccion enum.
+func (e ConsentRequestAccion) Valid() bool {
+	switch e {
+	case ConsentRequestAccionOtorgar:
+		return true
+	case ConsentRequestAccionRevocar:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsentimientoTipo.
+const (
+	Biometricos      ConsentimientoTipo = "biometricos"
+	TratamientoDatos ConsentimientoTipo = "tratamiento_datos"
+	WhatsappOptin    ConsentimientoTipo = "whatsapp_optin"
+)
+
+// Valid indicates whether the value is a known member of the ConsentimientoTipo enum.
+func (e ConsentimientoTipo) Valid() bool {
+	switch e {
+	case Biometricos:
+		return true
+	case TratamientoDatos:
+		return true
+	case WhatsappOptin:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConsentsResponseSuccess.
 const (
 	ConsentsResponseSuccessTrue ConsentsResponseSuccess = true
@@ -78,6 +135,33 @@ func (e ContextosResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for DesafioProposito.
+const (
+	DesafioPropositoCambioNumero      DesafioProposito = "cambio_numero"
+	DesafioPropositoCambioNumeroViejo DesafioProposito = "cambio_numero_viejo"
+	DesafioPropositoLogin             DesafioProposito = "login"
+	DesafioPropositoRecuperacion      DesafioProposito = "recuperacion"
+	DesafioPropositoRegistro          DesafioProposito = "registro"
+)
+
+// Valid indicates whether the value is a known member of the DesafioProposito enum.
+func (e DesafioProposito) Valid() bool {
+	switch e {
+	case DesafioPropositoCambioNumero:
+		return true
+	case DesafioPropositoCambioNumeroViejo:
+		return true
+	case DesafioPropositoLogin:
+		return true
+	case DesafioPropositoRecuperacion:
+		return true
+	case DesafioPropositoRegistro:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DesafioResponseSuccess.
 const (
 	DesafioResponseSuccessTrue DesafioResponseSuccess = true
@@ -110,14 +194,17 @@ func (e ErrorResponseSuccess) Valid() bool {
 
 // Defines values for KycEstadoProducto.
 const (
-	KycEstadoProductoBajoMonto KycEstadoProducto = "bajo_monto"
-	KycEstadoProductoPleno     KycEstadoProducto = "pleno"
+	KycEstadoProductoBajoMonto         KycEstadoProducto = "bajo_monto"
+	KycEstadoProductoDepositoOrdinario KycEstadoProducto = "deposito_ordinario"
+	KycEstadoProductoPleno             KycEstadoProducto = "pleno"
 )
 
 // Valid indicates whether the value is a known member of the KycEstadoProducto enum.
 func (e KycEstadoProducto) Valid() bool {
 	switch e {
 	case KycEstadoProductoBajoMonto:
+		return true
+	case KycEstadoProductoDepositoOrdinario:
 		return true
 	case KycEstadoProductoPleno:
 		return true
@@ -143,8 +230,9 @@ func (e KycEstadoResponseSuccess) Valid() bool {
 
 // Defines values for KycVerificacionRequestNivel.
 const (
-	KycVerificacionRequestNivelBajoMonto KycVerificacionRequestNivel = "bajo_monto"
-	KycVerificacionRequestNivelPleno     KycVerificacionRequestNivel = "pleno"
+	KycVerificacionRequestNivelBajoMonto         KycVerificacionRequestNivel = "bajo_monto"
+	KycVerificacionRequestNivelDepositoOrdinario KycVerificacionRequestNivel = "deposito_ordinario"
+	KycVerificacionRequestNivelPleno             KycVerificacionRequestNivel = "pleno"
 )
 
 // Valid indicates whether the value is a known member of the KycVerificacionRequestNivel enum.
@@ -152,7 +240,27 @@ func (e KycVerificacionRequestNivel) Valid() bool {
 	switch e {
 	case KycVerificacionRequestNivelBajoMonto:
 		return true
+	case KycVerificacionRequestNivelDepositoOrdinario:
+		return true
 	case KycVerificacionRequestNivelPleno:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LoginDataProposito.
+const (
+	LoginDataPropositoLogin    LoginDataProposito = "login"
+	LoginDataPropositoRegistro LoginDataProposito = "registro"
+)
+
+// Valid indicates whether the value is a known member of the LoginDataProposito enum.
+func (e LoginDataProposito) Valid() bool {
+	switch e {
+	case LoginDataPropositoLogin:
+		return true
+	case LoginDataPropositoRegistro:
 		return true
 	default:
 		return false
@@ -381,6 +489,21 @@ func (e ResetTokenResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for SegundoMetodoTipo.
+const (
+	CodigoRespaldo SegundoMetodoTipo = "codigo_respaldo"
+)
+
+// Valid indicates whether the value is a known member of the SegundoMetodoTipo enum.
+func (e SegundoMetodoTipo) Valid() bool {
+	switch e {
+	case CodigoRespaldo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SesionResponseSuccess.
 const (
 	SesionResponseSuccessTrue SesionResponseSuccess = true
@@ -470,9 +593,24 @@ func (e VerificacionResponseSuccess) Valid() bool {
 
 // APIError defines model for APIError.
 type APIError struct {
-	// Code Identificador estable del catalogo de errores.
+	// Code Identificador estable del catalogo de errores, en PascalCase. Nunca se compara el
+	// mensaje. Catalogo:
+	// BadRequest (JSON malformado), ValidationError (regla incumplida, con details),
+	// Unauthorized (access vencido o alterado), InvalidCredentials, AccountSuspended,
+	// AccountClosed, OtpInvalid, OtpExpired, ChallengeInvalid, OtpTooManyAttempts,
+	// OtpResendCooldown, RefreshInvalid, RefreshReused, SessionNotFound, NoCompanyRole,
+	// ContextInvalid, ResetInvalid, SecondFactorRequired, KycRequired, ConsentRequired,
+	// DuplicateIdentifier, PhoneUnverified, OtpTooManyResends, PhoneChangeCooldown,
+	// TooManyRequests, NotImplemented, PayloadTooLarge (cuerpo mayor a 1 MiB),
+	// MethodNotAllowed (metodo no permitido), NotFound (recurso inexistente),
+	// AuthUnavailable (fail closed de Redis o del canal),
+	// OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
+	// InternalError (siempre generico). Los identificadores InvalidEmail, InvalidPhone,
+	// InvalidName, WeakPassword e InvalidNit ya no existen: los reemplaza
+	// ValidationError con details[{field, rule, param}].
 	//
-	// Example: INVALID_CREDENTIALS
+	//
+	// Example: InvalidCredentials
 	Code    string        `json:"code"`
 	Details *[]FieldError `json:"details,omitempty"`
 	Message string        `json:"message"`
@@ -480,20 +618,40 @@ type APIError struct {
 
 // Consent defines model for Consent.
 type Consent struct {
-	Aceptado     bool      `json:"aceptado"`
-	Fecha        time.Time `json:"fecha"`
-	Metodo       *string   `json:"metodo,omitempty"`
-	Tipo         string    `json:"tipo"`
-	VersionTexto string    `json:"version_texto"`
+	Accion       ConsentAccion `json:"accion"`
+	Aceptado     bool          `json:"aceptado"`
+	Fecha        time.Time     `json:"fecha"`
+	Metodo       *string       `json:"metodo,omitempty"`
+	Origen       string        `json:"origen"`
+	Texto        string        `json:"texto"`
+	Tipo         string        `json:"tipo"`
+	VersionTexto string        `json:"version_texto"`
 }
+
+// ConsentAccion defines model for Consent.Accion.
+type ConsentAccion string
 
 // ConsentRequest defines model for ConsentRequest.
 type ConsentRequest struct {
-	Aceptado     bool    `json:"aceptado"`
-	Metodo       *string `json:"metodo,omitempty"`
-	Tipo         string  `json:"tipo"`
-	VersionTexto string  `json:"version_texto"`
+	Accion       *ConsentRequestAccion `json:"accion,omitempty" validate:"omitempty,oneof=otorgar revocar"`
+	Aceptado     *bool                 `json:"aceptado" validate:"required"`
+	Metodo       *string               `json:"metodo,omitempty" validate:"omitempty,max=64"`
+	Tipo         string                `json:"tipo" validate:"required"`
+	VersionTexto string                `json:"version_texto" validate:"required,max=64"`
 }
+
+// ConsentRequestAccion defines model for ConsentRequest.Accion.
+type ConsentRequestAccion string
+
+// Consentimiento defines model for Consentimiento.
+type Consentimiento struct {
+	Aceptado     *bool              `json:"aceptado" validate:"required"`
+	Tipo         ConsentimientoTipo `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos"`
+	VersionTexto string             `json:"version_texto" validate:"required,max=64"`
+}
+
+// ConsentimientoTipo defines model for Consentimiento.Tipo.
+type ConsentimientoTipo string
 
 // ConsentsResponse defines model for ConsentsResponse.
 type ConsentsResponse struct {
@@ -511,7 +669,7 @@ type Contexto struct {
 	ContextoId string       `json:"contexto_id"`
 	Nit        *string      `json:"nit,omitempty"`
 	Nombre     string       `json:"nombre"`
-	Rol        *string      `json:"rol,omitempty"`
+	Rol        *string      `json:"rol"`
 	Tipo       ContextoTipo `json:"tipo"`
 }
 
@@ -537,7 +695,7 @@ type ContextoActivoResponseSuccess bool
 
 // ContextoRequest defines model for ContextoRequest.
 type ContextoRequest struct {
-	ContextoId string `json:"contexto_id"`
+	ContextoId string `json:"contexto_id" validate:"required"`
 }
 
 // ContextosResponse defines model for ContextosResponse.
@@ -556,8 +714,12 @@ type Desafio struct {
 	ChallengeId openapi_types.UUID `json:"challenge_id"`
 
 	// ExpiraEnSegundos Example: 300
-	ExpiraEnSegundos int `json:"expira_en_segundos"`
+	ExpiraEnSegundos int              `json:"expira_en_segundos"`
+	Proposito        DesafioProposito `json:"proposito" validate:"required,oneof=registro login recuperacion cambio_numero cambio_numero_viejo"`
 }
+
+// DesafioProposito defines model for Desafio.Proposito.
+type DesafioProposito string
 
 // DesafioResponse defines model for DesafioResponse.
 type DesafioResponse struct {
@@ -592,6 +754,7 @@ type ErrorResponseSuccess bool
 
 // FieldError defines model for FieldError.
 type FieldError struct {
+	// Field Nombre del campo en snake_case, con la ruta anidada si aplica.
 	Field string  `json:"field"`
 	Param *string `json:"param,omitempty"`
 	Rule  string  `json:"rule"`
@@ -620,8 +783,8 @@ type KycEstadoResponseSuccess bool
 
 // KycVerificacionRequest defines model for KycVerificacionRequest.
 type KycVerificacionRequest struct {
-	Nivel     KycVerificacionRequestNivel `json:"nivel"`
-	Proveedor *string                     `json:"proveedor,omitempty"`
+	Nivel     KycVerificacionRequestNivel `json:"nivel" validate:"required,oneof=bajo_monto pleno deposito_ordinario"`
+	Proveedor *string                     `json:"proveedor,omitempty" validate:"omitempty,max=64"`
 }
 
 // KycVerificacionRequestNivel defines model for KycVerificacionRequest.Nivel.
@@ -634,15 +797,19 @@ type LoginData struct {
 	// ExpiraEnSegundos Example: 300
 	ExpiraEnSegundos      int                            `json:"expira_en_segundos"`
 	Mensaje               string                         `json:"mensaje"`
+	Proposito             LoginDataProposito             `json:"proposito" validate:"required,oneof=registro login"`
 	RequiereSegundoFactor LoginDataRequiereSegundoFactor `json:"requiere_segundo_factor"`
 }
+
+// LoginDataProposito defines model for LoginData.Proposito.
+type LoginDataProposito string
 
 // LoginDataRequiereSegundoFactor defines model for LoginData.RequiereSegundoFactor.
 type LoginDataRequiereSegundoFactor bool
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
-	Contexto   *LoginRequestContexto `json:"contexto,omitempty"`
+	Contexto   *LoginRequestContexto `json:"contexto,omitempty" validate:"omitempty,oneof=usuario empresa"`
 	Contrasena string                `json:"contrasena" validate:"required"`
 	Correo     string                `json:"correo" validate:"required,email"`
 }
@@ -686,7 +853,9 @@ type OkResponseSuccess bool
 
 // PhoneChangeRequest defines model for PhoneChangeRequest.
 type PhoneChangeRequest struct {
-	NuevoCelular string `json:"nuevo_celular" validate:"required"`
+	CodigoRespaldo   *string `json:"codigo_respaldo,omitempty" validate:"omitempty"`
+	ContrasenaActual string  `json:"contrasena_actual" validate:"required"`
+	NuevoCelular     string  `json:"nuevo_celular" validate:"required,e164"`
 }
 
 // RecoveryRequest defines model for RecoveryRequest.
@@ -697,21 +866,19 @@ type RecoveryRequest struct {
 // RecoveryResetRequest defines model for RecoveryResetRequest.
 type RecoveryResetRequest struct {
 	NuevaContrasena string `json:"nueva_contrasena" validate:"required,min=8,max=64"`
-	ResetToken      string `json:"reset_token"`
+	ResetToken      string `json:"reset_token" validate:"required"`
 }
 
 // RecoveryVerifyRequest defines model for RecoveryVerifyRequest.
 type RecoveryVerifyRequest struct {
-	ChallengeId openapi_types.UUID `json:"challenge_id"`
-	Codigo      string             `json:"codigo" validate:"required,len=6,numeric"`
-
-	// SegundoMetodo Segundo metodo distinto del codigo. El detalle queda pendiente.
-	SegundoMetodo map[string]interface{} `json:"segundo_metodo"`
+	ChallengeId   openapi_types.UUID `json:"challenge_id" validate:"required"`
+	Codigo        string             `json:"codigo" validate:"required,len=6,number"`
+	SegundoMetodo SegundoMetodo      `json:"segundo_metodo"`
 }
 
 // RefreshRequest defines model for RefreshRequest.
 type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
 // RefreshResponse defines model for RefreshResponse.
@@ -728,11 +895,12 @@ type RefreshResponseSuccess bool
 // RegisterEmpresaRequest defines model for RegisterEmpresaRequest.
 type RegisterEmpresaRequest struct {
 	// Celular Celular del representante legal, ancla del OTP.
-	Celular            string                           `json:"celular" validate:"required"`
+	Celular            string                           `json:"celular" validate:"required,e164"`
+	Consentimientos    []Consentimiento                 `json:"consentimientos" validate:"required,min=1,dive"`
 	Contrasena         string                           `json:"contrasena" validate:"required,min=8,max=64"`
 	Correo             string                           `json:"correo" validate:"required,email"`
-	Nit                string                           `json:"nit" validate:"required"`
-	RazonSocial        string                           `json:"razon_social" validate:"required"`
+	Nit                string                           `json:"nit" validate:"required,nit"`
+	RazonSocial        string                           `json:"razon_social" validate:"required,max=200"`
 	RepresentanteLegal RepresentanteLegal               `json:"representante_legal"`
 	TipoCuenta         RegisterEmpresaRequestTipoCuenta `json:"tipo_cuenta"`
 }
@@ -742,10 +910,11 @@ type RegisterEmpresaRequestTipoCuenta string
 
 // RegisterPersonaRequest defines model for RegisterPersonaRequest.
 type RegisterPersonaRequest struct {
-	Celular         string                              `json:"celular" validate:"required"`
+	Celular         string                              `json:"celular" validate:"required,e164"`
+	Consentimientos []Consentimiento                    `json:"consentimientos" validate:"required,min=1,dive"`
 	Contrasena      string                              `json:"contrasena" validate:"required,min=8,max=64"`
 	Correo          string                              `json:"correo" validate:"required,email"`
-	NombreCompleto  string                              `json:"nombre_completo" validate:"required"`
+	NombreCompleto  string                              `json:"nombre_completo" validate:"required,max=200"`
 	NumeroDocumento string                              `json:"numero_documento" validate:"required"`
 	TipoCuenta      RegisterPersonaRequestTipoCuenta    `json:"tipo_cuenta"`
 	TipoDocumento   RegisterPersonaRequestTipoDocumento `json:"tipo_documento" validate:"required,oneof=CC CE PA"`
@@ -795,7 +964,7 @@ type RegistroResponseSuccess bool
 
 // RepresentanteLegal defines model for RepresentanteLegal.
 type RepresentanteLegal struct {
-	NombreCompleto  string                          `json:"nombre_completo" validate:"required"`
+	NombreCompleto  string                          `json:"nombre_completo" validate:"required,max=200"`
 	NumeroDocumento string                          `json:"numero_documento" validate:"required"`
 	TipoDocumento   RepresentanteLegalTipoDocumento `json:"tipo_documento" validate:"required,oneof=CC CE PA"`
 }
@@ -805,7 +974,7 @@ type RepresentanteLegalTipoDocumento string
 
 // ResendOtpRequest defines model for ResendOtpRequest.
 type ResendOtpRequest struct {
-	ChallengeId openapi_types.UUID `json:"challenge_id"`
+	ChallengeId openapi_types.UUID `json:"challenge_id" validate:"required"`
 }
 
 // ResetToken defines model for ResetToken.
@@ -823,6 +992,15 @@ type ResetTokenResponse struct {
 
 // ResetTokenResponseSuccess defines model for ResetTokenResponse.Success.
 type ResetTokenResponseSuccess bool
+
+// SegundoMetodo defines model for SegundoMetodo.
+type SegundoMetodo struct {
+	Codigo string            `json:"codigo" validate:"required"`
+	Tipo   SegundoMetodoTipo `json:"tipo" validate:"required,oneof=codigo_respaldo"`
+}
+
+// SegundoMetodoTipo defines model for SegundoMetodo.Tipo.
+type SegundoMetodoTipo string
 
 // Sesion defines model for Sesion.
 type Sesion struct {
@@ -866,7 +1044,7 @@ type Usuario struct {
 	Id             openapi_types.UUID `json:"id"`
 	NombreCompleto *string            `json:"nombre_completo,omitempty"`
 	RazonSocial    *string            `json:"razon_social,omitempty"`
-	RolActivo      *string            `json:"rol_activo,omitempty"`
+	RolActivo      *string            `json:"rol_activo"`
 	TipoCuenta     UsuarioTipoCuenta  `json:"tipo_cuenta"`
 }
 
@@ -875,9 +1053,11 @@ type UsuarioTipoCuenta string
 
 // Verificacion defines model for Verificacion.
 type Verificacion struct {
-	Correo string             `json:"correo"`
-	Estado VerificacionEstado `json:"estado"`
-	Id     openapi_types.UUID `json:"id"`
+	// CodigosRespaldo Codigos de respaldo de un solo uso, presentes solo en la activacion.
+	CodigosRespaldo *[]string          `json:"codigos_respaldo,omitempty"`
+	Correo          string             `json:"correo"`
+	Estado          VerificacionEstado `json:"estado"`
+	Id              openapi_types.UUID `json:"id"`
 }
 
 // VerificacionEstado defines model for Verificacion.Estado.
@@ -896,8 +1076,8 @@ type VerificacionResponseSuccess bool
 
 // VerifyOtpRequest defines model for VerifyOtpRequest.
 type VerifyOtpRequest struct {
-	ChallengeId openapi_types.UUID `json:"challenge_id"`
-	Codigo      string             `json:"codigo" validate:"required,len=6,numeric"`
+	ChallengeId openapi_types.UUID `json:"challenge_id" validate:"required"`
+	Codigo      string             `json:"codigo" validate:"required,len=6,number"`
 }
 
 // Error defines model for Error.

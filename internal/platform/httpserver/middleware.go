@@ -18,11 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// RequestID genera en el servidor un id único por petición y lo guarda en el contexto,
-// donde middleware.GetReqID lo lee (logging.WithRequestID lo estampa en cada registro). El
-// X-Request-Id que mande el cliente se ignora a propósito: si se aceptara, un cliente podría
-// fijar el id que aparece en los logs. El id generado también viaja en el header de respuesta
-// para que quien llama pueda correlacionar.
+// RequestID genera un id de petición en el servidor y lo guarda en el contexto, ignorando el X-Request-Id del cliente para que no pueda fijarlo.
 func RequestID() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,13 +30,7 @@ func RequestID() func(http.Handler) http.Handler {
 	}
 }
 
-// Recoverer recupera un panic, lo registra con slog junto a su stack y responde 500 dentro
-// del envelope. Reemplaza a middleware.Recoverer, que escribe un 500 sin cuerpo y rompe el
-// contrato de respuesta. Re-propaga http.ErrAbortHandler para no cambiar el aborto del socket.
-//
-// Un panic que atravesó el Timeout llega envuelto en panicWithStack: se desenvuelve para
-// loguear el stack del punto donde se originó y no el de la goroutine de Timeout que solo
-// re-propaga.
+// Recoverer registra el panic con su stack y responde 500 en el envelope, re-propaga http.ErrAbortHandler y desenvuelve panicWithStack.
 func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -62,20 +52,13 @@ func Recoverer(next http.Handler) http.Handler {
 	})
 }
 
-// panicWithStack lleva el valor del panic recuperado en la goroutine del Timeout junto con
-// el stack del momento en que se originó. Ver Recoverer.
+// panicWithStack lleva el valor del panic recuperado en la goroutine del Timeout junto con su stack de origen.
 type panicWithStack struct {
 	value any
 	stack []byte
 }
 
-// Timeout corre el handler con un deadline. Si vence, responde 504 dentro del envelope y
-// descarta lo que el handler alcance a escribir después: el handler escribe en un buffer
-// propio (timeoutWriter), no en el ResponseWriter real. Un panic del handler se re-propaga
-// en esta goroutine para que el Recoverer de la raíz lo convierta en 500.
-//
-// Si el cliente corta la conexión, el contexto se cancela con context.Canceled: eso no es un
-// vencimiento, no se escribe respuesta (el cliente ya no está leyendo).
+// Timeout corre el handler con deadline y responde 504 en el envelope, descartando lo que el handler escriba después y sin responder si el cliente canceló.
 func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,8 +93,7 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 	}
 }
 
-// timeoutWriter acumula la respuesta del handler para poder descartarla completa si el
-// timeout gana la carrera.
+// timeoutWriter acumula la respuesta del handler para poder descartarla completa si gana el timeout.
 type timeoutWriter struct {
 	header http.Header
 	status int
@@ -151,14 +133,7 @@ func (tw *timeoutWriter) flush(w http.ResponseWriter) {
 	_, _ = w.Write(tw.body.Bytes())
 }
 
-// RequireAuth exige una identidad válida en el grupo autenticado: le pregunta a la
-// implementación inyectada quién es el usuario de la petición y, si la responde, deja su
-// usuario_id en el contexto con identidad.ConUsuarioID. Cualquier error o un id vacío da 401
-// dentro del envelope, de modo que ningún handler autenticado corre sin usuario.
-//
-// La credencial concreta la decide el adaptador, no este middleware: hoy es la cabecera de
-// prueba de auth.UsuarioDePrueba; cuando exista el JWT real, main inyecta el validador que lea
-// Authorization y este código no cambia.
+// RequireAuth exige identidad válida en el grupo autenticado, la deja en el contexto y da 401 en el envelope ante cualquier error o id vacío.
 func RequireAuth(quien IdentidadDeLaPeticion) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -166,19 +141,17 @@ func RequireAuth(quien IdentidadDeLaPeticion) func(http.Handler) http.Handler {
 				api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 				return
 			}
-			usuarioID, err := quien.UsuarioID(r)
-			if err != nil || strings.TrimSpace(usuarioID) == "" {
+			id, err := quien.Identidad(r)
+			if err != nil || strings.TrimSpace(id.UsuarioID) == "" {
 				api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(identidad.ConUsuarioID(r.Context(), usuarioID)))
+			next.ServeHTTP(w, r.WithContext(identidad.ConIdentidad(r.Context(), id)))
 		})
 	}
 }
 
-// clientIPKey da la clave del rate limit. Si el middleware de ClientIP no resolvió una IP
-// (por ejemplo, la petición no trae el header esperado), cae a r.RemoteAddr sin puerto para
-// no colapsar todas esas peticiones en un único bucket.
+// clientIPKey da la clave del rate limit, cayendo a r.RemoteAddr sin puerto si ClientIP no resolvió una IP.
 func clientIPKey(r *http.Request) (string, error) {
 	ip := middleware.GetClientIP(r.Context())
 	if ip == "" {
@@ -191,9 +164,7 @@ func clientIPKey(r *http.Request) (string, error) {
 	return httprate.CanonicalizeIP(ip), nil
 }
 
-// RateLimitExempting aplica el rate limit por IP salvo a los paths indicados. Los probes de
-// un orquestador sondean cada pocos segundos y no deben consumir ni ser bloqueados por el
-// bucket compartido: sin la excepción, un prober recibe 429.
+// RateLimitExempting aplica el rate limit por IP salvo a los paths exentos, para que los probes no consuman el bucket compartido.
 func RateLimitExempting(exemptPaths []string, requests int, window time.Duration) func(http.Handler) http.Handler {
 	exempt := make(map[string]struct{}, len(exemptPaths))
 	for _, p := range exemptPaths {
@@ -214,13 +185,7 @@ func RateLimitExempting(exemptPaths []string, requests int, window time.Duration
 	}
 }
 
-// MethodNotAllowedEnvelope responde el 405 dentro del envelope conservando el header Allow.
-// El handler por defecto de chi lo arma a partir de los métodos registrados para la ruta y
-// después escribe 405 (mux.go: methodNotAllowedHandler); ese listado vive en
-// rctx.methodsAllowed, que no tiene accesor exportado, así que en vez de reimplementarlo se
-// intercepta la respuesta: se deja pasar el WriteHeader del handler propio y, si fue un 405,
-// se reemplaza el cuerpo por el envelope sobre el mismo ResponseWriter, con el Allow que chi
-// ya había puesto en los headers.
+// MethodNotAllowedEnvelope reemplaza el 405 de chi por el envelope sobre el mismo ResponseWriter, conservando el header Allow.
 func MethodNotAllowedEnvelope(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mw := &methodNotAllowedWriter{ResponseWriter: w}
@@ -231,15 +196,13 @@ func MethodNotAllowedEnvelope(next http.Handler) http.Handler {
 	})
 }
 
-// methodNotAllowedWriter retiene el 405 del handler por defecto de chi para que
-// MethodNotAllowedEnvelope lo reemplace por el envelope, conservando headers previos (Allow).
+// methodNotAllowedWriter retiene el 405 del handler de chi para que MethodNotAllowedEnvelope lo reemplace por el envelope.
 type methodNotAllowedWriter struct {
 	http.ResponseWriter
 	intercepted bool
 }
 
-// WriteHeader intercepta el 405: no lo reenvía, lo marca para que el envelope se escriba al
-// volver del handler.
+// WriteHeader intercepta el 405 y lo marca para que el envelope se escriba al volver del handler.
 func (mw *methodNotAllowedWriter) WriteHeader(status int) {
 	if status == http.StatusMethodNotAllowed {
 		mw.intercepted = true

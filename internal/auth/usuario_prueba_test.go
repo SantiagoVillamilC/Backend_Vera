@@ -5,19 +5,25 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 )
 
-func TestUsuarioDePruebaUsuarioID(t *testing.T) {
+func TestUsuarioDePruebaIdentidad(t *testing.T) {
 	adapter := UsuarioDePrueba{}
 
 	tests := map[string]struct {
 		preparar  func(*http.Request)
-		wantID    string
+		want      identidad.Identidad
 		wantError error
 	}{
 		"cabecera con valor": {
 			preparar: func(r *http.Request) { r.Header.Set(CabeceraUsuarioDePrueba, "1") },
-			wantID:   UsuarioDePruebaID,
+			want: identidad.Identidad{
+				UsuarioID: UsuarioDePruebaID,
+				SesionID:  UsuarioDePruebaSesionID,
+				Contexto:  "usuario",
+			},
 		},
 		"sin cabecera": {
 			preparar:  func(*http.Request) {},
@@ -42,13 +48,13 @@ func TestUsuarioDePruebaUsuarioID(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			tc.preparar(req)
 
-			got, err := adapter.UsuarioID(req)
+			got, err := adapter.Identidad(req)
 
 			if !errors.Is(err, tc.wantError) {
 				t.Fatalf("error = %v, quiero %v", err, tc.wantError)
 			}
-			if got != tc.wantID {
-				t.Fatalf("usuarioID = %q, quiero %q", got, tc.wantID)
+			if got != tc.want {
+				t.Fatalf("identidad = %+v, quiero %+v", got, tc.want)
 			}
 		})
 	}

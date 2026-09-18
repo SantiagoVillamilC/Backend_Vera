@@ -4,12 +4,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/repositorio"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -23,19 +21,11 @@ const (
 	rateLimitWindow   = time.Minute
 )
 
-// NewRouter arma el árbol de rutas con la cadena de middleware y el envelope común.
-//
-// El orden de la cadena es deliberado: RequestID (server-generated) primero, luego un
-// único ClientIPFrom* (nginx sobrescribe X-Real-IP con el peer TCP en
-// infra/servidor/pasos/30-nginx.sh y el puerto de la API no se publica, así que el header
-// no es falsificable desde fuera), el logger de acceso, Recoverer, CORS en la raíz, el rate
-// limit (que exceptúa /healthz y /readyz para no bloquear a un prober) y por último el
-// envoltorio del 405, que conserva el Allow. Recoverer y Timeout son propios y responden
-// dentro del envelope.
-//
-// quien resuelve la identidad del grupo autenticado. Lo construye main y lo inyecta: hoy el
-// adaptador de usuario de prueba, mañana el validador de JWT real.
-func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion) http.Handler {
+// NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
+func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth) http.Handler {
+	if autenticadorCustodio == nil {
+		panic(ErrCustodioNulo)
+	}
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
@@ -44,35 +34,48 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion) http.Handler {
 	r.Use(Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Test-User"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))
 	r.Use(MethodNotAllowedEnvelope)
 
-	authHandler := auth.NewHandler(auth.NewService(repositorio.New(pool)))
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
+	nucleoHandler := nucleo.NewHandler(nucleoServicio)
+	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(publicTimeout))
-		r.Post("/login", authHandler.Login)
-		r.Post("/register", authHandler.Register)
-		r.Post("/mfa/verify", authHandler.VerifyMFA)
+		r.Post("/v1/auth/register", sinImplementar)
+		r.Post("/v1/auth/register/verify-phone", sinImplementar)
+		r.Post("/v1/auth/otp/resend", sinImplementar)
+		r.Post("/v1/auth/login", sinImplementar)
+		r.Post("/v1/auth/login/verify-otp", sinImplementar)
+		r.Post("/v1/auth/refresh", sinImplementar)
+		r.Post("/v1/auth/recovery/request", sinImplementar)
+		r.Post("/v1/auth/recovery/verify", sinImplementar)
+		r.Post("/v1/auth/recovery/reset", sinImplementar)
 		r.Get("/healthz", health.Live)
 		r.Get("/readyz", health.Ready)
 	})
 
-	// Grupo autenticado: Timeout y RequireAuth solo acá. Copilot y receipts llaman
-	// clientes externos con su propio presupuesto de retry, por eso el Timeout mayor.
+	// Grupo autenticado: RequireAuth deja la identidad completa y solo acá corre.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
-		r.Use(RequireAuth(quien))
+		r.Use(RequireAuth(authDeps.Identidad))
+		r.Get("/saldo", nucleoHandler.Saldo)
+		r.Get("/movimientos", nucleoHandler.Movimientos)
+		r.Get("/transferencias/maximo", nucleoHandler.MontoMaximo)
+		r.Post("/transferencias", nucleoHandler.Transferir)
+		r.Post("/depositos", nucleoHandler.CrearDeposito)
+		r.Get("/depositos/{id}", nucleoHandler.Deposito)
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
+		api.HandlerWithOptions(srv, api.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: api.ParamError})
 	})
 
 	// Los handlers por defecto de chi responden texto plano, que rompería el envelope. El

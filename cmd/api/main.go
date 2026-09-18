@@ -56,8 +56,10 @@ func run() error {
 	// swap a JWT real es construir acá otro IdentidadDeLaPeticion con cfg.JWTSecret; el router
 	// y los handlers no cambian.
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouter(pool, auth.UsuarioDePrueba{}),
+		Addr: ":" + cfg.Port,
+		Handler: httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), httpserver.DependenciasAuth{
+			Identidad: auth.UsuarioDePrueba{},
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del grupo autenticado, si no el server corta el
