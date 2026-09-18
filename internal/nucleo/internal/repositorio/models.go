@@ -30,6 +30,12 @@ type Deposito struct {
 	ActualizadaEn  pgtype.Timestamptz `json:"actualizada_en"`
 }
 
+type ExtractoCustodio struct {
+	CorteEn pgtype.Timestamptz `json:"corte_en"`
+	Saldo   int64              `json:"saldo"`
+	Origen  string             `json:"origen"`
+}
+
 type JournalEntry struct {
 	ID              int64              `json:"id"`
 	Tipo            string             `json:"tipo"`

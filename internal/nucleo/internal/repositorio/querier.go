@@ -17,6 +17,7 @@ type Querier interface {
 	ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error)
 	InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error)
 	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)
+	InsertarExtractoCustodio(ctx context.Context, arg InsertarExtractoCustodioParams) error
 	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error)
 	InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error)
 	InsertarTransferencia(ctx context.Context, arg InsertarTransferenciaParams) (Transferencia, error)

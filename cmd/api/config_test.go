@@ -318,3 +318,40 @@ func TestLoadConfigExpiracionInterval(t *testing.T) {
 		})
 	}
 }
+
+// NF-A5-01: la URL del extracto del custodio es opcional y se valida como http(s) absoluta.
+func TestLoadConfigExtractoDelCustodio(t *testing.T) {
+	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
+
+	tests := map[string]struct {
+		url     string
+		wantErr bool
+	}{
+		"por defecto vacia": {},
+		"http valida":       {url: "http://127.0.0.1:8099/extracto"},
+		"relativa":          {url: "/extracto", wantErr: true},
+		"esquema ajeno":     {url: "ftp://127.0.0.1/extracto", wantErr: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+			t.Setenv("JWT_SECRET", jwt)
+			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			t.Setenv("CUSTODIO_EXTRACTO_URL", tc.url)
+
+			cfg, err := LoadConfig()
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "CUSTODIO_EXTRACTO_URL") {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga CUSTODIO_EXTRACTO_URL", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.CustodioExtractoURL != tc.url {
+				t.Errorf("CustodioExtractoURL = %q, quiero %q", cfg.CustodioExtractoURL, tc.url)
+			}
+		})
+	}
+}

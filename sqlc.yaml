@@ -23,6 +23,7 @@ sql:
       - bd/migraciones/0010_create_deposito.sql
       - bd/migraciones/0013_create_transferencia.sql
       - bd/migraciones/0014_create_regla_limite_y_valor_uvt.sql
+      - bd/migraciones/0015_create_extracto_custodio.sql
       - bd/migraciones/0016_create_gmf_rule.sql
     queries: bd/consultas-nucleo
     gen:
@@ -40,6 +41,7 @@ sql:
           nucleo_journal_entry: JournalEntry
           nucleo_posting: Posting
           nucleo_deposito: Deposito
+          nucleo_extracto_custodio: ExtractoCustodio
           nucleo_transferencium: Transferencia
           nucleo_regla_limite: ReglaLimite
           nucleo_valor_uvt: ValorUvt

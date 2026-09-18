@@ -15,6 +15,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
@@ -57,12 +58,12 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// Rellenos de lo que aún no existe (riel NF-A2-06, custodio NF-A5-01).
+	// Rellenos de lo que aún no existe (KYC real y riel NF-A2-06); el extracto del custodio es real.
 	servicio := nucleo.NewServicio(
 		pool,
 		nucleo.KYCNoDisponible{},
 		nucleo.RielNoDisponible{},
-		nucleo.CustodioNoDisponible{},
+		custodiosim.NuevoLectorExtracto(cfg.CustodioExtractoURL, nil),
 		observabilidad.RastreadorSlog{},
 	)
 

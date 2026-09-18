@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ type Config struct {
 	AppDatabaseURL        string
 	JWTSecret             string
 	CustodioToken         string
+	CustodioExtractoURL   string
 	GroqAPIKey            string
 	OpenAIAPIKey          string
 	OCRWorkerURL          string
@@ -34,15 +36,16 @@ type Config struct {
 // LoadConfig valida el entorno y reporta todos los errores juntos.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		Port:           envOr("PORT", "8080"),
-		AppDatabaseURL: os.Getenv("APP_DATABASE_URL"),
-		JWTSecret:      os.Getenv("JWT_SECRET"),
-		CustodioToken:  os.Getenv("CUSTODIO_TOKEN"),
-		GroqAPIKey:     os.Getenv("GROQ_API_KEY"),
-		OpenAIAPIKey:   os.Getenv("OPENAI_API_KEY"),
-		OCRWorkerURL:   os.Getenv("OCR_WORKER_URL"),
-		LogLevel:       envOr("LOG_LEVEL", "info"),
-		LogFormat:      envOr("LOG_FORMAT", "json"),
+		Port:                envOr("PORT", "8080"),
+		AppDatabaseURL:      os.Getenv("APP_DATABASE_URL"),
+		JWTSecret:           os.Getenv("JWT_SECRET"),
+		CustodioToken:       os.Getenv("CUSTODIO_TOKEN"),
+		CustodioExtractoURL: os.Getenv("CUSTODIO_EXTRACTO_URL"),
+		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
+		OpenAIAPIKey:        os.Getenv("OPENAI_API_KEY"),
+		OCRWorkerURL:        os.Getenv("OCR_WORKER_URL"),
+		LogLevel:            envOr("LOG_LEVEL", "info"),
+		LogFormat:           envOr("LOG_FORMAT", "json"),
 	}
 
 	var errs []error
@@ -67,6 +70,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.CustodioToken != "" && cfg.CustodioToken == cfg.JWTSecret {
 		errs = append(errs, fmt.Errorf("CUSTODIO_TOKEN must differ from JWT_SECRET"))
+	}
+	if err := urlOpcional("CUSTODIO_EXTRACTO_URL", cfg.CustodioExtractoURL); err != nil {
+		errs = append(errs, err)
 	}
 	var lvl slog.Level
 	if err := lvl.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
@@ -126,6 +132,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("app_database_url_set", c.AppDatabaseURL != ""),
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
 		slog.Bool("custodio_token_set", c.CustodioToken != ""),
+		slog.Bool("custodio_extracto_url_set", c.CustodioExtractoURL != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
 		slog.Bool("openai_api_key_set", c.OpenAIAPIKey != ""),
 		slog.Bool("ocr_worker_url_set", c.OCRWorkerURL != ""),
@@ -149,6 +156,18 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// urlOpcional valida una URL http(s) absoluta solo cuando la variable trae un valor.
+func urlOpcional(key, valor string) error {
+	if valor == "" {
+		return nil
+	}
+	u, err := url.Parse(valor)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("%s must be an absolute http(s) URL, got %q", key, valor)
+	}
+	return nil
 }
 
 // centavosOr parsea una cifra de dinero en unidades menores y nombra la variable si no es entera.
