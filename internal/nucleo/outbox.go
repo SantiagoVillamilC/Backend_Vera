@@ -20,7 +20,7 @@ const TipoOutboxDespachoTransferencia = "despacho_transferencia"
 // longitudLoteOutbox es cuántas filas toma cada barrido, el mismo tope del ejemplo del capítulo 10.
 const longitudLoteOutbox = 50
 
-// plazoEntregaRiel es el plazo de la llamada al riel y la ventana que se adelanta al reclamar la fila (Criterio 16).
+// plazoEntregaRiel es el plazo máximo de la llamada al riel (Criterio 16).
 const plazoEntregaRiel = 20 * time.Second
 
 // arriendoEntregaRiel supera a plazoEntregaRiel para que otra pasada no reclame una fila todavía en vuelo.
@@ -67,6 +67,7 @@ func (p PoliticaReintentoOutbox) saneada() PoliticaReintentoOutbox {
 // despachoReclamado es una fila de outbox ya registrada como en vuelo, lista para entregar al riel.
 type despachoReclamado struct {
 	outbox          repositorio.Outbox
+	transferencia   repositorio.Transferencia
 	transferenciaID uuid.UUID
 }
 
@@ -160,7 +161,14 @@ func reclamarDespacho(ctx context.Context, q *repositorio.Queries, fila reposito
 	if payload.TransferenciaID == uuid.Nil {
 		return despachoReclamado{}, fmt.Errorf("nucleo: el outbox %d no trae transferencia_id", fila.ID)
 	}
-	if err := asentarDespacho(ctx, q, payload.TransferenciaID); err != nil {
+	transferencia, err := q.ObtenerTransferencia(ctx, pgtype.UUID{Bytes: payload.TransferenciaID, Valid: true})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return despachoReclamado{}, fmt.Errorf("nucleo: la transferencia %s del outbox no existe", payload.TransferenciaID)
+		}
+		return despachoReclamado{}, fmt.Errorf("nucleo: leer la transferencia %s del outbox: %w", payload.TransferenciaID, err)
+	}
+	if err := asentarDespacho(ctx, q, transferencia); err != nil {
 		return despachoReclamado{}, err
 	}
 	filas, err := q.AvanzarVentanaOutbox(ctx, repositorio.AvanzarVentanaOutboxParams{
@@ -173,23 +181,16 @@ func reclamarDespacho(ctx context.Context, q *repositorio.Queries, fila reposito
 	if filas != 1 {
 		return despachoReclamado{}, fmt.Errorf("nucleo: la ventana del outbox %d no quedó adelantada", fila.ID)
 	}
-	return despachoReclamado{outbox: fila, transferenciaID: payload.TransferenciaID}, nil
+	return despachoReclamado{outbox: fila, transferencia: transferencia, transferenciaID: payload.TransferenciaID}, nil
 }
 
 // asentarDespacho pasa la transferencia a despachada y escribe el asiento 3 una sola vez, con el compare-and-set como exclusión.
-func asentarDespacho(ctx context.Context, q *repositorio.Queries, transferenciaID uuid.UUID) error {
-	transferencia, err := q.ObtenerTransferencia(ctx, pgtype.UUID{Bytes: transferenciaID, Valid: true})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("nucleo: la transferencia %s del outbox no existe", transferenciaID)
-		}
-		return fmt.Errorf("nucleo: leer la transferencia %s del outbox: %w", transferenciaID, err)
-	}
+func asentarDespacho(ctx context.Context, q *repositorio.Queries, transferencia repositorio.Transferencia) error {
 	if transferencia.Estado == EstadoTransferenciaDespachada {
 		return nil
 	}
 	if transferencia.Estado != EstadoTransferenciaReservada {
-		return fmt.Errorf("nucleo: la transferencia %s está en %q, no se puede despachar", transferenciaID, transferencia.Estado)
+		return fmt.Errorf("nucleo: la transferencia %s está en %q, no se puede despachar", uuid.UUID(transferencia.ID.Bytes), transferencia.Estado)
 	}
 	if _, err := q.AvanzarEstadoTransferencia(ctx, repositorio.AvanzarEstadoTransferenciaParams{
 		ID:             transferencia.ID,
@@ -199,7 +200,7 @@ func asentarDespacho(ctx context.Context, q *repositorio.Queries, transferenciaI
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-		return fmt.Errorf("nucleo: marcar despachada la transferencia %s: %w", transferenciaID, err)
+		return fmt.Errorf("nucleo: marcar despachada la transferencia %s: %w", uuid.UUID(transferencia.ID.Bytes), err)
 	}
 	return escribirAsientoDeDespacho(ctx, q, transferencia)
 }
@@ -233,20 +234,31 @@ func escribirAsientoDeDespacho(ctx context.Context, q *repositorio.Queries, tran
 
 // entregarAlRiel envía la orden y registra el resultado del envío, sin abrir transacción durante la llamada.
 func (s *Servicio) entregarAlRiel(ctx context.Context, reclamada despachoReclamado) error {
-	if _, err := s.enviarAlRiel(ctx); err != nil {
+	if _, err := s.enviarAlRiel(ctx, reclamada.transferencia); err != nil {
 		return s.reintentarDespacho(ctx, reclamada, err)
 	}
 	return s.marcarDespachado(ctx, reclamada)
 }
 
 // enviarAlRiel entrega la orden con el plazo del Criterio 16 y sin ninguna operación de base abierta.
-func (s *Servicio) enviarAlRiel(ctx context.Context) (RespuestaRiel, error) {
+func (s *Servicio) enviarAlRiel(ctx context.Context, transferencia repositorio.Transferencia) (RespuestaRiel, error) {
 	if s.riel == nil {
 		return RespuestaRiel{}, errors.New("nucleo: no hay riel configurado")
 	}
 	ctxRiel, cancel := context.WithTimeout(ctx, plazoEntregaRiel)
 	defer cancel()
-	return s.riel.Enviar(ctxRiel, OrdenRiel{})
+	return s.riel.Enviar(ctxRiel, ordenDeTransferencia(transferencia))
+}
+
+// ordenDeTransferencia arma la orden con lo que el riel necesita para ejecutar y reconocer un reenvío.
+func ordenDeTransferencia(transferencia repositorio.Transferencia) OrdenRiel {
+	return OrdenRiel{
+		TransferenciaID: uuid.UUID(transferencia.ID.Bytes),
+		IdempotencyKey:  transferencia.IdempotencyKey,
+		Llave:           transferencia.LlaveDestino,
+		Monto:           Centavos(transferencia.Monto),
+		Moneda:          transferencia.Moneda,
+	}
 }
 
 // reintentarDespacho empuja la ventana con espera creciente y guarda el último error, sin tocar el asiento.

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // dbDeOutbox es un doble escrito a mano que registra el INSERT de la intención de despacho.
@@ -56,6 +57,43 @@ func TestEncolarDespachoEscribeLaIntencion(t *testing.T) {
 	}
 	if payload.TransferenciaID != transferenciaID {
 		t.Errorf("transferencia_id = %s, quiero %s", payload.TransferenciaID, transferenciaID)
+	}
+}
+
+// M3: ordenDeTransferencia mapea campo por campo lo que el riel necesita, con datos distinguibles.
+func TestOrdenDeTransferenciaMapeaCadaCampo(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.New()
+	transferencia := repositorio.Transferencia{
+		ID:             pgtype.UUID{Bytes: id, Valid: true},
+		UsuarioID:      "usuario-9f",
+		CuentaOrigen:   "pasivo:usuario:usuario-9f:disponible",
+		LlaveDestino:   "llave-destino-77",
+		Monto:          1234567,
+		Moneda:         "COP",
+		IdempotencyKey: "idem-abc",
+		Estado:         EstadoTransferenciaReservada,
+	}
+
+	orden := ordenDeTransferencia(transferencia)
+	if orden.TransferenciaID != id {
+		t.Errorf("TransferenciaID = %s, quiero %s", orden.TransferenciaID, id)
+	}
+	if orden.IdempotencyKey != transferencia.IdempotencyKey {
+		t.Errorf("IdempotencyKey = %q, quiero %q", orden.IdempotencyKey, transferencia.IdempotencyKey)
+	}
+	if orden.Llave != transferencia.LlaveDestino {
+		t.Errorf("Llave = %q, quiero %q (la llave destino, no otra columna)", orden.Llave, transferencia.LlaveDestino)
+	}
+	if orden.Llave == transferencia.CuentaOrigen {
+		t.Error("Llave salió de CuentaOrigen")
+	}
+	if orden.Monto != Centavos(transferencia.Monto) {
+		t.Errorf("Monto = %d, quiero %d", orden.Monto, transferencia.Monto)
+	}
+	if orden.Moneda != transferencia.Moneda {
+		t.Errorf("Moneda = %q, quiero %q", orden.Moneda, transferencia.Moneda)
 	}
 }
 

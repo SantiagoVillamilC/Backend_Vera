@@ -320,6 +320,45 @@ func TestConfigLogValueRegistraA6(t *testing.T) {
 	}
 }
 
+// NF-A2-06: la URL del simulador del riel es opcional y debe ser un origen http(s) sin ruta.
+func TestLoadConfigRielSimulado(t *testing.T) {
+	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
+
+	tests := map[string]struct {
+		url     string
+		wantErr bool
+	}{
+		"por defecto vacia": {},
+		"http valida":       {url: "http://127.0.0.1:8098"},
+		"con barra final":   {url: "http://127.0.0.1:8098/"},
+		"con ruta":          {url: "http://127.0.0.1:8098/transferencias", wantErr: true},
+		"relativa":          {url: "/transferencias", wantErr: true},
+		"esquema ajeno":     {url: "ftp://127.0.0.1/transferencias", wantErr: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+			t.Setenv("JWT_SECRET", jwt)
+			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			t.Setenv("RIEL_SIMULADOR_URL", tc.url)
+
+			cfg, err := LoadConfig()
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "RIEL_SIMULADOR_URL") {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga RIEL_SIMULADOR_URL", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.RielSimuladorURL != tc.url {
+				t.Errorf("RielSimuladorURL = %q, quiero %q", cfg.RielSimuladorURL, tc.url)
+			}
+		})
+	}
+}
+
 // NF-A1-07.3: EXPIRACION_INTERVAL por defecto en 60s y siempre positiva, como las demás cadencias.
 func TestLoadConfigExpiracionInterval(t *testing.T) {
 	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"

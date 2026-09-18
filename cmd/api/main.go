@@ -21,6 +21,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/observabilidad"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/rielsim"
 )
 
 // tokenEstatico es el token del custodio simulado, comparado en tiempo constante.
@@ -58,11 +59,15 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// Rellenos de lo que aún no existe (KYC real y riel NF-A2-06); el extracto del custodio es real.
+	// Rellenos de lo que aún no existe (KYC real); el extracto del custodio y el riel son reales cuando hay URL.
+	var riel nucleo.Riel = nucleo.RielNoDisponible{}
+	if cfg.RielSimuladorURL != "" {
+		riel = rielsim.NuevoRiel(cfg.RielSimuladorURL, nil)
+	}
 	servicio := nucleo.NewServicio(
 		pool,
 		nucleo.KYCNoDisponible{},
-		nucleo.RielNoDisponible{},
+		riel,
 		custodiosim.NuevoLectorExtracto(cfg.CustodioExtractoURL, nil),
 		observabilidad.RastreadorSlog{},
 		nucleo.ConPoliticaReintentoOutbox(nucleo.PoliticaReintentoOutbox{

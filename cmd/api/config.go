@@ -20,6 +20,7 @@ type Config struct {
 	JWTSecret             string
 	CustodioToken         string
 	CustodioExtractoURL   string
+	RielSimuladorURL      string
 	GroqAPIKey            string
 	OpenAIAPIKey          string
 	OCRWorkerURL          string
@@ -45,6 +46,7 @@ func LoadConfig() (*Config, error) {
 		JWTSecret:           os.Getenv("JWT_SECRET"),
 		CustodioToken:       os.Getenv("CUSTODIO_TOKEN"),
 		CustodioExtractoURL: os.Getenv("CUSTODIO_EXTRACTO_URL"),
+		RielSimuladorURL:    os.Getenv("RIEL_SIMULADOR_URL"),
 		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
 		OpenAIAPIKey:        os.Getenv("OPENAI_API_KEY"),
 		OCRWorkerURL:        os.Getenv("OCR_WORKER_URL"),
@@ -76,6 +78,9 @@ func LoadConfig() (*Config, error) {
 		errs = append(errs, fmt.Errorf("CUSTODIO_TOKEN must differ from JWT_SECRET"))
 	}
 	if err := urlOpcional("CUSTODIO_EXTRACTO_URL", cfg.CustodioExtractoURL); err != nil {
+		errs = append(errs, err)
+	}
+	if err := urlOrigenOpcional("RIEL_SIMULADOR_URL", cfg.RielSimuladorURL); err != nil {
 		errs = append(errs, err)
 	}
 	var lvl slog.Level
@@ -150,6 +155,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
 		slog.Bool("custodio_token_set", c.CustodioToken != ""),
 		slog.Bool("custodio_extracto_url_set", c.CustodioExtractoURL != ""),
+		slog.Bool("riel_simulador_url_set", c.RielSimuladorURL != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
 		slog.Bool("openai_api_key_set", c.OpenAIAPIKey != ""),
 		slog.Bool("ocr_worker_url_set", c.OCRWorkerURL != ""),
@@ -186,6 +192,21 @@ func urlOpcional(key, valor string) error {
 	u, err := url.Parse(valor)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("%s must be an absolute http(s) URL, got %q", key, valor)
+	}
+	return nil
+}
+
+// urlOrigenOpcional exige además que la URL no traiga ruta: el cliente del riel arma sus rutas.
+func urlOrigenOpcional(key, valor string) error {
+	if valor == "" {
+		return nil
+	}
+	u, err := url.Parse(valor)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("%s must be an absolute http(s) URL, got %q", key, valor)
+	}
+	if u.Path != "" && u.Path != "/" {
+		return fmt.Errorf("%s must be the origin without a path, got %q", key, valor)
 	}
 	return nil
 }

@@ -57,6 +57,11 @@ func (r *rielDoble) Llamadas() int {
 	return r.llamadas
 }
 
+// ConsultarEstado del doble no se usa en estas pruebas y devuelve sin registro.
+func (r *rielDoble) ConsultarEstado(context.Context, uuid.UUID) (RespuestaRiel, error) {
+	return RespuestaRiel{}, ErrRielSinRegistro
+}
+
 // sembrarReservaConOutbox deja una transferencia reservada, su retención y su fila de outbox en una sola transacción.
 func sembrarReservaConOutbox(t *testing.T, ctx context.Context, pool *pgxpool.Pool, usuario string, monto Centavos) (uuid.UUID, int64) {
 	t.Helper()

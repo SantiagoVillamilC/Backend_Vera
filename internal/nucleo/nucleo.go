@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -91,15 +92,39 @@ type LectorNivelKYC interface {
 	NivelKYC(ctx context.Context, usuarioID string) (string, error)
 }
 
-// OrdenRiel es lo que el núcleo le manda al riel; sus campos llegan con NF-A2-06.
-type OrdenRiel struct{}
+// OrdenRiel es la instrucción de transferencia que el núcleo le entrega al riel.
+type OrdenRiel struct {
+	TransferenciaID uuid.UUID `json:"transferencia_id"`
+	IdempotencyKey  string    `json:"idempotency_key"`
+	Llave           string    `json:"llave"`
+	Monto           Centavos  `json:"monto_centavos"`
+	Moneda          string    `json:"moneda"`
+}
 
-// RespuestaRiel es lo que el riel devuelve; sus campos llegan con NF-A2-06.
-type RespuestaRiel struct{}
+// ResultadoRiel es el desenlace definitivo que el riel reporta para una orden.
+type ResultadoRiel string
+
+// Los dos desenlaces definitivos que el riel reporta.
+const (
+	ResultadoConfirmado ResultadoRiel = "confirmada"
+	ResultadoRechazado  ResultadoRiel = "rechazada"
+)
+
+// RespuestaRiel es lo que el riel devuelve al recibir una orden o al consultarle su estado.
+type RespuestaRiel struct {
+	TransferenciaID uuid.UUID     `json:"transferencia_id"`
+	Resultado       ResultadoRiel `json:"resultado"`
+	Motivo          string        `json:"motivo,omitempty"`
+	OcurridoEn      time.Time     `json:"ocurrido_en"`
+}
+
+// ErrRielSinRegistro reporta que el riel no reconoce la transferencia consultada.
+var ErrRielSinRegistro = errors.New("nucleo: el riel no tiene registro de la transferencia")
 
 // Riel es la red externa por donde viaja el dinero.
 type Riel interface {
 	Enviar(ctx context.Context, orden OrdenRiel) (RespuestaRiel, error)
+	ConsultarEstado(ctx context.Context, transferenciaID uuid.UUID) (RespuestaRiel, error)
 }
 
 // ExtractoCustodio es el corte del banco custodio, no del ledger.
@@ -165,11 +190,16 @@ func (KYCNoDisponible) NivelKYC(context.Context, string) (string, error) {
 	return "", ErrKYCNoDisponible
 }
 
-// RielNoDisponible reemplaza al riel hasta NF-A2-06.
+// RielNoDisponible es el riel que se usa cuando no hay URL configurada.
 type RielNoDisponible struct{}
 
 // Enviar siempre devuelve ErrRielNoDisponible.
 func (RielNoDisponible) Enviar(context.Context, OrdenRiel) (RespuestaRiel, error) {
+	return RespuestaRiel{}, ErrRielNoDisponible
+}
+
+// ConsultarEstado siempre devuelve ErrRielNoDisponible.
+func (RielNoDisponible) ConsultarEstado(context.Context, uuid.UUID) (RespuestaRiel, error) {
 	return RespuestaRiel{}, ErrRielNoDisponible
 }
 
@@ -185,8 +215,8 @@ func (CustodioNoDisponible) Extracto(context.Context, time.Time) (ExtractoCustod
 var (
 	// ErrKYCNoDisponible no tiene adaptador real en el YAML.
 	ErrKYCNoDisponible = errors.New("nucleo: pendiente: lector de nivel de KYC real")
-	// ErrRielNoDisponible hasta NF-A2-06.
-	ErrRielNoDisponible = errors.New("nucleo: pendiente: NF-A2-06")
+	// ErrRielNoDisponible reporta que no hay riel configurado.
+	ErrRielNoDisponible = errors.New("nucleo: no hay riel configurado")
 	// ErrCustodioNoDisponible reporta que no hay lector de extracto inyectado.
 	ErrCustodioNoDisponible = errors.New("nucleo: extracto del custodio no disponible")
 )
