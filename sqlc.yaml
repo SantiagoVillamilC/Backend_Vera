@@ -63,9 +63,9 @@ sql:
         emit_empty_slices: true
         wrap_errors: true
         rename:
-          auth_partes: Partes
-          auth_personas: Personas
-          auth_empresas: Empresas
+          auth_parte: Parte
+          auth_persona: Persona
+          auth_empresa: Empresa
           auth_roles_de_parte: RolDeParte
-          auth_credenciales: Credencial
+          auth_credenciale: Credencial
           auth_transiciones_credencial: TransicionCredencial

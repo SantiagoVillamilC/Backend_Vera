@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// ErrEmailEnUso es el conflicto de dominio para un correo que ya está registrado.
-var ErrEmailEnUso = errors.New("auth: el correo ya está registrado")
+// ErrIdentificadorEnUso es el conflicto genérico de unicidad: no dice cuál de los datos chocó.
+var ErrIdentificadorEnUso = errors.New("auth: el identificador ya está en uso")
 
 // ErrAuthNoDisponible es el fail closed de auth: un error de Redis corta la operación con 503.
 var ErrAuthNoDisponible = errors.New("auth: la dependencia de auth no está disponible")
@@ -34,7 +34,7 @@ func MapearError(err error) error {
 	switch {
 	case errors.Is(err, ErrSinIdentidad):
 		return platformerrors.New("Unauthorized", "Missing or invalid token.", http.StatusUnauthorized)
-	case errors.Is(err, ErrEmailEnUso):
+	case errors.Is(err, ErrIdentificadorEnUso):
 		return platformerrors.New("DuplicateIdentifier", "The identifier is already registered.", http.StatusConflict)
 	case errors.Is(err, ErrAuthNoDisponible):
 		return platformerrors.New("AuthUnavailable", "Authentication is temporarily unavailable.", http.StatusServiceUnavailable)
@@ -43,12 +43,12 @@ func MapearError(err error) error {
 	}
 }
 
-// MapearErrorDeConsulta traduce el error del driver a error de dominio, limpia el Detail y vuelve ErrEmailEnUso la violación única de email.
+// MapearErrorDeConsulta traduce el driver a dominio, limpia el Detail y vuelve ErrIdentificadorEnUso toda violación única.
 func MapearErrorDeConsulta(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		if pgErr.Code == pgerrcode.UniqueViolation {
-			return fmt.Errorf("%w: %s", ErrEmailEnUso, pgErr.ConstraintName)
+			return fmt.Errorf("%w: %s", ErrIdentificadorEnUso, pgErr.ConstraintName)
 		}
 		sanitizado := *pgErr
 		sanitizado.Detail = ""

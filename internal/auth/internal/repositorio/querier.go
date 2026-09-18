@@ -6,10 +6,17 @@ package repositorio
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
-	Ping(ctx context.Context) (int32, error)
+	CrearCredencial(ctx context.Context, arg CrearCredencialParams) (Credencial, error)
+	CrearEmpresa(ctx context.Context, arg CrearEmpresaParams) (Empresa, error)
+	CrearParte(ctx context.Context, arg CrearParteParams) (Parte, error)
+	CrearPersona(ctx context.Context, arg CrearPersonaParams) (Persona, error)
+	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
+	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
 }
 
 var _ Querier = (*Queries)(nil)

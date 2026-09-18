@@ -3,3 +3,60 @@
 //   sqlc v1.31.1
 
 package repositorio
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type Credencial struct {
+	ID                  pgtype.UUID        `json:"id"`
+	ParteID             pgtype.UUID        `json:"parte_id"`
+	Correo              string             `json:"correo"`
+	Celular             string             `json:"celular"`
+	CelularVerificadoEn pgtype.Timestamptz `json:"celular_verificado_en"`
+	CorreoVerificadoEn  pgtype.Timestamptz `json:"correo_verificado_en"`
+	CelularCambiadoEn   pgtype.Timestamptz `json:"celular_cambiado_en"`
+	ValorDerivado       pgtype.Text        `json:"valor_derivado"`
+	Estado              string             `json:"estado"`
+	CreadaEn            pgtype.Timestamptz `json:"creada_en"`
+	ActualizadaEn       pgtype.Timestamptz `json:"actualizada_en"`
+}
+
+type Empresa struct {
+	ParteID     pgtype.UUID `json:"parte_id"`
+	Nit         string      `json:"nit"`
+	RazonSocial string      `json:"razon_social"`
+}
+
+type Parte struct {
+	ID       pgtype.UUID        `json:"id"`
+	Tipo     string             `json:"tipo"`
+	CreadaEn pgtype.Timestamptz `json:"creada_en"`
+}
+
+type Persona struct {
+	ParteID       pgtype.UUID `json:"parte_id"`
+	TipoDocumento string      `json:"tipo_documento"`
+	Documento     string      `json:"documento"`
+	Nombre        string      `json:"nombre"`
+	PerfilNombre  pgtype.Text `json:"perfil_nombre"`
+	NacidaEn      pgtype.Date `json:"nacida_en"`
+}
+
+type RolDeParte struct {
+	ID             int64              `json:"id"`
+	ParteID        pgtype.UUID        `json:"parte_id"`
+	Rol            string             `json:"rol"`
+	RepresentadaID pgtype.UUID        `json:"representada_id"`
+	CreadoEn       pgtype.Timestamptz `json:"creado_en"`
+	RevocadoEn     pgtype.Timestamptz `json:"revocado_en"`
+}
+
+type TransicionCredencial struct {
+	ID             int64              `json:"id"`
+	CredencialID   pgtype.UUID        `json:"credencial_id"`
+	EstadoAnterior pgtype.Text        `json:"estado_anterior"`
+	EstadoNuevo    string             `json:"estado_nuevo"`
+	Motivo         pgtype.Text        `json:"motivo"`
+	OcurridaEn     pgtype.Timestamptz `json:"ocurrida_en"`
+}
