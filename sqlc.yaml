@@ -69,3 +69,4 @@ sql:
           auth_roles_de_parte: RolDeParte
           auth_credenciale: Credencial
           auth_transiciones_credencial: TransicionCredencial
+          auth_eventos_autenticacion: EventoAutenticacion
