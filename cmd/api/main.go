@@ -102,10 +102,12 @@ func run() error {
 	}
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
+	clienteRedisAuth := clienteRedis(cfg)
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), httpserver.DependenciasAuth{
 			Identidad: auth.UsuarioDePrueba{},
+			Redis:     clienteRedisAuth,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -131,12 +133,17 @@ func run() error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	// Apagado en orden: HTTP, jobs, pool.
+	// Apagado en orden: HTTP, jobs, Redis, pool.
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("http shutdown: %w", err)
 	}
 	if err := riverClient.Stop(shutdownCtx); err != nil {
 		return fmt.Errorf("river stop: %w", err)
+	}
+	if clienteRedisAuth != nil {
+		if err := clienteRedisAuth.Close(); err != nil {
+			return fmt.Errorf("redis close: %w", err)
+		}
 	}
 	pool.Close()
 	log.Println("shutdown complete")

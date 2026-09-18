@@ -74,6 +74,7 @@ func TestLoadConfigExigeElTokenDelCustodio(t *testing.T) {
 			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 			t.Setenv("JWT_SECRET", jwt)
 			t.Setenv("CUSTODIO_TOKEN", tc.token)
+			entornoDeAuth(t)
 
 			cfg, err := LoadConfig()
 			if tc.wantErr == "" {
@@ -115,6 +116,7 @@ func TestLoadConfigTTLIntencion(t *testing.T) {
 			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 			t.Setenv("JWT_SECRET", jwt)
 			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			entornoDeAuth(t)
 			if tc.omitir {
 				t.Setenv("TTL_INTENCION", "")
 				if err := os.Unsetenv("TTL_INTENCION"); err != nil {
@@ -165,6 +167,7 @@ func TestLoadConfigBackoffOutbox(t *testing.T) {
 			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 			t.Setenv("JWT_SECRET", jwt)
 			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			entornoDeAuth(t)
 			t.Setenv("OUTBOX_BACKOFF_BASE", tc.base)
 			t.Setenv("OUTBOX_BACKOFF_FACTOR", tc.factor)
 			t.Setenv("OUTBOX_BACKOFF_MAX", tc.tope)
@@ -210,6 +213,7 @@ func TestLoadConfigA6(t *testing.T) {
 			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 			t.Setenv("JWT_SECRET", jwt)
 			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			entornoDeAuth(t)
 			t.Setenv("A6_POSICION_LIQUIDACION_CENTAVOS", tc.posicion)
 			t.Setenv("A6_PREFONDEO_ACTIVO", tc.activo)
 
@@ -239,6 +243,7 @@ func TestLoadConfigA6RindeCOP(t *testing.T) {
 	t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 	t.Setenv("JWT_SECRET", jwt)
 	t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+	entornoDeAuth(t)
 	t.Setenv("A6_POSICION_LIQUIDACION_CENTAVOS", "100000000000")
 
 	cfg, err := LoadConfig()
@@ -281,6 +286,7 @@ func TestRunRechazaA6Encendido(t *testing.T) {
 	t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 	t.Setenv("JWT_SECRET", strings.Repeat("j", 32))
 	t.Setenv("CUSTODIO_TOKEN", strings.Repeat("c", 32))
+	entornoDeAuth(t)
 	t.Setenv("A6_PREFONDEO_ACTIVO", "true")
 
 	err := run()
@@ -340,6 +346,7 @@ func TestLoadConfigRielSimulado(t *testing.T) {
 			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 			t.Setenv("JWT_SECRET", jwt)
 			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			entornoDeAuth(t)
 			t.Setenv("RIEL_SIMULADOR_URL", tc.url)
 
 			cfg, err := LoadConfig()
@@ -379,6 +386,7 @@ func TestLoadConfigExpiracionInterval(t *testing.T) {
 			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 			t.Setenv("JWT_SECRET", jwt)
 			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			entornoDeAuth(t)
 			if tc.omitir {
 				t.Setenv("EXPIRACION_INTERVAL", "")
 				if err := os.Unsetenv("EXPIRACION_INTERVAL"); err != nil {
@@ -423,6 +431,7 @@ func TestLoadConfigExtractoDelCustodio(t *testing.T) {
 			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
 			t.Setenv("JWT_SECRET", jwt)
 			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			entornoDeAuth(t)
 			t.Setenv("CUSTODIO_EXTRACTO_URL", tc.url)
 
 			cfg, err := LoadConfig()

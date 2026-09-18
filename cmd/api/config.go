@@ -37,6 +37,7 @@ type Config struct {
 	ExpirationTTL          time.Duration
 	A6PosicionLiquidacion  nucleo.Centavos
 	A6PrefondeoActivo      bool
+	Auth                   ConfigAuth
 }
 
 // LoadConfig valida el entorno y reporta todos los errores juntos.
@@ -57,6 +58,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var errs []error
+	var errsAuth []error
+	cfg.Auth, errsAuth = cargarConfigAuth()
+	errs = append(errs, errsAuth...)
 	required := []struct{ name, value string }{
 		{"APP_DATABASE_URL", cfg.AppDatabaseURL},
 		{"JWT_SECRET", cfg.JWTSecret},
@@ -160,6 +164,9 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
 		slog.Bool("custodio_token_set", c.CustodioToken != ""),
 		slog.Bool("custodio_extracto_url_set", c.CustodioExtractoURL != ""),
+		slog.Bool("redis_url_set", c.Auth.RedisURL != ""),
+		slog.String("otp_canal", c.Auth.OTPCanal),
+		slog.Bool("whatsapp_token_set", c.Auth.WhatsAppToken != ""),
 		slog.Bool("riel_simulador_url_set", c.RielSimuladorURL != ""),
 		slog.Bool("directorio_simulador_url_set", c.DirectorioSimuladorURL != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
