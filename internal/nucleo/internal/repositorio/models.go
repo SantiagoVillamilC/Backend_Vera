@@ -48,6 +48,17 @@ type Posting struct {
 	Moneda   string `json:"moneda"`
 }
 
+type ReglaLimite struct {
+	ID                string      `json:"id"`
+	NivelKyc          string      `json:"nivel_kyc"`
+	Ventana           string      `json:"ventana"`
+	TopeUvtCentesimas int64       `json:"tope_uvt_centesimas"`
+	ConteoMaximo      pgtype.Int4 `json:"conteo_maximo"`
+	VigenteDesde      pgtype.Date `json:"vigente_desde"`
+	VigenteHasta      pgtype.Date `json:"vigente_hasta"`
+	Fuente            string      `json:"fuente"`
+}
+
 type Transferencia struct {
 	ID             pgtype.UUID        `json:"id"`
 	UsuarioID      string             `json:"usuario_id"`
@@ -59,4 +70,10 @@ type Transferencia struct {
 	Estado         string             `json:"estado"`
 	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
 	ActualizadaEn  pgtype.Timestamptz `json:"actualizada_en"`
+}
+
+type ValorUvt struct {
+	Anio          int32  `json:"anio"`
+	ValorCentavos int64  `json:"valor_centavos"`
+	Fuente        string `json:"fuente"`
 }

@@ -29,7 +29,10 @@ type Querier interface {
 	ObtenerTransferenciaPorIdempotencyKey(ctx context.Context, arg ObtenerTransferenciaPorIdempotencyKeyParams) (Transferencia, error)
 	PaginaDeAnclas(ctx context.Context, arg PaginaDeAnclasParams) ([]PaginaDeAnclasRow, error)
 	RechazarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
+	ReglasLimiteVigentes(ctx context.Context, arg ReglasLimiteVigentesParams) ([]ReglasLimiteVigentesRow, error)
 	SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, error)
+	SumaDebitoDelMes(ctx context.Context, arg SumaDebitoDelMesParams) (int64, error)
+	ValorUVTDelAnio(ctx context.Context, anio int32) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

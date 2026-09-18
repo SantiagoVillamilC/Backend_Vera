@@ -22,6 +22,7 @@ sql:
       - bd/migraciones/0007_create_ledger.sql
       - bd/migraciones/0010_create_deposito.sql
       - bd/migraciones/0013_create_transferencia.sql
+      - bd/migraciones/0014_create_regla_limite_y_valor_uvt.sql
     queries: bd/consultas-nucleo
     gen:
       go:
@@ -39,3 +40,5 @@ sql:
           nucleo_posting: Posting
           nucleo_deposito: Deposito
           nucleo_transferencium: Transferencia
+          nucleo_regla_limite: ReglaLimite
+          nucleo_valor_uvt: ValorUvt
