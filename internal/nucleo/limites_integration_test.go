@@ -165,29 +165,34 @@ func TestVerificarLimiteRechazaSinValorDeUVTDelAnio(t *testing.T) {
 	t.Logf("un envío de 2025, sin UVT sembrada, se rechaza en vez de pasar sin tope")
 }
 
-// TestVerificarLimiteRechazaDosEnviosSimultaneosQueSuperanElCupo cubre el criterio 12.1, pendiente del candado de NF-A2-04 (HU-NF-06).
+// TestVerificarLimiteRechazaDosEnviosSimultaneosQueSuperanElCupo cubre el criterio 12.1 con el candado ordenado de NF-A2-04 (HU-NF-06).
 func TestVerificarLimiteRechazaDosEnviosSimultaneosQueSuperanElCupo(t *testing.T) {
-	t.Skip("pendiente del candado ordenado de NF-A2-04: sin candado, dos transacciones concurrentes leen la misma suma y las dos pasan")
-
-	pool := abrirPoolDePrueba(t)
+	pool := abrirPoolConcurrenteDePrueba(t)
 	ctx := t.Context()
 	s := NewServicio(pool, nil, nil, nil, nil)
 	usuario := uuid.NewString()
 	cuenta := subcuentaDisponibleDePrueba(t, ctx, s, usuario)
 	momento := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	fondearDisponibleDePrueba(t, pool, cuenta, topeCanonico2026)
 	insertarTransferenciaDePrueba(t, pool, usuario, cuenta, "intra:"+uuid.NewString(), topeCanonico2026-1000, EstadoTransferenciaReservada, momento)
 
 	resultados := make(chan error, 2)
 	for intento := 0; intento < 2; intento++ {
-		go func() { resultados <- ejecutarVerificarLimite(ctx, pool, usuario, 600, momento) }()
+		go func() { resultados <- intentarReservaDePrueba(ctx, pool, usuario, cuenta, 600, momento) }()
 	}
-	aprobados := 0
+	aprobados, rechazadosPorCupo := 0, 0
 	for intento := 0; intento < 2; intento++ {
-		if err := <-resultados; err == nil {
+		switch err := <-resultados; {
+		case err == nil:
 			aprobados++
+		case errors.Is(err, ErrCupoMensualExcedido):
+			rechazadosPorCupo++
+		default:
+			t.Fatalf("envío simultáneo %d: %v", intento, err)
 		}
 	}
-	if aprobados > 1 {
-		t.Errorf("aprobaron %d envíos simultáneos, quiero a lo sumo 1", aprobados)
+	if aprobados != 1 || rechazadosPorCupo != 1 {
+		t.Fatalf("aprobados = %d, rechazados por cupo = %d, quiero 1 y 1", aprobados, rechazadosPorCupo)
 	}
+	t.Logf("con el candado ordenado, de dos envíos simultáneos que juntos superan el cupo solo pasó uno")
 }

@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	AvanzarEstadoTransferencia(ctx context.Context, arg AvanzarEstadoTransferenciaParams) (Transferencia, error)
+	BloquearCuentasOrdenadas(ctx context.Context, cuentas []string) ([]string, error)
 	ConfirmarDeposito(ctx context.Context, arg ConfirmarDepositoParams) (Deposito, error)
 	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error)

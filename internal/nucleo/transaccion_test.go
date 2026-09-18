@@ -72,7 +72,7 @@ func TestEnTransaccionEjecutaElCambioDeRolAntesDeLaOperacion(t *testing.T) {
 		t.Errorf("enTransaccion = %q, want %q", got, "resultado")
 	}
 
-	want := []string{"exec:" + sentenciaCambioDeRol, "exec:" + sentenciaSearchPath, "operacion", "commit", "rollback"}
+	want := []string{"exec:" + sentenciaCambioDeRol, "exec:" + sentenciaSearchPath, "exec:" + sentenciaEsperaDeBloqueo, "operacion", "commit", "rollback"}
 	if !slices.Equal(eventos, want) {
 		t.Errorf("orden de eventos = %v, want %v", eventos, want)
 	}
@@ -106,7 +106,7 @@ func TestEnTransaccionNoConfirmaSiFallaLaOperacion(t *testing.T) {
 		t.Fatalf("enTransaccion error = %v, want %v", err, errOperacion)
 	}
 
-	want := []string{"exec:" + sentenciaCambioDeRol, "exec:" + sentenciaSearchPath, "operacion", "rollback"}
+	want := []string{"exec:" + sentenciaCambioDeRol, "exec:" + sentenciaSearchPath, "exec:" + sentenciaEsperaDeBloqueo, "operacion", "rollback"}
 	if !slices.Equal(eventos, want) {
 		t.Errorf("orden de eventos = %v, want %v", eventos, want)
 	}

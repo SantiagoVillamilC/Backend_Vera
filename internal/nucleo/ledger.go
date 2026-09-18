@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -138,4 +141,53 @@ func (s *Servicio) Saldo(ctx context.Context, cuentaID string) (Centavos, error)
 		return 0, fmt.Errorf("nucleo: consultar saldo de %q: %w", cuentaID, err)
 	}
 	return Centavos(0).Restar(Centavos(saldo))
+}
+
+// ErrEsperaDeBloqueoAgotada reporta que una cuenta no se pudo bloquear dentro del límite de espera.
+var ErrEsperaDeBloqueoAgotada = errors.New("nucleo: la espera por el candado de las cuentas superó el límite")
+
+// ErrCuentaDelCandadoAusente reporta que alguna cuenta pedida para el candado no existe.
+var ErrCuentaDelCandadoAusente = errors.New("nucleo: alguna cuenta del candado no existe")
+
+// bloquearOrdenadas toma el candado ordenado por identificador antes de los INSERT que referencian la cuenta; invertirlo produce deadlock (capítulo 12).
+func bloquearOrdenadas(ctx context.Context, q *repositorio.Queries, cuentas ...string) error {
+	esperadas := cuentasUnicasOrdenadas(cuentas)
+	if len(esperadas) == 0 {
+		return nil
+	}
+	bloqueadas, err := q.BloquearCuentasOrdenadas(ctx, esperadas)
+	if err != nil {
+		if esEsperaDeBloqueoAgotada(err) {
+			return fmt.Errorf("%w: %w", ErrEsperaDeBloqueoAgotada, err)
+		}
+		return fmt.Errorf("nucleo: bloquear %d cuenta(s): %w", len(esperadas), err)
+	}
+	if len(bloqueadas) != len(esperadas) {
+		return fmt.Errorf("%w: se pidieron %d y se bloquearon %d", ErrCuentaDelCandadoAusente, len(esperadas), len(bloqueadas))
+	}
+	return nil
+}
+
+// cuentasUnicasOrdenadas deduplica y ordena los identificadores para fijar el orden del candado.
+func cuentasUnicasOrdenadas(cuentas []string) []string {
+	unicas := make(map[string]struct{}, len(cuentas))
+	ordenadas := make([]string, 0, len(cuentas))
+	for _, cuenta := range cuentas {
+		if cuenta == "" {
+			continue
+		}
+		if _, visto := unicas[cuenta]; visto {
+			continue
+		}
+		unicas[cuenta] = struct{}{}
+		ordenadas = append(ordenadas, cuenta)
+	}
+	sort.Strings(ordenadas)
+	return ordenadas
+}
+
+// esEsperaDeBloqueoAgotada detecta el SQLSTATE que Postgres devuelve cuando vence el lock_timeout.
+func esEsperaDeBloqueoAgotada(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.LockNotAvailable
 }
