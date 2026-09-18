@@ -496,3 +496,45 @@ func TestHU_NF_10_Criterio11_HandlerRespondeElEnvioEnProceso(t *testing.T) {
 	}
 	t.Logf("el handler respondió 201 con estado reservada y 200 con el mismo id en el reintento")
 }
+
+// HU-NF-10, criterio 12.2: la orden entregada al riel lleva la llave, la entidad y el producto resueltos, el monto, la moneda, la idempotencia y el id.
+func TestHU_NF_10_Criterio12_2_LaOrdenLlevaEntidadYProducto(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, nil, nil, nil, nil)
+	usuario := uuid.NewString()
+	cuenta := subcuentaDisponibleDePrueba(t, ctx, base, usuario)
+	fondearDisponibleDePrueba(t, pool, cuenta, 1000000)
+
+	riel := &rielDoble{}
+	s := servicioDeLlave(pool, directorioEstatico{}, riel)
+	solicitud := solicitudDeLlave(usuario, cuenta, "3001234567", 250000)
+
+	transferencia, creada, err := s.TransferirPorLlave(ctx, solicitud)
+	if err != nil || !creada {
+		t.Fatalf("envío: creada = %v, err = %v; quiero true, nil", creada, err)
+	}
+	if err := s.DespacharOutbox(ctx); err != nil {
+		t.Fatalf("DespacharOutbox: %v", err)
+	}
+	orden := riel.UltimaOrden()
+	if orden.TransferenciaID != transferencia.ID {
+		t.Errorf("transferencia_id de la orden = %s, quiero %s", orden.TransferenciaID, transferencia.ID)
+	}
+	if orden.IdempotencyKey != solicitud.IdempotencyKey {
+		t.Errorf("idempotency_key de la orden = %q, quiero %q", orden.IdempotencyKey, solicitud.IdempotencyKey)
+	}
+	if orden.Llave != solicitud.Llave {
+		t.Errorf("llave de la orden = %q, quiero %q", orden.Llave, solicitud.Llave)
+	}
+	if orden.Entidad != "Banco Vecino" || orden.Producto != "Cuenta de ahorros" {
+		t.Errorf("entidad/producto de la orden = %q/%q, quiero Banco Vecino/Cuenta de ahorros", orden.Entidad, orden.Producto)
+	}
+	if orden.Monto != solicitud.Monto {
+		t.Errorf("monto de la orden = %d, quiero %d", orden.Monto, solicitud.Monto)
+	}
+	if orden.Moneda != solicitud.Moneda {
+		t.Errorf("moneda de la orden = %q, quiero %q", orden.Moneda, solicitud.Moneda)
+	}
+	t.Logf("la orden entregada al riel llevó la llave, la entidad y el producto resueltos, con el mismo id y la misma idempotencia")
+}

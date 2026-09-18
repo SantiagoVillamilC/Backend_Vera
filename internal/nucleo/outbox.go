@@ -29,9 +29,11 @@ const arriendoEntregaRiel = 30 * time.Second
 // ErrRielSinRespuesta marca que el riel no respondió dentro de su propio plazo, no del contexto padre.
 var ErrRielSinRespuesta = errors.New("nucleo: el riel no respondió dentro de su plazo")
 
-// PayloadDespacho es el cuerpo de una fila de outbox que manda una transferencia al riel.
+// PayloadDespacho es el cuerpo de una fila de outbox que manda una transferencia al riel, con la resolución del directorio.
 type PayloadDespacho struct {
 	TransferenciaID uuid.UUID `json:"transferencia_id"`
+	Entidad         string    `json:"entidad"`
+	Producto        string    `json:"producto"`
 }
 
 // PoliticaReintentoOutbox es la espera creciente: min(Base*Factor^(intentos-1), Tope).
@@ -72,6 +74,8 @@ type despachoReclamado struct {
 	outbox          repositorio.Outbox
 	transferencia   repositorio.Transferencia
 	transferenciaID uuid.UUID
+	entidad         string
+	producto        string
 }
 
 // falloDeFilaOutbox marca el error de una fila irrecuperable, que se registra en ella sin cortar el barrido.
@@ -89,9 +93,13 @@ func intervalo(d time.Duration) pgtype.Interval {
 	return pgtype.Interval{Microseconds: d.Microseconds(), Valid: true}
 }
 
-// encolarDespacho inserta la intención de despachar dentro de la transacción de la reserva (capítulo 10).
-func encolarDespacho(ctx context.Context, q *repositorio.Queries, transferenciaID uuid.UUID) (int64, error) {
-	payload, err := json.Marshal(PayloadDespacho{TransferenciaID: transferenciaID})
+// encolarDespacho inserta la intención de despachar, con la entidad y el producto resueltos, dentro de la transacción de la reserva (capítulo 10).
+func encolarDespacho(ctx context.Context, q *repositorio.Queries, transferenciaID uuid.UUID, resolucion ResolucionDirectorio) (int64, error) {
+	payload, err := json.Marshal(PayloadDespacho{
+		TransferenciaID: transferenciaID,
+		Entidad:         resolucion.Entidad,
+		Producto:        resolucion.Producto,
+	})
 	if err != nil {
 		return 0, fmt.Errorf("nucleo: serializar el payload del outbox: %w", err)
 	}
@@ -164,6 +172,9 @@ func reclamarDespacho(ctx context.Context, q *repositorio.Queries, fila reposito
 	if payload.TransferenciaID == uuid.Nil {
 		return despachoReclamado{}, fmt.Errorf("nucleo: el outbox %d no trae transferencia_id", fila.ID)
 	}
+	if payload.Entidad == "" || payload.Producto == "" {
+		return despachoReclamado{}, fmt.Errorf("nucleo: el outbox %d no trae la entidad y el producto resueltos", fila.ID)
+	}
 	transferencia, err := q.ObtenerTransferencia(ctx, pgtype.UUID{Bytes: payload.TransferenciaID, Valid: true})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -184,7 +195,13 @@ func reclamarDespacho(ctx context.Context, q *repositorio.Queries, fila reposito
 	if filas != 1 {
 		return despachoReclamado{}, fmt.Errorf("nucleo: la ventana del outbox %d no quedó adelantada", fila.ID)
 	}
-	return despachoReclamado{outbox: fila, transferencia: transferencia, transferenciaID: payload.TransferenciaID}, nil
+	return despachoReclamado{
+		outbox:          fila,
+		transferencia:   transferencia,
+		transferenciaID: payload.TransferenciaID,
+		entidad:         payload.Entidad,
+		producto:        payload.Producto,
+	}, nil
 }
 
 // asentarDespacho pasa la transferencia a despachada y escribe el asiento 3 una sola vez, con el compare-and-set como exclusión.
@@ -232,7 +249,7 @@ func lineasDeDespacho(transferencia repositorio.Transferencia) ([]repositorio.In
 
 // entregarAlRiel envía la orden y cierra el desenlace según la respuesta, sin transacción durante la llamada.
 func (s *Servicio) entregarAlRiel(ctx context.Context, reclamada despachoReclamado) error {
-	respuesta, err := s.enviarAlRiel(ctx, reclamada.transferencia)
+	respuesta, err := s.enviarAlRiel(ctx, reclamada)
 	if err != nil {
 		if errors.Is(err, ErrRielSinRespuesta) {
 			return s.cerrarIndeterminada(ctx, reclamada)
@@ -250,25 +267,27 @@ func (s *Servicio) entregarAlRiel(ctx context.Context, reclamada despachoReclama
 }
 
 // enviarAlRiel entrega la orden con el plazo del Criterio 16 y distingue su vencimiento del del padre.
-func (s *Servicio) enviarAlRiel(ctx context.Context, transferencia repositorio.Transferencia) (RespuestaRiel, error) {
+func (s *Servicio) enviarAlRiel(ctx context.Context, reclamada despachoReclamado) (RespuestaRiel, error) {
 	if s.riel == nil {
 		return RespuestaRiel{}, errors.New("nucleo: no hay riel configurado")
 	}
 	ctxRiel, cancel := context.WithTimeout(ctx, plazoEntregaRiel)
 	defer cancel()
-	respuesta, err := s.riel.Enviar(ctxRiel, ordenDeTransferencia(transferencia))
+	respuesta, err := s.riel.Enviar(ctxRiel, ordenDeTransferencia(reclamada.transferencia, reclamada.entidad, reclamada.producto))
 	if err != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
 		return RespuestaRiel{}, ErrRielSinRespuesta
 	}
 	return respuesta, err
 }
 
-// ordenDeTransferencia arma la orden con lo que el riel necesita para ejecutar y reconocer un reenvío.
-func ordenDeTransferencia(transferencia repositorio.Transferencia) OrdenRiel {
+// ordenDeTransferencia arma la orden con la llave, la entidad y el producto de la resolución, para que el riel ejecute y reconozca un reenvío.
+func ordenDeTransferencia(transferencia repositorio.Transferencia, entidad, producto string) OrdenRiel {
 	return OrdenRiel{
 		TransferenciaID: uuid.UUID(transferencia.ID.Bytes),
 		IdempotencyKey:  transferencia.IdempotencyKey,
 		Llave:           transferencia.LlaveDestino,
+		Entidad:         entidad,
+		Producto:        producto,
 		Monto:           Centavos(transferencia.Monto),
 		Moneda:          transferencia.Moneda,
 	}

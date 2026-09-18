@@ -40,8 +40,9 @@ func TestEncolarDespachoEscribeLaIntencion(t *testing.T) {
 	t.Parallel()
 
 	transferenciaID := uuid.New()
+	resolucion := ResolucionDirectorio{Entidad: "Banco Vecino", Producto: "Cuenta de ahorros"}
 	db := &dbDeOutbox{}
-	id, err := encolarDespacho(t.Context(), repositorio.New(db), transferenciaID)
+	id, err := encolarDespacho(t.Context(), repositorio.New(db), transferenciaID, resolucion)
 	if err != nil {
 		t.Fatalf("encolarDespacho: %v", err)
 	}
@@ -57,6 +58,12 @@ func TestEncolarDespachoEscribeLaIntencion(t *testing.T) {
 	}
 	if payload.TransferenciaID != transferenciaID {
 		t.Errorf("transferencia_id = %s, quiero %s", payload.TransferenciaID, transferenciaID)
+	}
+	if payload.Entidad != resolucion.Entidad {
+		t.Errorf("entidad = %q, quiero %q", payload.Entidad, resolucion.Entidad)
+	}
+	if payload.Producto != resolucion.Producto {
+		t.Errorf("producto = %q, quiero %q", payload.Producto, resolucion.Producto)
 	}
 }
 
@@ -76,7 +83,7 @@ func TestOrdenDeTransferenciaMapeaCadaCampo(t *testing.T) {
 		Estado:         EstadoTransferenciaReservada,
 	}
 
-	orden := ordenDeTransferencia(transferencia)
+	orden := ordenDeTransferencia(transferencia, "Banco Vecino", "Cuenta de ahorros")
 	if orden.TransferenciaID != id {
 		t.Errorf("TransferenciaID = %s, quiero %s", orden.TransferenciaID, id)
 	}
@@ -88,6 +95,12 @@ func TestOrdenDeTransferenciaMapeaCadaCampo(t *testing.T) {
 	}
 	if orden.Llave == transferencia.CuentaOrigen {
 		t.Error("Llave salió de CuentaOrigen")
+	}
+	if orden.Entidad != "Banco Vecino" {
+		t.Errorf("Entidad = %q, quiero %q", orden.Entidad, "Banco Vecino")
+	}
+	if orden.Producto != "Cuenta de ahorros" {
+		t.Errorf("Producto = %q, quiero %q", orden.Producto, "Cuenta de ahorros")
 	}
 	if orden.Monto != Centavos(transferencia.Monto) {
 		t.Errorf("Monto = %d, quiero %d", orden.Monto, transferencia.Monto)

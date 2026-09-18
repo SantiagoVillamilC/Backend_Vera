@@ -97,6 +97,8 @@ type OrdenRiel struct {
 	TransferenciaID uuid.UUID `json:"transferencia_id"`
 	IdempotencyKey  string    `json:"idempotency_key"`
 	Llave           string    `json:"llave"`
+	Entidad         string    `json:"entidad"`
+	Producto        string    `json:"producto"`
 	Monto           Centavos  `json:"monto_centavos"`
 	Moneda          string    `json:"moneda"`
 }

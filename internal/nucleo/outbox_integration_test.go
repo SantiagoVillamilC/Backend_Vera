@@ -26,19 +26,26 @@ const nombreVariableHijo = "CENTINELA_OUTBOX_ID"
 // marcaMuereEnElDespacho confirma que el hijo registró el despacho antes de morir.
 const marcaMuereEnElDespacho = "despacho registrado; el proceso muere antes de llamar al riel"
 
-// rielDoble es el doble de la interfaz Riel: cuenta llamadas, responde un desenlace, puede fallar y avisa al llamarse.
-type rielDoble struct {
-	mu        sync.Mutex
-	llamadas  int
-	err       error
-	respuesta RespuestaRiel
-	alLlamar  func()
+// resolucionDePrueba es la entidad y el producto que los ayudantes siembran para la orden (criterio 12.2).
+func resolucionDePrueba() ResolucionDirectorio {
+	return ResolucionDirectorio{Entidad: "Banco Vecino", Producto: "Cuenta de ahorros"}
 }
 
-// Enviar registra la llamada, avisa al observador y devuelve el desenlace configurado o el error.
-func (r *rielDoble) Enviar(context.Context, OrdenRiel) (RespuestaRiel, error) {
+// rielDoble es el doble de la interfaz Riel: cuenta llamadas, responde un desenlace, puede fallar y avisa al llamarse.
+type rielDoble struct {
+	mu          sync.Mutex
+	llamadas    int
+	err         error
+	respuesta   RespuestaRiel
+	alLlamar    func()
+	ultimaOrden OrdenRiel
+}
+
+// Enviar registra la llamada y la orden, avisa al observador y devuelve el desenlace configurado o el error.
+func (r *rielDoble) Enviar(_ context.Context, orden OrdenRiel) (RespuestaRiel, error) {
 	r.mu.Lock()
 	r.llamadas++
+	r.ultimaOrden = orden
 	alLlamar := r.alLlamar
 	err := r.err
 	respuesta := r.respuesta
@@ -60,6 +67,13 @@ func (r *rielDoble) Llamadas() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.llamadas
+}
+
+// UltimaOrden devuelve la última orden entregada al riel.
+func (r *rielDoble) UltimaOrden() OrdenRiel {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.ultimaOrden
 }
 
 // ConsultarEstado del doble no se usa en estas pruebas y devuelve sin registro.
@@ -100,7 +114,7 @@ func sembrarReservaConOutbox(t *testing.T, ctx context.Context, pool *pgxpool.Po
 			}); err != nil {
 				return struct{}{}, err
 			}
-			id, err := encolarDespacho(ctx, q, transferenciaID)
+			id, err := encolarDespacho(ctx, q, transferenciaID, resolucionDePrueba())
 			if err != nil {
 				return struct{}{}, err
 			}
@@ -264,7 +278,7 @@ func TestLaFilaDeOutboxYLaRetencionEntranEnLaMismaTransaccion(t *testing.T) {
 				}); err != nil {
 					return struct{}{}, err
 				}
-				if _, err := encolarDespacho(ctx, q, transferenciaID); err != nil {
+				if _, err := encolarDespacho(ctx, q, transferenciaID, resolucionDePrueba()); err != nil {
 					return struct{}{}, err
 				}
 				if fallar {

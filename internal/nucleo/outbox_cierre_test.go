@@ -209,6 +209,8 @@ func despachoDeClasificacion() despachoReclamado {
 			Estado:    EstadoTransferenciaDespachada,
 		},
 		transferenciaID: id,
+		entidad:         "Banco Vecino",
+		producto:        "Cuenta de ahorros",
 	}
 }
 
@@ -229,14 +231,14 @@ func TestEnviarAlRielDistingueElPlazoDelRielDelPadre(t *testing.T) {
 	vencido := fmt.Errorf("riel: %w", context.DeadlineExceeded)
 
 	conPadreVivo := &Servicio{riel: rielDeClasificacion{err: vencido}}
-	if _, err := conPadreVivo.enviarAlRiel(t.Context(), repositorio.Transferencia{}); !errors.Is(err, ErrRielSinRespuesta) {
+	if _, err := conPadreVivo.enviarAlRiel(t.Context(), despachoReclamado{}); !errors.Is(err, ErrRielSinRespuesta) {
 		t.Errorf("con el padre vivo y DeadlineExceeded err = %v, quiero ErrRielSinRespuesta", err)
 	}
 
 	ctxVencido, cancelar := context.WithCancel(t.Context())
 	cancelar()
 	conPadreVencido := &Servicio{riel: rielDeClasificacion{err: vencido}}
-	_, err := conPadreVencido.enviarAlRiel(ctxVencido, repositorio.Transferencia{})
+	_, err := conPadreVencido.enviarAlRiel(ctxVencido, despachoReclamado{})
 	if errors.Is(err, ErrRielSinRespuesta) {
 		t.Errorf("con el padre vencido y DeadlineExceeded err = %v, no quiero ErrRielSinRespuesta", err)
 	}

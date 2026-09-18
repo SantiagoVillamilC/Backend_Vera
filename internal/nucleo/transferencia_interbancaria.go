@@ -40,7 +40,8 @@ func (s *Servicio) ejecutarEnvioPorLlave(ctx context.Context, solicitud Solicitu
 	if solicitud.Monto <= 0 {
 		return Transferencia{}, ErrMontoInvalido
 	}
-	if _, err := s.ResolverLlave(ctx, solicitud.TipoLlave, solicitud.Llave); err != nil {
+	resolucion, err := s.ResolverLlave(ctx, solicitud.TipoLlave, solicitud.Llave)
+	if err != nil {
 		return Transferencia{}, err
 	}
 	if s.kyc == nil {
@@ -50,11 +51,11 @@ func (s *Servicio) ejecutarEnvioPorLlave(ctx context.Context, solicitud Solicitu
 	if err != nil {
 		return Transferencia{}, fmt.Errorf("nucleo: leer el nivel de KYC de %q: %w", solicitud.UsuarioID, err)
 	}
-	return s.reservarYEncolar(ctx, solicitud, nivel, time.Now().UTC())
+	return s.reservarYEncolar(ctx, solicitud, resolucion, nivel, time.Now().UTC())
 }
 
-// reservarYEncolar abre la única transacción: crea la fila, verifica límites y saldo, retiene, encola el despacho y la deja reservada (criterios 8 a 10).
-func (s *Servicio) reservarYEncolar(ctx context.Context, solicitud SolicitudEnvioPorLlave, nivel string, ocurridoEn time.Time) (Transferencia, error) {
+// reservarYEncolar abre la única transacción: crea la fila, verifica límites y saldo, retiene, encola el despacho con la resolución y la deja reservada (criterios 8 a 10).
+func (s *Servicio) reservarYEncolar(ctx context.Context, solicitud SolicitudEnvioPorLlave, resolucion ResolucionDirectorio, nivel string, ocurridoEn time.Time) (Transferencia, error) {
 	return enTransaccion(ctx, s.pool,
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (Transferencia, error) {
 			if err := bloquearOrdenadas(ctx, q, solicitud.CuentaOrigen); err != nil {
@@ -91,7 +92,7 @@ func (s *Servicio) reservarYEncolar(ctx context.Context, solicitud SolicitudEnvi
 			}); err != nil {
 				return Transferencia{}, err
 			}
-			if _, err := encolarDespacho(ctx, q, transferenciaID); err != nil {
+			if _, err := encolarDespacho(ctx, q, transferenciaID, resolucion); err != nil {
 				return Transferencia{}, err
 			}
 			reservada, err := q.AvanzarEstadoTransferencia(ctx, repositorio.AvanzarEstadoTransferenciaParams{

@@ -139,7 +139,7 @@ func reservarConGMFConOutbox(t *testing.T, ctx context.Context, pool *pgxpool.Po
 			}); err != nil {
 				return struct{}{}, err
 			}
-			id, err := encolarDespacho(ctx, q, transferenciaID)
+			id, err := encolarDespacho(ctx, q, transferenciaID, resolucionDePrueba())
 			if err != nil {
 				return struct{}{}, err
 			}
