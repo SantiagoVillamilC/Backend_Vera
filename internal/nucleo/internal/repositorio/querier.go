@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	AvanzarEstadoTransferencia(ctx context.Context, arg AvanzarEstadoTransferenciaParams) (Transferencia, error)
+	AvanzarVentanaOutbox(ctx context.Context, arg AvanzarVentanaOutboxParams) (int64, error)
 	BloquearCuentasOrdenadas(ctx context.Context, cuentas []string) ([]string, error)
 	ConfirmarDeposito(ctx context.Context, arg ConfirmarDepositoParams) (Deposito, error)
 	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
@@ -20,20 +21,25 @@ type Querier interface {
 	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)
 	InsertarExtractoCustodio(ctx context.Context, arg InsertarExtractoCustodioParams) error
 	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error)
+	InsertarOutbox(ctx context.Context, arg InsertarOutboxParams) (Outbox, error)
 	InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error)
 	InsertarTransferencia(ctx context.Context, arg InsertarTransferenciaParams) (Transferencia, error)
 	LineasDeMovimientos(ctx context.Context, anclas []int64) ([]LineasDeMovimientosRow, error)
+	MarcarOutboxDespachado(ctx context.Context, id int64) (int64, error)
 	ObtenerDeposito(ctx context.Context, id pgtype.UUID) (Deposito, error)
 	ObtenerDepositoPorIdempotencyKey(ctx context.Context, arg ObtenerDepositoPorIdempotencyKeyParams) (Deposito, error)
 	ObtenerDepositoPorReferencia(ctx context.Context, referencia string) (Deposito, error)
+	ObtenerOutbox(ctx context.Context, id int64) (Outbox, error)
 	ObtenerTitularDeCuenta(ctx context.Context, id string) (pgtype.Text, error)
 	ObtenerTransferencia(ctx context.Context, id pgtype.UUID) (Transferencia, error)
 	ObtenerTransferenciaPorIdempotencyKey(ctx context.Context, arg ObtenerTransferenciaPorIdempotencyKeyParams) (Transferencia, error)
 	PaginaDeAnclas(ctx context.Context, arg PaginaDeAnclasParams) ([]PaginaDeAnclasRow, error)
 	RechazarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	ReglasLimiteVigentes(ctx context.Context, arg ReglasLimiteVigentesParams) ([]ReglasLimiteVigentesRow, error)
+	ReintentarOutbox(ctx context.Context, arg ReintentarOutboxParams) (int32, error)
 	SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, error)
 	SumaDebitoDelMes(ctx context.Context, arg SumaDebitoDelMesParams) (int64, error)
+	TomarOutboxPendientes(ctx context.Context, limite int32) ([]Outbox, error)
 	ValorUVTDelAnio(ctx context.Context, anio int32) (int64, error)
 }
 

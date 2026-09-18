@@ -116,11 +116,20 @@ type LectorExtractoCustodio interface {
 
 // Servicio es la única puerta a las tablas del núcleo y a su frontera transaccional.
 type Servicio struct {
-	pool       abridorDeTransacciones
-	kyc        LectorNivelKYC
-	riel       Riel
-	custodio   LectorExtractoCustodio
-	rastreador RastreadorErrores
+	pool              abridorDeTransacciones
+	kyc               LectorNivelKYC
+	riel              Riel
+	custodio          LectorExtractoCustodio
+	rastreador        RastreadorErrores
+	politicaReintento PoliticaReintentoOutbox
+}
+
+// OpcionServicio ajusta el Servicio en su construcción.
+type OpcionServicio func(*Servicio)
+
+// ConPoliticaReintentoOutbox fija la espera creciente del barrido de la bandeja de salida.
+func ConPoliticaReintentoOutbox(politica PoliticaReintentoOutbox) OpcionServicio {
+	return func(s *Servicio) { s.politicaReintento = politica }
 }
 
 // NewServicio arma el Servicio; el Querier se construye por transacción adentro.
@@ -130,14 +139,20 @@ func NewServicio(
 	riel Riel,
 	custodio LectorExtractoCustodio,
 	rastreador RastreadorErrores,
+	opciones ...OpcionServicio,
 ) *Servicio {
-	return &Servicio{
-		pool:       poolDeNucleo{pool: pool},
-		kyc:        kyc,
-		riel:       riel,
-		custodio:   custodio,
-		rastreador: rastreador,
+	servicio := &Servicio{
+		pool:              poolDeNucleo{pool: pool},
+		kyc:               kyc,
+		riel:              riel,
+		custodio:          custodio,
+		rastreador:        rastreador,
+		politicaReintento: PoliticaReintentoOutboxPorDefecto(),
 	}
+	for _, opcion := range opciones {
+		opcion(servicio)
+	}
+	return servicio
 }
 
 // Rellenos para que main arranque antes de que lleguen las piezas reales.

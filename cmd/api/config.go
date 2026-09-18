@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -25,6 +26,9 @@ type Config struct {
 	LogLevel              string
 	LogFormat             string
 	OutboxInterval        time.Duration
+	OutboxBackoffBase     time.Duration
+	OutboxBackoffFactor   float64
+	OutboxBackoffMax      time.Duration
 	ConciliationInterval  time.Duration
 	ConciliationWindow    time.Duration
 	ExpirationInterval    time.Duration
@@ -86,6 +90,19 @@ func LoadConfig() (*Config, error) {
 	if errDuracion != nil {
 		errs = append(errs, errDuracion)
 	}
+	cfg.OutboxBackoffBase, errDuracion = durationOr("OUTBOX_BACKOFF_BASE", "30s")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
+	var errFactor error
+	cfg.OutboxBackoffFactor, errFactor = factorOr("OUTBOX_BACKOFF_FACTOR", "2")
+	if errFactor != nil {
+		errs = append(errs, errFactor)
+	}
+	cfg.OutboxBackoffMax, errDuracion = durationOr("OUTBOX_BACKOFF_MAX", "30m")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
 	cfg.ConciliationInterval, errDuracion = durationOr("CONCILIATION_INTERVAL", "60s")
 	if errDuracion != nil {
 		errs = append(errs, errDuracion)
@@ -139,6 +156,9 @@ func (c Config) LogValue() slog.Value {
 		slog.String("log_level", c.LogLevel),
 		slog.String("log_format", c.LogFormat),
 		slog.String("outbox_interval", c.OutboxInterval.String()),
+		slog.String("outbox_backoff_base", c.OutboxBackoffBase.String()),
+		slog.String("outbox_backoff_factor", strconv.FormatFloat(c.OutboxBackoffFactor, 'g', -1, 64)),
+		slog.String("outbox_backoff_max", c.OutboxBackoffMax.String()),
 		slog.String("conciliation_interval", c.ConciliationInterval.String()),
 		slog.String("conciliation_window", c.ConciliationWindow.String()),
 		slog.String("expiration_ttl", c.ExpirationTTL.String()),
@@ -188,6 +208,16 @@ func boolOr(key, fallback string) (bool, error) {
 		return false, fmt.Errorf("%s must be true or false, got %q", key, v)
 	}
 	return b, nil
+}
+
+// factorOr exige un multiplicador finito y mayor que cero para la espera creciente.
+func factorOr(key, fallback string) (float64, error) {
+	v := envOr(key, fallback)
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+		return 0, fmt.Errorf("%s must be a finite number greater than zero, got %q", key, v)
+	}
+	return f, nil
 }
 
 // durationOr exige una duración positiva para que una cadencia mal puesta detenga el arranque.

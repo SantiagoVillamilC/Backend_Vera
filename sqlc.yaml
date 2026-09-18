@@ -25,6 +25,7 @@ sql:
       - bd/migraciones/0014_create_regla_limite_y_valor_uvt.sql
       - bd/migraciones/0015_create_extracto_custodio.sql
       - bd/migraciones/0016_create_gmf_rule.sql
+      - bd/migraciones/0018_create_outbox.sql
     queries: bd/consultas-nucleo
     gen:
       go:
@@ -45,3 +46,4 @@ sql:
           nucleo_transferencium: Transferencia
           nucleo_regla_limite: ReglaLimite
           nucleo_valor_uvt: ValorUvt
+          nucleo_outbox: Outbox

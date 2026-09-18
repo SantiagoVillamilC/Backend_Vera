@@ -65,6 +65,11 @@ func run() error {
 		nucleo.RielNoDisponible{},
 		custodiosim.NuevoLectorExtracto(cfg.CustodioExtractoURL, nil),
 		observabilidad.RastreadorSlog{},
+		nucleo.ConPoliticaReintentoOutbox(nucleo.PoliticaReintentoOutbox{
+			Base:   cfg.OutboxBackoffBase,
+			Factor: cfg.OutboxBackoffFactor,
+			Tope:   cfg.OutboxBackoffMax,
+		}),
 	)
 
 	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.

@@ -46,6 +46,16 @@ type JournalEntry struct {
 	DepositoID      pgtype.UUID        `json:"deposito_id"`
 }
 
+type Outbox struct {
+	ID           int64              `json:"id"`
+	Tipo         string             `json:"tipo"`
+	Payload      []byte             `json:"payload"`
+	DisponibleEn pgtype.Timestamptz `json:"disponible_en"`
+	Intentos     int32              `json:"intentos"`
+	UltimoError  pgtype.Text        `json:"ultimo_error"`
+	DespachadoEn pgtype.Timestamptz `json:"despachado_en"`
+}
+
 type Posting struct {
 	ID       int64  `json:"id"`
 	EntryID  int64  `json:"entry_id"`

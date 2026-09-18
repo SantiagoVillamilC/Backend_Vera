@@ -141,6 +141,53 @@ func TestLoadConfigTTLIntencion(t *testing.T) {
 	}
 }
 
+// NF-A2-05: la espera creciente del outbox lee base, factor y tope del entorno con sus defaults.
+func TestLoadConfigBackoffOutbox(t *testing.T) {
+	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
+
+	tests := map[string]struct {
+		base    string
+		factor  string
+		tope    string
+		quiero  nucleo.PoliticaReintentoOutbox
+		wantErr string
+	}{
+		"por defecto":     {quiero: nucleo.PoliticaReintentoOutboxPorDefecto()},
+		"propios":         {base: "1s", factor: "3", tope: "5m", quiero: nucleo.PoliticaReintentoOutbox{Base: time.Second, Factor: 3, Tope: 5 * time.Minute}},
+		"factor uno":      {factor: "1", quiero: nucleo.PoliticaReintentoOutbox{Base: 30 * time.Second, Factor: 1, Tope: 30 * time.Minute}},
+		"base invalida":   {base: "ya", wantErr: "OUTBOX_BACKOFF_BASE"},
+		"factor cero":     {factor: "0", wantErr: "OUTBOX_BACKOFF_FACTOR"},
+		"factor negativo": {factor: "-1", wantErr: "OUTBOX_BACKOFF_FACTOR"},
+		"tope invalido":   {tope: "0s", wantErr: "OUTBOX_BACKOFF_MAX"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+			t.Setenv("JWT_SECRET", jwt)
+			t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+			t.Setenv("OUTBOX_BACKOFF_BASE", tc.base)
+			t.Setenv("OUTBOX_BACKOFF_FACTOR", tc.factor)
+			t.Setenv("OUTBOX_BACKOFF_MAX", tc.tope)
+
+			cfg, err := LoadConfig()
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.OutboxBackoffBase != tc.quiero.Base || cfg.OutboxBackoffFactor != tc.quiero.Factor || cfg.OutboxBackoffMax != tc.quiero.Tope {
+				t.Errorf("backoff = (%v, %v, %v), quiero (%v, %v, %v)",
+					cfg.OutboxBackoffBase, cfg.OutboxBackoffFactor, cfg.OutboxBackoffMax,
+					tc.quiero.Base, tc.quiero.Factor, tc.quiero.Tope)
+			}
+		})
+	}
+}
+
 // NF-A6-01: la cifra de posición y el interruptor de A6 cargan del entorno y default apagado.
 func TestLoadConfigA6(t *testing.T) {
 	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
