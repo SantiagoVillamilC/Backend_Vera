@@ -19,7 +19,7 @@ UPDATE nucleo.transferencia
  WHERE id = $2
    AND estado = $3
    AND (
-          (estado = 'creada'        AND $1 = 'reservada')
+          (estado = 'creada'        AND $1 IN ('reservada', 'confirmada'))
        OR (estado = 'reservada'     AND $1 = 'despachada')
        OR (estado = 'despachada'    AND $1 IN ('confirmada', 'fallida', 'indeterminada'))
        OR (estado = 'fallida'       AND $1 = 'compensada')

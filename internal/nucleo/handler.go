@@ -243,6 +243,93 @@ func respuestaDeDeposito(i IntencionDeposito) RespuestaDeposito {
 	}
 }
 
+// crearTransferenciaRequest es el cuerpo de POST /transferencias: destino, monto en centavos y clave del cliente.
+type crearTransferenciaRequest struct {
+	Destino        string   `json:"destino" validate:"required,max=320"`
+	Monto          Centavos `json:"monto" validate:"required,gt=0"`
+	Moneda         string   `json:"moneda" validate:"omitempty,eq=COP"`
+	IdempotencyKey string   `json:"idempotency_key" validate:"required,max=128"`
+}
+
+// RespuestaTransferencia es el envío interno que ve el cliente.
+type RespuestaTransferencia struct {
+	ID            string    `json:"id"`
+	Destino       string    `json:"destino"`
+	Monto         Centavos  `json:"monto"`
+	Moneda        string    `json:"moneda"`
+	Estado        string    `json:"estado"`
+	CreadaEn      time.Time `json:"creada_en"`
+	ActualizadaEn time.Time `json:"actualizada_en"`
+}
+
+// Transferir responde 201 con el envío nuevo y 200 con el ya guardado para la misma clave.
+func (h *Handler) Transferir(w http.ResponseWriter, r *http.Request) {
+	usuarioID, ok := identidad.UsuarioIDDeContexto(r.Context())
+	if !ok {
+		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
+		return
+	}
+	var req crearTransferenciaRequest
+	if !api.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	transferencia, creada, err := h.servicio.Transferir(r.Context(), SolicitudTransferencia{
+		UsuarioID:      usuarioID,
+		CuentaOrigen:   NombreCuentaDisponible(usuarioID),
+		LlaveDestino:   req.Destino,
+		Monto:          req.Monto,
+		Moneda:         req.Moneda,
+		IdempotencyKey: req.IdempotencyKey,
+	})
+	if err != nil {
+		escribirErrorDeTransferencia(w, r, err)
+		return
+	}
+	estado := http.StatusOK
+	if creada {
+		estado = http.StatusCreated
+	}
+	api.WriteData(w, estado, respuestaDeTransferencia(transferencia), nil)
+}
+
+// escribirErrorDeTransferencia traduce el rechazo del envío al envelope con su código estable.
+func escribirErrorDeTransferencia(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrDestinoObligatorio):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The destination is required.", nil)
+	case errors.Is(err, ErrMontoInvalido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The amount is not a positive integer of minor units.", nil)
+	case errors.Is(err, ErrDestinoNoExiste):
+		api.WriteError(w, http.StatusNotFound, "RecipientNotFound", "The destination does not exist.", nil)
+	case errors.Is(err, ErrDestinoPropio):
+		api.WriteError(w, http.StatusUnprocessableEntity, "SelfTransferNotAllowed", "You cannot send money to yourself.", nil)
+	case errors.Is(err, ErrSaldoInsuficiente):
+		api.WriteError(w, http.StatusUnprocessableEntity, "InsufficientFunds", "Insufficient funds.", nil)
+	case errors.Is(err, ErrTopeOperacionExcedido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "OperationLimitExceeded", "The amount exceeds the low-balance deposit limit.", nil)
+	case errors.Is(err, ErrCupoMensualExcedido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "MonthlyQuotaExceeded", "The monthly low-balance deposit quota is exhausted.", nil)
+	case errors.Is(err, ErrIdempotenciaEnConflicto):
+		api.WriteError(w, http.StatusConflict, "IdempotencyConflict", "The idempotency key was reused with a different request.", nil)
+	default:
+		api.WriteAPIError(w, r, err)
+	}
+}
+
+// respuestaDeTransferencia traduce la transferencia del núcleo al DTO de la API.
+func respuestaDeTransferencia(t Transferencia) RespuestaTransferencia {
+	return RespuestaTransferencia{
+		ID:            t.ID.String(),
+		Destino:       t.LlaveDestino,
+		Monto:         t.Monto,
+		Moneda:        t.Moneda,
+		Estado:        t.Estado,
+		CreadaEn:      t.CreadaEn,
+		ActualizadaEn: t.ActualizadaEn,
+	}
+}
+
 // paginacionDeMovimientos lee el cursor y el límite de la URL; un mensaje no vacío es un rechazo.
 func paginacionDeMovimientos(r *http.Request) (*int64, int, string) {
 	limite := limiteHistorialPorDefecto

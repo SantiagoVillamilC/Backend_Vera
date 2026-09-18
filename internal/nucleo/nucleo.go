@@ -143,6 +143,7 @@ type LectorExtractoCustodio interface {
 type Servicio struct {
 	pool              abridorDeTransacciones
 	kyc               LectorNivelKYC
+	destinos          ResolutorDestino
 	riel              Riel
 	custodio          LectorExtractoCustodio
 	rastreador        RastreadorErrores
@@ -155,6 +156,11 @@ type OpcionServicio func(*Servicio)
 // ConPoliticaReintentoOutbox fija la espera creciente del barrido de la bandeja de salida.
 func ConPoliticaReintentoOutbox(politica PoliticaReintentoOutbox) OpcionServicio {
 	return func(s *Servicio) { s.politicaReintento = politica }
+}
+
+// ConResolutorDestino fija el resolutor de la llave de destino; sin él, Transferir falla cerrado.
+func ConResolutorDestino(resolutor ResolutorDestino) OpcionServicio {
+	return func(s *Servicio) { s.destinos = resolutor }
 }
 
 // NewServicio arma el Servicio; el Querier se construye por transacción adentro.
@@ -190,6 +196,14 @@ func (KYCNoDisponible) NivelKYC(context.Context, string) (string, error) {
 	return "", ErrKYCNoDisponible
 }
 
+// LectorNivelKYCFijo devuelve el único nivel de KYC del alcance de la tesis.
+type LectorNivelKYCFijo struct{}
+
+// NivelKYC devuelve siempre el nivel del depósito de bajo monto.
+func (LectorNivelKYCFijo) NivelKYC(context.Context, string) (string, error) {
+	return NivelKYCDepositoBajoMonto, nil
+}
+
 // RielNoDisponible es el riel que se usa cuando no hay URL configurada.
 type RielNoDisponible struct{}
 
@@ -223,6 +237,7 @@ var (
 
 var (
 	_ LectorNivelKYC         = KYCNoDisponible{}
+	_ LectorNivelKYC         = LectorNivelKYCFijo{}
 	_ Riel                   = RielNoDisponible{}
 	_ LectorExtractoCustodio = CustodioNoDisponible{}
 )

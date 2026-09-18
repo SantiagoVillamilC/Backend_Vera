@@ -113,6 +113,48 @@ func lineasDeRetencion(solicitud SolicitudRetencion) ([]repositorio.InsertarLine
 	), nil
 }
 
+// SolicitudTransferenciaInterna es lo que el asiento de transferencia interna necesita del emisor y el receptor.
+type SolicitudTransferenciaInterna struct {
+	TransferenciaID uuid.UUID
+	EmisorID        string
+	ReceptorID      string
+	Monto           Centavos
+	Moneda          string
+	OcurridoEn      time.Time
+}
+
+// transferirInterna asienta la salida del retenido del emisor hacia el disponible del receptor, sin tocar el activo (Apéndice B).
+func transferirInterna(ctx context.Context, q *repositorio.Queries, solicitud SolicitudTransferenciaInterna) error {
+	if solicitud.Monto <= 0 {
+		return ErrMontoInvalido
+	}
+	if solicitud.Moneda == "" {
+		solicitud.Moneda = MonedaCOP
+	}
+	credito, err := Centavos(0).Restar(solicitud.Monto)
+	if err != nil {
+		return err
+	}
+	asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
+		Tipo:            TipoAsientoTransferenciaInterna,
+		TransferenciaID: pgtype.UUID{Bytes: solicitud.TransferenciaID, Valid: solicitud.TransferenciaID != uuid.Nil},
+		OcurridoEn:      pgtype.Timestamptz{Time: solicitud.OcurridoEn, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("nucleo: asentar la transferencia interna: %w", err)
+	}
+	lineas := []repositorio.InsertarLineaParams{
+		{EntryID: asiento.ID, CuentaID: NombreCuentaRetenido(solicitud.EmisorID), Monto: solicitud.Monto.Int64(), Moneda: solicitud.Moneda},
+		{EntryID: asiento.ID, CuentaID: NombreCuentaDisponible(solicitud.ReceptorID), Monto: credito.Int64(), Moneda: solicitud.Moneda},
+	}
+	for _, linea := range lineas {
+		if _, err := q.InsertarLinea(ctx, linea); err != nil {
+			return fmt.Errorf("nucleo: escribir una línea de la transferencia interna: %w", err)
+		}
+	}
+	return nil
+}
+
 // AbrirSubcuentasDeUsuario crea las dos subcuentas del usuario y devuelve cuántas creó; es idempotente.
 func (s *Servicio) AbrirSubcuentasDeUsuario(ctx context.Context, usuarioID string) (int64, error) {
 	if usuarioID == "" {

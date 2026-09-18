@@ -5,11 +5,14 @@ package nucleo
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -326,4 +329,418 @@ func TestRolNucleoNoPuedeReescribirElMontoDeLaTransferencia(t *testing.T) {
 		t.Fatalf("error = %v, quiero SQLSTATE %s", err, pgerrcode.InsufficientPrivilege)
 	}
 	t.Logf("UPDATE monto rechazado: %v", err)
+}
+
+// resolutorDePrueba resuelve la llave de destino contra un mapa en memoria.
+type resolutorDePrueba map[string]string
+
+func (r resolutorDePrueba) UsuarioIDDeDestino(_ context.Context, llave string) (string, bool, error) {
+	id, ok := r[llave]
+	return id, ok, nil
+}
+
+// errFallaInyectada marca la línea de la transferencia interna que la prueba obliga a fallar.
+var errFallaInyectada = errors.New("prueba: falla inyectada entre los dos asientos")
+
+// abridorConFalla envuelve el pool y devuelve transacciones que fallan al escribir en una cuenta concreta.
+type abridorConFalla struct {
+	real           abridorDeTransacciones
+	cuentaQueFalla string
+}
+
+func (a abridorConFalla) Begin(ctx context.Context) (transaccionDeNucleo, error) {
+	tx, err := a.real.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return transaccionConFalla{transaccionDeNucleo: tx, cuentaQueFalla: a.cuentaQueFalla}, nil
+}
+
+// transaccionConFalla inyecta el error solo en el INSERT de una línea de posting de la cuenta elegida.
+type transaccionConFalla struct {
+	transaccionDeNucleo
+	cuentaQueFalla string
+}
+
+func (t transaccionConFalla) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	if strings.Contains(sql, "INSERT INTO nucleo.posting") && len(args) >= 2 {
+		if cuenta, ok := args[1].(string); ok && cuenta == t.cuentaQueFalla {
+			return filaSinResultado{err: errFallaInyectada}
+		}
+	}
+	return t.transaccionDeNucleo.QueryRow(ctx, sql, args...)
+}
+
+// saldoDeCuentaDePrueba devuelve el saldo a favor de una cuenta con el signo del usuario.
+func saldoDeCuentaDePrueba(t *testing.T, s *Servicio, cuenta string) Centavos {
+	t.Helper()
+
+	saldo, err := s.Saldo(t.Context(), cuenta)
+	if err != nil {
+		t.Fatalf("saldo de %s: %v", cuenta, err)
+	}
+	return saldo
+}
+
+// asientoConLineas resume un asiento del diario con su suma y su número de líneas.
+type asientoConLineas struct {
+	ID         int64
+	Tipo       string
+	OcurridoEn time.Time
+	Suma       int64
+	Lineas     int64
+}
+
+// asientosDeLaTransferencia lee los asientos ligados a una transferencia con su suma y su conteo de líneas.
+func asientosDeLaTransferencia(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) []asientoConLineas {
+	t.Helper()
+
+	var asientos []asientoConLineas
+	_, err := enTransaccion(t.Context(), poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			rows, err := tx.Query(ctx, `
+				SELECT je.id, je.tipo, je.ocurrido_en, COALESCE(SUM(p.monto), 0)::bigint, count(p.id)
+				  FROM nucleo.journal_entry je
+				  LEFT JOIN nucleo.posting p ON p.entry_id = je.id
+				 WHERE je.transferencia_id = $1
+				 GROUP BY je.id, je.tipo, je.ocurrido_en
+				 ORDER BY je.id`, pgtype.UUID{Bytes: id, Valid: true})
+			if err != nil {
+				return struct{}{}, err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var asiento asientoConLineas
+				var ocurrido pgtype.Timestamptz
+				if err := rows.Scan(&asiento.ID, &asiento.Tipo, &ocurrido, &asiento.Suma, &asiento.Lineas); err != nil {
+					return struct{}{}, err
+				}
+				asiento.OcurridoEn = ocurrido.Time.UTC()
+				asientos = append(asientos, asiento)
+			}
+			return struct{}{}, rows.Err()
+		})
+	if err != nil {
+		t.Fatalf("leer los asientos de %s: %v", id, err)
+	}
+	return asientos
+}
+
+// contarAsientosYPosting cuenta las filas del diario para probar que una transacción fallida no deja rastro.
+func contarAsientosYPosting(t *testing.T, pool *pgxpool.Pool) (int64, int64) {
+	t.Helper()
+
+	var asientos, posting int64
+	_, err := enTransaccion(t.Context(), poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			return struct{}{}, tx.QueryRow(ctx,
+				`SELECT (SELECT count(*) FROM nucleo.journal_entry), (SELECT count(*) FROM nucleo.posting)`).
+				Scan(&asientos, &posting)
+		})
+	if err != nil {
+		t.Fatalf("contar el diario: %v", err)
+	}
+	return asientos, posting
+}
+
+// verificarApendiceC corre las verificaciones del Apéndice C acotadas a los asientos del envío y a sus cuentas.
+func verificarApendiceC(t *testing.T, pool *pgxpool.Pool, id uuid.UUID, cuentas []string) {
+	t.Helper()
+
+	_, err := enTransaccion(t.Context(), poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			idParam := pgtype.UUID{Bytes: id, Valid: true}
+			var descuadrados, cortos, activos int64
+			if err := tx.QueryRow(ctx, `
+				SELECT count(*) FROM (
+					SELECT entry_id FROM nucleo.posting
+					 WHERE entry_id IN (SELECT id FROM nucleo.journal_entry WHERE transferencia_id = $1)
+					 GROUP BY entry_id HAVING SUM(monto) <> 0) x`, idParam).Scan(&descuadrados); err != nil {
+				return struct{}{}, err
+			}
+			if err := tx.QueryRow(ctx, `
+				SELECT count(*) FROM (
+					SELECT entry_id FROM nucleo.posting
+					 WHERE entry_id IN (SELECT id FROM nucleo.journal_entry WHERE transferencia_id = $1)
+					 GROUP BY entry_id HAVING count(*) < 2) x`, idParam).Scan(&cortos); err != nil {
+				return struct{}{}, err
+			}
+			if err := tx.QueryRow(ctx, `
+				SELECT count(*) FROM nucleo.posting p
+				  JOIN nucleo.cuenta c ON c.id = p.cuenta_id
+				 WHERE p.entry_id IN (SELECT id FROM nucleo.journal_entry WHERE transferencia_id = $1)
+				   AND c.naturaleza = 'activo'`, idParam).Scan(&activos); err != nil {
+				return struct{}{}, err
+			}
+
+			var deudores int64
+			for _, cuenta := range cuentas {
+				var saldo int64
+				if err := tx.QueryRow(ctx,
+					`SELECT COALESCE(SUM(monto), 0)::bigint FROM nucleo.posting WHERE cuenta_id = $1`,
+					cuenta).Scan(&saldo); err != nil {
+					return struct{}{}, err
+				}
+				if saldo > 0 {
+					deudores++
+				}
+			}
+			if descuadrados != 0 {
+				t.Errorf("Apéndice C: %d asiento(s) descuadrado(s) en el envío, quiero 0", descuadrados)
+			}
+			if cortos != 0 {
+				t.Errorf("Apéndice C: %d asiento(s) con menos de dos líneas, quiero 0", cortos)
+			}
+			if activos != 0 {
+				t.Errorf("Apéndice C: el envío tocó %d cuenta(s) de activo, quiero 0", activos)
+			}
+			if deudores != 0 {
+				t.Errorf("Apéndice C: %d subcuenta(s) de usuario quedaron en saldo deudor, quiero 0", deudores)
+			}
+			return struct{}{}, nil
+		})
+	if err != nil {
+		t.Fatalf("Apéndice C: %v", err)
+	}
+}
+
+// HU-NF-06 Criterios 7 y 9: el envío feliz deja los dos asientos con el mismo transferencia_id y ocurrido_en, suma cero y sin tocar el activo.
+func TestHU_NF_06_Criterio7_EnvioFelizAsientaRetencionYTransferenciaInterna(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil)
+	emisor := uuid.NewString()
+	cuentaEmisor := subcuentaDisponibleDePrueba(t, ctx, base, emisor)
+	fondearDisponibleDePrueba(t, pool, cuentaEmisor, 1000000)
+	receptor := uuid.NewString()
+	subcuentaDisponibleDePrueba(t, ctx, base, receptor)
+
+	s := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil, ConResolutorDestino(resolutorDePrueba{"receptor": receptor}))
+	transferencia, creada, err := s.Transferir(ctx, SolicitudTransferencia{
+		UsuarioID:      emisor,
+		CuentaOrigen:   cuentaEmisor,
+		LlaveDestino:   "receptor",
+		Monto:          Centavos(250000),
+		Moneda:         "COP",
+		IdempotencyKey: "k-" + uuid.NewString(),
+	})
+	if err != nil || !creada {
+		t.Fatalf("envío: creada = %v, err = %v; quiero true, nil", creada, err)
+	}
+	if transferencia.Estado != EstadoTransferenciaConfirmada {
+		t.Errorf("estado = %q, quiero %q", transferencia.Estado, EstadoTransferenciaConfirmada)
+	}
+	if transferencia.ActualizadaEn.Before(transferencia.CreadaEn) {
+		t.Errorf("actualizada_en = %s, quiero posterior o igual a creada_en %s", transferencia.ActualizadaEn, transferencia.CreadaEn)
+	}
+
+	asientos := asientosDeLaTransferencia(t, pool, transferencia.ID)
+	if len(asientos) != 2 {
+		t.Fatalf("asientos = %d, quiero 2 (retención y transferencia interna)", len(asientos))
+	}
+	if asientos[0].Tipo != TipoAsientoRetencion || asientos[1].Tipo != TipoAsientoTransferenciaInterna {
+		t.Errorf("tipos = %q, %q; quiero %q y %q", asientos[0].Tipo, asientos[1].Tipo, TipoAsientoRetencion, TipoAsientoTransferenciaInterna)
+	}
+	if asientos[0].Suma != 0 || asientos[1].Suma != 0 || asientos[0].Lineas < 2 || asientos[1].Lineas < 2 {
+		t.Errorf("sumas y líneas = (%d,%d) y (%d,%d), quiero suma cero y al menos dos líneas en cada asiento",
+			asientos[0].Suma, asientos[0].Lineas, asientos[1].Suma, asientos[1].Lineas)
+	}
+	if !asientos[0].OcurridoEn.Equal(asientos[1].OcurridoEn) {
+		t.Errorf("ocurrido_en difiere: %s vs %s", asientos[0].OcurridoEn, asientos[1].OcurridoEn)
+	}
+
+	if got := saldoDeCuentaDePrueba(t, base, cuentaEmisor); got != 750000 {
+		t.Errorf("disponible del emisor = %d, quiero 750000", got)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, NombreCuentaRetenido(emisor)); got != 0 {
+		t.Errorf("retenido del emisor = %d, quiero 0", got)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, NombreCuentaDisponible(receptor)); got != 250000 {
+		t.Errorf("disponible del receptor = %d, quiero 250000", got)
+	}
+
+	verificarApendiceC(t, pool, transferencia.ID, []string{cuentaEmisor, NombreCuentaRetenido(emisor), NombreCuentaDisponible(receptor)})
+}
+
+// HU-NF-06 Criterio 7: una falla entre los dos asientos no deja ninguno y el saldo del emisor queda intacto.
+func TestHU_NF_06_Criterio7_EnvioAtomicoConFallaEntreLosDosAsientos(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil)
+	emisor := uuid.NewString()
+	cuentaEmisor := subcuentaDisponibleDePrueba(t, ctx, base, emisor)
+	fondearDisponibleDePrueba(t, pool, cuentaEmisor, 1000000)
+	receptor := uuid.NewString()
+	subcuentaDisponibleDePrueba(t, ctx, base, receptor)
+
+	asientosAntes, postingAntes := contarAsientosYPosting(t, pool)
+
+	s := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil, ConResolutorDestino(resolutorDePrueba{"receptor": receptor}))
+	s.pool = abridorConFalla{real: s.pool, cuentaQueFalla: NombreCuentaDisponible(receptor)}
+
+	_, _, err := s.Transferir(ctx, SolicitudTransferencia{
+		UsuarioID:      emisor,
+		CuentaOrigen:   cuentaEmisor,
+		LlaveDestino:   "receptor",
+		Monto:          Centavos(250000),
+		Moneda:         "COP",
+		IdempotencyKey: "k-" + uuid.NewString(),
+	})
+	if !errors.Is(err, errFallaInyectada) {
+		t.Fatalf("err = %v, quiero la falla inyectada", err)
+	}
+
+	if got := saldoDeCuentaDePrueba(t, base, cuentaEmisor); got != 1000000 {
+		t.Errorf("disponible del emisor = %d, quiero 1000000 intacto", got)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, NombreCuentaDisponible(receptor)); got != 0 {
+		t.Errorf("disponible del receptor = %d, quiero 0", got)
+	}
+	asientosDespues, postingDespues := contarAsientosYPosting(t, pool)
+	if asientosAntes != asientosDespues || postingAntes != postingDespues {
+		t.Errorf("el diario cambió: journal_entry %d->%d, posting %d->%d", asientosAntes, asientosDespues, postingAntes, postingDespues)
+	}
+	if filas := contarTransferenciasDeUsuario(t, pool, emisor); filas != 0 {
+		t.Errorf("transferencias del emisor = %d, quiero 0", filas)
+	}
+}
+
+// HU-NF-06 Criterio 6 (aportado por NF-A2-01): el reintento con la misma llave devuelve la primera transferencia y no asienta de nuevo.
+func TestHU_NF_06_ReintentoNoDuplicaElEnvio(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil)
+	emisor := uuid.NewString()
+	cuentaEmisor := subcuentaDisponibleDePrueba(t, ctx, base, emisor)
+	fondearDisponibleDePrueba(t, pool, cuentaEmisor, 1000000)
+	receptor := uuid.NewString()
+	subcuentaDisponibleDePrueba(t, ctx, base, receptor)
+
+	s := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil, ConResolutorDestino(resolutorDePrueba{"receptor": receptor}))
+	solicitud := SolicitudTransferencia{
+		UsuarioID:      emisor,
+		CuentaOrigen:   cuentaEmisor,
+		LlaveDestino:   "receptor",
+		Monto:          Centavos(250000),
+		Moneda:         "COP",
+		IdempotencyKey: "k-" + uuid.NewString(),
+	}
+
+	primera, creada, err := s.Transferir(ctx, solicitud)
+	if err != nil || !creada {
+		t.Fatalf("primer envío: creada = %v, err = %v; quiero true, nil", creada, err)
+	}
+	segunda, creada, err := s.Transferir(ctx, solicitud)
+	if err != nil {
+		t.Fatalf("reintento: %v", err)
+	}
+	if creada {
+		t.Error("el reintento no debe crear una segunda transferencia")
+	}
+	if segunda.ID != primera.ID {
+		t.Errorf("reintento devolvió %s, quiero la original %s", segunda.ID, primera.ID)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, cuentaEmisor); got != 750000 {
+		t.Errorf("disponible del emisor = %d, quiero 750000 sin doble débito", got)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, NombreCuentaDisponible(receptor)); got != 250000 {
+		t.Errorf("disponible del receptor = %d, quiero 250000 sin doble crédito", got)
+	}
+	if filas := contarTransferenciasDeUsuario(t, pool, emisor); filas != 1 {
+		t.Errorf("transferencias del emisor = %d, quiero 1", filas)
+	}
+	if asientos := asientosDeLaTransferencia(t, pool, primera.ID); len(asientos) != 2 {
+		t.Errorf("asientos = %d, quiero 2", len(asientos))
+	}
+}
+
+// HU-NF-06 Criterio 6: el reintento con la misma llave y el destino ya borrado devuelve la primera transferencia.
+func TestHU_NF_06_ReintentoConDestinoInexistenteDevuelveLaOriginal(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil)
+	emisor := uuid.NewString()
+	cuentaEmisor := subcuentaDisponibleDePrueba(t, ctx, base, emisor)
+	fondearDisponibleDePrueba(t, pool, cuentaEmisor, 1000000)
+	receptor := uuid.NewString()
+	subcuentaDisponibleDePrueba(t, ctx, base, receptor)
+
+	destinos := resolutorDePrueba{"receptor": receptor}
+	s := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil, ConResolutorDestino(destinos))
+	solicitud := SolicitudTransferencia{
+		UsuarioID:      emisor,
+		CuentaOrigen:   cuentaEmisor,
+		LlaveDestino:   "receptor",
+		Monto:          Centavos(250000),
+		Moneda:         "COP",
+		IdempotencyKey: "k-" + uuid.NewString(),
+	}
+
+	primera, creada, err := s.Transferir(ctx, solicitud)
+	if err != nil || !creada {
+		t.Fatalf("primer envío: creada = %v, err = %v; quiero true, nil", creada, err)
+	}
+
+	delete(destinos, "receptor")
+
+	segunda, creada, err := s.Transferir(ctx, solicitud)
+	if err != nil {
+		t.Fatalf("reintento con el destino ya inexistente: %v", err)
+	}
+	if creada {
+		t.Error("el reintento no debe crear una segunda transferencia")
+	}
+	if segunda.ID != primera.ID {
+		t.Errorf("reintento devolvió %s, quiero la original %s", segunda.ID, primera.ID)
+	}
+	if segunda.Estado != EstadoTransferenciaConfirmada {
+		t.Errorf("estado devuelto = %q, quiero %q", segunda.Estado, EstadoTransferenciaConfirmada)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, cuentaEmisor); got != 750000 {
+		t.Errorf("disponible del emisor = %d, quiero 750000 sin doble débito", got)
+	}
+	if filas := contarTransferenciasDeUsuario(t, pool, emisor); filas != 1 {
+		t.Errorf("transferencias del emisor = %d, quiero 1", filas)
+	}
+	if asientos := asientosDeLaTransferencia(t, pool, primera.ID); len(asientos) != 2 {
+		t.Errorf("asientos = %d, quiero 2", len(asientos))
+	}
+	t.Logf("reintento con el destino borrado devolvió %s sin rechazo", primera.ID)
+}
+
+// HU-NF-06 Criterios 4 y 5: el destino inexistente y el propio se rechazan sin dejar transferencia.
+func TestHU_NF_06_Criterios4y5_DestinoInexistenteYPropio(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil)
+	emisor := uuid.NewString()
+	cuentaEmisor := subcuentaDisponibleDePrueba(t, ctx, base, emisor)
+	fondearDisponibleDePrueba(t, pool, cuentaEmisor, 1000000)
+
+	casos := map[string]struct {
+		resolutor ResolutorDestino
+		esperado  error
+	}{
+		"destino inexistente": {resolutorDePrueba{}, ErrDestinoNoExiste},
+		"destino propio":      {resolutorDePrueba{"yo": emisor}, ErrDestinoPropio},
+	}
+	for nombre, tc := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			s := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil, ConResolutorDestino(tc.resolutor))
+			_, _, err := s.Transferir(ctx, SolicitudTransferencia{
+				UsuarioID:      emisor,
+				CuentaOrigen:   cuentaEmisor,
+				LlaveDestino:   "yo",
+				Monto:          Centavos(1000),
+				Moneda:         "COP",
+				IdempotencyKey: "k-" + uuid.NewString(),
+			})
+			if !errors.Is(err, tc.esperado) {
+				t.Fatalf("err = %v, quiero %v", err, tc.esperado)
+			}
+		})
+	}
+	if filas := contarTransferenciasDeUsuario(t, pool, emisor); filas != 0 {
+		t.Errorf("transferencias del emisor = %d, quiero 0", filas)
+	}
 }

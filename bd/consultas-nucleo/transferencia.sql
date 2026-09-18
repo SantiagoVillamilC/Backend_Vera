@@ -26,7 +26,7 @@ UPDATE nucleo.transferencia
  WHERE id = @id
    AND estado = @estado_esperado
    AND (
-          (estado = 'creada'        AND @estado_nuevo = 'reservada')
+          (estado = 'creada'        AND @estado_nuevo IN ('reservada', 'confirmada'))
        OR (estado = 'reservada'     AND @estado_nuevo = 'despachada')
        OR (estado = 'despachada'    AND @estado_nuevo IN ('confirmada', 'fallida', 'indeterminada'))
        OR (estado = 'fallida'       AND @estado_nuevo = 'compensada')
