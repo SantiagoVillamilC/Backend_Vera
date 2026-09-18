@@ -1,6 +1,7 @@
 -- name: InsertarExtractoCustodio :exec
 INSERT INTO nucleo.extracto_custodio (corte_en, saldo, origen)
-VALUES (@corte_en, @saldo, @origen);
+VALUES (@corte_en, @saldo, @origen)
+ON CONFLICT (corte_en) DO NOTHING;
 
 -- name: ExtractoPorCorte :one
 SELECT corte_en, saldo, origen

@@ -145,6 +145,56 @@ func (q *Queries) ObtenerTransferencia(ctx context.Context, id pgtype.UUID) (Tra
 	return i, err
 }
 
+const obtenerTransferenciaConDespacho = `-- name: ObtenerTransferenciaConDespacho :one
+SELECT t.id, t.usuario_id, t.cuenta_origen, t.llave_destino, t.monto, t.moneda,
+       t.idempotency_key, t.estado, t.creada_en, t.actualizada_en,
+       EXISTS (
+           SELECT 1
+             FROM nucleo.outbox o
+            WHERE o.tipo = 'despacho_transferencia'
+              AND (o.payload->>'transferencia_id') = t.id::text
+              AND o.despachado_en IS NULL
+       ) AS despacho_pendiente
+  FROM nucleo.transferencia t
+ WHERE t.id = $1
+`
+
+type ObtenerTransferenciaConDespachoRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	UsuarioID         string             `json:"usuario_id"`
+	CuentaOrigen      string             `json:"cuenta_origen"`
+	LlaveDestino      string             `json:"llave_destino"`
+	Monto             int64              `json:"monto"`
+	Moneda            string             `json:"moneda"`
+	IdempotencyKey    string             `json:"idempotency_key"`
+	Estado            string             `json:"estado"`
+	CreadaEn          pgtype.Timestamptz `json:"creada_en"`
+	ActualizadaEn     pgtype.Timestamptz `json:"actualizada_en"`
+	DespachoPendiente bool               `json:"despacho_pendiente"`
+}
+
+func (q *Queries) ObtenerTransferenciaConDespacho(ctx context.Context, id pgtype.UUID) (ObtenerTransferenciaConDespachoRow, error) {
+	row := q.db.QueryRow(ctx, obtenerTransferenciaConDespacho, id)
+	var i ObtenerTransferenciaConDespachoRow
+	err := row.Scan(
+		&i.ID,
+		&i.UsuarioID,
+		&i.CuentaOrigen,
+		&i.LlaveDestino,
+		&i.Monto,
+		&i.Moneda,
+		&i.IdempotencyKey,
+		&i.Estado,
+		&i.CreadaEn,
+		&i.ActualizadaEn,
+		&i.DespachoPendiente,
+	)
+	if err != nil {
+		err = fmt.Errorf("query ObtenerTransferenciaConDespacho: %w", err)
+	}
+	return i, err
+}
+
 const obtenerTransferenciaPorIdempotencyKey = `-- name: ObtenerTransferenciaPorIdempotencyKey :one
 SELECT id, usuario_id, cuenta_origen, llave_destino, monto, moneda, idempotency_key, estado, creada_en, actualizada_en
   FROM nucleo.transferencia

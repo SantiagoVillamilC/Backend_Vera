@@ -40,6 +40,7 @@ type Querier interface {
 	ObtenerOutbox(ctx context.Context, id int64) (Outbox, error)
 	ObtenerTitularDeCuenta(ctx context.Context, id string) (pgtype.Text, error)
 	ObtenerTransferencia(ctx context.Context, id pgtype.UUID) (Transferencia, error)
+	ObtenerTransferenciaConDespacho(ctx context.Context, id pgtype.UUID) (ObtenerTransferenciaConDespachoRow, error)
 	ObtenerTransferenciaPorIdempotencyKey(ctx context.Context, arg ObtenerTransferenciaPorIdempotencyKeyParams) (Transferencia, error)
 	PaginaDeAnclas(ctx context.Context, arg PaginaDeAnclasParams) ([]PaginaDeAnclasRow, error)
 	RechazarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)

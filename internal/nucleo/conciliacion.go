@@ -21,13 +21,8 @@ type ventanaConciliacion struct {
 	extractoCustodio ExtractoCustodio
 }
 
-// detectorDeVentana es el punto de enganche de NF-A4-02.2: recibe la ventana y devuelve cuántas diferencias registró.
+// detectorDeVentana es el punto de enganche de la detección por tipo: recibe la ventana y devuelve cuántas diferencias registró.
 type detectorDeVentana func(ctx context.Context, q *repositorio.Queries, ventana ventanaConciliacion) (int, error)
-
-// sinDiferenciasDeVentana es el relleno que NF-A4-02.2 reemplaza por las reglas de resolución por tipo.
-func sinDiferenciasDeVentana(context.Context, *repositorio.Queries, ventanaConciliacion) (int, error) {
-	return 0, nil
-}
 
 // rangoDeConciliacion arma [desde, hasta): hasta = ahora - N y desde el final de la corrida anterior (HU-NF-08, criterios 1 y 2).
 func rangoDeConciliacion(ultima pgtype.Timestamptz, ahora time.Time, antiguedad time.Duration) (desde, hasta time.Time) {
@@ -76,7 +71,7 @@ func (s *Servicio) Conciliar(ctx context.Context, antiguedad time.Duration) (int
 func (s *Servicio) conciliarVentana(ctx context.Context, desde, hasta time.Time, extractoRiel ExtractoRiel, extractoCustodio ExtractoCustodio) (int, error) {
 	detectar := s.detectar
 	if detectar == nil {
-		detectar = sinDiferenciasDeVentana
+		detectar = s.detectarDiferenciasDeVentana
 	}
 	diferencias := 0
 	_, err := enTransaccion(ctx, s.pool,

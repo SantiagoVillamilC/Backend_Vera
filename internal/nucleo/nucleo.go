@@ -211,11 +211,11 @@ func NewServicio(
 		riel:              riel,
 		custodio:          custodio,
 		lectorRiel:        RielNoDisponible{},
-		detectar:          sinDiferenciasDeVentana,
 		ahora:             time.Now,
 		rastreador:        rastreador,
 		politicaReintento: PoliticaReintentoOutboxPorDefecto(),
 	}
+	servicio.detectar = servicio.detectarDiferenciasDeVentana
 	for _, opcion := range opciones {
 		opcion(servicio)
 	}

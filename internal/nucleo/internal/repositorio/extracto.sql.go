@@ -31,6 +31,7 @@ func (q *Queries) ExtractoPorCorte(ctx context.Context, corteEn pgtype.Timestamp
 const insertarExtractoCustodio = `-- name: InsertarExtractoCustodio :exec
 INSERT INTO nucleo.extracto_custodio (corte_en, saldo, origen)
 VALUES ($1, $2, $3)
+ON CONFLICT (corte_en) DO NOTHING
 `
 
 type InsertarExtractoCustodioParams struct {
