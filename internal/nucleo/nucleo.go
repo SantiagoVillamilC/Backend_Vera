@@ -139,6 +139,25 @@ type LectorExtractoCustodio interface {
 	Extracto(ctx context.Context, corteEn time.Time) (ExtractoCustodio, error)
 }
 
+// ExtractoRiel es la ventana de operaciones que el riel reporta como ocurridas de su lado.
+type ExtractoRiel struct {
+	Corte       time.Time
+	Operaciones []OperacionDeExtractoRiel
+}
+
+// OperacionDeExtractoRiel es una fila del extracto, emparejable solo por el identificador global.
+type OperacionDeExtractoRiel struct {
+	TransferenciaID uuid.UUID
+	Estado          string
+	Monto           Centavos
+	OcurridoEn      time.Time
+}
+
+// LectorExtractoRiel es lo que el núcleo necesita del extracto del riel; el rango lo pide quien llama.
+type LectorExtractoRiel interface {
+	Extracto(ctx context.Context, desde, hasta time.Time) (ExtractoRiel, error)
+}
+
 // Servicio es la única puerta a las tablas del núcleo y a su frontera transaccional.
 type Servicio struct {
 	pool              abridorDeTransacciones
@@ -147,12 +166,20 @@ type Servicio struct {
 	directorio        DirectorioLlaves
 	riel              Riel
 	custodio          LectorExtractoCustodio
+	lectorRiel        LectorExtractoRiel
+	detectar          detectorDeVentana
+	ahora             func() time.Time
 	rastreador        RastreadorErrores
 	politicaReintento PoliticaReintentoOutbox
 }
 
 // OpcionServicio ajusta el Servicio en su construcción.
 type OpcionServicio func(*Servicio)
+
+// ConLectorExtractoRiel fija el lector del extracto del riel; sin él, la conciliación falla cerrada.
+func ConLectorExtractoRiel(lector LectorExtractoRiel) OpcionServicio {
+	return func(s *Servicio) { s.lectorRiel = lector }
+}
 
 // ConPoliticaReintentoOutbox fija la espera creciente del barrido de la bandeja de salida.
 func ConPoliticaReintentoOutbox(politica PoliticaReintentoOutbox) OpcionServicio {
@@ -183,6 +210,9 @@ func NewServicio(
 		kyc:               kyc,
 		riel:              riel,
 		custodio:          custodio,
+		lectorRiel:        RielNoDisponible{},
+		detectar:          sinDiferenciasDeVentana,
+		ahora:             time.Now,
 		rastreador:        rastreador,
 		politicaReintento: PoliticaReintentoOutboxPorDefecto(),
 	}
@@ -223,6 +253,11 @@ func (RielNoDisponible) ConsultarEstado(context.Context, uuid.UUID) (RespuestaRi
 	return RespuestaRiel{}, ErrRielNoDisponible
 }
 
+// Extracto siempre devuelve ErrRielNoDisponible.
+func (RielNoDisponible) Extracto(context.Context, time.Time, time.Time) (ExtractoRiel, error) {
+	return ExtractoRiel{}, ErrRielNoDisponible
+}
+
 // CustodioNoDisponible es el relleno del extracto para las pruebas que no levantan el simulador.
 type CustodioNoDisponible struct{}
 
@@ -246,4 +281,5 @@ var (
 	_ LectorNivelKYC         = LectorNivelKYCFijo{}
 	_ Riel                   = RielNoDisponible{}
 	_ LectorExtractoCustodio = CustodioNoDisponible{}
+	_ LectorExtractoRiel     = RielNoDisponible{}
 )

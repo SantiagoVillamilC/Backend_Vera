@@ -203,3 +203,97 @@ func TestNuevoRielUsaClienteConPlazoPorDefecto(t *testing.T) {
 		t.Errorf("plazo por defecto = %v, quiero %v", riel.cliente.Timeout, tiempoEsperaRiel)
 	}
 }
+
+// HU-NF-08, criterio 1: el extracto se pide por [desde, hasta) y trae cada operación con el monto exacto.
+func TestExtractoPideLaVentanaYLeeLasOperaciones(t *testing.T) {
+	t.Parallel()
+
+	desde := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
+	hasta := desde.Add(5 * time.Minute)
+	corte := desde.Add(6 * time.Minute)
+	id := uuid.New()
+
+	servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/extracto" {
+			t.Errorf("petición = %s %s, quiero GET /extracto", r.Method, r.URL.Path)
+		}
+		if got := r.URL.Query().Get("desde"); got != desde.Format(time.RFC3339) {
+			t.Errorf("desde = %q, quiero %q", got, desde.Format(time.RFC3339))
+		}
+		if got := r.URL.Query().Get("hasta"); got != hasta.Format(time.RFC3339) {
+			t.Errorf("hasta = %q, quiero %q", got, hasta.Format(time.RFC3339))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"corte":"`+corte.Format(time.RFC3339)+`","operaciones":[`+
+			`{"transferencia_id":"`+id.String()+`","estado":"confirmada","monto_centavos":"9007199254740993",`+
+			`"ocurrido_en":"`+desde.Add(time.Minute).Format(time.RFC3339)+`"}]}`)
+	}))
+	t.Cleanup(servidor.Close)
+
+	extracto, err := NuevoRiel(servidor.URL, nil).Extracto(t.Context(), desde, hasta)
+	if err != nil {
+		t.Fatalf("Extracto: %v", err)
+	}
+	if !extracto.Corte.Equal(corte) {
+		t.Errorf("Corte = %v, quiero %v", extracto.Corte, corte)
+	}
+	if len(extracto.Operaciones) != 1 {
+		t.Fatalf("operaciones = %d, quiero 1", len(extracto.Operaciones))
+	}
+	operacion := extracto.Operaciones[0]
+	if operacion.TransferenciaID != id || operacion.Estado != "confirmada" {
+		t.Errorf("operación = %+v, quiero %s confirmada", operacion, id)
+	}
+	if operacion.Monto != nucleo.Centavos(9007199254740993) {
+		t.Errorf("Monto = %d, quiero el entero exacto pasado 2^53", operacion.Monto)
+	}
+	if !operacion.OcurridoEn.Equal(desde.Add(time.Minute)) {
+		t.Errorf("OcurridoEn = %v, quiero %v", operacion.OcurridoEn, desde.Add(time.Minute))
+	}
+}
+
+// HU-NF-08, criterio 17: una ventana sin movimientos es un extracto vacío válido, no un error.
+func TestExtractoVacioNoTraeOperaciones(t *testing.T) {
+	t.Parallel()
+
+	servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"corte":"2026-09-18T12:06:00Z","operaciones":[]}`)
+	}))
+	t.Cleanup(servidor.Close)
+
+	extracto, err := NuevoRiel(servidor.URL, nil).Extracto(t.Context(), time.Now().Add(-time.Hour), time.Now())
+	if err != nil {
+		t.Fatalf("Extracto: %v", err)
+	}
+	if len(extracto.Operaciones) != 0 {
+		t.Errorf("operaciones = %d, quiero 0", len(extracto.Operaciones))
+	}
+}
+
+// HU-NF-08, criterio 18: el extracto exige el contrato completo y el monto como cadena entera.
+func TestExtractoRechazaContratoIncompleto(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.NewString()
+	corte := `"corte":"2026-09-18T12:06:00Z"`
+	ocurrido := `"ocurrido_en":"2026-09-18T12:01:00Z"`
+	casos := map[string]string{
+		"sin corte":              `{"operaciones":[]}`,
+		"sin operaciones":        `{` + corte + `}`,
+		"operacion sin id":       `{` + corte + `,"operaciones":[{"estado":"confirmada","monto_centavos":"1",` + ocurrido + `}]}`,
+		"operacion sin estado":   `{` + corte + `,"operaciones":[{"transferencia_id":"` + id + `","monto_centavos":"1",` + ocurrido + `}]}`,
+		"operacion sin monto":    `{` + corte + `,"operaciones":[{"transferencia_id":"` + id + `","estado":"confirmada",` + ocurrido + `}]}`,
+		"monto como número":      `{` + corte + `,"operaciones":[{"transferencia_id":"` + id + `","estado":"confirmada","monto_centavos":1,` + ocurrido + `}]}`,
+		"operacion sin ocurrido": `{` + corte + `,"operaciones":[{"transferencia_id":"` + id + `","estado":"confirmada","monto_centavos":"1"}]}`,
+	}
+	for name, cuerpo := range casos {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := leerExtracto(strings.NewReader(cuerpo)); err == nil {
+				t.Error("leerExtracto aceptó un contrato incompleto")
+			}
+		})
+	}
+}

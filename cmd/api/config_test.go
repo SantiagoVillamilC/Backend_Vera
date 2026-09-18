@@ -441,3 +441,23 @@ func TestLoadConfigExtractoDelCustodio(t *testing.T) {
 		})
 	}
 }
+
+// NF-A4-02.1: la corrida de conciliación dispara cada 60s sobre una ventana de 5m por defecto.
+func TestLoadConfigCadenciaYVentanaDeConciliacionPorDefecto(t *testing.T) {
+	t.Setenv("APP_DATABASE_URL", "postgres://nucleo:dsn@localhost:5432/centinela")
+	t.Setenv("JWT_SECRET", "jwt-secreto-de-al-menos-treinta-y-dos-bytes")
+	t.Setenv("CUSTODIO_TOKEN", strings.Repeat("a", 32))
+	t.Setenv("CONCILIATION_INTERVAL", "")
+	t.Setenv("CONCILIATION_WINDOW", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ConciliationInterval != 60*time.Second {
+		t.Errorf("ConciliationInterval = %v, quiero 60s", cfg.ConciliationInterval)
+	}
+	if cfg.ConciliationWindow != 5*time.Minute {
+		t.Errorf("ConciliationWindow = %v, quiero 5m", cfg.ConciliationWindow)
+	}
+}

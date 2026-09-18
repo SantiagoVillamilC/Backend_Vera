@@ -63,8 +63,11 @@ func run() error {
 
 	// Rellenos de lo que aún no existe (KYC real); el directorio, el extracto del custodio y el riel son reales cuando hay URL.
 	var riel nucleo.Riel = nucleo.RielNoDisponible{}
+	var lectorRiel nucleo.LectorExtractoRiel = nucleo.RielNoDisponible{}
 	if cfg.RielSimuladorURL != "" {
-		riel = rielsim.NuevoRiel(cfg.RielSimuladorURL, nil)
+		cliente := rielsim.NuevoRiel(cfg.RielSimuladorURL, nil)
+		riel = cliente
+		lectorRiel = cliente
 	}
 	var directorio nucleo.DirectorioLlaves = nucleo.DirectorioNoDisponible{}
 	if cfg.DirectorioSimuladorURL != "" {
@@ -79,6 +82,7 @@ func run() error {
 		observabilidad.RastreadorSlog{},
 		nucleo.ConResolutorDestino(resolutorDestino),
 		nucleo.ConDirectorio(directorio),
+		nucleo.ConLectorExtractoRiel(lectorRiel),
 		nucleo.ConPoliticaReintentoOutbox(nucleo.PoliticaReintentoOutbox{
 			Base:   cfg.OutboxBackoffBase,
 			Factor: cfg.OutboxBackoffFactor,

@@ -5,6 +5,7 @@ package nucleo
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -304,4 +305,386 @@ func sembrarTransferenciaDeConciliacion(t *testing.T, ctx context.Context, pool 
 		t.Fatalf("sembrar transferencia: %v", err)
 	}
 	return pgtype.UUID{Bytes: id, Valid: true}
+}
+
+// abridorDeConciliacion cuenta los Begin para probar el orden de las lecturas externas.
+type abridorDeConciliacion struct {
+	interno abridorDeTransacciones
+	begins  int
+}
+
+func (a *abridorDeConciliacion) Begin(ctx context.Context) (transaccionDeNucleo, error) {
+	a.begins++
+	return a.interno.Begin(ctx)
+}
+
+// rielFalso es el extracto del riel controlado por la prueba.
+type rielFalso struct {
+	extracto       ExtractoRiel
+	err            error
+	llamadas       int
+	desde, hasta   time.Time
+	abridor        *abridorDeConciliacion
+	beginsAlLlamar int
+}
+
+func (r *rielFalso) Extracto(_ context.Context, desde, hasta time.Time) (ExtractoRiel, error) {
+	r.llamadas++
+	r.desde, r.hasta = desde, hasta
+	if r.abridor != nil {
+		r.beginsAlLlamar = r.abridor.begins
+	}
+	return r.extracto, r.err
+}
+
+// custodioFalso es el extracto del custodio controlado por la prueba.
+type custodioFalso struct {
+	extracto       ExtractoCustodio
+	err            error
+	llamadas       int
+	corte          time.Time
+	abridor        *abridorDeConciliacion
+	beginsAlLlamar int
+}
+
+func (c *custodioFalso) Extracto(_ context.Context, corteEn time.Time) (ExtractoCustodio, error) {
+	c.llamadas++
+	c.corte = corteEn
+	if c.abridor != nil {
+		c.beginsAlLlamar = c.abridor.begins
+	}
+	return c.extracto, c.err
+}
+
+// detectorEspia captura la ventana que el enganche recibe y devuelve lo pedido.
+type detectorEspia struct {
+	llamadas int
+	ventana  ventanaConciliacion
+	devuelve int
+	err      error
+}
+
+// detectarFn ata el espía al tipo del punto de enganche.
+func (d *detectorEspia) detectarFn() detectorDeVentana {
+	return func(_ context.Context, _ *repositorio.Queries, ventana ventanaConciliacion) (int, error) {
+		d.llamadas++
+		d.ventana = ventana
+		return d.devuelve, d.err
+	}
+}
+
+// servicioDeConciliacion arma el Servicio con fakes y el reloj pedido.
+func servicioDeConciliacion(pool *pgxpool.Pool, reloj func() time.Time, riel LectorExtractoRiel, custodio LectorExtractoCustodio, espia *detectorEspia) *Servicio {
+	return &Servicio{
+		pool:       poolDeNucleo{pool: pool},
+		custodio:   custodio,
+		lectorRiel: riel,
+		detectar:   espia.detectarFn(),
+		ahora:      reloj,
+	}
+}
+
+// limpiarCursor borra el cursor con el rol dueño para probar la primera corrida.
+func limpiarCursor(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		t.Skip("DATABASE_URL no definida: limpiar el cursor exige el rol dueño")
+	}
+	dueno, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("abrir el pool dueño: %v", err)
+	}
+	t.Cleanup(dueno.Close)
+	if _, err := dueno.Exec(t.Context(), "DELETE FROM nucleo.conciliacion_corrida"); err != nil {
+		t.Fatalf("limpiar el cursor: %v", err)
+	}
+}
+
+// fijarCursor deja el cursor de la tabla en el final de ventana pedido.
+func fijarCursor(t *testing.T, pool *pgxpool.Pool, hasta time.Time) {
+	t.Helper()
+
+	_, err := enTransaccion(t.Context(), poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			_, err := tx.Exec(ctx, "INSERT INTO conciliacion_corrida (ventana_hasta) VALUES ($1)", hasta)
+			return struct{}{}, err
+		})
+	if err != nil {
+		t.Fatalf("fijar el cursor: %v", err)
+	}
+}
+
+// ultimaVentana lee el ventana_hasta de la última corrida.
+func ultimaVentana(t *testing.T, pool *pgxpool.Pool) time.Time {
+	t.Helper()
+
+	var hasta time.Time
+	_, err := enTransaccion(t.Context(), poolDeNucleo{pool: pool},
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
+			v, err := q.UltimaVentanaConciliada(ctx)
+			if err != nil {
+				return struct{}{}, err
+			}
+			hasta = v.Time.UTC()
+			return struct{}{}, nil
+		})
+	if err != nil {
+		t.Fatalf("leer el cursor: %v", err)
+	}
+	return hasta
+}
+
+// contarCorridas cuenta las filas del cursor.
+func contarCorridas(t *testing.T, pool *pgxpool.Pool) int64 {
+	t.Helper()
+
+	var filas int64
+	_, err := enTransaccion(t.Context(), poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			return struct{}{}, tx.QueryRow(ctx, "SELECT count(*) FROM conciliacion_corrida").Scan(&filas)
+		})
+	if err != nil {
+		t.Fatalf("contar corridas: %v", err)
+	}
+	return filas
+}
+
+// idsDeAsientos devuelve el conjunto de identificadores de la ventana leída.
+func idsDeAsientos(asientos []repositorio.JournalEntry) map[int64]bool {
+	ids := make(map[int64]bool, len(asientos))
+	for _, asiento := range asientos {
+		ids[asiento.ID] = true
+	}
+	return ids
+}
+
+// HU-NF-08, criterios 1 y 2.1: la ventana toma lo de tiempo de evento en [desde, hasta) y deja fuera lo reciente.
+func TestConciliarSeleccionaPorTiempoDeEventoYDejaFueraLoReciente(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	debito, credito := sembrarCuentasDeConciliacion(t, ctx, pool)
+
+	desde := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	hasta := desde.Add(5 * time.Minute)
+	fijarCursor(t, pool, desde)
+
+	dentro := sembrarAsientoDeConciliacion(t, ctx, pool, debito, credito, desde.Add(time.Minute))
+	enBorde := sembrarAsientoDeConciliacion(t, ctx, pool, debito, credito, hasta)
+	antes := sembrarAsientoDeConciliacion(t, ctx, pool, debito, credito, desde.Add(-time.Second))
+	despues := sembrarAsientoDeConciliacion(t, ctx, pool, debito, credito, hasta.Add(time.Second))
+
+	espia := &detectorEspia{}
+	servicio := servicioDeConciliacion(pool, func() time.Time { return hasta.Add(5 * time.Minute) },
+		&rielFalso{}, &custodioFalso{}, espia)
+
+	if _, err := servicio.Conciliar(ctx, 5*time.Minute); err != nil {
+		t.Fatalf("Conciliar: %v", err)
+	}
+
+	ids := idsDeAsientos(espia.ventana.asientos)
+	if !ids[dentro] {
+		t.Error("el asiento dentro de la ventana no fue seleccionado")
+	}
+	if ids[enBorde] {
+		t.Error("el asiento en el borde hasta entró: el borde es exclusivo")
+	}
+	if ids[antes] {
+		t.Error("el asiento anterior al cursor entró en la ventana")
+	}
+	if ids[despues] {
+		t.Error("el asiento más reciente que N entró en la ventana")
+	}
+}
+
+// HU-NF-08, criterio 2.2: las ventanas son contiguas y sin huecos aunque se salte una corrida.
+func TestConciliarEsContiguoYNoDejaHuecosAunqueSeSalteUnaCorrida(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	limpiarCursor(t, pool)
+
+	base := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	const antiguedad = 5 * time.Minute
+	reloj := base
+	riel := &rielFalso{}
+	espia := &detectorEspia{}
+	servicio := servicioDeConciliacion(pool, func() time.Time { return reloj }, riel, &custodioFalso{}, espia)
+
+	// Primera corrida: sin cursor, la ventana es vacía y solo siembra el cursor.
+	if n, err := servicio.Conciliar(ctx, antiguedad); err != nil || n != 0 {
+		t.Fatalf("primera corrida = (%d, %v), quiero (0, nil)", n, err)
+	}
+	if espia.llamadas != 0 || riel.llamadas != 0 {
+		t.Fatal("la primera corrida no debe leer extractos ni detectar diferencias")
+	}
+	if got := ultimaVentana(t, pool); !got.Equal(base.Add(-antiguedad)) {
+		t.Errorf("cursor sembrado = %v, quiero %v", got, base.Add(-antiguedad))
+	}
+
+	// Segunda corrida: arranca en el final de la anterior y avanza el cursor.
+	reloj = base.Add(60 * time.Second)
+	if _, err := servicio.Conciliar(ctx, antiguedad); err != nil {
+		t.Fatalf("segunda corrida: %v", err)
+	}
+	if espia.llamadas != 1 || riel.llamadas != 1 {
+		t.Fatalf("la segunda corrida debe leer extractos y detectar una vez (riel=%d, detector=%d)", riel.llamadas, espia.llamadas)
+	}
+	if !espia.ventana.desde.Equal(base.Add(-antiguedad)) {
+		t.Errorf("desde de la segunda = %v, quiero %v", espia.ventana.desde, base.Add(-antiguedad))
+	}
+	cursorSegundo := ultimaVentana(t, pool)
+	if !cursorSegundo.Equal(espia.ventana.hasta) {
+		t.Errorf("cursor = %v, quiero el ventana_hasta %v", cursorSegundo, espia.ventana.hasta)
+	}
+
+	// Tercera corrida: se salta una; la siguiente arranca en el mismo cursor, sin hueco ni solape.
+	reloj = base.Add(180 * time.Second)
+	if _, err := servicio.Conciliar(ctx, antiguedad); err != nil {
+		t.Fatalf("tercera corrida: %v", err)
+	}
+	if !espia.ventana.desde.Equal(cursorSegundo) {
+		t.Errorf("desde tras saltar una corrida = %v, quiero %v (sin hueco)", espia.ventana.desde, cursorSegundo)
+	}
+	if !espia.ventana.hasta.Equal(base.Add(180 * time.Second).Add(-antiguedad)) {
+		t.Errorf("hasta de la tercera = %v, quiero %v", espia.ventana.hasta, base.Add(180*time.Second).Add(-antiguedad))
+	}
+}
+
+// HU-NF-08, criterio 3: una confirmación atrasada se ubica por su tiempo de evento y no por el de llegada.
+func TestConciliarUbicaLaConfirmacionAtrasadaEnSuVentana(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	debito, credito := sembrarCuentasDeConciliacion(t, ctx, pool)
+
+	desde := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	hasta := desde.Add(5 * time.Minute)
+	fijarCursor(t, pool, desde)
+
+	tardia := sembrarAsientoDeConciliacion(t, ctx, pool, debito, credito, desde.Add(time.Minute))
+	siguiente := sembrarAsientoDeConciliacion(t, ctx, pool, debito, credito, hasta.Add(time.Minute))
+
+	espia := &detectorEspia{}
+	servicio := servicioDeConciliacion(pool, func() time.Time { return hasta.Add(5 * time.Minute) },
+		&rielFalso{}, &custodioFalso{}, espia)
+
+	if _, err := servicio.Conciliar(ctx, 5*time.Minute); err != nil {
+		t.Fatalf("Conciliar: %v", err)
+	}
+
+	ids := idsDeAsientos(espia.ventana.asientos)
+	if !ids[tardia] {
+		t.Error("la confirmación atrasada no quedó en su ventana de ocurrencia")
+	}
+	if ids[siguiente] {
+		t.Error("un asiento de la ventana siguiente entró en la ventana")
+	}
+	for _, asiento := range espia.ventana.asientos {
+		if asiento.ID != tardia {
+			continue
+		}
+		if !asiento.OcurridoEn.Time.UTC().Before(hasta) {
+			t.Error("ocurrido_en debía quedar dentro de la ventana")
+		}
+		if !asiento.RegistradoEn.Time.UTC().After(hasta) {
+			t.Error("registrado_en debía ser posterior a la ventana: la prueba no demuestra selección por evento")
+		}
+	}
+}
+
+// HU-NF-08, criterio 17: sin alguno de los extractos la ventana no se concilia y el cursor no avanza.
+func TestConciliarNoAvanzaElCursorSiFaltaUnExtracto(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+
+	desde := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	hasta := desde.Add(5 * time.Minute)
+	fijarCursor(t, pool, desde)
+	antes := contarCorridas(t, pool)
+
+	casos := map[string]struct{ rielErr, custodioErr error }{
+		"sin extracto del riel":     {rielErr: errors.New("riel caído")},
+		"sin extracto del custodio": {custodioErr: errors.New("custodio caído")},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			espia := &detectorEspia{}
+			servicio := servicioDeConciliacion(pool, func() time.Time { return hasta.Add(5 * time.Minute) },
+				&rielFalso{err: caso.rielErr}, &custodioFalso{err: caso.custodioErr}, espia)
+
+			if _, err := servicio.Conciliar(ctx, 5*time.Minute); err == nil {
+				t.Fatal("Conciliar con un extracto caído = nil, quiero error para reintentar")
+			}
+			if espia.llamadas != 0 {
+				t.Error("no debe detectar diferencias sin extractos")
+			}
+			if despues := contarCorridas(t, pool); despues != antes {
+				t.Errorf("corridas = %d, quiero %d: la ventana quedó sin conciliar", despues, antes)
+			}
+		})
+	}
+}
+
+// HU-NF-08, criterio 1: los dos extractos se leen antes de abrir la transacción de escritura.
+func TestConciliarLeeLosExtractosAntesDeLaTransaccionDeEscritura(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+
+	desde := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	hasta := desde.Add(5 * time.Minute)
+	fijarCursor(t, pool, desde)
+
+	abridor := &abridorDeConciliacion{interno: poolDeNucleo{pool: pool}}
+	riel := &rielFalso{abridor: abridor}
+	custodio := &custodioFalso{abridor: abridor}
+	espia := &detectorEspia{}
+	servicio := &Servicio{
+		pool:       abridor,
+		custodio:   custodio,
+		lectorRiel: riel,
+		detectar:   espia.detectarFn(),
+		ahora:      func() time.Time { return hasta.Add(5 * time.Minute) },
+	}
+
+	if _, err := servicio.Conciliar(ctx, 5*time.Minute); err != nil {
+		t.Fatalf("Conciliar: %v", err)
+	}
+	// El cursor se leyó en el primer Begin; los extractos deben llegar antes del segundo.
+	if riel.beginsAlLlamar != 1 {
+		t.Errorf("el extracto del riel se leyó tras %d Begin, quiero 1 (solo el cursor)", riel.beginsAlLlamar)
+	}
+	if custodio.beginsAlLlamar != 1 {
+		t.Errorf("el extracto del custodio se leyó tras %d Begin, quiero 1 (solo el cursor)", custodio.beginsAlLlamar)
+	}
+	if abridor.begins != 2 {
+		t.Errorf("Begin = %d, quiero 2 (lectura del cursor y escritura de la corrida)", abridor.begins)
+	}
+	if espia.llamadas != 1 {
+		t.Errorf("el enganche se llamó %d veces, quiero 1", espia.llamadas)
+	}
+}
+
+// HU-NF-08, criterio 1: las diferencias que el enganche registre quedan selladas con la ventana de la corrida.
+func TestConciliarEntregaLaVentanaAlEngancheYDevuelveLasDiferencias(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+
+	desde := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	hasta := desde.Add(5 * time.Minute)
+	fijarCursor(t, pool, desde)
+
+	espia := &detectorEspia{devuelve: 3}
+	servicio := servicioDeConciliacion(pool, func() time.Time { return hasta.Add(5 * time.Minute) },
+		&rielFalso{}, &custodioFalso{}, espia)
+
+	n, err := servicio.Conciliar(ctx, 5*time.Minute)
+	if err != nil {
+		t.Fatalf("Conciliar: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("diferencias = %d, quiero las 3 del enganche", n)
+	}
+	if !espia.ventana.desde.Equal(desde) || !espia.ventana.hasta.Equal(hasta) {
+		t.Errorf("ventana del enganche = [%v, %v), quiero [%v, %v)", espia.ventana.desde, espia.ventana.hasta, desde, hasta)
+	}
 }
