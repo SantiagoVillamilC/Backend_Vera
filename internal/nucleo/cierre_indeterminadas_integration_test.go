@@ -28,6 +28,19 @@ func asientoDeTipo(t *testing.T, asientos []repositorio.JournalEntry, tipo strin
 	return repositorio.JournalEntry{}
 }
 
+// corridaEnDeLaConciliacion devuelve la marca del servidor de la última corrida del cursor.
+func corridaEnDeLaConciliacion(t *testing.T, ctx context.Context, pool *pgxpool.Pool) time.Time {
+	t.Helper()
+	var corridaEn time.Time
+	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			return struct{}{}, tx.QueryRow(ctx, "SELECT corrida_en FROM conciliacion_corrida ORDER BY id DESC LIMIT 1").Scan(&corridaEn)
+		}); err != nil {
+		t.Fatalf("leer corrida_en: %v", err)
+	}
+	return corridaEn.UTC()
+}
+
 // sembrarOutboxDespachado inserta la fila de despacho ya entregada y devuelve su id.
 func sembrarOutboxDespachado(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id pgtype.UUID) int64 {
 	t.Helper()
@@ -110,8 +123,8 @@ func TestHU_NF_08_Criterio9_1Y11IndeterminadaConfirmadaCierraCon4aYDosMarcas(t *
 	if !cierre.RegistradoEn.Valid || cierre.RegistradoEn.Time.UTC().Equal(evento) {
 		t.Errorf("registrado_en = %v, quiero la marca de la corrida, distinta del evento", cierre.RegistradoEn.Time)
 	}
-	if desde := time.Since(cierre.RegistradoEn.Time.UTC()); desde < 0 || desde > time.Minute {
-		t.Errorf("registrado_en = %v, quiero el momento de registro de la corrida, no el del evento %v", cierre.RegistradoEn.Time, evento)
+	if corridaEn := corridaEnDeLaConciliacion(t, ctx, pool); !cierre.RegistradoEn.Time.UTC().Equal(corridaEn) {
+		t.Errorf("registrado_en = %v, quiero la marca del servidor %v de la corrida, no el del evento %v", cierre.RegistradoEn.Time, corridaEn, evento)
 	}
 	lineas := lineasDelAsiento(t, ctx, pool, transferenciaID, TipoAsientoLiquidacionConfirmada)
 	if lineas[CuentaLiquidacionPendienteRiel] != monto.Int64() || lineas[CuentaCustodiaBanco] != -monto.Int64() {

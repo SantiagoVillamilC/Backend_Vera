@@ -41,7 +41,6 @@ const referenciaCustodia = "custodia_saldo"
 // desenlaceDelPar es la decisión fija de un par libro/extracto ya emparejado por identificador y monto.
 type desenlaceDelPar struct {
 	tipo      string
-	adoptar   bool
 	compensar bool
 }
 
@@ -49,9 +48,9 @@ type desenlaceDelPar struct {
 func clasificarParDeEstados(estadoLibro, estadoExtracto string) (desenlaceDelPar, bool) {
 	switch {
 	case esTransferenciaActiva(estadoLibro) && estadoExtracto == estadoExtractoConfirmada:
-		return desenlaceDelPar{tipo: TipoDescuadreEstadoDistinto, adoptar: true}, true
+		return desenlaceDelPar{tipo: TipoDescuadreEstadoDistinto}, true
 	case esTransferenciaActiva(estadoLibro) && estadoExtracto == estadoExtractoRechazada:
-		return desenlaceDelPar{tipo: TipoDescuadreEstadoDistinto, adoptar: true, compensar: true}, true
+		return desenlaceDelPar{tipo: TipoDescuadreEstadoDistinto, compensar: true}, true
 	case estadoLibro == EstadoTransferenciaConfirmada && estadoExtracto != estadoExtractoConfirmada:
 		return desenlaceDelPar{tipo: TipoDescuadreEstadoFinalContradicho}, true
 	case estadoLibro == EstadoTransferenciaCompensada && estadoExtracto != estadoExtractoRechazada:

@@ -125,6 +125,8 @@ func TestIndicesDeLaConciliacionExisten(t *testing.T) {
 		"posting_por_asiento",
 		"transferencia_activas_por_actualizada",
 		"descuadre_identidad_unico",
+		"outbox_despacho_por_transferencia",
+		"conciliacion_corrida_por_ventana",
 	}
 
 	var encontrados []string
@@ -141,6 +143,7 @@ func TestIndicesDeLaConciliacionExisten(t *testing.T) {
 func TestCursorDeConciliacionGuardaElFinalDeLaVentana(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	ctx := t.Context()
+	limpiarCursor(t)
 	primera := ventanaPrueba
 	segunda := ventanaPrueba.Add(time.Minute)
 
@@ -169,39 +172,22 @@ func TestCursorDeConciliacionGuardaElFinalDeLaVentana(t *testing.T) {
 
 func sembrarCuentasDeConciliacion(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (string, string) {
 	t.Helper()
-	sufijo := uuid.NewString()
-	activo := "activo:custodia:" + sufijo
-	pasivo := "pasivo:usuario:" + sufijo + ":disponible"
+	var cuentas parDeCuentas
 	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
 		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
-			_, err := tx.Exec(ctx,
-				"INSERT INTO cuenta (id, naturaleza, clase, titular_id) VALUES ($1, 'activo', 'custodia', NULL), ($2, 'pasivo', 'usuario', $3)",
-				activo, pasivo, sufijo)
-			return struct{}{}, err
+			cuentas = cuentasDePrueba(t, ctx, tx)
+			return struct{}{}, nil
 		}); err != nil {
 		t.Fatalf("sembrar cuentas: %v", err)
 	}
-	return activo, pasivo
+	return cuentas.debito, cuentas.credito
 }
 
 func sembrarAsientoDeConciliacion(t *testing.T, ctx context.Context, pool *pgxpool.Pool, debito, credito string, ocurridoEn time.Time) int64 {
 	t.Helper()
 	id, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
-		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (int64, error) {
-			asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
-				Tipo:       "prueba_conciliacion",
-				OcurridoEn: pgtype.Timestamptz{Time: ocurridoEn, Valid: true},
-			})
-			if err != nil {
-				return 0, err
-			}
-			if _, err := q.InsertarLinea(ctx, repositorio.InsertarLineaParams{EntryID: asiento.ID, CuentaID: debito, Monto: 100, Moneda: "COP"}); err != nil {
-				return 0, err
-			}
-			if _, err := q.InsertarLinea(ctx, repositorio.InsertarLineaParams{EntryID: asiento.ID, CuentaID: credito, Monto: -100, Moneda: "COP"}); err != nil {
-				return 0, err
-			}
-			return asiento.ID, nil
+		func(ctx context.Context, tx transaccionDeNucleo, q *repositorio.Queries) (int64, error) {
+			return asientoConMontosEn(t, ctx, tx, q, parDeCuentas{debito: debito, credito: credito}, []int64{100, -100}, ocurridoEn), nil
 		})
 	if err != nil {
 		t.Fatalf("sembrar asiento: %v", err)
@@ -385,7 +371,7 @@ func servicioDeConciliacion(pool *pgxpool.Pool, reloj func() time.Time, riel Lec
 }
 
 // limpiarCursor borra el cursor con el rol dueño para probar la primera corrida.
-func limpiarCursor(t *testing.T, pool *pgxpool.Pool) {
+func limpiarCursor(t *testing.T) {
 	t.Helper()
 
 	dsn := os.Getenv("DATABASE_URL")
@@ -402,9 +388,10 @@ func limpiarCursor(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
-// fijarCursor deja el cursor de la tabla en el final de ventana pedido.
+// fijarCursor aísla el cursor de la tabla y lo deja en el final de ventana pedido.
 func fijarCursor(t *testing.T, pool *pgxpool.Pool, hasta time.Time) {
 	t.Helper()
+	limpiarCursor(t)
 
 	_, err := enTransaccion(t.Context(), poolDeNucleo{pool: pool},
 		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
@@ -502,7 +489,7 @@ func TestConciliarSeleccionaPorTiempoDeEventoYDejaFueraLoReciente(t *testing.T) 
 func TestConciliarEsContiguoYNoDejaHuecosAunqueSeSalteUnaCorrida(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	ctx := t.Context()
-	limpiarCursor(t, pool)
+	limpiarCursor(t)
 
 	base := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	const antiguedad = 5 * time.Minute

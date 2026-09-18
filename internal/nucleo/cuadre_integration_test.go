@@ -37,10 +37,15 @@ func cuentasDePrueba(t *testing.T, ctx context.Context, tx transaccionDeNucleo) 
 
 func asientoConMontos(t *testing.T, ctx context.Context, tx transaccionDeNucleo, q *repositorio.Queries, cuentas parDeCuentas, montos []int64) int64 {
 	t.Helper()
+	return asientoConMontosEn(t, ctx, tx, q, cuentas, montos, time.Now().UTC())
+}
+
+func asientoConMontosEn(t *testing.T, ctx context.Context, tx transaccionDeNucleo, q *repositorio.Queries, cuentas parDeCuentas, montos []int64, ocurridoEn time.Time) int64 {
+	t.Helper()
 
 	asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
 		Tipo:        "prueba",
-		OcurridoEn:  pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true},
+		OcurridoEn:  pgtype.Timestamptz{Time: ocurridoEn, Valid: true},
 		Descripcion: pgtype.Text{String: "asiento de cuadre", Valid: true},
 	})
 	if err != nil {

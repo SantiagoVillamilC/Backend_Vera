@@ -58,6 +58,23 @@ func rielDeConsulta(id uuid.UUID, respuesta RespuestaRiel) *rielConsultado {
 	return &rielConsultado{estados: map[uuid.UUID]RespuestaRiel{id: respuesta}}
 }
 
+// rielQueCuelga bloquea la consulta hasta que el contexto de la corrida se agota.
+type rielQueCuelga struct {
+	llamadas int
+}
+
+// Enviar no lo usa esta prueba: el envío al riel lo cubre el worker de outbox.
+func (r *rielQueCuelga) Enviar(context.Context, OrdenRiel) (RespuestaRiel, error) {
+	return RespuestaRiel{}, errors.New("prueba: Enviar no se usa")
+}
+
+// ConsultarEstado espera la cancelación del contexto y la reporta como causa.
+func (r *rielQueCuelga) ConsultarEstado(ctx context.Context, _ uuid.UUID) (RespuestaRiel, error) {
+	r.llamadas++
+	<-ctx.Done()
+	return RespuestaRiel{}, ctx.Err()
+}
+
 // HU-NF-08, criterio 21: la consulta resuelve la indeterminada sin esperar a que su ventana madure.
 func TestHU_NF_08_Criterio21ConsultaResuelveIndeterminadaSinEsperarLaVentana(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
@@ -226,6 +243,93 @@ func TestHU_NF_10_Criterio24ConsultaYRielCierranUnSoloCierre(t *testing.T) {
 			t.Errorf("iteración %d: estado = %q, quiero confirmada", i, estado)
 		}
 		verificarAsientosCuadradosDeLaTransferencia(t, ctx, pool, transferenciaID)
+	}
+}
+
+// HU-NF-08, criterio 7: una indeterminada que la ventana trae con otro monto no se cierra, y la que está fuera de la ventana sí cierra por la consulta.
+func TestHU_NF_08_Criterio7IndeterminadaConMontoDistintoNoCierraYLaFueraDeVentanaSiCierra(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := baseUnicaDeResolucion()
+	desde, hasta := base, base.Add(ventanaDeResolucion)
+	interno := Centavos(160000)
+	externo := Centavos(159999)
+	eventoEnVentana := base.Add(2 * time.Minute)
+	eventoFuera := hasta.Add(time.Minute).Add(time.Second)
+
+	// En la ventana y con otro monto en el extracto real: la consulta la reporta confirmada, pero manda el extracto.
+	enVentana, _ := sembrarUsuarioYTransferencia(t, ctx, pool, EstadoTransferenciaIndeterminada, interno, base.Add(time.Minute), false)
+	sembrarDespacho(t, ctx, pool, enVentana, base.Add(time.Minute))
+	// Fuera de la ventana: solo la consulta puede alcanzarla (criterio 21).
+	fuera, _ := sembrarUsuarioYTransferencia(t, ctx, pool, EstadoTransferenciaIndeterminada, 170000, hasta.Add(time.Minute), false)
+	sembrarDespacho(t, ctx, pool, fuera, base.Add(time.Minute))
+
+	riel := &rielConsultado{
+		extracto: extractoDeCierre(enVentana, estadoExtractoConfirmada, externo, eventoEnVentana),
+		estados: map[uuid.UUID]RespuestaRiel{
+			uuid.UUID(enVentana.Bytes): respuestaConfirmada(uuid.UUID(enVentana.Bytes), eventoEnVentana),
+			uuid.UUID(fuera.Bytes):     respuestaConfirmada(uuid.UUID(fuera.Bytes), eventoFuera),
+		},
+	}
+	rastreador := &rastreadorFalso{}
+	servicio := NewServicio(pool, nil, riel, custodioQueCuadra(t, ctx, pool, hasta), rastreador, ConLectorExtractoRiel(riel))
+	servicio.ahora = func() time.Time { return hasta.Add(ventanaDeResolucion) }
+	fijarCursor(t, pool, desde)
+
+	n, err := servicio.Conciliar(ctx, ventanaDeResolucion)
+	if err != nil {
+		t.Fatalf("Conciliar: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("diferencias = %d, quiero 2 (el monto distinto abierto y el cierre por consulta)", n)
+	}
+	if estado := leerTransferenciaDeResolucion(t, ctx, pool, enVentana).Estado; estado != EstadoTransferenciaIndeterminada {
+		t.Errorf("estado en ventana = %q, quiero indeterminada: el monto distinto no se automatiza", estado)
+	}
+	if tieneAsientoDeTipo(asientosDeTransferencia(t, ctx, pool, enVentana), TipoAsientoLiquidacionConfirmada) {
+		t.Error("el monto distinto de la ventana no debe producir el 4a")
+	}
+	enVentanaID := uuid.UUID(enVentana.Bytes).String()
+	if filas := contarDescuadresAbiertos(t, ctx, pool, TipoDescuadreMontoDistinto, enVentanaID); filas != 1 {
+		t.Fatalf("descuadres abiertos de monto_distinto = %d, quiero 1", filas)
+	}
+	fila := leerDescuadre(t, ctx, pool, TipoDescuadreMontoDistinto, enVentanaID)
+	if !fila.MontoInterno.Valid || fila.MontoInterno.Int64 != interno.Int64() || !fila.MontoExterno.Valid || fila.MontoExterno.Int64 != externo.Int64() {
+		t.Errorf("descuadre = %+v, quiero interno %d y externo %d", fila, interno.Int64(), externo.Int64())
+	}
+	if estado := leerTransferenciaDeResolucion(t, ctx, pool, fuera).Estado; estado != EstadoTransferenciaConfirmada {
+		t.Errorf("estado fuera de ventana = %q, quiero confirmada por la consulta", estado)
+	}
+	if !tieneAsientoDeTipo(asientosDeTransferencia(t, ctx, pool, fuera), TipoAsientoLiquidacionConfirmada) {
+		t.Error("la indeterminada fuera de la ventana debe cerrar con el 4a por la consulta")
+	}
+}
+
+// HU-NF-08, criterio 21 / M2: una indeterminada que no responde no consume más allá del presupuesto de la corrida.
+func TestConsultarIndeterminadasCortaConElPresupuesto(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := baseUnicaDeResolucion()
+	sembrarUsuarioYTransferencia(t, ctx, pool, EstadoTransferenciaIndeterminada, 120000, base.Add(time.Minute), false)
+	sembrarUsuarioYTransferencia(t, ctx, pool, EstadoTransferenciaIndeterminada, 121000, base.Add(2*time.Minute), false)
+
+	riel := &rielQueCuelga{}
+	servicio := NewServicio(pool, nil, riel, nil, nil)
+	servicio.presupuestoIndeterminadas = 50 * time.Millisecond
+
+	inicio := time.Now()
+	operaciones, err := servicio.consultarIndeterminadas(ctx)
+	if err != nil {
+		t.Fatalf("consultarIndeterminadas: %v", err)
+	}
+	if transcurrido := time.Since(inicio); transcurrido > time.Second {
+		t.Errorf("la consulta tardó %v, quiero el corte por presupuesto", transcurrido)
+	}
+	if len(operaciones) != 0 {
+		t.Errorf("operaciones = %d, quiero 0: el presupuesto corta antes de resolver", len(operaciones))
+	}
+	if riel.llamadas != 1 {
+		t.Errorf("llamadas = %d, quiero 1: se corta en la primera que no responde", riel.llamadas)
 	}
 }
 

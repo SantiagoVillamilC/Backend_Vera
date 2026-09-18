@@ -160,17 +160,18 @@ type LectorExtractoRiel interface {
 
 // Servicio es la única puerta a las tablas del núcleo y a su frontera transaccional.
 type Servicio struct {
-	pool              abridorDeTransacciones
-	kyc               LectorNivelKYC
-	destinos          ResolutorDestino
-	directorio        DirectorioLlaves
-	riel              Riel
-	custodio          LectorExtractoCustodio
-	lectorRiel        LectorExtractoRiel
-	detectar          detectorDeVentana
-	ahora             func() time.Time
-	rastreador        RastreadorErrores
-	politicaReintento PoliticaReintentoOutbox
+	pool                      abridorDeTransacciones
+	kyc                       LectorNivelKYC
+	destinos                  ResolutorDestino
+	directorio                DirectorioLlaves
+	riel                      Riel
+	custodio                  LectorExtractoCustodio
+	lectorRiel                LectorExtractoRiel
+	detectar                  detectorDeVentana
+	ahora                     func() time.Time
+	rastreador                RastreadorErrores
+	politicaReintento         PoliticaReintentoOutbox
+	presupuestoIndeterminadas time.Duration
 }
 
 // OpcionServicio ajusta el Servicio en su construcción.
@@ -206,14 +207,15 @@ func NewServicio(
 	opciones ...OpcionServicio,
 ) *Servicio {
 	servicio := &Servicio{
-		pool:              poolDeNucleo{pool: pool},
-		kyc:               kyc,
-		riel:              riel,
-		custodio:          custodio,
-		lectorRiel:        RielNoDisponible{},
-		ahora:             time.Now,
-		rastreador:        rastreador,
-		politicaReintento: PoliticaReintentoOutboxPorDefecto(),
+		pool:                      poolDeNucleo{pool: pool},
+		kyc:                       kyc,
+		riel:                      riel,
+		custodio:                  custodio,
+		lectorRiel:                RielNoDisponible{},
+		ahora:                     time.Now,
+		rastreador:                rastreador,
+		politicaReintento:         PoliticaReintentoOutboxPorDefecto(),
+		presupuestoIndeterminadas: presupuestoConsultaIndeterminadasDefecto,
 	}
 	servicio.detectar = servicio.detectarDiferenciasDeVentana
 	for _, opcion := range opciones {

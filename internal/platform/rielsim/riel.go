@@ -55,11 +55,11 @@ func (r *Riel) ConsultarEstado(ctx context.Context, transferenciaID uuid.UUID) (
 func (r *Riel) Extracto(ctx context.Context, desde, hasta time.Time) (nucleo.ExtractoRiel, error) {
 	destino, err := urlDeExtracto(r.base+"/extracto", desde, hasta)
 	if err != nil {
-		return nucleo.ExtractoRiel{}, fmt.Errorf("rielsim: armar la URL del extracto: %w", err)
+		return nucleo.ExtractoRiel{}, fmt.Errorf("rielsim: armar la URL del extracto: %w", causaSinURL(err))
 	}
 	peticion, err := http.NewRequestWithContext(ctx, http.MethodGet, destino, nil)
 	if err != nil {
-		return nucleo.ExtractoRiel{}, fmt.Errorf("rielsim: armar la petición del extracto: %w", err)
+		return nucleo.ExtractoRiel{}, fmt.Errorf("rielsim: armar la petición del extracto: %w", causaSinURL(err))
 	}
 	respuesta, err := r.cliente.Do(peticion)
 	if err != nil {

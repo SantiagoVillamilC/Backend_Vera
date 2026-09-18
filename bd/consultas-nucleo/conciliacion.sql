@@ -35,7 +35,7 @@ RETURNING id, ventana_hasta, corrida_en;
 -- name: UltimaVentanaConciliada :one
 SELECT ventana_hasta
   FROM nucleo.conciliacion_corrida
- ORDER BY id DESC
+ ORDER BY ventana_hasta DESC, id DESC
  LIMIT 1;
 
 -- name: LeerAsientosDeVentana :many

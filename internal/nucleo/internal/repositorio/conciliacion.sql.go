@@ -307,7 +307,7 @@ func (q *Queries) ResolverDescuadre(ctx context.Context, arg ResolverDescuadrePa
 const ultimaVentanaConciliada = `-- name: UltimaVentanaConciliada :one
 SELECT ventana_hasta
   FROM nucleo.conciliacion_corrida
- ORDER BY id DESC
+ ORDER BY ventana_hasta DESC, id DESC
  LIMIT 1
 `
 

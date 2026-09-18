@@ -70,9 +70,27 @@ func (s *Servicio) Conciliar(ctx context.Context, antiguedad time.Duration) (int
 	if err != nil {
 		return 0, err
 	}
-	extractoRiel.Operaciones = append(extractoRiel.Operaciones, consultadas...)
+	extractoRiel.Operaciones = deduplicarIndeterminadas(extractoRiel.Operaciones, consultadas)
 	return s.conciliarVentana(ctx, desde, hasta, extractoRiel, extractoCustodio)
 }
+
+// deduplicarIndeterminadas deja mandar al extracto real de la ventana sobre la operación sintetizada por la consulta (criterio 7).
+func deduplicarIndeterminadas(extractoReal, consultadas []OperacionDeExtractoRiel) []OperacionDeExtractoRiel {
+	presentes := make(map[uuid.UUID]struct{}, len(extractoReal))
+	for _, operacion := range extractoReal {
+		presentes[operacion.TransferenciaID] = struct{}{}
+	}
+	for _, consultada := range consultadas {
+		if _, ya := presentes[consultada.TransferenciaID]; ya {
+			continue
+		}
+		extractoReal = append(extractoReal, consultada)
+	}
+	return extractoReal
+}
+
+// presupuestoConsultaIndeterminadasDefecto acota las llamadas sincronas al riel de una corrida (M2, liveness).
+const presupuestoConsultaIndeterminadasDefecto = 20 * time.Second
 
 // consultarIndeterminadas pregunta al riel el estado de cada indeterminada, haya madurado su ventana o no (HU-NF-08, criterio 21).
 func (s *Servicio) consultarIndeterminadas(ctx context.Context) ([]OperacionDeExtractoRiel, error) {
@@ -83,9 +101,18 @@ func (s *Servicio) consultarIndeterminadas(ctx context.Context) ([]OperacionDeEx
 	if err != nil {
 		return nil, err
 	}
+	presupuesto := s.presupuestoIndeterminadas
+	if presupuesto <= 0 {
+		presupuesto = presupuestoConsultaIndeterminadasDefecto
+	}
+	consultaCtx, cancelar := context.WithTimeout(ctx, presupuesto)
+	defer cancelar()
 	operaciones := make([]OperacionDeExtractoRiel, 0, len(indeterminadas))
 	for _, transferencia := range indeterminadas {
-		respuesta, err := s.riel.ConsultarEstado(ctx, uuid.UUID(transferencia.ID.Bytes))
+		if consultaCtx.Err() != nil {
+			break
+		}
+		respuesta, err := s.riel.ConsultarEstado(consultaCtx, uuid.UUID(transferencia.ID.Bytes))
 		if err != nil {
 			if !errors.Is(err, ErrRielSinRegistro) {
 				s.reportarConsultaFallida(ctx, transferencia, err)

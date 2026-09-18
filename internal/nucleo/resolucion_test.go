@@ -19,17 +19,16 @@ func TestClasificarParDeEstadosCubreLaTablaCerrada(t *testing.T) {
 		estadoExtracto  string
 		quiereDesenlace bool
 		tipo            string
-		adoptar         bool
 		compensar       bool
 	}{
-		{"criterio 8.1: despachada que el extracto confirma adopta el extracto", EstadoTransferenciaDespachada, estadoExtractoConfirmada, true, TipoDescuadreEstadoDistinto, true, false},
-		{"criterio 8.2: indeterminada que el extracto rechaza adopta el extracto y compensa", EstadoTransferenciaIndeterminada, estadoExtractoRechazada, true, TipoDescuadreEstadoDistinto, true, true},
-		{"criterio 8.2: despachada que el extracto rechaza adopta el extracto y compensa", EstadoTransferenciaDespachada, estadoExtractoRechazada, true, TipoDescuadreEstadoDistinto, true, true},
-		{"criterio 22: confirmada que el extracto contradice se escala", EstadoTransferenciaConfirmada, estadoExtractoRechazada, true, TipoDescuadreEstadoFinalContradicho, false, false},
-		{"criterio 22: compensada que el extracto contradice se escala", EstadoTransferenciaCompensada, estadoExtractoConfirmada, true, TipoDescuadreEstadoFinalContradicho, false, false},
-		{"sin diferencia: confirmada con el extracto confirmada", EstadoTransferenciaConfirmada, estadoExtractoConfirmada, false, "", false, false},
-		{"sin diferencia: compensada con el extracto rechazada", EstadoTransferenciaCompensada, estadoExtractoRechazada, false, "", false, false},
-		{"sin clasificación: un estado que no se empareja", EstadoTransferenciaCreada, estadoExtractoConfirmada, false, "", false, false},
+		{"criterio 8.1: despachada que el extracto confirma adopta el extracto", EstadoTransferenciaDespachada, estadoExtractoConfirmada, true, TipoDescuadreEstadoDistinto, false},
+		{"criterio 8.2: indeterminada que el extracto rechaza adopta el extracto y compensa", EstadoTransferenciaIndeterminada, estadoExtractoRechazada, true, TipoDescuadreEstadoDistinto, true},
+		{"criterio 8.2: despachada que el extracto rechaza adopta el extracto y compensa", EstadoTransferenciaDespachada, estadoExtractoRechazada, true, TipoDescuadreEstadoDistinto, true},
+		{"criterio 22: confirmada que el extracto contradice se escala", EstadoTransferenciaConfirmada, estadoExtractoRechazada, true, TipoDescuadreEstadoFinalContradicho, false},
+		{"criterio 22: compensada que el extracto contradice se escala", EstadoTransferenciaCompensada, estadoExtractoConfirmada, true, TipoDescuadreEstadoFinalContradicho, false},
+		{"sin diferencia: confirmada con el extracto confirmada", EstadoTransferenciaConfirmada, estadoExtractoConfirmada, false, "", false},
+		{"sin diferencia: compensada con el extracto rechazada", EstadoTransferenciaCompensada, estadoExtractoRechazada, false, "", false},
+		{"sin clasificación: un estado que no se empareja", EstadoTransferenciaCreada, estadoExtractoConfirmada, false, "", false},
 	}
 
 	for _, caso := range casos {
@@ -48,9 +47,6 @@ func TestClasificarParDeEstadosCubreLaTablaCerrada(t *testing.T) {
 			}
 			if desenlace.compensar != caso.compensar {
 				t.Errorf("compensar = %v, quiero %v", desenlace.compensar, caso.compensar)
-			}
-			if desenlace.adoptar != caso.adoptar {
-				t.Errorf("adoptar = %v, quiero %v", desenlace.adoptar, caso.adoptar)
 			}
 		})
 	}
