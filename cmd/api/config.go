@@ -10,14 +10,29 @@ import (
 
 // Config reúne los valores de entorno que el proceso necesita para arrancar.
 type Config struct {
-	Port           string
-	AppDatabaseURL string
-	JWTSecret      string
-	GroqAPIKey     string
-	OpenAIAPIKey   string
-	OCRWorkerURL   string
-	LogLevel       string
-	LogFormat      string
+	Port                   string
+	AppDatabaseURL         string
+	JWTSecret              string
+	CustodioToken          string
+	CustodioExtractoURL    string
+	RielSimuladorURL       string
+	DirectorioSimuladorURL string
+	GroqAPIKey             string
+	OpenAIAPIKey           string
+	OCRWorkerURL           string
+	LogLevel               string
+	LogFormat              string
+	OutboxInterval         time.Duration
+	OutboxBackoffBase      time.Duration
+	OutboxBackoffFactor    float64
+	OutboxBackoffMax       time.Duration
+	ConciliationInterval   time.Duration
+	ConciliationWindow     time.Duration
+	ExpirationInterval     time.Duration
+	ExpirationTTL          time.Duration
+	A6PosicionLiquidacion  nucleo.Centavos
+	A6PrefondeoActivo      bool
+	Auth                   ConfigAuth
 }
 
 // LoadConfig lee el entorno, valida la forma de cada variable y reporta todos los errores
@@ -35,6 +50,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var errs []error
+	var errsAuth []error
+	cfg.Auth, errsAuth = cargarConfigAuth()
+	errs = append(errs, errsAuth...)
 	required := []struct{ name, value string }{
 		{"APP_DATABASE_URL", cfg.AppDatabaseURL},
 		{"JWT_SECRET", cfg.JWTSecret},
@@ -70,6 +88,13 @@ func (c Config) LogValue() slog.Value {
 		slog.String("port", c.Port),
 		slog.Bool("app_database_url_set", c.AppDatabaseURL != ""),
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
+		slog.Bool("custodio_token_set", c.CustodioToken != ""),
+		slog.Bool("custodio_extracto_url_set", c.CustodioExtractoURL != ""),
+		slog.Bool("redis_url_set", c.Auth.RedisURL != ""),
+		slog.String("otp_canal", c.Auth.OTPCanal),
+		slog.Bool("whatsapp_token_set", c.Auth.WhatsAppToken != ""),
+		slog.Bool("riel_simulador_url_set", c.RielSimuladorURL != ""),
+		slog.Bool("directorio_simulador_url_set", c.DirectorioSimuladorURL != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
 		slog.Bool("openai_api_key_set", c.OpenAIAPIKey != ""),
 		slog.Bool("ocr_worker_url_set", c.OCRWorkerURL != ""),

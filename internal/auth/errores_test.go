@@ -62,6 +62,11 @@ func TestMapearError(t *testing.T) {
 	}{
 		"sin identidad es 401": {err: ErrSinIdentidad, code: "Unauthorized", status: 401},
 		"correo en uso es 409": {err: ErrEmailEnUso, code: "DuplicateIdentifier", status: 409},
+		"auth no disponible es 503": {
+			err:    ConFailClosed(errors.New("dial tcp 127.0.0.1:1: connect: connection refused")),
+			code:   "AuthUnavailable",
+			status: 503,
+		},
 	}
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {

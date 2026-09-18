@@ -5,6 +5,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"github.com/redis/go-redis/v9"
 )
 
 // AuthHandler agrupa los endpoints autenticados que el módulo de autenticación cuelga del contrato.
@@ -37,6 +38,7 @@ type DependenciasAuth struct {
 	Auth      AuthHandler
 	KYC       KYCHandler
 	Consent   ConsentHandler
+	Redis     *redis.Client
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
