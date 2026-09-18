@@ -20,9 +20,21 @@ func TestMapearErrorDeConsulta(t *testing.T) {
 		err  error
 		want error
 	}{
-		"violación de unicidad": {
-			err:  &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "users_email_key"},
-			want: ErrEmailEnUso,
+		"correo repetido": {
+			err:  &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "credenciales_correo_uk"},
+			want: ErrIdentificadorEnUso,
+		},
+		"celular repetido": {
+			err:  &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "credenciales_celular_uk"},
+			want: ErrIdentificadorEnUso,
+		},
+		"documento repetido": {
+			err:  &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "personas_documento_uk"},
+			want: ErrIdentificadorEnUso,
+		},
+		"nit repetido": {
+			err:  &pgconn.PgError{Code: pgerrcode.UniqueViolation, ConstraintName: "empresas_nit_uk"},
+			want: ErrIdentificadorEnUso,
 		},
 		"error no relacionado": {
 			err:  otro,
@@ -61,7 +73,7 @@ func TestMapearError(t *testing.T) {
 		status int
 	}{
 		"sin identidad es 401": {err: ErrSinIdentidad, code: "Unauthorized", status: 401},
-		"correo en uso es 409": {err: ErrEmailEnUso, code: "DuplicateIdentifier", status: 409},
+		"correo en uso es 409": {err: ErrIdentificadorEnUso, code: "DuplicateIdentifier", status: 409},
 		"auth no disponible es 503": {
 			err:    ConFailClosed(errors.New("dial tcp 127.0.0.1:1: connect: connection refused")),
 			code:   "AuthUnavailable",
