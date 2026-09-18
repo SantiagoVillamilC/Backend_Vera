@@ -62,8 +62,8 @@ func TestEvaluarLimiteTopeOperacionYCupoMensual(t *testing.T) {
 	t.Parallel()
 
 	reglasCompletas := []ReglaLimite{
-		{Ventana: VentanaLimiteOperacion, TopeUVTCentesimas: 21050},
-		{Ventana: VentanaLimiteMensual, TopeUVTCentesimas: 21050},
+		{Tipo: TipoReglaRechaza, Ventana: VentanaLimiteOperacion, TopeUVTCentesimas: 21050},
+		{Tipo: TipoReglaRechaza, Ventana: VentanaLimiteMensual, TopeUVTCentesimas: 21050},
 	}
 
 	casos := map[string]struct {
@@ -114,7 +114,7 @@ func (filaAusente) Scan(...interface{}) error { return pgx.ErrNoRows }
 func TestVerificarLimiteSinValorDeUVTRechazaSinTocarLaBase(t *testing.T) {
 	t.Parallel()
 
-	err := verificarLimite(t.Context(), repositorio.New(dbSinUVT{}), uuid.NewString(), NivelKYCDepositoBajoMonto, 1000, time.Now())
+	_, err := verificarLimite(t.Context(), repositorio.New(dbSinUVT{}), uuid.NewString(), NivelKYCDepositoBajoMonto, 1000, time.Now())
 	if !errors.Is(err, ErrValorUVTNoVigente) {
 		t.Fatalf("error = %v, quiero ErrValorUVTNoVigente", err)
 	}

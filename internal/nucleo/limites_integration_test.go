@@ -76,7 +76,8 @@ func insertarTransferenciaDePrueba(t *testing.T, pool *pgxpool.Pool, usuarioID, 
 func ejecutarVerificarLimite(ctx context.Context, pool *pgxpool.Pool, usuarioID string, monto Centavos, momento time.Time) error {
 	_, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
-			return struct{}{}, verificarLimite(ctx, q, usuarioID, NivelKYCDepositoBajoMonto, monto, momento)
+			_, err := verificarLimite(ctx, q, usuarioID, NivelKYCDepositoBajoMonto, monto, momento)
+			return struct{}{}, err
 		})
 	return err
 }

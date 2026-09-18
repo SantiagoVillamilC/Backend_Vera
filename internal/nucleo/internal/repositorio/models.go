@@ -57,6 +57,8 @@ type ReglaLimite struct {
 	VigenteDesde      pgtype.Date `json:"vigente_desde"`
 	VigenteHasta      pgtype.Date `json:"vigente_hasta"`
 	Fuente            string      `json:"fuente"`
+	Tipo              string      `json:"tipo"`
+	TarifaPpm         int64       `json:"tarifa_ppm"`
 }
 
 type Transferencia struct {

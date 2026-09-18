@@ -23,6 +23,7 @@ sql:
       - bd/migraciones/0010_create_deposito.sql
       - bd/migraciones/0013_create_transferencia.sql
       - bd/migraciones/0014_create_regla_limite_y_valor_uvt.sql
+      - bd/migraciones/0016_create_gmf_rule.sql
     queries: bd/consultas-nucleo
     gen:
       go:

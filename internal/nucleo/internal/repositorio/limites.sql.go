@@ -13,7 +13,7 @@ import (
 )
 
 const reglasLimiteVigentes = `-- name: ReglasLimiteVigentes :many
-SELECT ventana, tope_uvt_centesimas
+SELECT tipo, ventana, tope_uvt_centesimas, tarifa_ppm
   FROM nucleo.regla_limite
  WHERE nivel_kyc = $1
    AND vigente_desde <= $2
@@ -27,8 +27,10 @@ type ReglasLimiteVigentesParams struct {
 }
 
 type ReglasLimiteVigentesRow struct {
+	Tipo              string `json:"tipo"`
 	Ventana           string `json:"ventana"`
 	TopeUvtCentesimas int64  `json:"tope_uvt_centesimas"`
+	TarifaPpm         int64  `json:"tarifa_ppm"`
 }
 
 func (q *Queries) ReglasLimiteVigentes(ctx context.Context, arg ReglasLimiteVigentesParams) ([]ReglasLimiteVigentesRow, error) {
@@ -40,7 +42,12 @@ func (q *Queries) ReglasLimiteVigentes(ctx context.Context, arg ReglasLimiteVige
 	items := []ReglasLimiteVigentesRow{}
 	for rows.Next() {
 		var i ReglasLimiteVigentesRow
-		if err := rows.Scan(&i.Ventana, &i.TopeUvtCentesimas); err != nil {
+		if err := rows.Scan(
+			&i.Tipo,
+			&i.Ventana,
+			&i.TopeUvtCentesimas,
+			&i.TarifaPpm,
+		); err != nil {
 			return nil, fmt.Errorf("query ReglasLimiteVigentes: %w", err)
 		}
 		items = append(items, i)

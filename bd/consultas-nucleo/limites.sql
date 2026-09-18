@@ -1,5 +1,5 @@
 -- name: ReglasLimiteVigentes :many
-SELECT ventana, tope_uvt_centesimas
+SELECT tipo, ventana, tope_uvt_centesimas, tarifa_ppm
   FROM nucleo.regla_limite
  WHERE nivel_kyc = @nivel_kyc
    AND vigente_desde <= @fecha
