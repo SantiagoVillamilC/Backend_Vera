@@ -17,6 +17,7 @@ type Querier interface {
 	ConfirmarDeposito(ctx context.Context, arg ConfirmarDepositoParams) (Deposito, error)
 	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error)
+	ExtractoPorCorte(ctx context.Context, corteEn pgtype.Timestamptz) (ExtractoCustodio, error)
 	InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error)
 	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)
 	InsertarExtractoCustodio(ctx context.Context, arg InsertarExtractoCustodioParams) error
@@ -38,6 +39,7 @@ type Querier interface {
 	ReglasLimiteVigentes(ctx context.Context, arg ReglasLimiteVigentesParams) ([]ReglasLimiteVigentesRow, error)
 	ReintentarOutbox(ctx context.Context, arg ReintentarOutboxParams) (int32, error)
 	SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, error)
+	SaldoDeCuentaHasta(ctx context.Context, arg SaldoDeCuentaHastaParams) (int64, error)
 	SumaDebitoDelMes(ctx context.Context, arg SumaDebitoDelMesParams) (int64, error)
 	TomarOutboxPendientes(ctx context.Context, limite int32) ([]Outbox, error)
 	ValorUVTDelAnio(ctx context.Context, anio int32) (int64, error)

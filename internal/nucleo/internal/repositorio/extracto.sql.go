@@ -12,6 +12,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const extractoPorCorte = `-- name: ExtractoPorCorte :one
+SELECT corte_en, saldo, origen
+  FROM nucleo.extracto_custodio
+ WHERE corte_en = $1
+`
+
+func (q *Queries) ExtractoPorCorte(ctx context.Context, corteEn pgtype.Timestamptz) (ExtractoCustodio, error) {
+	row := q.db.QueryRow(ctx, extractoPorCorte, corteEn)
+	var i ExtractoCustodio
+	err := row.Scan(&i.CorteEn, &i.Saldo, &i.Origen)
+	if err != nil {
+		err = fmt.Errorf("query ExtractoPorCorte: %w", err)
+	}
+	return i, err
+}
+
 const insertarExtractoCustodio = `-- name: InsertarExtractoCustodio :exec
 INSERT INTO nucleo.extracto_custodio (corte_en, saldo, origen)
 VALUES ($1, $2, $3)

@@ -20,3 +20,12 @@ SELECT COALESCE(SUM(p.monto), 0)::bigint AS saldo
   JOIN nucleo.cuenta c ON c.id = p.cuenta_id
  WHERE p.cuenta_id = @cuenta_id
    AND p.moneda = c.moneda;
+
+-- name: SaldoDeCuentaHasta :one
+SELECT COALESCE(SUM(p.monto), 0)::bigint AS saldo
+  FROM nucleo.posting p
+  JOIN nucleo.journal_entry j ON j.id = p.entry_id
+  JOIN nucleo.cuenta c ON c.id = p.cuenta_id
+ WHERE p.cuenta_id = @cuenta_id
+   AND p.moneda = c.moneda
+   AND j.ocurrido_en <= @corte_en;

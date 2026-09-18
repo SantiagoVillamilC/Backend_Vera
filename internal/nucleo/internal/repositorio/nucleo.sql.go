@@ -122,3 +122,28 @@ func (q *Queries) SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, er
 	}
 	return saldo, err
 }
+
+const saldoDeCuentaHasta = `-- name: SaldoDeCuentaHasta :one
+SELECT COALESCE(SUM(p.monto), 0)::bigint AS saldo
+  FROM nucleo.posting p
+  JOIN nucleo.journal_entry j ON j.id = p.entry_id
+  JOIN nucleo.cuenta c ON c.id = p.cuenta_id
+ WHERE p.cuenta_id = $1
+   AND p.moneda = c.moneda
+   AND j.ocurrido_en <= $2
+`
+
+type SaldoDeCuentaHastaParams struct {
+	CuentaID string             `json:"cuenta_id"`
+	CorteEn  pgtype.Timestamptz `json:"corte_en"`
+}
+
+func (q *Queries) SaldoDeCuentaHasta(ctx context.Context, arg SaldoDeCuentaHastaParams) (int64, error) {
+	row := q.db.QueryRow(ctx, saldoDeCuentaHasta, arg.CuentaID, arg.CorteEn)
+	var saldo int64
+	err := row.Scan(&saldo)
+	if err != nil {
+		err = fmt.Errorf("query SaldoDeCuentaHasta: %w", err)
+	}
+	return saldo, err
+}
