@@ -21,6 +21,7 @@ sql:
       - bd/migraciones/0004_create_nucleo_schema_and_role.sql
       - bd/migraciones/0007_create_ledger.sql
       - bd/migraciones/0010_create_deposito.sql
+      - bd/migraciones/0013_create_transferencia.sql
     queries: bd/consultas-nucleo
     gen:
       go:
@@ -37,3 +38,4 @@ sql:
           nucleo_journal_entry: JournalEntry
           nucleo_posting: Posting
           nucleo_deposito: Deposito
+          nucleo_transferencium: Transferencia

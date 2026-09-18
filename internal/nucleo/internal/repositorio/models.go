@@ -47,3 +47,16 @@ type Posting struct {
 	Monto    int64  `json:"monto"`
 	Moneda   string `json:"moneda"`
 }
+
+type Transferencia struct {
+	ID             pgtype.UUID        `json:"id"`
+	UsuarioID      string             `json:"usuario_id"`
+	CuentaOrigen   string             `json:"cuenta_origen"`
+	LlaveDestino   string             `json:"llave_destino"`
+	Monto          int64              `json:"monto"`
+	Moneda         string             `json:"moneda"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Estado         string             `json:"estado"`
+	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
+	ActualizadaEn  pgtype.Timestamptz `json:"actualizada_en"`
+}
