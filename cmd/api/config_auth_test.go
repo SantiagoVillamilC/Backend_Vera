@@ -17,6 +17,8 @@ func entornoDeAuth(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://:secreta@127.0.0.1:16381/0")
 	t.Setenv("OTP_CANAL", "simulador")
 	t.Setenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", "24h")
+	t.Setenv("AUTH_VENTANA_PENDIENTE", "24h")
+	t.Setenv("AUTH_LIMPIEZA_INTERVAL", "15m")
 }
 
 func baseDeConfig(t *testing.T) {
@@ -170,6 +172,41 @@ func TestLoadConfigAuthExigeEnfriamientoCambioNumero(t *testing.T) {
 			}
 			if cfg.Auth.EnfriamientoCambioNumero != 24*time.Hour {
 				t.Errorf("EnfriamientoCambioNumero = %s, quiero 24h", cfg.Auth.EnfriamientoCambioNumero)
+			}
+		})
+	}
+}
+
+func TestLoadConfigAuthExigeVentanaPendienteYLimpieza(t *testing.T) {
+	casos := map[string]struct {
+		ventana  string
+		limpieza string
+		wantErr  string
+	}{
+		"validos":           {ventana: "24h", limpieza: "15m"},
+		"ventana ausente":   {ventana: "", limpieza: "15m", wantErr: "AUTH_VENTANA_PENDIENTE is required"},
+		"ventana cero":      {ventana: "0s", limpieza: "15m", wantErr: "AUTH_VENTANA_PENDIENTE must be a positive duration"},
+		"limpieza ausente":  {ventana: "24h", limpieza: "", wantErr: "AUTH_LIMPIEZA_INTERVAL is required"},
+		"limpieza negativa": {ventana: "24h", limpieza: "-1m", wantErr: "AUTH_LIMPIEZA_INTERVAL must be a positive duration"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AUTH_VENTANA_PENDIENTE", caso.ventana)
+			t.Setenv("AUTH_LIMPIEZA_INTERVAL", caso.limpieza)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Auth.VentanaPendiente != 24*time.Hour || cfg.Auth.LimpiezaInterval != 15*time.Minute {
+				t.Errorf("VentanaPendiente = %s, LimpiezaInterval = %s, quiero 24h y 15m", cfg.Auth.VentanaPendiente, cfg.Auth.LimpiezaInterval)
 			}
 		})
 	}

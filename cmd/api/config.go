@@ -167,6 +167,8 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("redis_url_set", c.Auth.RedisURL != ""),
 		slog.String("otp_canal", c.Auth.OTPCanal),
 		slog.String("auth_enfriamiento_cambio_numero", c.Auth.EnfriamientoCambioNumero.String()),
+		slog.String("auth_ventana_pendiente", c.Auth.VentanaPendiente.String()),
+		slog.String("auth_limpieza_interval", c.Auth.LimpiezaInterval.String()),
 		slog.Bool("whatsapp_token_set", c.Auth.WhatsAppToken != ""),
 		slog.Bool("riel_simulador_url_set", c.RielSimuladorURL != ""),
 		slog.Bool("directorio_simulador_url_set", c.DirectorioSimuladorURL != ""),
