@@ -38,7 +38,11 @@ func DecodeAndValidate(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if err := validate.Struct(dst); errors.As(err, &ve) {
 		details := make([]FieldError, 0, len(ve))
 		for _, fe := range ve {
-			details = append(details, FieldError{Field: fe.Field(), Rule: fe.Tag(), Param: fe.Param()})
+			campo := FieldError{Field: fe.Field(), Rule: fe.Tag()}
+			if param := fe.Param(); param != "" {
+				campo.Param = &param
+			}
+			details = append(details, campo)
 		}
 		WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.", details)
 		return false

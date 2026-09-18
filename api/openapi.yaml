@@ -1,0 +1,1157 @@
+openapi: 3.0.3
+info:
+  title: Centinela API
+  version: 1.0.0
+  description: |
+    Contrato del modulo de autenticacion. Es la fuente para el cliente Flutter y para los
+    handlers generados con oapi-codegen. Toda respuesta usa el envelope
+    {success, data, error, meta}. El detalle de comportamiento vive en las historias de
+    autenticacion y el porqué de cada decisión en el dossier de diseño.
+
+servers:
+  - url: /
+    description: El host y el esquema los fija el despliegue.
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: public
+    description: Operacion sin token. Se registra a mano y no se genera.
+  - name: registro
+    description: Alta de persona y de empresa.
+  - name: login
+    description: Inicio de sesion y su segundo factor.
+  - name: sesion
+    description: Renovacion, cierre y dispositivos.
+  - name: contexto
+    description: Contexto personal o de empresa.
+  - name: recuperacion
+    description: Recuperacion de acceso.
+  - name: cambio-numero
+    description: Cambio del celular verificado.
+  - name: kyc
+    description: Niveles de producto y verificacion.
+  - name: consentimiento
+    description: Autorizacion de datos y opt-in.
+
+paths:
+  /v1/auth/register:
+    post:
+      operationId: register
+      summary: Registra una persona natural o una empresa.
+      tags: [public, registro]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Cuenta creada en estado pendiente de verificacion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistroResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/register/verify-phone:
+    post:
+      operationId: verifyPhone
+      summary: Verifica el celular y activa la cuenta.
+      tags: [public, registro]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: Celular verificado y cuenta activa.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificacionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/otp/resend:
+    post:
+      operationId: resendOtp
+      summary: Reenvia el codigo de un desafio vigente.
+      tags: [public, login]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendOtpRequest"
+      responses:
+        "200":
+          description: Codigo reenviado sobre el mismo desafio.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesafioResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/login:
+    post:
+      operationId: login
+      summary: Valida credenciales y crea el desafio del segundo factor.
+      tags: [public, login]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Se requiere el codigo. No emite tokens.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/login/verify-otp:
+    post:
+      operationId: verifyOtp
+      summary: Verifica el codigo y emite el par de tokens.
+      tags: [public, login]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: Par de tokens y usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SesionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/refresh:
+    post:
+      operationId: refresh
+      summary: Rota el refresh y entrega un access nuevo.
+      tags: [public, sesion]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Par de tokens rotado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/recovery/request:
+    post:
+      operationId: recoveryRequest
+      summary: Inicia la recuperacion. Responde igual exista o no la cuenta.
+      tags: [public, recuperacion]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoveryRequest"
+      responses:
+        "202":
+          description: Respuesta generica con un desafio.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesafioResponse"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/recovery/verify:
+    post:
+      operationId: recoveryVerify
+      summary: Verifica el codigo y el segundo metodo, y entrega el token de restablecimiento.
+      tags: [public, recuperacion]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoveryVerifyRequest"
+      responses:
+        "200":
+          description: Token de restablecimiento de vida corta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetTokenResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/recovery/reset:
+    post:
+      operationId: recoveryReset
+      summary: Fija la contrasena nueva. No emite sesion.
+      tags: [public, recuperacion]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoveryResetRequest"
+      responses:
+        "200":
+          description: Contrasena restablecida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Revoca el refresh del dispositivo actual.
+      tags: [sesion]
+      responses:
+        "204":
+          description: Sesion cerrada.
+
+  /v1/auth/logout-all:
+    post:
+      operationId: logoutAll
+      summary: Revoca todos los refresh del usuario.
+      tags: [sesion]
+      responses:
+        "204":
+          description: Todas las sesiones cerradas.
+
+  /v1/auth/sessions:
+    get:
+      operationId: listSessions
+      summary: Lista los dispositivos activos.
+      tags: [sesion]
+      responses:
+        "200":
+          description: Sesiones del usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SesionesResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/sessions/{session_id}:
+    delete:
+      operationId: deleteSession
+      summary: Revoca una sesion.
+      tags: [sesion]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Sesion revocada.
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/contextos:
+    get:
+      operationId: listContextos
+      summary: Lista los contextos del usuario.
+      tags: [contexto]
+      responses:
+        "200":
+          description: Contexto personal y empresas con rol.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextosResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/contexto:
+    post:
+      operationId: setContexto
+      summary: Emite un access con el contexto elegido.
+      tags: [contexto]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContextoRequest"
+      responses:
+        "200":
+          description: Access con el contexto y el rol.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextoActivoResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/phone/change/request:
+    post:
+      operationId: phoneChangeRequest
+      summary: Inicia el cambio de numero verificando el nuevo.
+      tags: [cambio-numero]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhoneChangeRequest"
+      responses:
+        "200":
+          description: Codigo enviado al numero nuevo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesafioResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/phone/change/confirm:
+    post:
+      operationId: phoneChangeConfirm
+      summary: Confirma el cambio y notifica al numero viejo.
+      tags: [cambio-numero]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: Numero cambiado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /v1/kyc/estado:
+    get:
+      operationId: kycEstado
+      summary: Consulta el producto, el estado de KYC y los limites.
+      tags: [kyc]
+      responses:
+        "200":
+          description: Estado de KYC del usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycEstadoResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /v1/kyc/verificacion:
+    post:
+      operationId: kycVerificacion
+      summary: Inicia o completa la verificacion del nivel solicitado.
+      tags: [kyc]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycVerificacionRequest"
+      responses:
+        "200":
+          description: Verificacion registrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+
+  /v1/auth/consents:
+    get:
+      operationId: listConsents
+      summary: Lista los consentimientos del usuario.
+      tags: [consentimiento]
+      responses:
+        "200":
+          description: Consentimientos con su version y fecha.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsentsResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createConsent
+      summary: Registra un consentimiento.
+      tags: [consentimiento]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsentRequest"
+      responses:
+        "201":
+          description: Consentimiento registrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Error:
+      description: Envelope de error. Misma forma en cualquier status.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    APIError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Identificador estable del catalogo de errores.
+          example: INVALID_CREDENTIALS
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      required: [field, rule]
+      properties:
+        field:
+          type: string
+        rule:
+          type: string
+        param:
+          type: string
+
+    Meta:
+      type: object
+      nullable: true
+      required: [limit, next_cursor, has_more]
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: integer
+          format: int64
+          nullable: true
+        has_more:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        data:
+          type: object
+          nullable: true
+        error:
+          $ref: "#/components/schemas/APIError"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    OkData:
+      type: object
+      properties:
+        mensaje:
+          type: string
+
+    OkResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/OkData"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Desafio:
+      type: object
+      required: [challenge_id, expira_en_segundos]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        expira_en_segundos:
+          type: integer
+          example: 300
+
+    DesafioResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Desafio"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    RegisterPersonaRequest:
+      type: object
+      required: [tipo_cuenta, correo, contrasena, celular, nombre_completo, tipo_documento, numero_documento]
+      properties:
+        tipo_cuenta:
+          type: string
+          enum: [persona]
+        correo:
+          type: string
+          format: email
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,email"
+        contrasena:
+          type: string
+          minLength: 8
+          maxLength: 64
+          x-oapi-codegen-extra-tags:
+            validate: "required,min=8,max=64"
+        celular:
+          type: string
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        nombre_completo:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        tipo_documento:
+          type: string
+          enum: [CC, CE, PA]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=CC CE PA"
+        numero_documento:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+
+    RepresentanteLegal:
+      type: object
+      required: [nombre_completo, tipo_documento, numero_documento]
+      properties:
+        nombre_completo:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        tipo_documento:
+          type: string
+          enum: [CC, CE, PA]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=CC CE PA"
+        numero_documento:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+
+    RegisterEmpresaRequest:
+      type: object
+      required: [tipo_cuenta, razon_social, nit, correo, contrasena, celular, representante_legal]
+      properties:
+        tipo_cuenta:
+          type: string
+          enum: [empresa]
+        razon_social:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        nit:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        correo:
+          type: string
+          format: email
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,email"
+        contrasena:
+          type: string
+          minLength: 8
+          maxLength: 64
+          x-oapi-codegen-extra-tags:
+            validate: "required,min=8,max=64"
+        celular:
+          type: string
+          description: Celular del representante legal, ancla del OTP.
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        representante_legal:
+          $ref: "#/components/schemas/RepresentanteLegal"
+
+    RegisterRequest:
+      oneOf:
+        - $ref: "#/components/schemas/RegisterPersonaRequest"
+        - $ref: "#/components/schemas/RegisterEmpresaRequest"
+      discriminator:
+        propertyName: tipo_cuenta
+        mapping:
+          persona: "#/components/schemas/RegisterPersonaRequest"
+          empresa: "#/components/schemas/RegisterEmpresaRequest"
+
+    Registro:
+      type: object
+      required: [id, tipo_cuenta, correo, celular, estado, fecha_creacion, desafio]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo_cuenta:
+          type: string
+          enum: [persona, empresa]
+        correo:
+          type: string
+        celular:
+          type: string
+        estado:
+          type: string
+          enum: [pendiente_verificacion, activo, suspendido, cerrado]
+        fecha_creacion:
+          type: string
+          format: date-time
+        nombre_completo:
+          type: string
+        razon_social:
+          type: string
+        nit:
+          type: string
+        desafio:
+          $ref: "#/components/schemas/Desafio"
+
+    RegistroResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Registro"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    VerifyOtpRequest:
+      type: object
+      required: [challenge_id, codigo]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        codigo:
+          type: string
+          pattern: "^[0-9]{6}$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,len=6,numeric"
+
+    ResendOtpRequest:
+      type: object
+      required: [challenge_id]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+
+    Verificacion:
+      type: object
+      required: [id, correo, estado]
+      properties:
+        id:
+          type: string
+          format: uuid
+        correo:
+          type: string
+        estado:
+          type: string
+          enum: [pendiente_verificacion, activo, suspendido, cerrado]
+
+    VerificacionResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Verificacion"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    LoginRequest:
+      type: object
+      required: [correo, contrasena]
+      properties:
+        correo:
+          type: string
+          format: email
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,email"
+        contrasena:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        contexto:
+          type: string
+          enum: [usuario, empresa]
+          default: usuario
+
+    LoginData:
+      type: object
+      required: [requiere_segundo_factor, challenge_id, expira_en_segundos, mensaje]
+      properties:
+        requiere_segundo_factor:
+          type: boolean
+          enum: [true]
+        challenge_id:
+          type: string
+          format: uuid
+        expira_en_segundos:
+          type: integer
+          example: 300
+        mensaje:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/LoginData"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Usuario:
+      type: object
+      required: [id, tipo_cuenta, correo, contexto_activo]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo_cuenta:
+          type: string
+          enum: [persona, empresa]
+        correo:
+          type: string
+        nombre_completo:
+          type: string
+        razon_social:
+          type: string
+        contexto_activo:
+          type: string
+        rol_activo:
+          type: string
+          nullable: true
+
+    Sesion:
+      type: object
+      required: [access_token, refresh_token, usuario]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        usuario:
+          $ref: "#/components/schemas/Usuario"
+
+    SesionResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Sesion"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    Tokens:
+      type: object
+      required: [access_token, refresh_token]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+
+    RefreshResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Tokens"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Dispositivo:
+      type: object
+      required: [id, dispositivo, creada_en, ultimo_uso_en, contexto]
+      properties:
+        id:
+          type: string
+          format: uuid
+        dispositivo:
+          type: string
+        creada_en:
+          type: string
+          format: date-time
+        ultimo_uso_en:
+          type: string
+          format: date-time
+        contexto:
+          type: string
+
+    SesionesResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Dispositivo"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Contexto:
+      type: object
+      required: [contexto_id, tipo, nombre]
+      properties:
+        contexto_id:
+          type: string
+        tipo:
+          type: string
+          enum: [usuario, empresa]
+        nombre:
+          type: string
+        nit:
+          type: string
+        rol:
+          type: string
+          nullable: true
+
+    ContextosResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contexto"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    ContextoRequest:
+      type: object
+      required: [contexto_id]
+      properties:
+        contexto_id:
+          type: string
+
+    ContextoActivo:
+      type: object
+      required: [access_token, contexto]
+      properties:
+        access_token:
+          type: string
+        contexto:
+          $ref: "#/components/schemas/Contexto"
+
+    ContextoActivoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/ContextoActivo"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    PhoneChangeRequest:
+      type: object
+      required: [nuevo_celular]
+      properties:
+        nuevo_celular:
+          type: string
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+
+    RecoveryRequest:
+      type: object
+      required: [correo]
+      properties:
+        correo:
+          type: string
+          format: email
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,email"
+
+    RecoveryVerifyRequest:
+      type: object
+      required: [challenge_id, codigo, segundo_metodo]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        codigo:
+          type: string
+          pattern: "^[0-9]{6}$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,len=6,numeric"
+        segundo_metodo:
+          type: object
+          description: Segundo metodo distinto del codigo. El detalle queda pendiente.
+
+    ResetToken:
+      type: object
+      required: [reset_token]
+      properties:
+        reset_token:
+          type: string
+
+    ResetTokenResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/ResetToken"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    RecoveryResetRequest:
+      type: object
+      required: [reset_token, nueva_contrasena]
+      properties:
+        reset_token:
+          type: string
+        nueva_contrasena:
+          type: string
+          minLength: 8
+          maxLength: 64
+          x-oapi-codegen-extra-tags:
+            validate: "required,min=8,max=64"
+
+    KycEstado:
+      type: object
+      required: [producto, estado_kyc]
+      properties:
+        producto:
+          type: string
+          enum: [bajo_monto, pleno]
+        estado_kyc:
+          type: string
+        limites:
+          type: object
+
+    KycEstadoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/KycEstado"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    KycVerificacionRequest:
+      type: object
+      required: [nivel]
+      properties:
+        nivel:
+          type: string
+          enum: [bajo_monto, pleno]
+        proveedor:
+          type: string
+
+    ConsentRequest:
+      type: object
+      required: [tipo, version_texto, aceptado]
+      properties:
+        tipo:
+          type: string
+        version_texto:
+          type: string
+        aceptado:
+          type: boolean
+        metodo:
+          type: string
+
+    Consent:
+      type: object
+      required: [tipo, version_texto, aceptado, fecha]
+      properties:
+        tipo:
+          type: string
+        version_texto:
+          type: string
+        aceptado:
+          type: boolean
+        metodo:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+
+    ConsentsResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Consent"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
