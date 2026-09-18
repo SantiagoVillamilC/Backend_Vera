@@ -24,6 +24,7 @@ func capturar(logger *slog.Logger, ctx context.Context, err error, contexto nucl
 	}
 	logger.ErrorContext(ctx, "error del nucleo",
 		"operacion", contexto.Operacion,
+		"canal", contexto.Canal,
 		"contexto", slog.GroupValue(campos...),
 		"err", err,
 	)

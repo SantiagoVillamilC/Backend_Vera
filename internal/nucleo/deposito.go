@@ -241,6 +241,7 @@ func (s *Servicio) escalarConfirmacionTardia(ctx context.Context, intencion repo
 	}
 	s.rastreador.Capturar(ctx, ErrConfirmacionTardia, ContextoError{
 		Operacion: "confirmacion_tardia",
+		Canal:     CanalSoloLog,
 		Campos: []Campo{
 			{Clave: "referencia", Valor: intencion.Referencia},
 			{Clave: "usuario_id", Valor: intencion.UsuarioID},
@@ -281,6 +282,7 @@ func (s *Servicio) falloDeAsiento(ctx context.Context, intencion repositorio.Dep
 	if s.rastreador != nil {
 		s.rastreador.Capturar(ctx, err, ContextoError{
 			Operacion: "confirmar_deposito",
+			Canal:     CanalSoloLog,
 			Campos: []Campo{
 				{Clave: "referencia", Valor: intencion.Referencia},
 				{Clave: "usuario_id", Valor: intencion.UsuarioID},

@@ -1,7 +1,9 @@
 package nucleo
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -106,16 +108,22 @@ func TestTransicionesDeCierrePasanPorLosEstadosValidos(t *testing.T) {
 	}
 }
 
-// HU-NF-08, criterio 12: la escalada identifica la diferencia con su tipo, identidad y montos.
+// HU-NF-08, criterios 12 y 24: la escalada identifica la diferencia con tipo, identidad, montos, ventana y detección.
 func TestCamposDelDescuadreIdentificanLaDiferencia(t *testing.T) {
 	t.Parallel()
 
+	desde := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
+	hasta := time.Date(2026, 9, 15, 10, 5, 0, 0, time.UTC)
+	detectado := time.Date(2026, 9, 15, 10, 6, 30, 0, time.UTC)
 	fila := repositorio.Descuadre{
 		ID:                7,
 		Tipo:              TipoDescuadreMontoDistinto,
 		MontoInterno:      pgtype.Int8{Int64: 100000, Valid: true},
 		MontoExterno:      pgtype.Int8{Int64: 99999, Valid: true},
 		ReferenciaExterna: pgtype.Text{},
+		VentanaDesde:      pgtype.Timestamptz{Time: desde, Valid: true},
+		VentanaHasta:      pgtype.Timestamptz{Time: hasta, Valid: true},
+		DetectadoEn:       pgtype.Timestamptz{Time: detectado, Valid: true},
 	}
 	fila.TransferenciaID = pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 
@@ -136,5 +144,36 @@ func TestCamposDelDescuadreIdentificanLaDiferencia(t *testing.T) {
 	}
 	if _, hay := porClave["referencia_externa"]; hay {
 		t.Errorf("campos = %v, no quiero la referencia externa cuando no existe", porClave)
+	}
+	if porClave["ventana_desde"] != desde.Format(time.RFC3339Nano) {
+		t.Errorf("ventana_desde = %q, quiero %q", porClave["ventana_desde"], desde.Format(time.RFC3339Nano))
+	}
+	if porClave["ventana_hasta"] != hasta.Format(time.RFC3339Nano) {
+		t.Errorf("ventana_hasta = %q, quiero %q", porClave["ventana_hasta"], hasta.Format(time.RFC3339Nano))
+	}
+	if porClave["detectado_en"] != detectado.Format(time.RFC3339Nano) {
+		t.Errorf("detectado_en = %q, quiero %q", porClave["detectado_en"], detectado.Format(time.RFC3339Nano))
+	}
+}
+
+// HU-NF-08, criterio 24: el escalamiento declara su único canal, sin aviso a persona ni tickets.
+func TestEscalarDeclaraCanalSoloLog(t *testing.T) {
+	t.Parallel()
+
+	if CanalSoloLog == "" {
+		t.Fatal("CanalSoloLog no puede estar vacío: la declaración de limitación quedaría invisible")
+	}
+	falso := &rastreadorFalso{}
+	detector := &detectorDiferencias{ctx: t.Context(), rastreador: falso}
+	detector.escalar(repositorio.Descuadre{ID: 9, Tipo: TipoDescuadreMontoDistinto}, errors.New("descuadre sin resolver"))
+
+	if len(falso.capturas) != 1 {
+		t.Fatalf("capturas = %d, quiero 1", len(falso.capturas))
+	}
+	if falso.capturas[0].contexto.Operacion != "conciliar" {
+		t.Errorf("operación = %q, quiero conciliar", falso.capturas[0].contexto.Operacion)
+	}
+	if falso.capturas[0].contexto.Canal != CanalSoloLog {
+		t.Errorf("canal = %q, quiero %q", falso.capturas[0].contexto.Canal, CanalSoloLog)
 	}
 }

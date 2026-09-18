@@ -384,7 +384,7 @@ func (d *detectorDiferencias) escalar(fila repositorio.Descuadre, causa error) {
 	if d.rastreador == nil {
 		return
 	}
-	d.rastreador.Capturar(d.ctx, causa, ContextoError{Operacion: "conciliar", Campos: camposDelDescuadre(fila)})
+	d.rastreador.Capturar(d.ctx, causa, ContextoError{Operacion: "conciliar", Canal: CanalSoloLog, Campos: camposDelDescuadre(fila)})
 }
 
 // camposDelDescuadre identifica la diferencia escalada para el rastreador de errores.
@@ -404,6 +404,15 @@ func camposDelDescuadre(fila repositorio.Descuadre) []Campo {
 	}
 	if fila.MontoExterno.Valid {
 		campos = append(campos, Campo{Clave: "monto_externo", Valor: strconv.FormatInt(fila.MontoExterno.Int64, 10)})
+	}
+	if fila.VentanaDesde.Valid {
+		campos = append(campos, Campo{Clave: "ventana_desde", Valor: fila.VentanaDesde.Time.UTC().Format(time.RFC3339Nano)})
+	}
+	if fila.VentanaHasta.Valid {
+		campos = append(campos, Campo{Clave: "ventana_hasta", Valor: fila.VentanaHasta.Time.UTC().Format(time.RFC3339Nano)})
+	}
+	if fila.DetectadoEn.Valid {
+		campos = append(campos, Campo{Clave: "detectado_en", Valor: fila.DetectadoEn.Time.UTC().Format(time.RFC3339Nano)})
 	}
 	return campos
 }

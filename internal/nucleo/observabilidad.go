@@ -8,11 +8,15 @@ type Campo struct {
 	Valor string
 }
 
-// ContextoError ubica la falla: operación y campos del dominio.
+// ContextoError ubica la falla: operación, canal y campos del dominio.
 type ContextoError struct {
 	Operacion string
+	Canal     string
 	Campos    []Campo
 }
+
+// CanalSoloLog declara el único destino del escalamiento: log, sin aviso a persona, ni tickets, ni SLA.
+const CanalSoloLog = "solo_log"
 
 // RastreadorErrores es el puerto del núcleo; main inyecta la implementación.
 type RastreadorErrores interface {

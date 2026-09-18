@@ -239,6 +239,29 @@ func tieneAsientoDeTipo(asientos []repositorio.JournalEntry, tipo string) bool {
 	return false
 }
 
+// verificarCamposDeLaCaptura comprueba el canal y los campos identificadores que exige el criterio 24.
+func verificarCamposDeLaCaptura(t *testing.T, captura capturaFalsa, quiero map[string]string) {
+	t.Helper()
+
+	if captura.contexto.Canal != CanalSoloLog {
+		t.Errorf("canal = %q, quiero %q", captura.contexto.Canal, CanalSoloLog)
+	}
+	porClave := make(map[string]string, len(captura.contexto.Campos))
+	for _, campo := range captura.contexto.Campos {
+		porClave[campo.Clave] = campo.Valor
+	}
+	for clave, valor := range quiero {
+		if porClave[clave] != valor {
+			t.Errorf("campo %q = %q, quiero %q", clave, porClave[clave], valor)
+		}
+	}
+	for _, clave := range []string{"descuadre_id", "detectado_en"} {
+		if porClave[clave] == "" {
+			t.Errorf("campo %q vacío: el log no ubica la diferencia", clave)
+		}
+	}
+}
+
 // HU-NF-08, criterio 5: lo que está en el libro y no en el extracto se compensa y deja el despacho intacto.
 func TestHU_NF_08_Criterio5LibroSinExtractoCompensaYDejaElDespachoIntacto(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
@@ -341,6 +364,14 @@ func TestHU_NF_08_Criterio7MontoDistintoEscalaSinAutomatizar(t *testing.T) {
 	if len(rastreador.capturas) != 1 {
 		t.Fatalf("capturas = %d, quiero 1", len(rastreador.capturas))
 	}
+	verificarCamposDeLaCaptura(t, rastreador.capturas[0], map[string]string{
+		"tipo":             TipoDescuadreMontoDistinto,
+		"transferencia_id": uuid.UUID(id.Bytes).String(),
+		"monto_interno":    "100000",
+		"monto_externo":    "99999",
+		"ventana_desde":    desde.Format(time.RFC3339Nano),
+		"ventana_hasta":    hasta.Format(time.RFC3339Nano),
+	})
 }
 
 // HU-NF-08, criterio 8.1: el extracto confirma una transferencia sin resolver y manda el extracto.
@@ -500,8 +531,8 @@ func TestHU_NF_08_Criterio4LoPendienteDeDespachoNoGeneraDiferencia(t *testing.T)
 	}
 }
 
-// HU-NF-08, criterio 13: una diferencia sin resolver no se duplica en la corrida siguiente.
-func TestHU_NF_08_Criterio13UnaDiferenciaSinResolverNoSeDuplica(t *testing.T) {
+// HU-NF-08, criterios 13 y 24: una diferencia sin resolver no se duplica ni se re-escala en cada corrida.
+func TestHU_NF_08_Criterio13UnaDiferenciaSinResolverNoSeDuplicaNiSeReescala(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	ctx := t.Context()
 	base := baseUnicaDeResolucion()
@@ -512,14 +543,22 @@ func TestHU_NF_08_Criterio13UnaDiferenciaSinResolverNoSeDuplica(t *testing.T) {
 		TransferenciaID: uuid.UUID(id.Bytes), Estado: estadoExtractoConfirmada, Monto: 99999, OcurridoEn: base.Add(time.Minute),
 	}}}}
 	custodio := custodioQueCuadra(t, ctx, pool, hasta)
+	rastreador := &rastreadorFalso{}
 
-	if n := correrConciliacionDeResolucion(t, ctx, pool, desde, hasta, riel, custodio, &rastreadorFalso{}); n != 1 {
+	if n := correrConciliacionDeResolucion(t, ctx, pool, desde, hasta, riel, custodio, rastreador); n != 1 {
 		t.Fatalf("primera corrida = %d diferencias, quiero 1", n)
 	}
-	if n := correrConciliacionDeResolucion(t, ctx, pool, desde, hasta, riel, custodio, &rastreadorFalso{}); n != 0 {
+	if n := correrConciliacionDeResolucion(t, ctx, pool, desde, hasta, riel, custodio, rastreador); n != 0 {
 		t.Fatalf("segunda corrida = %d diferencias, quiero 0", n)
 	}
 	if filas := contarDescuadres(t, ctx, pool, TipoDescuadreMontoDistinto, uuid.UUID(id.Bytes).String()); filas != 1 {
 		t.Errorf("filas = %d, quiero 1: la diferencia sin resolver no se duplica", filas)
+	}
+	if len(rastreador.capturas) != 1 {
+		t.Fatalf("capturas = %d, quiero 1: el escalamiento se emite una sola vez mientras siga sin resolver", len(rastreador.capturas))
+	}
+	fila := leerDescuadre(t, ctx, pool, TipoDescuadreMontoDistinto, uuid.UUID(id.Bytes).String())
+	if fila.ResueltoEn.Valid || fila.Resolucion.Valid {
+		t.Errorf("descuadre = %+v, quiero sin resolución para que siga escalado", fila)
 	}
 }
