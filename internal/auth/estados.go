@@ -75,11 +75,13 @@ func (g *GestorDeEstados) TransicionarCredencial(ctx context.Context, q *reposit
 		return err
 	}
 
-	return g.eventos.Registrar(ctx, Evento{
-		Actor:     uuid.Nil,
-		Resultado: string(nuevo),
-		Fecha:     time.Now().UTC(),
-		Contexto:  motivo,
+	return registrarEvento(ctx, g.eventos, q, Evento{
+		Tipo:         tipoDeTransicion(nuevo),
+		Actor:        uuid.Nil,
+		CredencialID: credencialID,
+		Resultado:    string(nuevo),
+		Fecha:        time.Now().UTC(),
+		Contexto:     motivo,
 	})
 }
 
@@ -90,6 +92,22 @@ func RegistrarTransicion(ctx context.Context, q *repositorio.Queries, credencial
 		texto = pgtype.Text{String: string(anterior), Valid: true}
 	}
 	return registrarTransicion(ctx, q, credencialID, texto, nuevo, motivo)
+}
+
+// tipoDeTransicion mapea el estado alcanzado al tipo del catálogo de eventos de auditoría.
+func tipoDeTransicion(nuevo EstadoCredencial) string {
+	if nuevo == EstadoActivo {
+		return TipoEventoVerificacion
+	}
+	return TipoEventoRevocacion
+}
+
+// registrarEvento escribe el evento en la transacción del caso de uso cuando el registrador la soporta.
+func registrarEvento(ctx context.Context, r RegistradorEventos, q *repositorio.Queries, e Evento) error {
+	if conTx, ok := r.(registradorConTx); ok {
+		return conTx.EnTransaccion(q).Registrar(ctx, e)
+	}
+	return r.Registrar(ctx, e)
 }
 
 // registrarTransicion inserta la fila append-only del historial con el motivo corto.

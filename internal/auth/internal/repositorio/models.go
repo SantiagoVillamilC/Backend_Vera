@@ -28,6 +28,19 @@ type Empresa struct {
 	RazonSocial string      `json:"razon_social"`
 }
 
+type EventoAutenticacion struct {
+	ID           int64              `json:"id"`
+	Tipo         string             `json:"tipo"`
+	ActorParteID pgtype.UUID        `json:"actor_parte_id"`
+	CredencialID pgtype.UUID        `json:"credencial_id"`
+	Resultado    string             `json:"resultado"`
+	OcurridoEn   pgtype.Timestamptz `json:"ocurrido_en"`
+	Origen       string             `json:"origen"`
+	Contexto     string             `json:"contexto"`
+	SesionID     pgtype.UUID        `json:"sesion_id"`
+	Detalle      []byte             `json:"detalle"`
+}
+
 type Parte struct {
 	ID       pgtype.UUID        `json:"id"`
 	Tipo     string             `json:"tipo"`

@@ -20,6 +20,7 @@ type Querier interface {
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
 	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
+	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
 	RegistrarTransicionCredencial(ctx context.Context, arg RegistrarTransicionCredencialParams) error
 	ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error)
 	ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)

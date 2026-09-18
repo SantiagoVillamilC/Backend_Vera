@@ -29,7 +29,7 @@ func clienteRedis(cfg *Config) *redis.Client {
 
 // opcionLimpiezaDeAuth registra el cierre de pendientes vencidas en la cola auth de River.
 func opcionLimpiezaDeAuth(pool *pgxpool.Pool, cfg *Config) jobs.OpcionDeAuth {
-	gestor := auth.NuevoGestorDeEstados(auth.RegistradorNulo{})
+	gestor := auth.NuevoGestorDeEstados(auth.NuevoRegistradorEventos(pool))
 	return jobs.ConTrabajoDeAuth(
 		auth.NuevoCerrarPendientesWorker(pool, gestor, cfg.Auth.VentanaPendiente),
 		auth.TrabajoPeriodicoDeLimpieza(cfg.Auth.LimpiezaInterval),
