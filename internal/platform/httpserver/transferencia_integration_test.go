@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,7 +19,7 @@ import (
 // servicioConResolutor arma el servicio del núcleo con el resolutor real de auth y el nivel fijo de KYC.
 func servicioConResolutor(pool *pgxpool.Pool) *nucleo.Servicio {
 	return nucleo.NewServicio(pool, nucleo.LectorNivelKYCFijo{}, nil, nil, nil,
-		nucleo.ConResolutorDestino(auth.NuevoResolutorDestino(repositorio.New(pool))))
+		nucleo.ConResolutorDestino(auth.NuevoResolutorDestino(pool, 24*time.Hour)))
 }
 
 // pedirTransferenciaAutenticada manda el envío por el router real con la credencial de prueba.

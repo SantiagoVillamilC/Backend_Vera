@@ -105,11 +105,7 @@ func sembrarUsuarioConSaldo(t *testing.T, pool *pgxpool.Pool, s *nucleo.Servicio
 	t.Helper()
 	ctx := t.Context()
 
-	usuarioID := uuid.NewString()
-	if _, err := pool.Exec(ctx, "INSERT INTO users (id, email) VALUES ($1::uuid, $2)",
-		usuarioID, usuarioID+"@centinela.test"); err != nil {
-		t.Fatalf("sembrar usuario: %v", err)
-	}
+	usuarioID := auth.SembrarParteDePruebaConID(t, pool, uuid.NewString())
 	if _, err := s.AbrirSubcuentasDeUsuario(ctx, usuarioID); err != nil {
 		t.Fatalf("abrir subcuentas: %v", err)
 	}

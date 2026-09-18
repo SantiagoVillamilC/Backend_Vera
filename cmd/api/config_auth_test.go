@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 )
 
 const jwtDePrueba = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
@@ -15,6 +16,7 @@ func entornoDeAuth(t *testing.T) {
 	t.Helper()
 	t.Setenv("REDIS_URL", "redis://:secreta@127.0.0.1:16381/0")
 	t.Setenv("OTP_CANAL", "simulador")
+	t.Setenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", "24h")
 }
 
 func baseDeConfig(t *testing.T) {
@@ -137,5 +139,38 @@ func TestConfigLogValueRegistraAuth(t *testing.T) {
 	if grupo["redis_url_set"] != true || grupo["otp_canal"] != "simulador" || grupo["whatsapp_token_set"] != true {
 		t.Errorf("faltan los campos de auth: redis_url_set=%v otp_canal=%v whatsapp_token_set=%v",
 			grupo["redis_url_set"], grupo["otp_canal"], grupo["whatsapp_token_set"])
+	}
+}
+
+func TestLoadConfigAuthExigeEnfriamientoCambioNumero(t *testing.T) {
+	casos := map[string]struct {
+		valor   string
+		wantErr string
+	}{
+		"valido":      {valor: "24h"},
+		"ausente":     {valor: "", wantErr: "AUTH_ENFRIAMIENTO_CAMBIO_NUMERO is required"},
+		"cero":        {valor: "0s", wantErr: "AUTH_ENFRIAMIENTO_CAMBIO_NUMERO must be a positive duration"},
+		"negativo":    {valor: "-1h", wantErr: "AUTH_ENFRIAMIENTO_CAMBIO_NUMERO must be a positive duration"},
+		"no numerico": {valor: "veinticuatro", wantErr: "AUTH_ENFRIAMIENTO_CAMBIO_NUMERO must be a positive duration"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", caso.valor)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Auth.EnfriamientoCambioNumero != 24*time.Hour {
+				t.Errorf("EnfriamientoCambioNumero = %s, quiero 24h", cfg.Auth.EnfriamientoCambioNumero)
+			}
+		})
 	}
 }

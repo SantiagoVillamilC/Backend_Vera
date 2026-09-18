@@ -82,3 +82,54 @@ func (q *Queries) CredencialPorID(ctx context.Context, id pgtype.UUID) (Credenci
 	}
 	return i, err
 }
+
+const insertarCredencialDePrueba = `-- name: InsertarCredencialDePrueba :exec
+INSERT INTO auth.credenciales (id, parte_id, correo, celular, valor_derivado, estado)
+VALUES ($1, $2, $3, $4, NULL, 'sin_login')
+ON CONFLICT DO NOTHING
+`
+
+type InsertarCredencialDePruebaParams struct {
+	ID      pgtype.UUID `json:"id"`
+	ParteID pgtype.UUID `json:"parte_id"`
+	Correo  string      `json:"correo"`
+	Celular string      `json:"celular"`
+}
+
+func (q *Queries) InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error {
+	_, err := q.db.Exec(ctx, insertarCredencialDePrueba,
+		arg.ID,
+		arg.ParteID,
+		arg.Correo,
+		arg.Celular,
+	)
+	if err != nil {
+		return fmt.Errorf("query InsertarCredencialDePrueba: %w", err)
+	}
+	return nil
+}
+
+const resolverDestinoPorCelular = `-- name: ResolverDestinoPorCelular :one
+SELECT c.parte_id
+FROM auth.credenciales c
+WHERE c.celular = $1
+  AND c.celular_verificado_en IS NOT NULL
+  AND c.estado = 'activo'
+  AND (c.celular_cambiado_en IS NULL
+       OR c.celular_cambiado_en <= now() - ($2::double precision * interval '1 second'))
+`
+
+type ResolverDestinoPorCelularParams struct {
+	Celular              string  `json:"celular"`
+	EnfriamientoSegundos float64 `json:"enfriamiento_segundos"`
+}
+
+func (q *Queries) ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, resolverDestinoPorCelular, arg.Celular, arg.EnfriamientoSegundos)
+	var parte_id pgtype.UUID
+	err := row.Scan(&parte_id)
+	if err != nil {
+		err = fmt.Errorf("query ResolverDestinoPorCelular: %w", err)
+	}
+	return parte_id, err
+}

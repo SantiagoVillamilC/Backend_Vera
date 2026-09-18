@@ -32,3 +32,36 @@ func (q *Queries) CrearParte(ctx context.Context, arg CrearParteParams) (Parte, 
 	}
 	return i, err
 }
+
+const insertarParteDePrueba = `-- name: InsertarParteDePrueba :exec
+INSERT INTO auth.partes (id, tipo)
+VALUES ($1, 'persona')
+ON CONFLICT (id) DO NOTHING
+`
+
+func (q *Queries) InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, insertarParteDePrueba, id)
+	if err != nil {
+		return fmt.Errorf("query InsertarParteDePrueba: %w", err)
+	}
+	return nil
+}
+
+const resolverDestinoPorID = `-- name: ResolverDestinoPorID :one
+SELECT p.id
+FROM auth.partes p
+LEFT JOIN auth.credenciales c ON c.parte_id = p.id
+LEFT JOIN auth.empresas e ON e.parte_id = p.id
+WHERE p.id = $1
+  AND (e.parte_id IS NOT NULL OR (c.id IS NOT NULL AND c.estado <> 'cerrado'))
+`
+
+func (q *Queries) ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, resolverDestinoPorID, id)
+	var id_2 pgtype.UUID
+	err := row.Scan(&id_2)
+	if err != nil {
+		err = fmt.Errorf("query ResolverDestinoPorID: %w", err)
+	}
+	return id_2, err
+}

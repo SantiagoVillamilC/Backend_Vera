@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"time"
 
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// ConfigAuth reúne la configuración del módulo de autenticación: Redis y el canal del OTP.
+// ConfigAuth reúne la configuración del módulo de autenticación: Redis, el canal del OTP y el enfriamiento.
 type ConfigAuth struct {
-	RedisURL         string
-	OTPCanal         string
-	WhatsAppToken    string
-	WhatsAppPhoneID  string
-	WhatsAppTemplate string
+	RedisURL                 string
+	OTPCanal                 string
+	WhatsAppToken            string
+	WhatsAppPhoneID          string
+	WhatsAppTemplate         string
+	EnfriamientoCambioNumero time.Duration
 }
 
 // cargarConfigAuth lee el bloque de auth y devuelve sus errores para el errors.Join del llamador.
@@ -31,6 +33,11 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	var errs []error
 	if err := validarRedisURL(cfg.RedisURL); err != nil {
 		errs = append(errs, err)
+	}
+	var errEnfriamiento error
+	cfg.EnfriamientoCambioNumero, errEnfriamiento = duracionRequerida("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", os.Getenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO"))
+	if errEnfriamiento != nil {
+		errs = append(errs, errEnfriamiento)
 	}
 	switch cfg.OTPCanal {
 	case "simulador", "demo":
@@ -68,4 +75,16 @@ func validarRedisURL(raw string) error {
 		return fmt.Errorf("REDIS_URL must be a valid Redis URL, got host %q", u.Host)
 	}
 	return nil
+}
+
+// duracionRequerida exige una duración positiva sin default en código.
+func duracionRequerida(key, valor string) (time.Duration, error) {
+	if valor == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	d, err := time.ParseDuration(valor)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration (e.g. 24h), got %q", key, valor)
+	}
+	return d, nil
 }

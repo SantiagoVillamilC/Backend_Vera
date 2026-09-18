@@ -23,7 +23,6 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/observabilidad"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/rielsim"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/repositorio"
 )
 
 // tokenEstatico es el token del custodio simulado, comparado en tiempo constante.
@@ -70,7 +69,7 @@ func run() error {
 	if cfg.DirectorioSimuladorURL != "" {
 		directorio = directoriosim.NuevoDirectorio(cfg.DirectorioSimuladorURL, nil)
 	}
-	resolutorDestino := auth.NuevoResolutorDestino(repositorio.New(pool))
+	resolutorDestino := auth.NuevoResolutorDestino(pool, cfg.Auth.EnfriamientoCambioNumero)
 	servicio := nucleo.NewServicio(
 		pool,
 		nucleo.LectorNivelKYCFijo{},
