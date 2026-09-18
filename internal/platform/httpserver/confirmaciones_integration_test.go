@@ -130,7 +130,7 @@ func TestHU_NF_07_Criterio6_ConfirmacionAsientaElFondeo(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 250000)
 
 	rec := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, "250000", ""), "Bearer "+tokenCustodioDePrueba)
@@ -164,7 +164,7 @@ func TestHU_NF_07_Criterio22_CUSPersistidoSinExponerlo(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
 	cus := "cus-" + uuid.NewString()
 
@@ -189,7 +189,7 @@ func TestHU_NF_07_Criterio22_SinCUSLaColumnaQuedaNULL(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
 
 	rec := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, "100000", ""), "Bearer "+tokenCustodioDePrueba)
@@ -206,7 +206,7 @@ func TestHU_NF_07_Criterio8_PrimerMovimientoDejaElSaldoEnElMonto(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 275000)
 
 	rec := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, "275000", ""), "Bearer "+tokenCustodioDePrueba)
@@ -230,7 +230,7 @@ func TestHU_NF_07_Criterio8_PrimerMovimientoDejaElSaldoEnElMonto(t *testing.T) {
 func TestHU_NF_07_Criterio4_ReferenciaDesconocidaNoAcredita(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
-	r := NewRouter(pool, identidadFija{uuid.NewString()}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{uuid.NewString()}})
 	asientosAntes, lineasAntes := contarDiario(t, pool)
 
 	rec := pedirConfirmacion(t, r, cuerpoDeConfirmacion("dep-"+uuid.NewString(), "1000", ""), "Bearer "+tokenCustodioDePrueba)
@@ -257,7 +257,7 @@ func TestHU_NF_07_Criterio10_1_MontoOMonedaDistintosDanConflicto(t *testing.T) {
 			pool := abrirPoolDeIntegracion(t)
 			servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 			usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-			r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+			r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 			intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
 
 			rec := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, tc.monto, tc.moneda), "Bearer "+tokenCustodioDePrueba)
@@ -278,7 +278,7 @@ func TestHU_NF_07_Criterio10_2_ConfirmadaConMontoDistintoDanConflicto(t *testing
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 120000)
 
 	primera := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, "120000", ""), "Bearer "+tokenCustodioDePrueba)
@@ -302,7 +302,7 @@ func TestHU_NF_07_Criterio9_ReenvioNoDuplicaYDevuelveLoMismo(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 160000)
 
 	primera := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, "160000", ""), "Bearer "+tokenCustodioDePrueba)
@@ -327,7 +327,7 @@ func TestHU_NF_07_Criterio9_3_ReenvioEnParalelo(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 150000)
 	cuerpo := cuerpoDeConfirmacion(intencion.Referencia, "150000", "")
 
@@ -374,7 +374,7 @@ func TestHU_NF_07_Criterio7_FallaLaSegundaEscrituraNoDejaNada(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := uuid.NewString()
 	intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirConfirmacion(t, r, cuerpoDeConfirmacion(intencion.Referencia, "100000", ""), "Bearer "+tokenCustodioDePrueba)
 	assertErrorEnvelope(t, rec, http.StatusInternalServerError, "InternalError")
@@ -394,7 +394,7 @@ func TestHU_NF_07_Criterio19_ConfirmacionTardiaNoAsienta(t *testing.T) {
 			pool := abrirPoolDeIntegracion(t)
 			servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 			usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-			r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+			r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 			intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
 			marcarEstadoDelDeposito(t, pool, intencion.ID, estado)
 
@@ -416,7 +416,7 @@ func TestHU_NF_07_Criterio17_RechazoExplicitoNoAsienta(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 	intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
 	cuerpo := cuerpoDeConfirmacionConEstado(intencion.Referencia, "rechazado", "100000", "")
 
@@ -457,7 +457,7 @@ func TestHU_NF_07_Criterio17_RechazoAceptaPayloadMinimo(t *testing.T) {
 			pool := abrirPoolDeIntegracion(t)
 			servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 			usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-			r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+			r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 			intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
 
 			rec := pedirConfirmacion(t, r, fmt.Sprintf(plantilla, intencion.Referencia), "Bearer "+tokenCustodioDePrueba)
@@ -492,7 +492,7 @@ func TestHU_NF_07_Criterio17_RechazoNoPendienteDa409(t *testing.T) {
 			pool := abrirPoolDeIntegracion(t)
 			servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 			usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-			r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+			r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 			intencion := sembrarIntencion(t, servicio, usuarioID, 100000)
 			marcarEstadoDelDeposito(t, pool, intencion.ID, tc.estado)
 			asientosAntes, lineasAntes, _ := contarAsientoDelDeposito(t, pool, intencion.ID)

@@ -4,13 +4,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/repositorio"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -25,7 +23,7 @@ const (
 )
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
-func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio) http.Handler {
+func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)
 	}
@@ -37,33 +35,39 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *
 	r.Use(Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Test-User"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))
 	r.Use(MethodNotAllowedEnvelope)
 
-	authHandler := auth.NewHandler(auth.NewService(repositorio.New(pool)))
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
 	nucleoHandler := nucleo.NewHandler(nucleoServicio)
+	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(publicTimeout))
-		r.Post("/login", authHandler.Login)
-		r.Post("/register", authHandler.Register)
-		r.Post("/mfa/verify", authHandler.VerifyMFA)
+		r.Post("/v1/auth/register", sinImplementar)
+		r.Post("/v1/auth/register/verify-phone", sinImplementar)
+		r.Post("/v1/auth/otp/resend", sinImplementar)
+		r.Post("/v1/auth/login", sinImplementar)
+		r.Post("/v1/auth/login/verify-otp", sinImplementar)
+		r.Post("/v1/auth/refresh", sinImplementar)
+		r.Post("/v1/auth/recovery/request", sinImplementar)
+		r.Post("/v1/auth/recovery/verify", sinImplementar)
+		r.Post("/v1/auth/recovery/reset", sinImplementar)
 		r.Get("/healthz", health.Live)
 		r.Get("/readyz", health.Ready)
 	})
 
-	// Grupo autenticado: RequireAuth deja el usuario en el contexto y solo acá corre.
+	// Grupo autenticado: RequireAuth deja la identidad completa y solo acá corre.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
-		r.Use(RequireAuth(quien))
+		r.Use(RequireAuth(authDeps.Identidad))
 		r.Get("/saldo", nucleoHandler.Saldo)
 		r.Get("/movimientos", nucleoHandler.Movimientos)
 		r.Get("/transferencias/maximo", nucleoHandler.MontoMaximo)
@@ -72,6 +76,7 @@ func NewRouter(pool *pgxpool.Pool, quien IdentidadDeLaPeticion, nucleoServicio *
 		r.Get("/depositos/{id}", nucleoHandler.Deposito)
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
+		api.HandlerWithOptions(srv, api.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: api.ParamError})
 	})
 
 	// Grupo del custodio simulado: token estático, sin identidad de usuario.

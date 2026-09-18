@@ -52,7 +52,7 @@ func TestHU_NF_06_Criterio3_EnvioSinSaldoSeRechaza(t *testing.T) {
 			servicio := servicioConResolutor(pool)
 			emisor := sembrarUsuarioConSaldo(t, pool, servicio, saldo, 0)
 			destino := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-			r := NewRouter(pool, identidadFija{emisor}, servicio, custodioDePrueba)
+			r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{emisor}})
 
 			rec := pedirTransferenciaAutenticada(t, r, cuerpoTransferencia(destino, 1000, "k-"+uuid.NewString()))
 
@@ -66,7 +66,7 @@ func TestHU_NF_06_Criterio4_DestinoInexistenteSeRechaza(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := servicioConResolutor(pool)
 	emisor := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 0)
-	r := NewRouter(pool, identidadFija{emisor}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{emisor}})
 
 	rec := pedirTransferenciaAutenticada(t, r, cuerpoTransferencia(uuid.NewString(), 1000, "k-"+uuid.NewString()))
 
@@ -78,7 +78,7 @@ func TestHU_NF_06_Criterio5_EnvioAUnMismoSeRechaza(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := servicioConResolutor(pool)
 	emisor := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 0)
-	r := NewRouter(pool, identidadFija{emisor}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{emisor}})
 
 	rec := pedirTransferenciaAutenticada(t, r, cuerpoTransferencia(emisor, 1000, "k-"+uuid.NewString()))
 
@@ -91,7 +91,7 @@ func TestHU_NF_06_Criterio7_EnvioFelizSubeElSaldoDelReceptor(t *testing.T) {
 	servicio := servicioConResolutor(pool)
 	emisor := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 0)
 	receptor := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{emisor}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{emisor}})
 
 	rec := pedirTransferenciaAutenticada(t, r, cuerpoTransferencia(receptor, 250000, "k-"+uuid.NewString()))
 	if rec.Code != http.StatusCreated {
@@ -111,7 +111,7 @@ func TestHU_NF_06_Criterio7_EnvioFelizSubeElSaldoDelReceptor(t *testing.T) {
 		t.Errorf("id = %q, no es UUID: %v", id, err)
 	}
 
-	rReceptor := NewRouter(pool, identidadFija{receptor}, servicio, custodioDePrueba)
+	rReceptor := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{receptor}})
 	recSaldo := pedirSaldo(t, rReceptor, "")
 	if recSaldo.Code != http.StatusOK {
 		t.Fatalf("saldo del receptor: status = %d (cuerpo %q)", recSaldo.Code, recSaldo.Body.String())

@@ -11,6 +11,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -36,7 +37,9 @@ func abrirPoolDeIntegracion(t *testing.T) *pgxpool.Pool {
 // identidadFija le da a cada prueba su propio usuario, en vez del usuario de prueba compartido.
 type identidadFija struct{ usuarioID string }
 
-func (i identidadFija) UsuarioID(*http.Request) (string, error) { return i.usuarioID, nil }
+func (i identidadFija) Identidad(*http.Request) (identidad.Identidad, error) {
+	return identidad.Identidad{UsuarioID: i.usuarioID, Contexto: "usuario"}, nil
+}
 
 func pedirSaldo(t *testing.T, r http.Handler, query string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -152,7 +155,7 @@ func TestHU_NF_04_Criterio1_SaldoDevuelveCentavosYCOP(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 123456, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirSaldo(t, r, "")
 
@@ -183,7 +186,7 @@ func TestHU_NF_04_Criterio1_SaldoDevuelveCentavosYCOP(t *testing.T) {
 func TestHU_NF_04_Criterio1_SaldoSinCredencialDa401(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
-	r := NewRouter(pool, auth.UsuarioDePrueba{}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 
 	req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
 	rec := httptest.NewRecorder()
@@ -202,7 +205,7 @@ func TestHU_NF_04_Criterio2_SaldoDeOtroUsuarioSeRechaza(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	for name, query := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -221,7 +224,7 @@ func TestHU_NF_04_Criterio3_SaldoSinMovimientosEsCero(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirSaldo(t, r, "")
 
@@ -239,7 +242,7 @@ func TestHU_NF_04_Criterio8_DisponibleNoIncluyeLaRetenida(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 250000)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirSaldo(t, r, "")
 
@@ -257,7 +260,7 @@ func TestHU_NF_04_Criterio5_Criterio6_SaldoAFavorPositivoYExacto(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 9007199254740993, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirSaldo(t, r, "")
 
@@ -275,7 +278,7 @@ func TestHU_NF_04_Criterio11_LaConsultaNoEscribeEnElDiario(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 1000000, 250000)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	asientosAntes, lineasAntes := contarDiario(t, pool)
 	rec := pedirSaldo(t, r, "")

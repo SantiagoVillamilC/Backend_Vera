@@ -103,8 +103,10 @@ func run() error {
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouter(pool, auth.UsuarioDePrueba{}, servicio, tokenEstatico(cfg.CustodioToken)),
+		Addr: ":" + cfg.Port,
+		Handler: httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), httpserver.DependenciasAuth{
+			Identidad: auth.UsuarioDePrueba{},
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

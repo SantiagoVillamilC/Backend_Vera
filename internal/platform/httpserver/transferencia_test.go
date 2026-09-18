@@ -12,7 +12,7 @@ import (
 
 // rutaDeTransferencia monta el router real con el usuario de prueba y un servicio sin base para los rechazos de validación.
 func rutaDeTransferencia() http.Handler {
-	return NewRouter(nil, auth.UsuarioDePrueba{}, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba)
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 }
 
 // campoDelPrimerDetalle devuelve el campo del primer error de validación del envelope.
@@ -49,8 +49,8 @@ func TestHU_NF_06_Criterio1_EnvioSinDestinoOSinMonto(t *testing.T) {
 		cuerpo string
 		campo  string
 	}{
-		"sin destino": {`{"monto":"1000","idempotency_key":"k-1"}`, "Destino"},
-		"sin monto":   {`{"destino":"` + destino + `","idempotency_key":"k-1"}`, "Monto"},
+		"sin destino": {`{"monto":"1000","idempotency_key":"k-1"}`, "destino"},
+		"sin monto":   {`{"destino":"` + destino + `","idempotency_key":"k-1"}`, "monto"},
 	}
 
 	for nombre, tc := range casos {
@@ -78,8 +78,8 @@ func TestHU_NF_06_Criterio2_EnvioConMontoNoPositivo(t *testing.T) {
 			req, rec := peticionDeTransferencia(cuerpo)
 			rutaDeTransferencia().ServeHTTP(rec, req)
 			assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
-			if campo := campoDelPrimerDetalle(t, rec); campo != "Monto" {
-				t.Errorf("campo inválido = %q, quiero %q", campo, "Monto")
+			if campo := campoDelPrimerDetalle(t, rec); campo != "monto" {
+				t.Errorf("campo inválido = %q, quiero %q", campo, "monto")
 			}
 		})
 	}

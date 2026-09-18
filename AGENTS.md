@@ -128,7 +128,7 @@ a medida que el código avanza.
   `go generate ./...`. El archivo generado no se edita a mano y aporta los tipos del envelope
   (`Meta`, `APIError`, `FieldError`) que antes se escribían a mano. Las operaciones con la
   etiqueta `public` se registran a mano en el grupo público del router, así que no se generan.
-- El esquema se migra con goose desde `bd/migraciones`; el ledger vive en el esquema Postgres
+- El esquema se migra con goose desde `bd/migraciones`. El ledger vive en el esquema Postgres
   `nucleo` y River en el suyo. Hay dos paquetes sqlc: `internal/repositorio` (auth) y
   `internal/nucleo/internal/repositorio` (núcleo). Toda consulta del núcleo corre dentro del helper
   de transacción que hace `SET LOCAL ROLE rol_nucleo`.
@@ -148,3 +148,20 @@ a medida que el código avanza.
 En resumen: las skills son la línea base para código nuevo, no una descripción de lo que ya existe.
 No asumas que un módulo ya sigue el patrón de una skill solo porque la skill existe, verifícalo en el
 archivo real primero.
+
+## Autenticacion
+
+- `code` del envelope va en PascalCase (`InvalidCredentials`, `RefreshReused`, `AuthUnavailable`, y
+  el resto del catálogo). El catálogo completo está en la descripción de `APIError.code` en
+  `api/openapi.yaml` y su mapeo en `internal/auth/errores.go`. El cliente nunca compara `message`.
+- Ningún DTO de request o response se escribe a mano si ya existe en `openapi.gen.go`. Los tipos
+  generados son la forma del contrato y los tags `validate` inyectados con
+  `x-oapi-codegen-extra-tags` son la única validación de entrada, aplicada por
+  `api.DecodeAndValidate` y `api.DecodeDiscriminated`.
+- A `WriteData` solo van los tipos de `data` (por ejemplo `api.Sesion` o `api.Contexto`), nunca un
+  `api.*Response`: el envelope lo arma el helper de `internal/platform/api`.
+- Todo handler que devuelva un array inicializa con `make([]T, 0, n)` para que el JSON lleve `[]` y
+  no `null`.
+- El gate de `go generate ./...` es local, no hay CI en el repo: el evaluador hace `git add` de las
+  rutas, corre `go generate ./...` y exige `git diff --exit-code` sobre
+  `internal/platform/api/openapi.gen.go`.

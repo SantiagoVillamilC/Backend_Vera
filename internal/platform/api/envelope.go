@@ -44,6 +44,24 @@ func WriteAPIError(w http.ResponseWriter, r *http.Request, err error) {
 	WriteError(w, http.StatusInternalServerError, "InternalError", "Something went wrong.", nil)
 }
 
+// ParamError traduce los errores de binding del wrapper generado al envelope, nunca a texto plano.
+func ParamError(w http.ResponseWriter, _ *http.Request, err error) {
+	var (
+		requerido *RequiredParamError
+		formato   *InvalidParamFormatError
+	)
+	switch {
+	case errors.As(err, &requerido):
+		WriteError(w, http.StatusBadRequest, "BadRequest", "A required parameter is missing.",
+			[]FieldError{{Field: requerido.ParamName, Rule: "required"}})
+	case errors.As(err, &formato):
+		WriteError(w, http.StatusBadRequest, "BadRequest", "A parameter has an invalid format.",
+			[]FieldError{{Field: formato.ParamName, Rule: "format"}})
+	default:
+		WriteError(w, http.StatusBadRequest, "BadRequest", "Malformed request parameters.", nil)
+	}
+}
+
 // writeJSON serializa el envelope en un buffer antes de tocar el ResponseWriter, para no dejar un 200 truncado.
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	buf := new(bytes.Buffer)

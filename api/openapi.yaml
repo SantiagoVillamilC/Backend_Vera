@@ -5,8 +5,9 @@ info:
   description: |
     Contrato del modulo de autenticacion. Es la fuente para el cliente Flutter y para los
     handlers generados con oapi-codegen. Toda respuesta usa el envelope
-    {success, data, error, meta}. El detalle de comportamiento vive en las historias de
-    autenticacion y el porqué de cada decisión en el dossier de diseño.
+    {success, data, error, meta}. El codigo de error viaja en PascalCase. El detalle de
+    comportamiento vive en las historias de autenticacion y el porqué de cada decisión en el
+    dossier de diseño.
 
 servers:
   - url: /
@@ -59,7 +60,13 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/register/verify-phone:
@@ -83,7 +90,13 @@ paths:
                 $ref: "#/components/schemas/VerificacionResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/otp/resend:
@@ -107,7 +120,13 @@ paths:
                 $ref: "#/components/schemas/DesafioResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/login:
@@ -124,16 +143,26 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Se requiere el codigo. No emite tokens.
+          description: |
+            Se requiere el codigo y no se emiten tokens. Con la cuenta pendiente de verificacion
+            responde un desafio nuevo con proposito registro para reanudar la verificacion.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/login/verify-otp:
@@ -159,7 +188,13 @@ paths:
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/refresh:
@@ -181,7 +216,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RefreshResponse"
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/recovery/request:
@@ -203,7 +246,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DesafioResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/recovery/verify:
@@ -229,7 +280,13 @@ paths:
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/recovery/reset:
@@ -253,6 +310,12 @@ paths:
                 $ref: "#/components/schemas/OkResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
 
   /v1/auth/logout:
     post:
@@ -262,6 +325,10 @@ paths:
       responses:
         "204":
           description: Sesion cerrada.
+        "401":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
 
   /v1/auth/logout-all:
     post:
@@ -271,6 +338,10 @@ paths:
       responses:
         "204":
           description: Todas las sesiones cerradas.
+        "401":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
 
   /v1/auth/sessions:
     get:
@@ -285,6 +356,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/SesionesResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/sessions/{session_id}:
@@ -302,7 +375,11 @@ paths:
       responses:
         "204":
           description: Sesion revocada.
+        "401":
+          $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/contextos:
@@ -318,6 +395,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ContextosResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/contexto:
@@ -340,7 +419,13 @@ paths:
                 $ref: "#/components/schemas/ContextoActivoResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
         "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/phone/change/request:
@@ -363,7 +448,13 @@ paths:
                 $ref: "#/components/schemas/DesafioResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
         "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/phone/change/confirm:
@@ -386,6 +477,12 @@ paths:
                 $ref: "#/components/schemas/OkResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
 
   /v1/kyc/estado:
     get:
@@ -400,6 +497,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/KycEstadoResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/kyc/verificacion:
@@ -422,7 +521,13 @@ paths:
                 $ref: "#/components/schemas/OkResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
         "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/consents:
@@ -438,6 +543,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsentsResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
     post:
       operationId: createConsent
@@ -457,6 +564,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OkResponse"
         "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
 components:
@@ -481,8 +594,23 @@ components:
       properties:
         code:
           type: string
-          description: Identificador estable del catalogo de errores.
-          example: INVALID_CREDENTIALS
+          description: |
+            Identificador estable del catalogo de errores, en PascalCase. Nunca se compara el
+            mensaje. Catalogo:
+            BadRequest (JSON malformado), ValidationError (regla incumplida, con details),
+            Unauthorized (access vencido o alterado), InvalidCredentials, AccountSuspended,
+            AccountClosed, OtpInvalid, OtpExpired, ChallengeInvalid, OtpTooManyAttempts,
+            OtpResendCooldown, RefreshInvalid, RefreshReused, SessionNotFound, NoCompanyRole,
+            ContextInvalid, ResetInvalid, SecondFactorRequired, KycRequired, ConsentRequired,
+            DuplicateIdentifier, PhoneUnverified, OtpTooManyResends, PhoneChangeCooldown,
+            TooManyRequests, NotImplemented, PayloadTooLarge (cuerpo mayor a 1 MiB),
+            MethodNotAllowed (metodo no permitido), NotFound (recurso inexistente),
+            AuthUnavailable (fail closed de Redis o del canal),
+            OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
+            InternalError (siempre generico). Los identificadores InvalidEmail, InvalidPhone,
+            InvalidName, WeakPassword e InvalidNit ya no existen: los reemplaza
+            ValidationError con details[{field, rule, param}].
+          example: InvalidCredentials
         message:
           type: string
         details:
@@ -496,6 +624,7 @@ components:
       properties:
         field:
           type: string
+          description: Nombre del campo en snake_case, con la ruta anidada si aplica.
         rule:
           type: string
         param:
@@ -553,7 +682,7 @@ components:
 
     Desafio:
       type: object
-      required: [challenge_id, expira_en_segundos]
+      required: [challenge_id, expira_en_segundos, proposito]
       properties:
         challenge_id:
           type: string
@@ -561,6 +690,11 @@ components:
         expira_en_segundos:
           type: integer
           example: 300
+        proposito:
+          type: string
+          enum: [registro, login, recuperacion, cambio_numero, cambio_numero_viejo]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=registro login recuperacion cambio_numero cambio_numero_viejo"
 
     DesafioResponse:
       type: object
@@ -577,9 +711,28 @@ components:
         meta:
           $ref: "#/components/schemas/Meta"
 
+    Consentimiento:
+      type: object
+      required: [tipo, version_texto, aceptado]
+      properties:
+        tipo:
+          type: string
+          enum: [tratamiento_datos, whatsapp_optin, biometricos]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos"
+        version_texto:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=64"
+        aceptado:
+          type: boolean
+          x-go-type: "*bool"
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+
     RegisterPersonaRequest:
       type: object
-      required: [tipo_cuenta, correo, contrasena, celular, nombre_completo, tipo_documento, numero_documento]
+      required: [tipo_cuenta, correo, contrasena, celular, nombre_completo, tipo_documento, numero_documento, consentimientos]
       properties:
         tipo_cuenta:
           type: string
@@ -594,17 +747,18 @@ components:
           type: string
           minLength: 8
           maxLength: 64
+          x-go-type: string
           x-oapi-codegen-extra-tags:
             validate: "required,min=8,max=64"
         celular:
           type: string
           x-go-type: string
           x-oapi-codegen-extra-tags:
-            validate: "required"
+            validate: "required,e164"
         nombre_completo:
           type: string
           x-oapi-codegen-extra-tags:
-            validate: "required"
+            validate: "required,max=200"
         tipo_documento:
           type: string
           enum: [CC, CE, PA]
@@ -614,6 +768,13 @@ components:
           type: string
           x-oapi-codegen-extra-tags:
             validate: "required"
+        consentimientos:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Consentimiento"
+          x-oapi-codegen-extra-tags:
+            validate: "required,min=1,dive"
 
     RepresentanteLegal:
       type: object
@@ -622,7 +783,7 @@ components:
         nombre_completo:
           type: string
           x-oapi-codegen-extra-tags:
-            validate: "required"
+            validate: "required,max=200"
         tipo_documento:
           type: string
           enum: [CC, CE, PA]
@@ -635,7 +796,7 @@ components:
 
     RegisterEmpresaRequest:
       type: object
-      required: [tipo_cuenta, razon_social, nit, correo, contrasena, celular, representante_legal]
+      required: [tipo_cuenta, razon_social, nit, correo, contrasena, celular, representante_legal, consentimientos]
       properties:
         tipo_cuenta:
           type: string
@@ -643,11 +804,11 @@ components:
         razon_social:
           type: string
           x-oapi-codegen-extra-tags:
-            validate: "required"
+            validate: "required,max=200"
         nit:
           type: string
           x-oapi-codegen-extra-tags:
-            validate: "required"
+            validate: "required,nit"
         correo:
           type: string
           format: email
@@ -658,6 +819,7 @@ components:
           type: string
           minLength: 8
           maxLength: 64
+          x-go-type: string
           x-oapi-codegen-extra-tags:
             validate: "required,min=8,max=64"
         celular:
@@ -665,9 +827,16 @@ components:
           description: Celular del representante legal, ancla del OTP.
           x-go-type: string
           x-oapi-codegen-extra-tags:
-            validate: "required"
+            validate: "required,e164"
         representante_legal:
           $ref: "#/components/schemas/RepresentanteLegal"
+        consentimientos:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Consentimiento"
+          x-oapi-codegen-extra-tags:
+            validate: "required,min=1,dive"
 
     RegisterRequest:
       oneOf:
@@ -730,11 +899,13 @@ components:
         challenge_id:
           type: string
           format: uuid
+          x-oapi-codegen-extra-tags:
+            validate: "required"
         codigo:
           type: string
           pattern: "^[0-9]{6}$"
           x-oapi-codegen-extra-tags:
-            validate: "required,len=6,numeric"
+            validate: "required,len=6,number"
 
     ResendOtpRequest:
       type: object
@@ -743,6 +914,8 @@ components:
         challenge_id:
           type: string
           format: uuid
+          x-oapi-codegen-extra-tags:
+            validate: "required"
 
     Verificacion:
       type: object
@@ -756,6 +929,13 @@ components:
         estado:
           type: string
           enum: [pendiente_verificacion, activo, suspendido, cerrado]
+        codigos_respaldo:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+          description: Codigos de respaldo de un solo uso, presentes solo en la activacion.
 
     VerificacionResponse:
       type: object
@@ -784,16 +964,19 @@ components:
             validate: "required,email"
         contrasena:
           type: string
+          x-go-type: string
           x-oapi-codegen-extra-tags:
             validate: "required"
         contexto:
           type: string
           enum: [usuario, empresa]
           default: usuario
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,oneof=usuario empresa"
 
     LoginData:
       type: object
-      required: [requiere_segundo_factor, challenge_id, expira_en_segundos, mensaje]
+      required: [requiere_segundo_factor, challenge_id, expira_en_segundos, mensaje, proposito]
       properties:
         requiere_segundo_factor:
           type: boolean
@@ -806,6 +989,11 @@ components:
           example: 300
         mensaje:
           type: string
+        proposito:
+          type: string
+          enum: [registro, login]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=registro login"
 
     LoginResponse:
       type: object
@@ -824,7 +1012,7 @@ components:
 
     Usuario:
       type: object
-      required: [id, tipo_cuenta, correo, contexto_activo]
+      required: [id, tipo_cuenta, correo, contexto_activo, rol_activo]
       properties:
         id:
           type: string
@@ -876,6 +1064,8 @@ components:
       properties:
         refresh_token:
           type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
 
     Tokens:
       type: object
@@ -938,7 +1128,7 @@ components:
 
     Contexto:
       type: object
-      required: [contexto_id, tipo, nombre]
+      required: [contexto_id, tipo, nombre, rol]
       properties:
         contexto_id:
           type: string
@@ -976,6 +1166,8 @@ components:
       properties:
         contexto_id:
           type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
 
     ContextoActivo:
       type: object
@@ -1003,13 +1195,22 @@ components:
 
     PhoneChangeRequest:
       type: object
-      required: [nuevo_celular]
+      required: [nuevo_celular, contrasena_actual]
       properties:
         nuevo_celular:
           type: string
           x-go-type: string
           x-oapi-codegen-extra-tags:
+            validate: "required,e164"
+        contrasena_actual:
+          type: string
+          x-go-type: string
+          x-oapi-codegen-extra-tags:
             validate: "required"
+        codigo_respaldo:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty"
 
     RecoveryRequest:
       type: object
@@ -1022,6 +1223,20 @@ components:
           x-oapi-codegen-extra-tags:
             validate: "required,email"
 
+    SegundoMetodo:
+      type: object
+      required: [tipo, codigo]
+      properties:
+        tipo:
+          type: string
+          enum: [codigo_respaldo]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=codigo_respaldo"
+        codigo:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+
     RecoveryVerifyRequest:
       type: object
       required: [challenge_id, codigo, segundo_metodo]
@@ -1029,14 +1244,15 @@ components:
         challenge_id:
           type: string
           format: uuid
+          x-oapi-codegen-extra-tags:
+            validate: "required"
         codigo:
           type: string
           pattern: "^[0-9]{6}$"
           x-oapi-codegen-extra-tags:
-            validate: "required,len=6,numeric"
+            validate: "required,len=6,number"
         segundo_metodo:
-          type: object
-          description: Segundo metodo distinto del codigo. El detalle queda pendiente.
+          $ref: "#/components/schemas/SegundoMetodo"
 
     ResetToken:
       type: object
@@ -1066,10 +1282,13 @@ components:
       properties:
         reset_token:
           type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
         nueva_contrasena:
           type: string
           minLength: 8
           maxLength: 64
+          x-go-type: string
           x-oapi-codegen-extra-tags:
             validate: "required,min=8,max=64"
 
@@ -1079,7 +1298,7 @@ components:
       properties:
         producto:
           type: string
-          enum: [bajo_monto, pleno]
+          enum: [bajo_monto, pleno, deposito_ordinario]
         estado_kyc:
           type: string
         limites:
@@ -1106,9 +1325,13 @@ components:
       properties:
         nivel:
           type: string
-          enum: [bajo_monto, pleno]
+          enum: [bajo_monto, pleno, deposito_ordinario]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=bajo_monto pleno deposito_ordinario"
         proveedor:
           type: string
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=64"
 
     ConsentRequest:
       type: object
@@ -1116,16 +1339,31 @@ components:
       properties:
         tipo:
           type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
         version_texto:
           type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=64"
         aceptado:
           type: boolean
+          x-go-type: "*bool"
+          x-oapi-codegen-extra-tags:
+            validate: "required"
         metodo:
           type: string
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=64"
+        accion:
+          type: string
+          enum: [otorgar, revocar]
+          default: otorgar
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,oneof=otorgar revocar"
 
     Consent:
       type: object
-      required: [tipo, version_texto, aceptado, fecha]
+      required: [tipo, version_texto, aceptado, accion, texto, origen, fecha]
       properties:
         tipo:
           type: string
@@ -1134,6 +1372,13 @@ components:
         aceptado:
           type: boolean
         metodo:
+          type: string
+        accion:
+          type: string
+          enum: [otorgar, revocar]
+        texto:
+          type: string
+        origen:
           type: string
         fecha:
           type: string
