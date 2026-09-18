@@ -121,6 +121,13 @@ a medida que el código avanza.
 - El router es chi (`internal/platform/httpserver/router.go`), con el envelope
   `{success, data, error, meta}` y los grupos público y autenticado de SCRUM-51. La autenticación
   sigue siendo un usuario de prueba inyectado detrás de una interfaz, no JWT real.
+- El contrato OpenAPI vive en `api/openapi.yaml` (20 rutas, propiedades JSON en `snake_case`, igual
+  que el resto de la API implementada). El código se genera con oapi-codegen v2.8.0 a
+  `internal/platform/api/openapi.gen.go`, con el generador fijado por la directiva `tool` de
+  `go.mod` y la directiva `//go:generate` en `internal/platform/api/doc.go`. Se regenera con
+  `go generate ./...`. El archivo generado no se edita a mano y aporta los tipos del envelope
+  (`Meta`, `APIError`, `FieldError`) que antes se escribían a mano. Las operaciones con la
+  etiqueta `public` se registran a mano en el grupo público del router, así que no se generan.
 - El esquema se migra con goose desde `bd/migraciones`; el ledger vive en el esquema Postgres
   `nucleo` y River en el suyo. Hay dos paquetes sqlc: `internal/repositorio` (auth) y
   `internal/nucleo/internal/repositorio` (núcleo). Toda consulta del núcleo corre dentro del helper
