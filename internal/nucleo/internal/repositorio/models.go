@@ -8,6 +8,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ConciliacionCorrida struct {
+	ID           int64              `json:"id"`
+	VentanaHasta pgtype.Timestamptz `json:"ventana_hasta"`
+	CorridaEn    pgtype.Timestamptz `json:"corrida_en"`
+}
+
 type Cuenta struct {
 	ID         string             `json:"id"`
 	Naturaleza string             `json:"naturaleza"`
@@ -28,6 +34,20 @@ type Deposito struct {
 	Estado         string             `json:"estado"`
 	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
 	ActualizadaEn  pgtype.Timestamptz `json:"actualizada_en"`
+}
+
+type Descuadre struct {
+	ID                int64              `json:"id"`
+	Tipo              string             `json:"tipo"`
+	TransferenciaID   pgtype.UUID        `json:"transferencia_id"`
+	ReferenciaExterna pgtype.Text        `json:"referencia_externa"`
+	MontoInterno      pgtype.Int8        `json:"monto_interno"`
+	MontoExterno      pgtype.Int8        `json:"monto_externo"`
+	VentanaDesde      pgtype.Timestamptz `json:"ventana_desde"`
+	VentanaHasta      pgtype.Timestamptz `json:"ventana_hasta"`
+	DetectadoEn       pgtype.Timestamptz `json:"detectado_en"`
+	ResueltoEn        pgtype.Timestamptz `json:"resuelto_en"`
+	Resolucion        pgtype.Text        `json:"resolucion"`
 }
 
 type ExtractoCustodio struct {

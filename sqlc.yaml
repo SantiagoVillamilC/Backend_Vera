@@ -26,6 +26,7 @@ sql:
       - bd/migraciones/0015_create_extracto_custodio.sql
       - bd/migraciones/0016_create_gmf_rule.sql
       - bd/migraciones/0018_create_outbox.sql
+      - bd/migraciones/0019_create_descuadre_y_cursor.sql
     queries: bd/consultas-nucleo
     gen:
       go:
@@ -47,3 +48,5 @@ sql:
           nucleo_regla_limite: ReglaLimite
           nucleo_valor_uvt: ValorUvt
           nucleo_outbox: Outbox
+          nucleo_descuadre: Descuadre
+          nucleo_conciliacion_corrida: ConciliacionCorrida
