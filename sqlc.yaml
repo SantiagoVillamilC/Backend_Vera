@@ -47,3 +47,25 @@ sql:
           nucleo_regla_limite: ReglaLimite
           nucleo_valor_uvt: ValorUvt
           nucleo_outbox: Outbox
+  # Repositorio de auth (fase0-2): su propio esquema y su propio rol, sin el ledger del núcleo.
+  - engine: postgresql
+    schema:
+      - bd/migraciones-auth
+    queries: bd/consultas-auth
+    gen:
+      go:
+        package: repositorio
+        out: internal/auth/internal/repositorio
+        sql_package: pgx/v5
+        sql_driver: github.com/jackc/pgx/v5
+        emit_interface: true
+        emit_json_tags: true
+        emit_empty_slices: true
+        wrap_errors: true
+        rename:
+          auth_partes: Partes
+          auth_personas: Personas
+          auth_empresas: Empresas
+          auth_roles_de_parte: RolDeParte
+          auth_credenciales: Credencial
+          auth_transiciones_credencial: TransicionCredencial

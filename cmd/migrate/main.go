@@ -41,17 +41,20 @@ func run() error {
 
 	ctx := context.Background()
 	comando := os.Args[1]
-	// River tiene su propio migrador y su propio esquema, y este binario impone el orden: arriba,
-	// goose primero (crea el esquema `river`) y River después; abajo, River primero (vacía el
-	// esquema) y goose después (lo borra). Correr goose o el CLI de River por separado
-	// desincroniza las dos tablas de versión.
+	// El binario impone el orden: arriba goose del núcleo, River y auth; abajo auth, River y goose.
 	switch comando {
 	case "up":
 		if err := goose.RunContext(ctx, "up", db, "migraciones"); err != nil {
 			return fmt.Errorf("goose up: %w", err)
 		}
-		return subirRiver(ctx, dsn)
+		if err := subirRiver(ctx, dsn); err != nil {
+			return err
+		}
+		return correrAuth(ctx, db, "up")
 	case "down":
+		if err := correrAuth(ctx, db, "down"); err != nil {
+			return err
+		}
 		if err := bajarRiver(ctx, dsn); err != nil {
 			return err
 		}
@@ -63,7 +66,10 @@ func run() error {
 		if err := goose.RunContext(ctx, "status", db, "migraciones"); err != nil {
 			return fmt.Errorf("goose status: %w", err)
 		}
-		return estadoRiver(ctx, dsn)
+		if err := estadoRiver(ctx, dsn); err != nil {
+			return err
+		}
+		return correrAuth(ctx, db, "status")
 	default:
 		if err := goose.RunContext(ctx, comando, db, "migraciones"); err != nil {
 			return fmt.Errorf("goose %s: %w", comando, err)
