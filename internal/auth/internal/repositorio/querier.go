@@ -17,6 +17,10 @@ type Querier interface {
 	CrearPersona(ctx context.Context, arg CrearPersonaParams) (Persona, error)
 	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
+	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
+	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
+	ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error)
+	ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -17,6 +17,8 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/observabilidad"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/rielsim"
 )
 
 func main() {
@@ -42,10 +44,17 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// El núcleo nace sin rutas ni disparadores: las unidades de negocio le agregan los
-	// métodos y quien los exponga. Acá queda construido con sus dependencias reales y con
-	// los rellenos de las piezas que todavía no existen (riel NF-A2-06, custodio NF-A5-01).
-	_ = nucleo.NewServicio(
+	// Rellenos de lo que aún no existe (KYC real); el directorio, el extracto del custodio y el riel son reales cuando hay URL.
+	var riel nucleo.Riel = nucleo.RielNoDisponible{}
+	if cfg.RielSimuladorURL != "" {
+		riel = rielsim.NuevoRiel(cfg.RielSimuladorURL, nil)
+	}
+	var directorio nucleo.DirectorioLlaves = nucleo.DirectorioNoDisponible{}
+	if cfg.DirectorioSimuladorURL != "" {
+		directorio = directoriosim.NuevoDirectorio(cfg.DirectorioSimuladorURL, nil)
+	}
+	resolutorDestino := auth.NuevoResolutorDestino(pool, cfg.Auth.EnfriamientoCambioNumero)
+	servicio := nucleo.NewServicio(
 		pool,
 		nucleo.KYCNoDisponible{},
 		nucleo.RielNoDisponible{},
