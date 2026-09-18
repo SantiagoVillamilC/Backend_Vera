@@ -41,7 +41,7 @@ func simuladorDePrueba(t *testing.T) (*httptest.Server, *Simulador) {
 	}
 	t.Cleanup(func() { _ = almacen.Cerrar() })
 
-	sim := NuevoSimulador(almacen, "simulador-custodia")
+	sim := NuevoSimulador(almacen, "simulador-custodia", NuevoControlPerillas(perillasFieles()))
 	servidor := httptest.NewServer(sim.Rutas())
 	t.Cleanup(servidor.Close)
 	return servidor, sim

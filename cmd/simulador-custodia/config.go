@@ -17,6 +17,7 @@ type Config struct {
 	DBPath             string
 	Origen             string
 	PermitirExposicion bool
+	Perillas           Perillas
 }
 
 // LoadConfig valida el entorno y reporta todos los errores del boot juntos.
@@ -30,6 +31,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var errs []error
+	perillas, errsPerillas := cargarPerillas()
+	cfg.Perillas = perillas
+	errs = append(errs, errsPerillas...)
 	if p, err := strconv.Atoi(cfg.Port); err != nil || p < 1 || p > 65535 {
 		errs = append(errs, fmt.Errorf("SIMULADOR_CUSTODIA_PORT must be 1..65535, got %q", cfg.Port))
 	}

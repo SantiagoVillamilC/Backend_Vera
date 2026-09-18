@@ -29,6 +29,9 @@ func run() error {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	slog.Info("config loaded", "config", cfg)
 
+	perillas := NuevoControlPerillas(cfg.Perillas)
+	slog.Info("perillas de la corrida", "perillas", perillas.Vigentes())
+
 	almacen, err := AbrirAlmacen(cfg.DBPath)
 	if err != nil {
 		return err
@@ -40,11 +43,12 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(cfg.Addr, cfg.Port),
-		Handler:           NuevoSimulador(almacen, cfg.Origen).Rutas(),
+		Handler:           NuevoSimulador(almacen, cfg.Origen, perillas).Rutas(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
 	errCh := make(chan error, 1)
 	go func() {

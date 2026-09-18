@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"strings"
 	"time"
@@ -14,28 +16,148 @@ import (
 // maximoCuerpoNotificacion es el tamaño máximo que el simulador acepta en una notificación.
 const maximoCuerpoNotificacion = 64 << 10
 
+// maximoCuerpoPerillas es el tamaño máximo que el control acepta en un cambio de perillas.
+const maximoCuerpoPerillas = 4 << 10
+
+// topeEsperaSilencio queda sobre los 10s del cliente y bajo el WriteTimeout de 30s para que el 504 de respaldo sea alcanzable.
+const topeEsperaSilencio = 25 * time.Second
+
 // ErrMontoNotificacion reporta un monto que no es un entero positivo de centavos.
 var ErrMontoNotificacion = errors.New("el monto no es un entero positivo en centavos")
 
-// Simulador sirve las tres rutas del banco custodio simulado.
+// Simulador sirve las rutas del banco custodio simulado y su control de perillas.
 type Simulador struct {
-	almacen *Almacen
-	origen  string
-	ahora   func() time.Time
+	almacen    *Almacen
+	origen     string
+	ahora      func() time.Time
+	perillas   *ControlPerillas
+	sorteo     func() float64
+	topeEspera time.Duration
 }
 
-// NuevoSimulador arma el simulador con su almacén y el identificador con que se nombra a sí mismo.
-func NuevoSimulador(almacen *Almacen, origen string) *Simulador {
-	return &Simulador{almacen: almacen, origen: origen, ahora: time.Now}
+// NuevoSimulador arma el simulador con su almacén, su nombre, el control de perillas y el tope de espera de producción.
+func NuevoSimulador(almacen *Almacen, origen string, perillas *ControlPerillas) *Simulador {
+	return &Simulador{almacen: almacen, origen: origen, ahora: time.Now, perillas: perillas, sorteo: rand.Float64, topeEspera: topeEsperaSilencio}
 }
 
-// Rutas monta las dos notificaciones y la consulta del extracto.
+// Rutas monta las dos notificaciones, la consulta del extracto y el control de perillas.
 func (s *Simulador) Rutas() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/notificaciones/depositos", s.Deposito)
 	r.Post("/notificaciones/retiros", s.Retiro)
 	r.Get("/extracto", s.Extracto)
+	r.Get("/control/perillas", s.VerPerillas)
+	r.Put("/control/perillas", s.CambiarPerillas)
 	return r
+}
+
+// fallasDeNegocio aplica modo de caída, rechazo y latencia, y dice si la petición ya se atendió.
+func (s *Simulador) fallasDeNegocio(w http.ResponseWriter, r *http.Request) bool {
+	if s.fallasSinLatencia(w, r) {
+		return true
+	}
+	s.esperarLatencia(r, s.perillas.Vigentes())
+	return false
+}
+
+// fallasSinLatencia aplica modo de caída y rechazo sin leer el cuerpo, y dice si la petición ya se atendió.
+func (s *Simulador) fallasSinLatencia(w http.ResponseWriter, r *http.Request) bool {
+	p := s.perillas.Vigentes()
+	switch p.ModoCaida {
+	case modoRechaza:
+		cortarConexion(w)
+		return true
+	case modoSilencio:
+		s.esperarAlCliente(w, r)
+		return true
+	}
+	if s.falla(p.PRechazo) {
+		escribirError(w, http.StatusServiceUnavailable, "el simulador rechazó la petición", nil)
+		return true
+	}
+	return false
+}
+
+// falla sortea contra una probabilidad, con 0 nunca falla y con 1 siempre falla.
+func (s *Simulador) falla(probabilidad float64) bool { return s.sorteo() < probabilidad }
+
+// esperarLatencia duerme la latencia base más el jitter uniforme, sin pasarse del plazo del cliente.
+func (s *Simulador) esperarLatencia(r *http.Request, p Perillas) {
+	espera := time.Duration(p.LatenciaMS) * time.Millisecond
+	if p.LatenciaVarMS > 0 {
+		espera += time.Duration(s.sorteo()*float64(p.LatenciaVarMS)) * time.Millisecond
+	}
+	if espera <= 0 {
+		return
+	}
+	temporizador := time.NewTimer(espera)
+	defer temporizador.Stop()
+	select {
+	case <-temporizador.C:
+	case <-r.Context().Done():
+	}
+}
+
+// cortarConexion cierra el socket sin responder, que es la caída por conexión rechazada.
+func cortarConexion(w http.ResponseWriter) {
+	if !secuestrarYCerrar(w) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+}
+
+// secuestrarYCerrar le quita la conexión a net/http y la cierra, y dice si pudo.
+func secuestrarYCerrar(w http.ResponseWriter) bool {
+	secuestrador, ok := w.(http.Hijacker)
+	if !ok {
+		return false
+	}
+	conn, _, err := secuestrador.Hijack()
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// esperarAlCliente aguarda a que el cliente se rinda o vence su tope, y al vencer lo corta en vez de dejar un 200 vacío.
+func (s *Simulador) esperarAlCliente(w http.ResponseWriter, r *http.Request) {
+	temporizador := time.NewTimer(s.topeEspera)
+	defer temporizador.Stop()
+	select {
+	case <-r.Context().Done():
+	case <-temporizador.C:
+		if !secuestrarYCerrar(w) {
+			w.WriteHeader(http.StatusGatewayTimeout)
+		}
+	}
+}
+
+// VerPerillas responde las seis perillas vigentes.
+func (s *Simulador) VerPerillas(w http.ResponseWriter, r *http.Request) {
+	escribirJSON(w, http.StatusOK, s.perillas.Vigentes())
+}
+
+// CambiarPerillas aplica un cambio parcial en caliente y responde las perillas resultantes.
+func (s *Simulador) CambiarPerillas(w http.ResponseWriter, r *http.Request) {
+	var parcial perillasParciales
+	r.Body = http.MaxBytesReader(w, r.Body, maximoCuerpoPerillas)
+	decodificador := json.NewDecoder(r.Body)
+	decodificador.DisallowUnknownFields()
+	if err := decodificador.Decode(&parcial); err != nil {
+		escribirError(w, http.StatusBadRequest, "el cuerpo no es un cambio de perillas JSON válido", nil)
+		return
+	}
+	if err := decodificador.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		escribirError(w, http.StatusBadRequest, "el cuerpo trae datos sobrantes tras el JSON", nil)
+		return
+	}
+	actuales, err := s.perillas.Aplicar(parcial)
+	if err != nil {
+		escribirError(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	slog.InfoContext(r.Context(), "perillas cambiadas por el control", "perillas", actuales)
+	escribirJSON(w, http.StatusOK, actuales)
 }
 
 // Deposito registra una notificación de depósito.
@@ -50,6 +172,9 @@ func (s *Simulador) Retiro(w http.ResponseWriter, r *http.Request) {
 
 // notificar valida la notificación, la registra con idempotencia por referencia y responde el movimiento.
 func (s *Simulador) notificar(w http.ResponseWriter, r *http.Request, tipo string) {
+	if s.fallasSinLatencia(w, r) {
+		return
+	}
 	nota, faltantes, err := leerNotificacion(w, r)
 	if err != nil {
 		escribirError(w, http.StatusBadRequest, err.Error(), nil)
@@ -57,6 +182,11 @@ func (s *Simulador) notificar(w http.ResponseWriter, r *http.Request, tipo strin
 	}
 	if len(faltantes) > 0 {
 		escribirError(w, http.StatusBadRequest, "faltan campos obligatorios", faltantes)
+		return
+	}
+	s.esperarLatencia(r, s.perillas.Vigentes())
+	if s.falla(s.perillas.Vigentes().PNotificacionPerdida) {
+		escribirJSON(w, http.StatusOK, respuestaDescartada{Descartada: true})
 		return
 	}
 	movimiento, reintento, err := s.almacen.Registrar(r.Context(), Movimiento{
@@ -74,6 +204,10 @@ func (s *Simulador) notificar(w http.ResponseWriter, r *http.Request, tipo strin
 		escribirError(w, http.StatusInternalServerError, "no se pudo registrar el movimiento", nil)
 		return
 	}
+	if s.falla(s.perillas.Vigentes().PRespuestaPerdida) {
+		s.esperarAlCliente(w, r)
+		return
+	}
 	escribirJSON(w, http.StatusOK, respuestaMovimiento{
 		ID:            movimiento.ID,
 		Referencia:    movimiento.Referencia,
@@ -83,6 +217,11 @@ func (s *Simulador) notificar(w http.ResponseWriter, r *http.Request, tipo strin
 		RegistradoEn:  movimiento.RegistradoEn,
 		Reintento:     reintento,
 	})
+}
+
+// respuestaDescartada acepta una notificación que la perilla de notificación perdida descartó.
+type respuestaDescartada struct {
+	Descartada bool `json:"descartada"`
 }
 
 // notificacion es el cuerpo ya validado de una notificación.
@@ -139,6 +278,9 @@ func centavosDeJSON(datos json.RawMessage) (Centavos, error) {
 
 // Extracto responde el corte completo al instante pedido y rechaza un corte futuro.
 func (s *Simulador) Extracto(w http.ResponseWriter, r *http.Request) {
+	if s.fallasDeNegocio(w, r) {
+		return
+	}
 	corte, err := time.Parse(time.RFC3339, r.URL.Query().Get("corte_en"))
 	if err != nil {
 		escribirError(w, http.StatusBadRequest, "corte_en debe ser un instante RFC3339", nil)

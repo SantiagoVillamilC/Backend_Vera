@@ -11,6 +11,9 @@ import (
 var todasLasClaves = []string{
 	"SIMULADOR_CUSTODIA_ADDR", "SIMULADOR_CUSTODIA_PORT", "SIMULADOR_CUSTODIA_DB",
 	"SIMULADOR_CUSTODIA_ORIGEN", "SIMULADOR_CUSTODIA_PERMITIR_EXPOSICION",
+	"SIMULADOR_CUSTODIA_P_RECHAZO", "SIMULADOR_CUSTODIA_LATENCIA_MS", "SIMULADOR_CUSTODIA_LATENCIA_VAR_MS",
+	"SIMULADOR_CUSTODIA_MODO_CAIDA", "SIMULADOR_CUSTODIA_P_RESPUESTA_PERDIDA",
+	"SIMULADOR_CUSTODIA_P_NOTIFICACION_PERDIDA",
 }
 
 // LoadConfig resuelve el entorno y reporta el primer defecto de cada caso.
@@ -34,6 +37,7 @@ func TestLoadConfig(t *testing.T) {
 		"origen en blanco":            {override: map[string]string{"SIMULADOR_CUSTODIA_ORIGEN": "   "}, wantErr: true},
 		"origen explícito":            {override: map[string]string{"SIMULADOR_CUSTODIA_ORIGEN": "banco-simulado"}, puerto: "8099", addr: "127.0.0.1", origen: "banco-simulado"},
 		"ruta de base explícita":      {override: map[string]string{"SIMULADOR_CUSTODIA_DB": "/tmp/x.db"}, puerto: "8099", addr: "127.0.0.1", origen: "simulador-custodia"},
+		"latencia fuera del tope":     {override: map[string]string{"SIMULADOR_CUSTODIA_LATENCIA_MS": "999999999"}, wantErr: true},
 	}
 
 	for nombre, tc := range tests {
