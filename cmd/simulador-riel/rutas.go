@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -34,6 +35,7 @@ func (s *Simulador) Rutas() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/transferencias", s.Enviar)
 	r.Get("/transferencias/{id}", s.ConsultarEstado)
+	r.Get("/extracto", s.Extracto)
 	r.Get("/control", s.VerControl)
 	r.Put("/control", s.CambiarControl)
 	return r
@@ -95,6 +97,22 @@ func (s *Simulador) ConsultarEstado(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	escribirJSON(w, http.StatusOK, respuestaDe(operacion, false))
+}
+
+// Extracto responde las operaciones de la ventana [desde, hasta) más el corte del extracto.
+func (s *Simulador) Extracto(w http.ResponseWriter, r *http.Request) {
+	desde, hasta, err := leerVentana(r, s.ahora())
+	if err != nil {
+		escribirError(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	operaciones, err := s.almacen.EnVentana(r.Context(), desde, hasta)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "leer el extracto", "err", err)
+		escribirError(w, http.StatusInternalServerError, "no se pudo leer el extracto", nil)
+		return
+	}
+	escribirJSON(w, http.StatusOK, extractoDe(operaciones, s.ahora()))
 }
 
 // VerControl devuelve las perillas vigentes.
@@ -273,6 +291,65 @@ func respuestaDe(o Operacion, reintento bool) respuestaHTTP {
 		OcurridoEn:      o.OcurridoEn,
 		Reintento:       reintento,
 	}
+}
+
+// extractoHTTP es la ventana de operaciones que el simulador entrega para la conciliación.
+type extractoHTTP struct {
+	Corte       time.Time               `json:"corte"`
+	Operaciones []operacionExtractoHTTP `json:"operaciones"`
+}
+
+// operacionExtractoHTTP es una fila del extracto, emparejable por transferencia_id y no por la clave.
+type operacionExtractoHTTP struct {
+	TransferenciaID string    `json:"transferencia_id"`
+	Estado          string    `json:"estado"`
+	MontoCentavos   Centavos  `json:"monto_centavos"`
+	OcurridoEn      time.Time `json:"ocurrido_en"`
+}
+
+// extractoDe lleva las operaciones registradas a su forma en el cable, con el corte.
+func extractoDe(operaciones []Operacion, corte time.Time) extractoHTTP {
+	filas := make([]operacionExtractoHTTP, 0, len(operaciones))
+	for _, o := range operaciones {
+		filas = append(filas, operacionExtractoHTTP{
+			TransferenciaID: o.TransferenciaID,
+			Estado:          o.Estado,
+			MontoCentavos:   o.MontoCentavos,
+			OcurridoEn:      o.OcurridoEn,
+		})
+	}
+	return extractoHTTP{Corte: corte.UTC(), Operaciones: filas}
+}
+
+// leerVentana valida que la ventana sea RFC 3339, no vacía, ordenada y pasada.
+func leerVentana(r *http.Request, ahora time.Time) (time.Time, time.Time, error) {
+	desde, err := instanteDe(r.URL.Query().Get("desde"), "desde")
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	hasta, err := instanteDe(r.URL.Query().Get("hasta"), "hasta")
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if !desde.Before(hasta) {
+		return time.Time{}, time.Time{}, errors.New("la ventana debe cumplir desde < hasta")
+	}
+	if hasta.After(ahora) {
+		return time.Time{}, time.Time{}, errors.New("hasta no puede ser futuro")
+	}
+	return desde, hasta, nil
+}
+
+// instanteDe parsea un parámetro de la consulta como RFC 3339 y lo normaliza a UTC.
+func instanteDe(valor, nombre string) (time.Time, error) {
+	if valor == "" {
+		return time.Time{}, fmt.Errorf("falta el parámetro %s", nombre)
+	}
+	t, err := time.Parse(time.RFC3339, valor)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("el parámetro %s debe ser un instante RFC 3339", nombre)
+	}
+	return t.UTC(), nil
 }
 
 // errorHTTP es el cuerpo de un rechazo, con los campos faltantes cuando aplica.

@@ -173,6 +173,17 @@ func (a *Almacen) Operaciones(ctx context.Context) ([]Operacion, error) {
 	return escanearOperaciones(rows)
 }
 
+// EnVentana devuelve las operaciones ocurridas en [desde, hasta), sin incluir el extremo hasta.
+func (a *Almacen) EnVentana(ctx context.Context, desde, hasta time.Time) ([]Operacion, error) {
+	rows, err := a.db.QueryContext(ctx, consultaOperacion+` WHERE ocurrido_en >= ? AND ocurrido_en < ? ORDER BY ocurrido_en, id`,
+		desde.UTC().Format(formatoInstante), hasta.UTC().Format(formatoInstante))
+	if err != nil {
+		return nil, fmt.Errorf("leer la ventana: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return escanearOperaciones(rows)
+}
+
 // consultaOperacion es la lectura común de una fila de operación.
 const consultaOperacion = `
 SELECT id, transferencia_id, idempotency_key, llave,
