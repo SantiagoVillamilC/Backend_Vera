@@ -79,6 +79,109 @@ func lineasDelAsiento(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id 
 	return lineas
 }
 
+// fondearComoDeposito acredita el disponible con un asiento tipado como depósito, para que el historial lo lea.
+func fondearComoDeposito(t *testing.T, ctx context.Context, pool *pgxpool.Pool, cuenta string, monto Centavos) {
+	t.Helper()
+
+	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
+			asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
+				Tipo:        TipoAsientoDeposito,
+				OcurridoEn:  pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true},
+				Descripcion: pgtype.Text{String: "fondeo de prueba", Valid: true},
+			})
+			if err != nil {
+				return struct{}{}, err
+			}
+			lineas := []repositorio.InsertarLineaParams{
+				{EntryID: asiento.ID, CuentaID: CuentaCustodiaBanco, Monto: monto.Int64(), Moneda: MonedaCOP},
+				{EntryID: asiento.ID, CuentaID: cuenta, Monto: -monto.Int64(), Moneda: MonedaCOP},
+			}
+			for _, linea := range lineas {
+				if _, err := q.InsertarLinea(ctx, linea); err != nil {
+					return struct{}{}, err
+				}
+			}
+			return struct{}{}, nil
+		}); err != nil {
+		t.Fatalf("fondear %s como depósito: %v", cuenta, err)
+	}
+}
+
+// reservarConGMFConOutbox deja la retención de cuatro líneas y su outbox sobre un disponible ya fondeado.
+func reservarConGMFConOutbox(t *testing.T, ctx context.Context, pool *pgxpool.Pool, usuario string, monto, gravamen Centavos) (uuid.UUID, int64) {
+	t.Helper()
+
+	cuenta := NombreCuentaDisponible(usuario)
+	transferenciaID := uuid.New()
+	var outboxID int64
+	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
+			if _, err := q.InsertarTransferencia(ctx, repositorio.InsertarTransferenciaParams{
+				ID:             pgtype.UUID{Bytes: transferenciaID, Valid: true},
+				UsuarioID:      usuario,
+				CuentaOrigen:   cuenta,
+				LlaveDestino:   "llave-" + uuid.NewString(),
+				Monto:          monto.Int64(),
+				Moneda:         MonedaCOP,
+				IdempotencyKey: "k-" + uuid.NewString(),
+				Estado:         EstadoTransferenciaReservada,
+			}); err != nil {
+				return struct{}{}, err
+			}
+			if err := retener(ctx, q, SolicitudRetencion{
+				TransferenciaID: transferenciaID,
+				UsuarioID:       usuario,
+				Monto:           monto,
+				Gravamen:        gravamen,
+				Moneda:          MonedaCOP,
+				OcurridoEn:      time.Now().UTC(),
+			}); err != nil {
+				return struct{}{}, err
+			}
+			id, err := encolarDespacho(ctx, q, transferenciaID)
+			if err != nil {
+				return struct{}{}, err
+			}
+			outboxID = id
+			return struct{}{}, nil
+		}); err != nil {
+		t.Fatalf("reservar con GMF y outbox: %v", err)
+	}
+	return transferenciaID, outboxID
+}
+
+// lineasDelAsientoEnOrden devuelve las líneas de un asiento como slice, para no colapsar una cuenta repetida.
+func lineasDelAsientoEnOrden(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, tipo string) []lineaDeAsiento {
+	t.Helper()
+
+	var lineas []lineaDeAsiento
+	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			rows, err := tx.Query(ctx,
+				`SELECT p.cuenta_id, p.monto FROM nucleo.posting p
+				   JOIN nucleo.journal_entry j ON j.id = p.entry_id
+				  WHERE j.transferencia_id = $1 AND j.tipo = $2
+				  ORDER BY p.id`,
+				pgtype.UUID{Bytes: id, Valid: true}, tipo)
+			if err != nil {
+				return struct{}{}, err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var linea lineaDeAsiento
+				if err := rows.Scan(&linea.cuenta, &linea.monto); err != nil {
+					return struct{}{}, err
+				}
+				lineas = append(lineas, linea)
+			}
+			return struct{}{}, rows.Err()
+		}); err != nil {
+		t.Fatalf("leer las líneas del asiento %q de %s: %v", tipo, id, err)
+	}
+	return lineas
+}
+
 // sumaDeCuentaDeLaTransferencia suma las líneas de la transferencia en una sola cuenta.
 func sumaDeCuentaDeLaTransferencia(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, cuenta string) int64 {
 	t.Helper()
@@ -222,7 +325,108 @@ func TestCierreRechazadoAsienta4bYDevuelveElDineroYConservaElMotivo(t *testing.T
 	if conservado := descripcionDelAsiento(t, ctx, pool, transferenciaID, TipoAsientoCompensacion); conservado != motivo {
 		t.Errorf("motivo conservado en el 4b = %q, quiero %q", conservado, motivo)
 	}
+	if len(lineas) != 2 {
+		t.Errorf("líneas del 4b sin GMF = %d, quiero 2", len(lineas))
+	}
+	if _, hayGravamen := lineas[CuentaGMFPorPagar]; hayGravamen {
+		t.Errorf("el 4b sin GMF no debe traer línea de gravamen")
+	}
 	verificarAsientosCuadradosDeLaTransferencia(t, ctx, pool, transferenciaID)
+}
+
+// HU-NF-10, criterio 15.2: con GMF retenido, el rechazo devuelve el monto y el gravamen y deja el disponible donde empezó.
+func TestCierreRechazadoConGMFDevuelveElMontoYElGravamen(t *testing.T) {
+	pool := abrirPoolConcurrenteDePrueba(t)
+	ctx := t.Context()
+	usuario := uuid.NewString()
+	monto := Centavos(1000000)
+	gravamen := Centavos(4000)
+
+	servicio := NewServicio(pool, nil, nil, nil, nil)
+	cuenta := subcuentaDisponibleDePrueba(t, ctx, servicio, usuario)
+	fondeo, err := monto.Sumar(gravamen)
+	if err != nil {
+		t.Fatalf("sumar el monto y el gravamen: %v", err)
+	}
+	fondearComoDeposito(t, ctx, pool, cuenta, fondeo)
+	inicial := saldoDeCuentaDePrueba(t, servicio, cuenta)
+
+	transferenciaID, outboxID := reservarConGMFConOutbox(t, ctx, pool, usuario, monto, gravamen)
+	riel := &rielDoble{respuesta: RespuestaRiel{Resultado: ResultadoRechazado, Motivo: "fondos_insuficientes", OcurridoEn: time.Now().UTC()}}
+	rechazador := NewServicio(pool, nil, riel, nil, nil)
+	if err := rechazador.DespacharOutbox(ctx); err != nil {
+		t.Fatalf("DespacharOutbox: %v", err)
+	}
+
+	if estado := leerEstadoTransferencia(t, ctx, pool, transferenciaID); estado != EstadoTransferenciaCompensada {
+		t.Errorf("estado = %q, quiero %q", estado, EstadoTransferenciaCompensada)
+	}
+	if fila := leerOutbox(t, ctx, pool, outboxID); !fila.DespachadoEn.Valid {
+		t.Errorf("el outbox no quedó despachado")
+	}
+	if saldo := saldoDeCuentaDePrueba(t, servicio, cuenta); saldo != inicial {
+		t.Errorf("disponible del emisor tras la compensación = %d, quiero %d de vuelta", saldo, inicial)
+	}
+	if saldo := saldoDeCuentaDePrueba(t, servicio, NombreCuentaRetenido(usuario)); saldo != 0 {
+		t.Errorf("retenido del emisor tras la compensación = %d, quiero 0", saldo)
+	}
+	if suma := sumaDeCuentaDeLaTransferencia(t, ctx, pool, transferenciaID, CuentaLiquidacionPendienteRiel); suma != 0 {
+		t.Errorf("liquidación pendiente de la operación = %d, quiero 0", suma)
+	}
+	if suma := sumaDeCuentaDeLaTransferencia(t, ctx, pool, transferenciaID, CuentaGMFPorPagar); suma != 0 {
+		t.Errorf("gravamen por pagar de la operación = %d, quiero 0", suma)
+	}
+
+	lineas := lineasDelAsientoEnOrden(t, ctx, pool, transferenciaID, TipoAsientoCompensacion)
+	querer := []lineaDeAsiento{
+		{CuentaLiquidacionPendienteRiel, monto.Int64()},
+		{NombreCuentaDisponible(usuario), -monto.Int64()},
+		{CuentaGMFPorPagar, gravamen.Int64()},
+		{NombreCuentaDisponible(usuario), -gravamen.Int64()},
+	}
+	if len(lineas) != len(querer) {
+		t.Fatalf("líneas del 4b con GMF = %d, quiero %d", len(lineas), len(querer))
+	}
+	var suma int64
+	for i, linea := range lineas {
+		if linea != querer[i] {
+			t.Errorf("línea %d = %+v, quiero %+v", i, linea, querer[i])
+		}
+		suma += linea.monto
+	}
+	if suma != 0 {
+		t.Errorf("suma del asiento 4b con GMF = %d, quiero 0", suma)
+	}
+	verificarHistorialDelGravamenDevuelto(t, servicio, usuario, monto, gravamen)
+	verificarAsientosCuadradosDeLaTransferencia(t, ctx, pool, transferenciaID)
+	verificarApendiceCSinFilas(t, pool)
+}
+
+// verificarHistorialDelGravamenDevuelto exige que el historial muestre el monto y el gravamen como dos devoluciones distintas.
+func verificarHistorialDelGravamenDevuelto(t *testing.T, servicio *Servicio, usuario string, monto, gravamen Centavos) {
+	t.Helper()
+
+	pagina, err := servicio.Historial(t.Context(), usuario, nil, 50)
+	if err != nil {
+		t.Fatalf("Historial: %v", err)
+	}
+	var hayMonto, hayGravamen bool
+	for _, movimiento := range pagina.Movimientos {
+		for _, linea := range movimiento.Lineas {
+			if linea.Motivo == MotivoDevolucion && linea.Monto == monto {
+				hayMonto = true
+			}
+			if linea.Motivo == MotivoDevolucionGravamen && linea.Monto == gravamen {
+				hayGravamen = true
+			}
+		}
+	}
+	if !hayMonto {
+		t.Errorf("el historial no muestra la devolución del monto %d", monto)
+	}
+	if !hayGravamen {
+		t.Errorf("el historial no muestra el gravamen devuelto %d como concepto propio", gravamen)
+	}
 }
 
 // Criterio 16 y asiento 4c: el plazo vence, no hay asiento nuevo, la transferencia queda indeterminada y el dinero sigue en vuelo.

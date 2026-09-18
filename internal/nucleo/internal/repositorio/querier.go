@@ -18,6 +18,7 @@ type Querier interface {
 	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error)
 	ExtractoPorCorte(ctx context.Context, corteEn pgtype.Timestamptz) (ExtractoCustodio, error)
+	GravamenRetenidoDeTransferencia(ctx context.Context, arg GravamenRetenidoDeTransferenciaParams) (int64, error)
 	InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error)
 	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)
 	InsertarExtractoCustodio(ctx context.Context, arg InsertarExtractoCustodioParams) error

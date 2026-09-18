@@ -82,7 +82,7 @@ func TestLineasDeCompensacionCuadranContraElEmisor(t *testing.T) {
 		Moneda:    MonedaCOP,
 	}
 
-	lineas, err := lineasDeCompensacion(transferencia)
+	lineas, err := lineasDeCompensacion(transferencia, 0)
 	if err != nil {
 		t.Fatalf("lineasDeCompensacion: %v", err)
 	}
@@ -95,6 +95,43 @@ func TestLineasDeCompensacionCuadranContraElEmisor(t *testing.T) {
 	}
 	if suma := sumaDeLineas(t, lineas); suma != 0 {
 		t.Errorf("suma del asiento 4b = %d, quiero 0", suma)
+	}
+}
+
+// HU-NF-10, criterio 15.2: el 4b con gravamen devuelve el monto y el gravamen como líneas propias y suma cero.
+func TestLineasDeCompensacionConGravamenDevuelvenElGravamenComoLineaPropia(t *testing.T) {
+	t.Parallel()
+
+	usuario := uuid.NewString()
+	transferencia := repositorio.Transferencia{
+		ID:        pgtype.UUID{Bytes: uuid.New(), Valid: true},
+		UsuarioID: usuario,
+		Monto:     1000000,
+		Moneda:    MonedaCOP,
+	}
+
+	lineas, err := lineasDeCompensacion(transferencia, 4000)
+	if err != nil {
+		t.Fatalf("lineasDeCompensacion: %v", err)
+	}
+	querer := []repositorio.InsertarLineaParams{
+		{CuentaID: CuentaLiquidacionPendienteRiel, Monto: 1000000, Moneda: MonedaCOP},
+		{CuentaID: NombreCuentaDisponible(usuario), Monto: -1000000, Moneda: MonedaCOP},
+		{CuentaID: CuentaGMFPorPagar, Monto: 4000, Moneda: MonedaCOP},
+		{CuentaID: NombreCuentaDisponible(usuario), Monto: -4000, Moneda: MonedaCOP},
+	}
+	if len(lineas) != len(querer) {
+		t.Fatalf("líneas del 4b con gravamen = %d, quiero %d", len(lineas), len(querer))
+	}
+	for i, linea := range lineas {
+		if linea.CuentaID != querer[i].CuentaID || linea.Monto != querer[i].Monto || linea.Moneda != querer[i].Moneda {
+			t.Errorf("línea %d = (%s, %d, %s), quiero (%s, %d, %s)",
+				i, linea.CuentaID, linea.Monto, linea.Moneda,
+				querer[i].CuentaID, querer[i].Monto, querer[i].Moneda)
+		}
+	}
+	if suma := sumaDeLineas(t, lineas); suma != 0 {
+		t.Errorf("suma del asiento 4b con gravamen = %d, quiero 0", suma)
 	}
 }
 

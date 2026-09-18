@@ -12,6 +12,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const gravamenRetenidoDeTransferencia = `-- name: GravamenRetenidoDeTransferencia :one
+SELECT COALESCE(SUM(-p.monto), 0)::bigint AS gravamen
+  FROM nucleo.posting p
+  JOIN nucleo.journal_entry j ON j.id = p.entry_id
+ WHERE j.transferencia_id = $1
+   AND j.tipo = $2
+   AND p.cuenta_id = $3
+`
+
+type GravamenRetenidoDeTransferenciaParams struct {
+	TransferenciaID pgtype.UUID `json:"transferencia_id"`
+	Tipo            string      `json:"tipo"`
+	CuentaID        string      `json:"cuenta_id"`
+}
+
+func (q *Queries) GravamenRetenidoDeTransferencia(ctx context.Context, arg GravamenRetenidoDeTransferenciaParams) (int64, error) {
+	row := q.db.QueryRow(ctx, gravamenRetenidoDeTransferencia, arg.TransferenciaID, arg.Tipo, arg.CuentaID)
+	var gravamen int64
+	err := row.Scan(&gravamen)
+	if err != nil {
+		err = fmt.Errorf("query GravamenRetenidoDeTransferencia: %w", err)
+	}
+	return gravamen, err
+}
+
 const insertarAsiento = `-- name: InsertarAsiento :one
 INSERT INTO nucleo.journal_entry (tipo, transferencia_id, deposito_id, ocurrido_en, descripcion)
 VALUES ($1, $2, $3, $4, $5)

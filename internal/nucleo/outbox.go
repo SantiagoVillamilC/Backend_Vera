@@ -409,26 +409,48 @@ func lineasDeConfirmacion(transferencia repositorio.Transferencia) ([]repositori
 	}, nil
 }
 
-// escribirAsientoDeCompensacion escribe el asiento 4b del Apéndice B: el dinero en vuelo vuelve al disponible del emisor.
+// escribirAsientoDeCompensacion escribe el asiento 4b leyendo de la retención el GMF que haya que devolver.
 func escribirAsientoDeCompensacion(ctx context.Context, q *repositorio.Queries, transferencia repositorio.Transferencia, motivo string, ocurridoEn time.Time) error {
-	lineas, err := lineasDeCompensacion(transferencia)
+	gravamen, err := q.GravamenRetenidoDeTransferencia(ctx, repositorio.GravamenRetenidoDeTransferenciaParams{
+		TransferenciaID: transferencia.ID,
+		Tipo:            TipoAsientoRetencion,
+		CuentaID:        CuentaGMFPorPagar,
+	})
+	if err != nil {
+		return fmt.Errorf("nucleo: leer el gravamen retenido de %s: %w", uuid.UUID(transferencia.ID.Bytes), err)
+	}
+	lineas, err := lineasDeCompensacion(transferencia, Centavos(gravamen))
 	if err != nil {
 		return err
 	}
 	return insertarAsientoConLineas(ctx, q, TipoAsientoCompensacion, transferencia, ocurridoEn, motivoDeRechazo(motivo), lineas)
 }
 
-// lineasDeCompensacion arma las dos líneas del asiento 4b; la reversión del GMF de NF-A2-09.3 entra por acá.
-func lineasDeCompensacion(transferencia repositorio.Transferencia) ([]repositorio.InsertarLineaParams, error) {
+// lineasDeCompensacion arma las dos líneas del asiento 4b y, con gravamen, las dos de su devolución (HU-NF-10, criterio 15.2).
+func lineasDeCompensacion(transferencia repositorio.Transferencia, gravamen Centavos) ([]repositorio.InsertarLineaParams, error) {
+	if gravamen < 0 {
+		return nil, ErrMontoInvalido
+	}
 	monto := Centavos(transferencia.Monto)
-	credito, err := Centavos(0).Restar(monto)
+	creditoMonto, err := Centavos(0).Restar(monto)
 	if err != nil {
 		return nil, err
 	}
-	return []repositorio.InsertarLineaParams{
+	lineas := []repositorio.InsertarLineaParams{
 		{CuentaID: CuentaLiquidacionPendienteRiel, Monto: monto.Int64(), Moneda: transferencia.Moneda},
-		{CuentaID: NombreCuentaDisponible(transferencia.UsuarioID), Monto: credito.Int64(), Moneda: transferencia.Moneda},
-	}, nil
+		{CuentaID: NombreCuentaDisponible(transferencia.UsuarioID), Monto: creditoMonto.Int64(), Moneda: transferencia.Moneda},
+	}
+	if gravamen == 0 {
+		return lineas, nil
+	}
+	creditoGravamen, err := Centavos(0).Restar(gravamen)
+	if err != nil {
+		return nil, err
+	}
+	return append(lineas,
+		repositorio.InsertarLineaParams{CuentaID: CuentaGMFPorPagar, Monto: gravamen.Int64(), Moneda: transferencia.Moneda},
+		repositorio.InsertarLineaParams{CuentaID: NombreCuentaDisponible(transferencia.UsuarioID), Monto: creditoGravamen.Int64(), Moneda: transferencia.Moneda},
+	), nil
 }
 
 // motivoDeRechazo lleva el motivo del riel a la descripción del asiento, que es donde se conserva.

@@ -29,3 +29,11 @@ SELECT COALESCE(SUM(p.monto), 0)::bigint AS saldo
  WHERE p.cuenta_id = @cuenta_id
    AND p.moneda = c.moneda
    AND j.ocurrido_en <= @corte_en;
+
+-- name: GravamenRetenidoDeTransferencia :one
+SELECT COALESCE(SUM(-p.monto), 0)::bigint AS gravamen
+  FROM nucleo.posting p
+  JOIN nucleo.journal_entry j ON j.id = p.entry_id
+ WHERE j.transferencia_id = @transferencia_id
+   AND j.tipo = @tipo
+   AND p.cuenta_id = @cuenta_id;
