@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -64,7 +65,64 @@ func (s *Servicio) Conciliar(ctx context.Context, antiguedad time.Duration) (int
 	if err != nil {
 		return 0, fmt.Errorf("nucleo: conciliar: leer el extracto del custodio: %w", err)
 	}
+	// La consulta al riel es otra lectura externa anterior a la transacción de escritura (HU-NF-10, criterio 24).
+	consultadas, err := s.consultarIndeterminadas(ctx)
+	if err != nil {
+		return 0, err
+	}
+	extractoRiel.Operaciones = append(extractoRiel.Operaciones, consultadas...)
 	return s.conciliarVentana(ctx, desde, hasta, extractoRiel, extractoCustodio)
+}
+
+// consultarIndeterminadas pregunta al riel el estado de cada indeterminada, haya madurado su ventana o no (HU-NF-08, criterio 21).
+func (s *Servicio) consultarIndeterminadas(ctx context.Context) ([]OperacionDeExtractoRiel, error) {
+	if s.riel == nil {
+		return nil, nil
+	}
+	indeterminadas, err := s.leerIndeterminadas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	operaciones := make([]OperacionDeExtractoRiel, 0, len(indeterminadas))
+	for _, transferencia := range indeterminadas {
+		respuesta, err := s.riel.ConsultarEstado(ctx, uuid.UUID(transferencia.ID.Bytes))
+		if err != nil {
+			if !errors.Is(err, ErrRielSinRegistro) {
+				s.reportarConsultaFallida(ctx, transferencia, err)
+			}
+			continue
+		}
+		operaciones = append(operaciones, operacionDeRespuesta(transferencia, respuesta))
+	}
+	return operaciones, nil
+}
+
+// operacionDeRespuesta lleva el desenlace que el riel reportó a la forma que la maquinaria de cierre ya sabe resolver.
+func operacionDeRespuesta(transferencia repositorio.Transferencia, respuesta RespuestaRiel) OperacionDeExtractoRiel {
+	return OperacionDeExtractoRiel{
+		TransferenciaID: uuid.UUID(transferencia.ID.Bytes),
+		Estado:          string(respuesta.Resultado),
+		Monto:           Centavos(transferencia.Monto),
+		OcurridoEn:      respuesta.OcurridoEn.UTC(),
+	}
+}
+
+// leerIndeterminadas trae las transferencias sin desenlace conocido sin acotarlas a la ventana de la corrida.
+func (s *Servicio) leerIndeterminadas(ctx context.Context) ([]repositorio.Transferencia, error) {
+	return enTransaccion(ctx, s.pool,
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) ([]repositorio.Transferencia, error) {
+			return q.LeerTransferenciasIndeterminadas(ctx)
+		})
+}
+
+// reportarConsultaFallida deja rastro de una consulta que no resolvió, sin cortar la corrida (criterio 21).
+func (s *Servicio) reportarConsultaFallida(ctx context.Context, transferencia repositorio.Transferencia, causa error) {
+	if s.rastreador == nil {
+		return
+	}
+	id := uuid.UUID(transferencia.ID.Bytes).String()
+	s.rastreador.Capturar(ctx, fmt.Errorf("nucleo: consultar el estado de la transferencia %s: %w", id, causa),
+		ContextoError{Operacion: "conciliar", Canal: CanalSoloLog, Campos: []Campo{{Clave: "transferencia_id", Valor: id}}})
 }
 
 // conciliarVentana lee la ventana y la entrega al detector dentro de una sola transacción de escritura.

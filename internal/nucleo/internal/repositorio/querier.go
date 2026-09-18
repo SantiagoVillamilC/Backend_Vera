@@ -32,6 +32,7 @@ type Querier interface {
 	LeerAsientosDeTransferencia(ctx context.Context, transferenciaID pgtype.UUID) ([]JournalEntry, error)
 	LeerAsientosDeVentana(ctx context.Context, arg LeerAsientosDeVentanaParams) ([]JournalEntry, error)
 	LeerTransferenciasActivasDeVentana(ctx context.Context, arg LeerTransferenciasActivasDeVentanaParams) ([]LeerTransferenciasActivasDeVentanaRow, error)
+	LeerTransferenciasIndeterminadas(ctx context.Context) ([]Transferencia, error)
 	LineasDeMovimientos(ctx context.Context, anclas []int64) ([]LineasDeMovimientosRow, error)
 	MarcarOutboxDespachado(ctx context.Context, id int64) (int64, error)
 	ObtenerDeposito(ctx context.Context, id pgtype.UUID) (Deposito, error)

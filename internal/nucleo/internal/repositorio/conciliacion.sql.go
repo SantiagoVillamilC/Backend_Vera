@@ -245,6 +245,44 @@ func (q *Queries) LeerTransferenciasActivasDeVentana(ctx context.Context, arg Le
 	return items, nil
 }
 
+const leerTransferenciasIndeterminadas = `-- name: LeerTransferenciasIndeterminadas :many
+SELECT id, usuario_id, cuenta_origen, llave_destino, monto, moneda, idempotency_key, estado, creada_en, actualizada_en
+  FROM nucleo.transferencia
+ WHERE estado = 'indeterminada'
+ ORDER BY actualizada_en, id
+`
+
+func (q *Queries) LeerTransferenciasIndeterminadas(ctx context.Context) ([]Transferencia, error) {
+	rows, err := q.db.Query(ctx, leerTransferenciasIndeterminadas)
+	if err != nil {
+		return nil, fmt.Errorf("query LeerTransferenciasIndeterminadas: %w", err)
+	}
+	defer rows.Close()
+	items := []Transferencia{}
+	for rows.Next() {
+		var i Transferencia
+		if err := rows.Scan(
+			&i.ID,
+			&i.UsuarioID,
+			&i.CuentaOrigen,
+			&i.LlaveDestino,
+			&i.Monto,
+			&i.Moneda,
+			&i.IdempotencyKey,
+			&i.Estado,
+			&i.CreadaEn,
+			&i.ActualizadaEn,
+		); err != nil {
+			return nil, fmt.Errorf("query LeerTransferenciasIndeterminadas: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query LeerTransferenciasIndeterminadas: %w", err)
+	}
+	return items, nil
+}
+
 const resolverDescuadre = `-- name: ResolverDescuadre :execrows
 UPDATE nucleo.descuadre
    SET resuelto_en = now(),

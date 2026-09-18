@@ -58,3 +58,9 @@ SELECT id, estado, actualizada_en
    AND actualizada_en >= @desde
    AND actualizada_en < @hasta
  ORDER BY actualizada_en, id;
+
+-- name: LeerTransferenciasIndeterminadas :many
+SELECT id, usuario_id, cuenta_origen, llave_destino, monto, moneda, idempotency_key, estado, creada_en, actualizada_en
+  FROM nucleo.transferencia
+ WHERE estado = 'indeterminada'
+ ORDER BY actualizada_en, id;
