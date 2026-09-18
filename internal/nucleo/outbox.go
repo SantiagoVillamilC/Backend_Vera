@@ -26,6 +26,9 @@ const plazoEntregaRiel = 20 * time.Second
 // arriendoEntregaRiel supera a plazoEntregaRiel para que otra pasada no reclame una fila todavía en vuelo.
 const arriendoEntregaRiel = 30 * time.Second
 
+// ErrRielSinRespuesta marca que el riel no respondió dentro de su propio plazo, no del contexto padre.
+var ErrRielSinRespuesta = errors.New("nucleo: el riel no respondió dentro de su plazo")
+
 // PayloadDespacho es el cuerpo de una fila de outbox que manda una transferencia al riel.
 type PayloadDespacho struct {
 	TransferenciaID uuid.UUID `json:"transferencia_id"`
@@ -207,47 +210,57 @@ func asentarDespacho(ctx context.Context, q *repositorio.Queries, transferencia 
 
 // escribirAsientoDeDespacho escribe el asiento 3 del Apéndice B: el retenido del emisor contra liquidación pendiente del riel.
 func escribirAsientoDeDespacho(ctx context.Context, q *repositorio.Queries, transferencia repositorio.Transferencia) error {
-	asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
-		Tipo:            TipoAsientoDespachoRiel,
-		TransferenciaID: transferencia.ID,
-		OcurridoEn:      pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true},
-	})
-	if err != nil {
-		return fmt.Errorf("nucleo: asentar el despacho de %s: %w", transferencia.ID, err)
-	}
-	monto := Centavos(transferencia.Monto)
-	credito, err := Centavos(0).Restar(monto)
+	lineas, err := lineasDeDespacho(transferencia)
 	if err != nil {
 		return err
 	}
-	lineas := []repositorio.InsertarLineaParams{
-		{EntryID: asiento.ID, CuentaID: NombreCuentaRetenido(transferencia.UsuarioID), Monto: monto.Int64(), Moneda: transferencia.Moneda},
-		{EntryID: asiento.ID, CuentaID: CuentaLiquidacionPendienteRiel, Monto: credito.Int64(), Moneda: transferencia.Moneda},
-	}
-	for _, linea := range lineas {
-		if _, err := q.InsertarLinea(ctx, linea); err != nil {
-			return fmt.Errorf("nucleo: escribir una línea del despacho de %s: %w", transferencia.ID, err)
-		}
-	}
-	return nil
+	return insertarAsientoConLineas(ctx, q, TipoAsientoDespachoRiel, transferencia, time.Now().UTC(), pgtype.Text{}, lineas)
 }
 
-// entregarAlRiel envía la orden y registra el resultado del envío, sin abrir transacción durante la llamada.
+// lineasDeDespacho arma las dos líneas del asiento 3, que sacan el dinero retenido hacia el riel.
+func lineasDeDespacho(transferencia repositorio.Transferencia) ([]repositorio.InsertarLineaParams, error) {
+	monto := Centavos(transferencia.Monto)
+	credito, err := Centavos(0).Restar(monto)
+	if err != nil {
+		return nil, err
+	}
+	return []repositorio.InsertarLineaParams{
+		{CuentaID: NombreCuentaRetenido(transferencia.UsuarioID), Monto: monto.Int64(), Moneda: transferencia.Moneda},
+		{CuentaID: CuentaLiquidacionPendienteRiel, Monto: credito.Int64(), Moneda: transferencia.Moneda},
+	}, nil
+}
+
+// entregarAlRiel envía la orden y cierra el desenlace según la respuesta, sin transacción durante la llamada.
 func (s *Servicio) entregarAlRiel(ctx context.Context, reclamada despachoReclamado) error {
-	if _, err := s.enviarAlRiel(ctx, reclamada.transferencia); err != nil {
+	respuesta, err := s.enviarAlRiel(ctx, reclamada.transferencia)
+	if err != nil {
+		if errors.Is(err, ErrRielSinRespuesta) {
+			return s.cerrarIndeterminada(ctx, reclamada)
+		}
 		return s.reintentarDespacho(ctx, reclamada, err)
 	}
-	return s.marcarDespachado(ctx, reclamada)
+	switch respuesta.Resultado {
+	case ResultadoConfirmado:
+		return s.cerrarConfirmada(ctx, reclamada, respuesta)
+	case ResultadoRechazado:
+		return s.cerrarCompensada(ctx, reclamada, respuesta)
+	default:
+		return fmt.Errorf("nucleo: desenlace desconocido %q en la transferencia %s", respuesta.Resultado, reclamada.transferenciaID)
+	}
 }
 
-// enviarAlRiel entrega la orden con el plazo del Criterio 16 y sin ninguna operación de base abierta.
+// enviarAlRiel entrega la orden con el plazo del Criterio 16 y distingue su vencimiento del del padre.
 func (s *Servicio) enviarAlRiel(ctx context.Context, transferencia repositorio.Transferencia) (RespuestaRiel, error) {
 	if s.riel == nil {
 		return RespuestaRiel{}, errors.New("nucleo: no hay riel configurado")
 	}
 	ctxRiel, cancel := context.WithTimeout(ctx, plazoEntregaRiel)
 	defer cancel()
-	return s.riel.Enviar(ctxRiel, ordenDeTransferencia(transferencia))
+	respuesta, err := s.riel.Enviar(ctxRiel, ordenDeTransferencia(transferencia))
+	if err != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+		return RespuestaRiel{}, ErrRielSinRespuesta
+	}
+	return respuesta, err
 }
 
 // ordenDeTransferencia arma la orden con lo que el riel necesita para ejecutar y reconocer un reenvío.
@@ -304,18 +317,156 @@ func (s *Servicio) registrarFalloOutbox(ctx context.Context, id int64, causa err
 	return intentos, demora, nil
 }
 
-// marcarDespachado deja la orden como entregada al riel y cierra la fila de outbox.
-func (s *Servicio) marcarDespachado(ctx context.Context, reclamada despachoReclamado) error {
+// transicionCierre es un paso del cierre; solo aplica si la transferencia está en el estado esperado.
+type transicionCierre struct {
+	esperado string
+	nuevo    string
+}
+
+// cerrarConfirmada escribe el asiento 4a y lleva la transferencia a confirmada en su propia transacción (Criterio 14).
+func (s *Servicio) cerrarConfirmada(ctx context.Context, reclamada despachoReclamado, respuesta RespuestaRiel) error {
+	transiciones := []transicionCierre{{esperado: EstadoTransferenciaDespachada, nuevo: EstadoTransferenciaConfirmada}}
+	asentar := func(ctx context.Context, q *repositorio.Queries) error {
+		return escribirAsientoDeConfirmacion(ctx, q, reclamada.transferencia, respuesta.OcurridoEn)
+	}
+	return s.cerrarDespacho(ctx, reclamada, transiciones, asentar)
+}
+
+// cerrarCompensada escribe el asiento 4b y lleva la transferencia a compensada conservando el motivo (Criterio 15).
+func (s *Servicio) cerrarCompensada(ctx context.Context, reclamada despachoReclamado, respuesta RespuestaRiel) error {
+	transiciones := []transicionCierre{
+		{esperado: EstadoTransferenciaDespachada, nuevo: EstadoTransferenciaFallida},
+		{esperado: EstadoTransferenciaFallida, nuevo: EstadoTransferenciaCompensada},
+	}
+	asentar := func(ctx context.Context, q *repositorio.Queries) error {
+		return escribirAsientoDeCompensacion(ctx, q, reclamada.transferencia, respuesta.Motivo, respuesta.OcurridoEn)
+	}
+	return s.cerrarDespacho(ctx, reclamada, transiciones, asentar)
+}
+
+// cerrarIndeterminada no escribe asiento y deja la transferencia sin desenlace conocido (Criterio 16).
+func (s *Servicio) cerrarIndeterminada(ctx context.Context, reclamada despachoReclamado) error {
+	transiciones := []transicionCierre{{esperado: EstadoTransferenciaDespachada, nuevo: EstadoTransferenciaIndeterminada}}
+	return s.cerrarDespacho(ctx, reclamada, transiciones, nil)
+}
+
+// cerrarDespacho aplica las transiciones y el asiento del desenlace en una transacción, y marca la fila entregada.
+func (s *Servicio) cerrarDespacho(ctx context.Context, reclamada despachoReclamado, transiciones []transicionCierre, asentar func(context.Context, *repositorio.Queries) error) error {
 	_, err := enTransaccion(ctx, s.pool,
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
-			filas, err := q.MarcarOutboxDespachado(ctx, reclamada.outbox.ID)
+			aplicado, err := aplicarCierre(ctx, q, reclamada.transferencia.ID, transiciones)
 			if err != nil {
-				return struct{}{}, fmt.Errorf("nucleo: marcar despachado el outbox %d: %w", reclamada.outbox.ID, err)
+				return struct{}{}, err
 			}
-			if filas != 1 {
-				return struct{}{}, fmt.Errorf("nucleo: el outbox %d no quedó marcado como despachado", reclamada.outbox.ID)
+			if aplicado && asentar != nil {
+				if err := asentar(ctx, q); err != nil {
+					return struct{}{}, err
+				}
 			}
-			return struct{}{}, nil
+			return struct{}{}, marcarOutboxDespachado(ctx, q, reclamada.outbox.ID)
 		})
 	return err
+}
+
+// aplicarCierre mueve la transferencia por sus transiciones; sin la primera fila otro cierre ya ganó (Criterio 17).
+func aplicarCierre(ctx context.Context, q *repositorio.Queries, id pgtype.UUID, transiciones []transicionCierre) (bool, error) {
+	for i, transicion := range transiciones {
+		_, err := q.AvanzarEstadoTransferencia(ctx, repositorio.AvanzarEstadoTransferenciaParams{
+			ID:             id,
+			EstadoEsperado: transicion.esperado,
+			EstadoNuevo:    transicion.nuevo,
+		})
+		if err == nil {
+			continue
+		}
+		if i == 0 && errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("nucleo: cerrar la transferencia en %q: %w", transicion.nuevo, err)
+	}
+	return true, nil
+}
+
+// escribirAsientoDeConfirmacion escribe el asiento 4a del Apéndice B: el dinero en vuelo sale del custodio.
+func escribirAsientoDeConfirmacion(ctx context.Context, q *repositorio.Queries, transferencia repositorio.Transferencia, ocurridoEn time.Time) error {
+	lineas, err := lineasDeConfirmacion(transferencia)
+	if err != nil {
+		return err
+	}
+	return insertarAsientoConLineas(ctx, q, TipoAsientoLiquidacionConfirmada, transferencia, ocurridoEn, pgtype.Text{}, lineas)
+}
+
+// lineasDeConfirmacion arma las dos líneas del asiento 4a contra la cuenta del custodio.
+func lineasDeConfirmacion(transferencia repositorio.Transferencia) ([]repositorio.InsertarLineaParams, error) {
+	monto := Centavos(transferencia.Monto)
+	credito, err := Centavos(0).Restar(monto)
+	if err != nil {
+		return nil, err
+	}
+	return []repositorio.InsertarLineaParams{
+		{CuentaID: CuentaLiquidacionPendienteRiel, Monto: monto.Int64(), Moneda: transferencia.Moneda},
+		{CuentaID: CuentaCustodiaBanco, Monto: credito.Int64(), Moneda: transferencia.Moneda},
+	}, nil
+}
+
+// escribirAsientoDeCompensacion escribe el asiento 4b del Apéndice B: el dinero en vuelo vuelve al disponible del emisor.
+func escribirAsientoDeCompensacion(ctx context.Context, q *repositorio.Queries, transferencia repositorio.Transferencia, motivo string, ocurridoEn time.Time) error {
+	lineas, err := lineasDeCompensacion(transferencia)
+	if err != nil {
+		return err
+	}
+	return insertarAsientoConLineas(ctx, q, TipoAsientoCompensacion, transferencia, ocurridoEn, motivoDeRechazo(motivo), lineas)
+}
+
+// lineasDeCompensacion arma las dos líneas del asiento 4b; la reversión del GMF de NF-A2-09.3 entra por acá.
+func lineasDeCompensacion(transferencia repositorio.Transferencia) ([]repositorio.InsertarLineaParams, error) {
+	monto := Centavos(transferencia.Monto)
+	credito, err := Centavos(0).Restar(monto)
+	if err != nil {
+		return nil, err
+	}
+	return []repositorio.InsertarLineaParams{
+		{CuentaID: CuentaLiquidacionPendienteRiel, Monto: monto.Int64(), Moneda: transferencia.Moneda},
+		{CuentaID: NombreCuentaDisponible(transferencia.UsuarioID), Monto: credito.Int64(), Moneda: transferencia.Moneda},
+	}, nil
+}
+
+// motivoDeRechazo lleva el motivo del riel a la descripción del asiento, que es donde se conserva.
+func motivoDeRechazo(motivo string) pgtype.Text {
+	if motivo == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: motivo, Valid: true}
+}
+
+// insertarAsientoConLineas escribe la cabecera y las líneas de un asiento del desenlace en la transacción en curso.
+func insertarAsientoConLineas(ctx context.Context, q *repositorio.Queries, tipo string, transferencia repositorio.Transferencia, ocurridoEn time.Time, descripcion pgtype.Text, lineas []repositorio.InsertarLineaParams) error {
+	asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
+		Tipo:            tipo,
+		TransferenciaID: transferencia.ID,
+		OcurridoEn:      pgtype.Timestamptz{Time: ocurridoEn.UTC(), Valid: true},
+		Descripcion:     descripcion,
+	})
+	if err != nil {
+		return fmt.Errorf("nucleo: asentar %q de %s: %w", tipo, uuid.UUID(transferencia.ID.Bytes), err)
+	}
+	for _, linea := range lineas {
+		linea.EntryID = asiento.ID
+		if _, err := q.InsertarLinea(ctx, linea); err != nil {
+			return fmt.Errorf("nucleo: escribir una línea del asiento %q de %s: %w", tipo, uuid.UUID(transferencia.ID.Bytes), err)
+		}
+	}
+	return nil
+}
+
+// marcarOutboxDespachado cierra la fila de la bandeja dentro de la transacción del desenlace.
+func marcarOutboxDespachado(ctx context.Context, q *repositorio.Queries, id int64) error {
+	filas, err := q.MarcarOutboxDespachado(ctx, id)
+	if err != nil {
+		return fmt.Errorf("nucleo: marcar despachado el outbox %d: %w", id, err)
+	}
+	if filas != 1 {
+		return fmt.Errorf("nucleo: el outbox %d no quedó marcado como despachado", id)
+	}
+	return nil
 }

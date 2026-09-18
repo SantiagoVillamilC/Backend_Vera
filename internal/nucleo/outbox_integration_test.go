@@ -26,20 +26,22 @@ const nombreVariableHijo = "CENTINELA_OUTBOX_ID"
 // marcaMuereEnElDespacho confirma que el hijo registró el despacho antes de morir.
 const marcaMuereEnElDespacho = "despacho registrado; el proceso muere antes de llamar al riel"
 
-// rielDoble es el doble de la interfaz Riel: cuenta llamadas, puede fallar y avisa al llamarse.
+// rielDoble es el doble de la interfaz Riel: cuenta llamadas, responde un desenlace, puede fallar y avisa al llamarse.
 type rielDoble struct {
-	mu       sync.Mutex
-	llamadas int
-	err      error
-	alLlamar func()
+	mu        sync.Mutex
+	llamadas  int
+	err       error
+	respuesta RespuestaRiel
+	alLlamar  func()
 }
 
-// Enviar registra la llamada, avisa al observador y falla solo si se le pidió.
+// Enviar registra la llamada, avisa al observador y devuelve el desenlace configurado o el error.
 func (r *rielDoble) Enviar(context.Context, OrdenRiel) (RespuestaRiel, error) {
 	r.mu.Lock()
 	r.llamadas++
 	alLlamar := r.alLlamar
 	err := r.err
+	respuesta := r.respuesta
 	r.mu.Unlock()
 	if alLlamar != nil {
 		alLlamar()
@@ -47,7 +49,10 @@ func (r *rielDoble) Enviar(context.Context, OrdenRiel) (RespuestaRiel, error) {
 	if err != nil {
 		return RespuestaRiel{}, err
 	}
-	return RespuestaRiel{}, nil
+	if respuesta.Resultado == "" {
+		respuesta = RespuestaRiel{Resultado: ResultadoConfirmado, OcurridoEn: time.Now().UTC()}
+	}
+	return respuesta, nil
 }
 
 // Llamadas devuelve cuántas veces se llamó al riel.
@@ -165,37 +170,6 @@ func leerEstadoTransferencia(t *testing.T, ctx context.Context, pool *pgxpool.Po
 		t.Fatalf("leer transferencia %s: %v", id, err)
 	}
 	return fila.Estado
-}
-
-// lineasDelDespacho devuelve el monto por cuenta del asiento de despacho de una transferencia.
-func lineasDelDespacho(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) map[string]int64 {
-	t.Helper()
-
-	lineas := map[string]int64{}
-	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
-		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
-			rows, err := tx.Query(ctx,
-				`SELECT p.cuenta_id, p.monto FROM nucleo.posting p
-				   JOIN nucleo.journal_entry j ON j.id = p.entry_id
-				  WHERE j.transferencia_id = $1 AND j.tipo = $2`,
-				pgtype.UUID{Bytes: id, Valid: true}, TipoAsientoDespachoRiel)
-			if err != nil {
-				return struct{}{}, err
-			}
-			defer rows.Close()
-			for rows.Next() {
-				var cuenta string
-				var monto int64
-				if err := rows.Scan(&cuenta, &monto); err != nil {
-					return struct{}{}, err
-				}
-				lineas[cuenta] = monto
-			}
-			return struct{}{}, rows.Err()
-		}); err != nil {
-		t.Fatalf("leer las líneas del despacho de %s: %v", id, err)
-	}
-	return lineas
 }
 
 // adelantarVentanaAlPasado deja la fila pendiente de inmediato para simular que la ventana venció.
@@ -356,7 +330,7 @@ func TestElDespachoSeRegistraAntesDeLlamarAlRiel(t *testing.T) {
 	if fila := leerOutbox(t, ctx, pool, outboxID); !fila.DespachadoEn.Valid {
 		t.Errorf("el outbox no quedó marcado como despachado tras una entrega correcta")
 	}
-	lineas := lineasDelDespacho(t, ctx, pool, transferenciaID)
+	lineas := lineasDelAsiento(t, ctx, pool, transferenciaID, TipoAsientoDespachoRiel)
 	if lineas[NombreCuentaRetenido(usuario)] != monto.Int64() {
 		t.Errorf("línea del retenido = %d, quiero %d", lineas[NombreCuentaRetenido(usuario)], monto.Int64())
 	}
@@ -597,8 +571,8 @@ func TestLaFilaIrrecuperableNoBloqueaElBarrido(t *testing.T) {
 		t.Errorf("la ventana de la fila irrecuperable no se empujó: %v", mala.DisponibleEn.Time)
 	}
 
-	if estado := leerEstadoTransferencia(t, ctx, pool, transferenciaID); estado != EstadoTransferenciaDespachada {
-		t.Errorf("estado de la transferencia válida = %q, quiero %q", estado, EstadoTransferenciaDespachada)
+	if estado := leerEstadoTransferencia(t, ctx, pool, transferenciaID); estado != EstadoTransferenciaConfirmada {
+		t.Errorf("estado de la transferencia válida = %q, quiero %q", estado, EstadoTransferenciaConfirmada)
 	}
 	if asientos := contarAsientosDeTransferencia(t, ctx, pool, transferenciaID, TipoAsientoDespachoRiel); asientos != 1 {
 		t.Errorf("asientos de la transferencia válida = %d, quiero 1", asientos)
