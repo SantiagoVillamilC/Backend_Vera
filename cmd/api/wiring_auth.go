@@ -5,7 +5,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -22,4 +25,13 @@ func clienteRedis(cfg *Config) *redis.Client {
 		slog.Warn("Redis no responde al arrancar, auth fallará cerrado", "err", err)
 	}
 	return cliente
+}
+
+// opcionLimpiezaDeAuth registra el cierre de pendientes vencidas en la cola auth de River.
+func opcionLimpiezaDeAuth(pool *pgxpool.Pool, cfg *Config) jobs.OpcionDeAuth {
+	gestor := auth.NuevoGestorDeEstados(auth.RegistradorNulo{})
+	return jobs.ConTrabajoDeAuth(
+		auth.NuevoCerrarPendientesWorker(pool, gestor, cfg.Auth.VentanaPendiente),
+		auth.TrabajoPeriodicoDeLimpieza(cfg.Auth.LimpiezaInterval),
+	)
 }

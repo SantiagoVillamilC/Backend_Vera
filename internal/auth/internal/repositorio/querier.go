@@ -19,8 +19,11 @@ type Querier interface {
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
 	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
+	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
+	RegistrarTransicionCredencial(ctx context.Context, arg RegistrarTransicionCredencialParams) error
 	ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error)
 	ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
+	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

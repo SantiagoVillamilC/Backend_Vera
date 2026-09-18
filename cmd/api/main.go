@@ -68,7 +68,7 @@ func run() error {
 		ConciliationWindow:   cfg.ConciliationWindow,
 		ExpirationInterval:   cfg.ExpirationInterval,
 		ExpirationTTL:        cfg.ExpirationTTL,
-	})
+	}, opcionLimpiezaDeAuth(pool, cfg))
 	if err != nil {
 		return fmt.Errorf("river: %w", err)
 	}

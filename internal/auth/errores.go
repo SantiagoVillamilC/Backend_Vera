@@ -36,6 +36,8 @@ func MapearError(err error) error {
 		return platformerrors.New("Unauthorized", "Missing or invalid token.", http.StatusUnauthorized)
 	case errors.Is(err, ErrIdentificadorEnUso):
 		return platformerrors.New("DuplicateIdentifier", "The identifier is already registered.", http.StatusConflict)
+	case errors.Is(err, ErrConflictoDeEstado), errors.Is(err, ErrTransicionNoPermitida):
+		return platformerrors.New("ChallengeInvalid", "The account is not in a state that allows this change.", http.StatusBadRequest)
 	case errors.Is(err, ErrAuthNoDisponible):
 		return platformerrors.New("AuthUnavailable", "Authentication is temporarily unavailable.", http.StatusServiceUnavailable)
 	default:

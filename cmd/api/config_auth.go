@@ -10,7 +10,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// ConfigAuth reúne la configuración del módulo de autenticación: Redis, el canal del OTP y el enfriamiento.
+// ConfigAuth reúne la configuración del módulo de autenticación: Redis, el canal del OTP, el enfriamiento y la limpieza de pendientes.
 type ConfigAuth struct {
 	RedisURL                 string
 	OTPCanal                 string
@@ -18,6 +18,8 @@ type ConfigAuth struct {
 	WhatsAppPhoneID          string
 	WhatsAppTemplate         string
 	EnfriamientoCambioNumero time.Duration
+	VentanaPendiente         time.Duration
+	LimpiezaInterval         time.Duration
 }
 
 // cargarConfigAuth lee el bloque de auth y devuelve sus errores para el errors.Join del llamador.
@@ -38,6 +40,16 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	cfg.EnfriamientoCambioNumero, errEnfriamiento = duracionRequerida("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", os.Getenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO"))
 	if errEnfriamiento != nil {
 		errs = append(errs, errEnfriamiento)
+	}
+	var errVentana error
+	cfg.VentanaPendiente, errVentana = duracionRequerida("AUTH_VENTANA_PENDIENTE", os.Getenv("AUTH_VENTANA_PENDIENTE"))
+	if errVentana != nil {
+		errs = append(errs, errVentana)
+	}
+	var errLimpieza error
+	cfg.LimpiezaInterval, errLimpieza = duracionRequerida("AUTH_LIMPIEZA_INTERVAL", os.Getenv("AUTH_LIMPIEZA_INTERVAL"))
+	if errLimpieza != nil {
+		errs = append(errs, errLimpieza)
 	}
 	switch cfg.OTPCanal {
 	case "simulador", "demo":
