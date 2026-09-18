@@ -38,7 +38,7 @@ func (r *relojDePrueba) Fijar(t time.Time) {
 func servidorExtracto(t *testing.T, reloj *relojDePrueba, perillas Perillas) *httptest.Server {
 	t.Helper()
 
-	simulador := NuevoSimulador(almacenDePrueba(t), NuevoControl(perillas), "simulador-riel")
+	simulador := NuevoSimulador(almacenDePrueba(t), NuevoControl(perillas), NuevoDirectorio(nil), "simulador-riel")
 	simulador.ahora = reloj.Ahora
 	servidor := httptest.NewServer(simulador.Rutas())
 	t.Cleanup(servidor.Close)

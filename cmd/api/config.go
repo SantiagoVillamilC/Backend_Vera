@@ -15,43 +15,45 @@ import (
 
 // Config reúne los valores de entorno que el proceso necesita para arrancar.
 type Config struct {
-	Port                  string
-	AppDatabaseURL        string
-	JWTSecret             string
-	CustodioToken         string
-	CustodioExtractoURL   string
-	RielSimuladorURL      string
-	GroqAPIKey            string
-	OpenAIAPIKey          string
-	OCRWorkerURL          string
-	LogLevel              string
-	LogFormat             string
-	OutboxInterval        time.Duration
-	OutboxBackoffBase     time.Duration
-	OutboxBackoffFactor   float64
-	OutboxBackoffMax      time.Duration
-	ConciliationInterval  time.Duration
-	ConciliationWindow    time.Duration
-	ExpirationInterval    time.Duration
-	ExpirationTTL         time.Duration
-	A6PosicionLiquidacion nucleo.Centavos
-	A6PrefondeoActivo     bool
+	Port                   string
+	AppDatabaseURL         string
+	JWTSecret              string
+	CustodioToken          string
+	CustodioExtractoURL    string
+	RielSimuladorURL       string
+	DirectorioSimuladorURL string
+	GroqAPIKey             string
+	OpenAIAPIKey           string
+	OCRWorkerURL           string
+	LogLevel               string
+	LogFormat              string
+	OutboxInterval         time.Duration
+	OutboxBackoffBase      time.Duration
+	OutboxBackoffFactor    float64
+	OutboxBackoffMax       time.Duration
+	ConciliationInterval   time.Duration
+	ConciliationWindow     time.Duration
+	ExpirationInterval     time.Duration
+	ExpirationTTL          time.Duration
+	A6PosicionLiquidacion  nucleo.Centavos
+	A6PrefondeoActivo      bool
 }
 
 // LoadConfig valida el entorno y reporta todos los errores juntos.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		Port:                envOr("PORT", "8080"),
-		AppDatabaseURL:      os.Getenv("APP_DATABASE_URL"),
-		JWTSecret:           os.Getenv("JWT_SECRET"),
-		CustodioToken:       os.Getenv("CUSTODIO_TOKEN"),
-		CustodioExtractoURL: os.Getenv("CUSTODIO_EXTRACTO_URL"),
-		RielSimuladorURL:    os.Getenv("RIEL_SIMULADOR_URL"),
-		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
-		OpenAIAPIKey:        os.Getenv("OPENAI_API_KEY"),
-		OCRWorkerURL:        os.Getenv("OCR_WORKER_URL"),
-		LogLevel:            envOr("LOG_LEVEL", "info"),
-		LogFormat:           envOr("LOG_FORMAT", "json"),
+		Port:                   envOr("PORT", "8080"),
+		AppDatabaseURL:         os.Getenv("APP_DATABASE_URL"),
+		JWTSecret:              os.Getenv("JWT_SECRET"),
+		CustodioToken:          os.Getenv("CUSTODIO_TOKEN"),
+		CustodioExtractoURL:    os.Getenv("CUSTODIO_EXTRACTO_URL"),
+		RielSimuladorURL:       os.Getenv("RIEL_SIMULADOR_URL"),
+		DirectorioSimuladorURL: os.Getenv("DIRECTORIO_SIMULADOR_URL"),
+		GroqAPIKey:             os.Getenv("GROQ_API_KEY"),
+		OpenAIAPIKey:           os.Getenv("OPENAI_API_KEY"),
+		OCRWorkerURL:           os.Getenv("OCR_WORKER_URL"),
+		LogLevel:               envOr("LOG_LEVEL", "info"),
+		LogFormat:              envOr("LOG_FORMAT", "json"),
 	}
 
 	var errs []error
@@ -81,6 +83,9 @@ func LoadConfig() (*Config, error) {
 		errs = append(errs, err)
 	}
 	if err := urlOrigenOpcional("RIEL_SIMULADOR_URL", cfg.RielSimuladorURL); err != nil {
+		errs = append(errs, err)
+	}
+	if err := urlOrigenOpcional("DIRECTORIO_SIMULADOR_URL", cfg.DirectorioSimuladorURL); err != nil {
 		errs = append(errs, err)
 	}
 	var lvl slog.Level
@@ -156,6 +161,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("custodio_token_set", c.CustodioToken != ""),
 		slog.Bool("custodio_extracto_url_set", c.CustodioExtractoURL != ""),
 		slog.Bool("riel_simulador_url_set", c.RielSimuladorURL != ""),
+		slog.Bool("directorio_simulador_url_set", c.DirectorioSimuladorURL != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
 		slog.Bool("openai_api_key_set", c.OpenAIAPIKey != ""),
 		slog.Bool("ocr_worker_url_set", c.OCRWorkerURL != ""),

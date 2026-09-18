@@ -17,6 +17,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/directoriosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
@@ -60,10 +61,14 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// Rellenos de lo que aún no existe (KYC real); el extracto del custodio y el riel son reales cuando hay URL.
+	// Rellenos de lo que aún no existe (KYC real); el directorio, el extracto del custodio y el riel son reales cuando hay URL.
 	var riel nucleo.Riel = nucleo.RielNoDisponible{}
 	if cfg.RielSimuladorURL != "" {
 		riel = rielsim.NuevoRiel(cfg.RielSimuladorURL, nil)
+	}
+	var directorio nucleo.DirectorioLlaves = nucleo.DirectorioNoDisponible{}
+	if cfg.DirectorioSimuladorURL != "" {
+		directorio = directoriosim.NuevoDirectorio(cfg.DirectorioSimuladorURL, nil)
 	}
 	resolutorDestino := auth.NuevoResolutorDestino(repositorio.New(pool))
 	servicio := nucleo.NewServicio(
@@ -73,6 +78,7 @@ func run() error {
 		custodiosim.NuevoLectorExtracto(cfg.CustodioExtractoURL, nil),
 		observabilidad.RastreadorSlog{},
 		nucleo.ConResolutorDestino(resolutorDestino),
+		nucleo.ConDirectorio(directorio),
 		nucleo.ConPoliticaReintentoOutbox(nucleo.PoliticaReintentoOutbox{
 			Base:   cfg.OutboxBackoffBase,
 			Factor: cfg.OutboxBackoffFactor,

@@ -18,7 +18,7 @@ import (
 func servidorDePrueba(t *testing.T, perillas Perillas) (*httptest.Server, *Simulador) {
 	t.Helper()
 
-	simulador := NuevoSimulador(almacenDePrueba(t), NuevoControl(perillas), "simulador-riel")
+	simulador := NuevoSimulador(almacenDePrueba(t), NuevoControl(perillas), NuevoDirectorio(nil), "simulador-riel")
 	servidor := httptest.NewServer(simulador.Rutas())
 	t.Cleanup(servidor.Close)
 	return servidor, simulador

@@ -40,7 +40,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort(cfg.Addr, cfg.Port),
-		Handler:           NuevoSimulador(almacen, NuevoControl(cfg.Perillas), cfg.Origen).Rutas(),
+		Handler:           NuevoSimulador(almacen, NuevoControl(cfg.Perillas), NuevoDirectorio(cfg.Directorio), cfg.Origen).Rutas(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

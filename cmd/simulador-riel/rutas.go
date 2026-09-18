@@ -19,18 +19,19 @@ const maximoCuerpoOrden = 64 << 10
 
 // Simulador sirve las rutas del riel simulado y guarda su propio registro de operaciones.
 type Simulador struct {
-	almacen *Almacen
-	control *Control
-	origen  string
-	ahora   func() time.Time
+	almacen    *Almacen
+	control    *Control
+	directorio *Directorio
+	origen     string
+	ahora      func() time.Time
 }
 
-// NuevoSimulador arma el simulador con su almacén y su control de perillas.
-func NuevoSimulador(almacen *Almacen, control *Control, origen string) *Simulador {
-	return &Simulador{almacen: almacen, control: control, origen: origen, ahora: time.Now}
+// NuevoSimulador arma el simulador con su almacén, su control de perillas y su directorio de llaves.
+func NuevoSimulador(almacen *Almacen, control *Control, directorio *Directorio, origen string) *Simulador {
+	return &Simulador{almacen: almacen, control: control, directorio: directorio, origen: origen, ahora: time.Now}
 }
 
-// Rutas monta la recepción de órdenes, la consulta de estado y el control de perillas.
+// Rutas monta la recepción de órdenes, la consulta de estado, el extracto, el control y el directorio.
 func (s *Simulador) Rutas() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/transferencias", s.Enviar)
@@ -38,7 +39,24 @@ func (s *Simulador) Rutas() chi.Router {
 	r.Get("/extracto", s.Extracto)
 	r.Get("/control", s.VerControl)
 	r.Put("/control", s.CambiarControl)
+	r.Get("/resolver", s.ResolverLlave)
 	return r
+}
+
+// ResolverLlave responde la entidad y el producto de la llave, o 404 si no está registrada.
+func (s *Simulador) ResolverLlave(w http.ResponseWriter, r *http.Request) {
+	tipo := strings.TrimSpace(r.URL.Query().Get("tipo"))
+	valor := strings.TrimSpace(r.URL.Query().Get("valor"))
+	if tipo == "" || valor == "" {
+		escribirError(w, http.StatusBadRequest, "faltan los parámetros tipo y valor", nil)
+		return
+	}
+	entrada, ok := s.directorio.Resolver(tipo, valor)
+	if !ok {
+		escribirError(w, http.StatusNotFound, "la llave no está registrada", nil)
+		return
+	}
+	escribirJSON(w, http.StatusOK, entrada)
 }
 
 // Enviar recibe una orden, aplica la caída, la latencia y el rechazo, y responde o pierde la respuesta.

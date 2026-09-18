@@ -144,6 +144,7 @@ type Servicio struct {
 	pool              abridorDeTransacciones
 	kyc               LectorNivelKYC
 	destinos          ResolutorDestino
+	directorio        DirectorioLlaves
 	riel              Riel
 	custodio          LectorExtractoCustodio
 	rastreador        RastreadorErrores
@@ -161,6 +162,11 @@ func ConPoliticaReintentoOutbox(politica PoliticaReintentoOutbox) OpcionServicio
 // ConResolutorDestino fija el resolutor de la llave de destino; sin él, Transferir falla cerrado.
 func ConResolutorDestino(resolutor ResolutorDestino) OpcionServicio {
 	return func(s *Servicio) { s.destinos = resolutor }
+}
+
+// ConDirectorio fija el directorio de llaves de Bre-B; sin él, ResolverLlave falla cerrado.
+func ConDirectorio(directorio DirectorioLlaves) OpcionServicio {
+	return func(s *Servicio) { s.directorio = directorio }
 }
 
 // NewServicio arma el Servicio; el Querier se construye por transacción adentro.

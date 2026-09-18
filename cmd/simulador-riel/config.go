@@ -18,6 +18,7 @@ type Config struct {
 	DBPath             string
 	Origen             string
 	Perillas           Perillas
+	Directorio         map[string]EntradaDirectorio
 	PermitirExposicion bool
 }
 
@@ -42,6 +43,9 @@ func LoadConfig() (*Config, error) {
 	perillas, errPerillas := leerPerillasDelEntorno()
 	errs = append(errs, errPerillas...)
 	cfg.Perillas = perillas
+	directorio, errDirectorio := leerDirectorioDelEntorno()
+	errs = append(errs, errDirectorio...)
+	cfg.Directorio = directorio
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("config: %w", errors.Join(errs...))
 	}
@@ -79,6 +83,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("db_path_set", c.DBPath != ""),
 		slog.String("origen", c.Origen),
 		slog.Any("perillas", c.Perillas),
+		slog.Int("directorio_llaves", len(c.Directorio)),
 		slog.Bool("permitir_exposicion", c.PermitirExposicion),
 	)
 }
