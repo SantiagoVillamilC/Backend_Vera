@@ -79,8 +79,10 @@ func (e estadoDesafio) solicitud(origen string) Solicitud {
 	}
 }
 
-// esRelleno reconoce la fila de relleno de A3-02.1: sin parte no hay envío real.
-func esRelleno(fila repositorio.AuthDesafio) bool { return !fila.ParteID.Valid }
+// esRelleno exige el centinela sin parte ni credencial, sin mirar el propósito porque P-07 rellena también registro.
+func esRelleno(fila repositorio.AuthDesafio) bool {
+	return fila.CelularDestino == celularDeRelleno && !fila.ParteID.Valid && !fila.CredencialID.Valid
+}
 
 // leerDesafioAReenviar lee el desafío pendiente y el correo de su credencial para el tope de cuenta.
 func (g *GestorDesafios) leerDesafioAReenviar(ctx context.Context, id uuid.UUID) (estadoDesafio, error) {

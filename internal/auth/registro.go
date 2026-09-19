@@ -68,22 +68,30 @@ type AbridorDeSubcuentas interface {
 
 // RegistradorDePersonas valida, deriva y persiste el alta; no emite tokens.
 type RegistradorDePersonas struct {
-	pool       *pgxpool.Pool
-	derivador  Derivador
-	eventos    RegistradorEventos
-	desafios   CreadorDeDesafioDeRegistro
-	subcuentas AbridorDeSubcuentas
+	pool        *pgxpool.Pool
+	derivador   Derivador
+	eventos     RegistradorEventos
+	desafios    CreadorDeDesafioDeRegistro
+	subcuentas  AbridorDeSubcuentas
+	compensador CompensadorDeAlta
 }
 
 // NuevoRegistradorDePersonas exige pool, derivador, desafios y subcuentas, y rellena los eventos con el nulo.
-func NuevoRegistradorDePersonas(pool *pgxpool.Pool, derivador Derivador, eventos RegistradorEventos, desafios CreadorDeDesafioDeRegistro, subcuentas AbridorDeSubcuentas) (*RegistradorDePersonas, error) {
+func NuevoRegistradorDePersonas(pool *pgxpool.Pool, derivador Derivador, eventos RegistradorEventos, desafios CreadorDeDesafioDeRegistro, subcuentas AbridorDeSubcuentas, opciones ...OpcionDeRegistrador) (*RegistradorDePersonas, error) {
 	if pool == nil || derivador == nil || desafios == nil || subcuentas == nil {
 		return nil, errors.New("auth: el registro necesita pool, derivador, desafios y subcuentas")
 	}
 	if eventos == nil {
 		eventos = RegistradorNulo{}
 	}
-	return &RegistradorDePersonas{pool: pool, derivador: derivador, eventos: eventos, desafios: desafios, subcuentas: subcuentas}, nil
+	s := &RegistradorDePersonas{
+		pool: pool, derivador: derivador, eventos: eventos, desafios: desafios, subcuentas: subcuentas,
+		compensador: compensadorDeAltaPostgres{pool: pool, gestor: NuevoGestorDeEstados(eventos)},
+	}
+	for _, opcion := range opciones {
+		opcion(s)
+	}
+	return s, nil
 }
 
 // RegistrarPersona normaliza, deriva la contrasena, crea la cuenta pendiente y encola el OTP de registro.
@@ -103,6 +111,7 @@ func (s *RegistradorDePersonas) RegistrarPersona(ctx context.Context, solicitud 
 	s.abrirSubcuentasEnSegundoPlano(ctx, datos.parteID)
 	desafio, err := s.crearDesafioDeRegistro(ctx, datos, entrada)
 	if err != nil {
+		s.compensarAlta(ctx, datos.credencialID)
 		return Registro{}, err
 	}
 	return datos.resultado(desafio), nil

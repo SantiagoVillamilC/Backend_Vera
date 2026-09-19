@@ -57,6 +57,54 @@ func TestHayEnfriamiento(t *testing.T) {
 	}
 }
 
+func TestEsRellenoLeeLaMarcaExplicita(t *testing.T) {
+	t.Parallel()
+
+	parte := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	credencial := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
+	casos := map[string]struct {
+		fila repositorio.AuthDesafio
+		want bool
+	}{
+		"relleno de recuperacion con el centinela": {
+			fila: repositorio.AuthDesafio{Proposito: string(PropositoRecuperacion), CelularDestino: celularDeRelleno},
+			want: true,
+		},
+		"relleno de registro con el centinela no exige propósito recuperacion": {
+			fila: repositorio.AuthDesafio{Proposito: string(PropositoRegistro), CelularDestino: celularDeRelleno},
+			want: true,
+		},
+		"registro real sin parte y con celular real no es relleno": {
+			fila: repositorio.AuthDesafio{Proposito: string(PropositoRegistro), CelularDestino: "+573001234567"},
+			want: false,
+		},
+		"desafio real con parte y celular raro no es relleno": {
+			fila: repositorio.AuthDesafio{Proposito: string(PropositoLogin), ParteID: parte, CelularDestino: "raro"},
+			want: false,
+		},
+		"el centinela con parte presente no es relleno": {
+			fila: repositorio.AuthDesafio{Proposito: string(PropositoRecuperacion), ParteID: parte, CelularDestino: celularDeRelleno},
+			want: false,
+		},
+		"el centinela con credencial presente no es relleno": {
+			fila: repositorio.AuthDesafio{Proposito: string(PropositoRecuperacion), CredencialID: credencial, CelularDestino: celularDeRelleno},
+			want: false,
+		},
+		"recuperacion real con parte y credencial no es relleno": {
+			fila: repositorio.AuthDesafio{Proposito: string(PropositoRecuperacion), ParteID: parte, CredencialID: credencial, CelularDestino: "+573001234567"},
+			want: false,
+		},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+			if got := esRelleno(caso.fila); got != caso.want {
+				t.Errorf("esRelleno(%+v) = %v, quiero %v", caso.fila, got, caso.want)
+			}
+		})
+	}
+}
+
 func TestDecidirReenvio(t *testing.T) {
 	t.Parallel()
 

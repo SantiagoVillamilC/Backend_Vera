@@ -108,6 +108,7 @@ func (s *RegistradorDePersonas) RegistrarEmpresa(ctx context.Context, solicitud 
 	s.abrirSubcuentasEnSegundoPlano(ctx, datos.empresaParteID)
 	desafio, err := s.crearDesafioDeRegistroEmpresa(ctx, datos, entrada)
 	if err != nil {
+		s.compensarAlta(ctx, datos.credencialID)
 		return RegistroEmpresa{}, err
 	}
 	return datos.resultado(desafio), nil

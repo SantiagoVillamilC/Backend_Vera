@@ -233,6 +233,51 @@ func TestReenviarDesafioReemplazaElHmacYConservaIntentos(t *testing.T) {
 	}
 }
 
+func TestReenviarDesafioDeRellenoNoEnviaYElRealSi(t *testing.T) {
+	pool := abrirPoolExterno(t)
+	cliente := abrirRedisExterno(t)
+	canal := &canalFalso{}
+	gestor := gestorDeRecuperacionExterno(t, pool, canal, cliente)
+	servicio := servicioDeRecuperacionExterno(t, pool, canal, cliente)
+	origen := "10.31.7." + uuid.NewString()[:3]
+
+	relleno, err := servicio.SolicitarRecuperacion(t.Context(), "sin-cuenta-"+uuid.NewString()+"@centinela.test", origen)
+	if err != nil {
+		t.Fatalf("SolicitarRecuperacion sin cuenta: %v", err)
+	}
+	if fila := leerFilaDeRecuperacion(t, pool, relleno.ID); fila.parteID.Valid || fila.credencialID.Valid {
+		t.Fatalf("la fila de relleno trae parte o credencial: %+v", fila)
+	}
+	envejecerUltimoEnvio(t, pool, relleno.ID)
+	respuesta, err := gestor.ReenviarDesafio(t.Context(), relleno.ID, origen)
+	if err != nil {
+		t.Fatalf("ReenviarDesafio sobre el relleno: %v", err)
+	}
+	if respuesta.ID != relleno.ID || respuesta.ExpiraEnSegundos != 300 {
+		t.Errorf("respuesta del relleno = %+v, quiero el mismo id y 300 segundos", respuesta)
+	}
+	if canal.ultimoCelular != "" || canal.ultimoTexto != "" {
+		t.Fatalf("el reenvio del relleno toco el canal: (%q, %q)", canal.ultimoCelular, canal.ultimoTexto)
+	}
+
+	celular := "+57300" + strings.ReplaceAll(uuid.NewString(), "-", "")[:7]
+	real, err := gestor.CrearDesafio(t.Context(), auth.Solicitud{Proposito: auth.PropositoRegistro, Celular: celular, Origen: origen})
+	if err != nil {
+		t.Fatalf("CrearDesafio de registro sin parte: %v", err)
+	}
+	if fila := leerFilaDeRecuperacion(t, pool, real.ID); fila.parteID.Valid {
+		t.Fatalf("el desafio real de registro trae parte: %+v", fila)
+	}
+	canal.ultimoCelular, canal.ultimoTexto = "", ""
+	envejecerUltimoEnvio(t, pool, real.ID)
+	if _, err := gestor.ReenviarDesafio(t.Context(), real.ID, origen); err != nil {
+		t.Fatalf("ReenviarDesafio sobre el real: %v", err)
+	}
+	if canal.ultimoCelular != celular || len(canal.ultimoTexto) != 6 {
+		t.Errorf("el canal recibio (%q, %q), quiero el celular real %q y un codigo de seis digitos", canal.ultimoCelular, canal.ultimoTexto, celular)
+	}
+}
+
 func TestCrearDesafioRacionadoSextoEnvioDeLaCuentaBloquea(t *testing.T) {
 	pool := abrirPoolExterno(t)
 	cliente := abrirRedisExterno(t)
