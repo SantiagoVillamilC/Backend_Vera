@@ -16,6 +16,12 @@ var ErrIdentificadorEnUso = errors.New("auth: el identificador ya está en uso")
 // ErrAuthNoDisponible es el fail closed de auth: un error de Redis corta la operación con 503.
 var ErrAuthNoDisponible = errors.New("auth: la dependencia de auth no está disponible")
 
+// ErrRefreshInvalido es el refresh ausente, revocado, vencido o presentado de nuevo dentro de la ventana de gracia.
+var ErrRefreshInvalido = errors.New("auth: el refresh no es válido")
+
+// ErrRefreshReusado es el refresh ya usado fuera de la ventana de gracia, que revoca la familia entera.
+var ErrRefreshReusado = errors.New("auth: el refresh ya fue usado")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -40,6 +46,10 @@ func MapearError(err error) error {
 		return platformerrors.New("ChallengeInvalid", "The account is not in a state that allows this change.", http.StatusBadRequest)
 	case errors.Is(err, ErrAuthNoDisponible):
 		return platformerrors.New("AuthUnavailable", "Authentication is temporarily unavailable.", http.StatusServiceUnavailable)
+	case errors.Is(err, ErrRefreshReusado):
+		return platformerrors.New("RefreshReused", "The refresh token has already been used.", http.StatusUnauthorized)
+	case errors.Is(err, ErrRefreshInvalido):
+		return platformerrors.New("RefreshInvalid", "The refresh token is invalid or expired.", http.StatusUnauthorized)
 	default:
 		return err
 	}

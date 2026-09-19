@@ -65,6 +65,20 @@ type RolDeParte struct {
 	RevocadoEn     pgtype.Timestamptz `json:"revocado_en"`
 }
 
+type Sesion struct {
+	ID             pgtype.UUID        `json:"id"`
+	FamiliaID      pgtype.UUID        `json:"familia_id"`
+	ParteID        pgtype.UUID        `json:"parte_id"`
+	ContextoActivo string             `json:"contexto_activo"`
+	Dispositivo    string             `json:"dispositivo"`
+	RefreshHash    []byte             `json:"refresh_hash"`
+	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
+	UltimoUsoEn    pgtype.Timestamptz `json:"ultimo_uso_en"`
+	UsadoEn        pgtype.Timestamptz `json:"usado_en"`
+	RevocadaEn     pgtype.Timestamptz `json:"revocada_en"`
+	VenceEn        pgtype.Timestamptz `json:"vence_en"`
+}
+
 type TransicionCredencial struct {
 	ID             int64              `json:"id"`
 	CredencialID   pgtype.UUID        `json:"credencial_id"`

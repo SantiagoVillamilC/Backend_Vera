@@ -19,11 +19,20 @@ type Querier interface {
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
 	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
+	InsertarSesion(ctx context.Context, arg InsertarSesionParams) (Sesion, error)
+	ListarSesionesActivas(ctx context.Context, parteID pgtype.UUID) ([]Sesion, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
+	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
 	RegistrarTransicionCredencial(ctx context.Context, arg RegistrarTransicionCredencialParams) error
 	ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error)
 	ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
+	RevocarFamilia(ctx context.Context, familiaID pgtype.UUID) (int64, error)
+	RevocarSesionDeParte(ctx context.Context, arg RevocarSesionDeParteParams) (int64, error)
+	RevocarSesionesDeParte(ctx context.Context, parteID pgtype.UUID) (int64, error)
+	RolesVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]RolesVigentesDeParteRow, error)
+	RotarSesion(ctx context.Context, refreshHash []byte) (Sesion, error)
+	SesionPorRefreshHash(ctx context.Context, refreshHash []byte) (Sesion, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
 }
 
