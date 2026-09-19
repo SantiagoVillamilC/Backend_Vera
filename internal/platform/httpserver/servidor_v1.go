@@ -33,6 +33,11 @@ type ConsentHandler interface {
 	CreateConsent(http.ResponseWriter, *http.Request)
 }
 
+// DesafiosHandler agrupa el handler público del reenvío de OTP.
+type DesafiosHandler interface {
+	ResendOtp(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
 	Identidad  IdentidadDeLaPeticion
@@ -42,6 +47,7 @@ type DependenciasAuth struct {
 	Redis      *redis.Client
 	CanalOTP   auth.CanalOTP
 	Contadores auth.Contadores
+	Desafios   DesafiosHandler
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.

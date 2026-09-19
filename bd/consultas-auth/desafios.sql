@@ -53,3 +53,16 @@ WHERE id = $1 AND estado = 'pendiente';
 UPDATE auth.desafios
 SET estado = 'expirado'
 WHERE id = $1 AND estado = 'pendiente';
+
+-- name: ActualizarReenvioDesafio :one
+UPDATE auth.desafios
+SET codigo_hmac = sqlc.arg('codigo_hmac'),
+    reenvios = reenvios + 1,
+    ultimo_envio_en = sqlc.arg('ahora'),
+    expira_en = sqlc.arg('expira_en')
+WHERE id = sqlc.arg('id')
+  AND estado = 'pendiente'
+  AND reenvios < 3
+  AND ultimo_envio_en <= sqlc.arg('umbral')
+  AND expira_en > sqlc.arg('ahora')
+RETURNING *;

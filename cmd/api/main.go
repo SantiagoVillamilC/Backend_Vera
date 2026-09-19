@@ -95,6 +95,15 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("contadores de auth: %w", err)
 	}
+	clavesContadores, err := auth.NuevasClaves(cfg.Auth.ContadoresPepper)
+	if err != nil {
+		return fmt.Errorf("claves de contadores: %w", err)
+	}
+	gestorDesafios, err := auth.NuevoGestorDesafios(pool, canal, auth.NuevoRegistradorEventos(pool), auth.SiempreOptIn{}, cfg.Auth.OTPPepper,
+		auth.ConRacionamiento(contadoresAuth, clavesContadores))
+	if err != nil {
+		return fmt.Errorf("gestor de desafíos: %w", err)
+	}
 
 	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
 	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
@@ -118,6 +127,7 @@ func run() error {
 			Redis:      clienteRedisAuth,
 			CanalOTP:   canal,
 			Contadores: contadoresAuth,
+			Desafios:   httpserver.NuevoOTPHandler(gestorDesafios),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

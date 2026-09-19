@@ -28,6 +28,8 @@ const (
 	resultadoDesafioCreado = "creado"
 	// resultadoEntregaFallida marca el desafío que el canal no pudo entregar.
 	resultadoEntregaFallida = "entrega_fallida"
+	// resultadoDesafioReenviado marca el código regenerado que reemplazó al anterior.
+	resultadoDesafioReenviado = "reenviado"
 )
 
 // Proposito es el motivo del desafío y queda atado a la verificación de A2-06.2.
@@ -48,12 +50,13 @@ const (
 
 // Solicitud reúne los datos con los que se crea un desafío OTP.
 type Solicitud struct {
-	ParteID      uuid.UUID
-	CredencialID uuid.UUID
-	Proposito    Proposito
-	Celular      string
-	Contexto     string
-	Origen       string
+	ParteID           uuid.UUID
+	CredencialID      uuid.UUID
+	Proposito         Proposito
+	Celular           string
+	Contexto          string
+	Origen            string
+	CorreoNormalizado string
 }
 
 // Desafio es lo que recibe el cliente: su id, la vigencia en segundos y el propósito, nunca el código.
@@ -78,15 +81,28 @@ var _ LectorOptIn = SiempreOptIn{}
 
 // GestorDesafios crea los desafíos OTP y los entrega por el canal tras confirmar la transacción.
 type GestorDesafios struct {
-	pool    abridorDeTransaccionesAuth
-	canal   CanalOTP
-	eventos RegistradorEventos
-	optIn   LectorOptIn
-	pepper  []byte
+	pool       abridorDeTransaccionesAuth
+	canal      CanalOTP
+	eventos    RegistradorEventos
+	optIn      LectorOptIn
+	pepper     []byte
+	contadores Contadores
+	claves     *Claves
+	racionador *RacionadorOTP
+}
+
+// OpcionGestorDesafios ajusta el gestor durante su construcción.
+type OpcionGestorDesafios func(*GestorDesafios)
+
+// ConRacionamiento entrega a A2-06.3 el puerto y las claves con los que aplica los topes agregados.
+func ConRacionamiento(contadores Contadores, claves *Claves) OpcionGestorDesafios {
+	return func(g *GestorDesafios) {
+		g.contadores, g.claves = contadores, claves
+	}
 }
 
 // NuevoGestorDesafios construye el servicio y exige un OTP_PEPPER de al menos 32 bytes.
-func NuevoGestorDesafios(pool *pgxpool.Pool, canal CanalOTP, eventos RegistradorEventos, optIn LectorOptIn, pepper []byte) (*GestorDesafios, error) {
+func NuevoGestorDesafios(pool *pgxpool.Pool, canal CanalOTP, eventos RegistradorEventos, optIn LectorOptIn, pepper []byte, opciones ...OpcionGestorDesafios) (*GestorDesafios, error) {
 	if len(pepper) < 32 {
 		return nil, fmt.Errorf("auth: OTP_PEPPER debe tener al menos 32 bytes, tiene %d", len(pepper))
 	}
@@ -96,7 +112,32 @@ func NuevoGestorDesafios(pool *pgxpool.Pool, canal CanalOTP, eventos Registrador
 	if optIn == nil {
 		optIn = SiempreOptIn{}
 	}
-	return &GestorDesafios{pool: poolDeAuth{pool: pool}, canal: canal, eventos: eventos, optIn: optIn, pepper: pepper}, nil
+	g := &GestorDesafios{pool: poolDeAuth{pool: pool}, canal: canal, eventos: eventos, optIn: optIn, pepper: pepper}
+	for _, opcion := range opciones {
+		opcion(g)
+	}
+	if g.contadores != nil || g.claves != nil {
+		racionador, err := NuevoRacionadorOTP(g.contadores, g.claves)
+		if err != nil {
+			return nil, err
+		}
+		g.racionador = racionador
+	}
+	return g, nil
+}
+
+// CrearDesafioRacionado aplica los topes agregados de cuenta y origen antes de crear el desafío.
+func (g *GestorDesafios) CrearDesafioRacionado(ctx context.Context, solicitud Solicitud) (Desafio, error) {
+	if g.racionador == nil {
+		return Desafio{}, ConFailClosed(errors.New("auth: el racionamiento de OTP no está configurado"))
+	}
+	if solicitud.CorreoNormalizado == "" {
+		return Desafio{}, ConFailClosed(errors.New("auth: el desafío racionado necesita el correo normalizado"))
+	}
+	if err := g.racionador.Exigir(ctx, solicitud.CorreoNormalizado, solicitud.Origen); err != nil {
+		return Desafio{}, err
+	}
+	return g.CrearDesafio(ctx, solicitud)
 }
 
 // CrearDesafio genera el código, lo persiste con HMAC, lo entrega por el canal y devuelve su vigencia.
