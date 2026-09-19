@@ -85,21 +85,6 @@ func run() error {
 		}),
 	)
 
-	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
-	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
-		OutboxInterval:       cfg.OutboxInterval,
-		ConciliationInterval: cfg.ConciliationInterval,
-		ConciliationWindow:   cfg.ConciliationWindow,
-		ExpirationInterval:   cfg.ExpirationInterval,
-		ExpirationTTL:        cfg.ExpirationTTL,
-	}, opcionLimpiezaDeAuth(pool, cfg))
-	if err != nil {
-		return fmt.Errorf("river: %w", err)
-	}
-	if err := riverClient.Start(context.Background()); err != nil {
-		return fmt.Errorf("river start: %w", err)
-	}
-
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
 	canal, err := canalOTP(cfg)
@@ -110,6 +95,22 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("contadores de auth: %w", err)
 	}
+
+	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
+	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
+		OutboxInterval:       cfg.OutboxInterval,
+		ConciliationInterval: cfg.ConciliationInterval,
+		ConciliationWindow:   cfg.ConciliationWindow,
+		ExpirationInterval:   cfg.ExpirationInterval,
+		ExpirationTTL:        cfg.ExpirationTTL,
+	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutboxDeAuth(pool, canal, cfg))
+	if err != nil {
+		return fmt.Errorf("river: %w", err)
+	}
+	if err := riverClient.Start(context.Background()); err != nil {
+		return fmt.Errorf("river start: %w", err)
+	}
+
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), httpserver.DependenciasAuth{

@@ -8,6 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AvisoOutbox struct {
+	ID                 int64              `json:"id"`
+	Tipo               string             `json:"tipo"`
+	Payload            []byte             `json:"payload"`
+	DisponibleEn       pgtype.Timestamptz `json:"disponible_en"`
+	Intentos           int32              `json:"intentos"`
+	UltimoError        pgtype.Text        `json:"ultimo_error"`
+	DespachadoEn       pgtype.Timestamptz `json:"despachado_en"`
+	IDMensajeProveedor pgtype.Text        `json:"id_mensaje_proveedor"`
+}
+
 type Credencial struct {
 	ID                  pgtype.UUID        `json:"id"`
 	ParteID             pgtype.UUID        `json:"parte_id"`

@@ -20,6 +20,10 @@ func entornoDeAuth(t *testing.T) {
 	t.Setenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", "24h")
 	t.Setenv("AUTH_VENTANA_PENDIENTE", "24h")
 	t.Setenv("AUTH_LIMPIEZA_INTERVAL", "15m")
+	t.Setenv("AUTH_OUTBOX_INTERVAL", "10s")
+	t.Setenv("AUTH_OUTBOX_BACKOFF_BASE", "5s")
+	t.Setenv("AUTH_OUTBOX_BACKOFF_FACTOR", "2")
+	t.Setenv("AUTH_OUTBOX_BACKOFF_MAX", "5m")
 }
 
 func baseDeConfig(t *testing.T) {
@@ -206,6 +210,51 @@ func TestLoadConfigAuthExigeContadoresPepper(t *testing.T) {
 			}
 			if len(cfg.Auth.ContadoresPepper) != 32 {
 				t.Errorf("ContadoresPepper = %d bytes, quiero 32", len(cfg.Auth.ContadoresPepper))
+			}
+		})
+	}
+}
+
+func TestLoadConfigAuthExigeElOutbox(t *testing.T) {
+	casos := map[string]struct {
+		intervalo string
+		base      string
+		factor    string
+		tope      string
+		wantErr   string
+	}{
+		"validos":         {intervalo: "10s", base: "5s", factor: "2", tope: "5m"},
+		"sin intervalo":   {intervalo: "", base: "5s", factor: "2", tope: "5m", wantErr: "AUTH_OUTBOX_INTERVAL is required"},
+		"intervalo cero":  {intervalo: "0s", base: "5s", factor: "2", tope: "5m", wantErr: "AUTH_OUTBOX_INTERVAL must be a positive duration"},
+		"sin base":        {intervalo: "10s", base: "", factor: "2", tope: "5m", wantErr: "AUTH_OUTBOX_BACKOFF_BASE is required"},
+		"sin factor":      {intervalo: "10s", base: "5s", factor: "", tope: "5m", wantErr: "AUTH_OUTBOX_BACKOFF_FACTOR is required"},
+		"factor no num":   {intervalo: "10s", base: "5s", factor: "dos", tope: "5m", wantErr: "AUTH_OUTBOX_BACKOFF_FACTOR must be a finite number"},
+		"factor negativo": {intervalo: "10s", base: "5s", factor: "-2", tope: "5m", wantErr: "AUTH_OUTBOX_BACKOFF_FACTOR must be a finite number"},
+		"sin tope":        {intervalo: "10s", base: "5s", factor: "2", tope: "", wantErr: "AUTH_OUTBOX_BACKOFF_MAX is required"},
+		"tope negativo":   {intervalo: "10s", base: "5s", factor: "2", tope: "-5m", wantErr: "AUTH_OUTBOX_BACKOFF_MAX must be a positive duration"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AUTH_OUTBOX_INTERVAL", caso.intervalo)
+			t.Setenv("AUTH_OUTBOX_BACKOFF_BASE", caso.base)
+			t.Setenv("AUTH_OUTBOX_BACKOFF_FACTOR", caso.factor)
+			t.Setenv("AUTH_OUTBOX_BACKOFF_MAX", caso.tope)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Auth.OutboxInterval != 10*time.Second || cfg.Auth.OutboxBackoffBase != 5*time.Second ||
+				cfg.Auth.OutboxBackoffFactor != 2 || cfg.Auth.OutboxBackoffMax != 5*time.Minute {
+				t.Errorf("outbox = (%s, %s, %v, %s), quiero (10s, 5s, 2, 5m)",
+					cfg.Auth.OutboxInterval, cfg.Auth.OutboxBackoffBase, cfg.Auth.OutboxBackoffFactor, cfg.Auth.OutboxBackoffMax)
 			}
 		})
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/correosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
@@ -43,6 +44,20 @@ func opcionLimpiezaDeAuth(pool *pgxpool.Pool, cfg *Config) jobs.OpcionDeAuth {
 	return jobs.ConTrabajoDeAuth(
 		auth.NuevoCerrarPendientesWorker(pool, gestor, cfg.Auth.VentanaPendiente),
 		auth.TrabajoPeriodicoDeLimpieza(cfg.Auth.LimpiezaInterval),
+	)
+}
+
+// opcionOutboxDeAuth registra el barrido del outbox de avisos en la cola auth de River.
+func opcionOutboxDeAuth(pool *pgxpool.Pool, canal auth.CanalOTP, cfg *Config) jobs.OpcionDeAuth {
+	notificador := auth.NuevoNotificadorDeAvisos(correosim.Nuevo(), canal)
+	despachador := auth.NuevoDespachadorDeAvisos(pool, notificador, auth.PoliticaReintento{
+		Base:   cfg.Auth.OutboxBackoffBase,
+		Factor: cfg.Auth.OutboxBackoffFactor,
+		Tope:   cfg.Auth.OutboxBackoffMax,
+	})
+	return jobs.ConTrabajoDeAuth(
+		auth.NuevoDespacharAvisosWorker(despachador),
+		auth.TrabajoPeriodicoDeOutbox(cfg.Auth.OutboxInterval),
 	)
 }
 

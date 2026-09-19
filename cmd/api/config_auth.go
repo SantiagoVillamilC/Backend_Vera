@@ -4,8 +4,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
@@ -23,6 +25,10 @@ type ConfigAuth struct {
 	EnfriamientoCambioNumero time.Duration
 	VentanaPendiente         time.Duration
 	LimpiezaInterval         time.Duration
+	OutboxInterval           time.Duration
+	OutboxBackoffBase        time.Duration
+	OutboxBackoffFactor      float64
+	OutboxBackoffMax         time.Duration
 }
 
 // cargarConfigAuth lee el bloque de auth y devuelve sus errores para el errors.Join del llamador.
@@ -59,6 +65,23 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	cfg.LimpiezaInterval, errLimpieza = duracionRequerida("AUTH_LIMPIEZA_INTERVAL", os.Getenv("AUTH_LIMPIEZA_INTERVAL"))
 	if errLimpieza != nil {
 		errs = append(errs, errLimpieza)
+	}
+	var errOutbox error
+	cfg.OutboxInterval, errOutbox = duracionRequerida("AUTH_OUTBOX_INTERVAL", os.Getenv("AUTH_OUTBOX_INTERVAL"))
+	if errOutbox != nil {
+		errs = append(errs, errOutbox)
+	}
+	cfg.OutboxBackoffBase, errOutbox = duracionRequerida("AUTH_OUTBOX_BACKOFF_BASE", os.Getenv("AUTH_OUTBOX_BACKOFF_BASE"))
+	if errOutbox != nil {
+		errs = append(errs, errOutbox)
+	}
+	cfg.OutboxBackoffFactor, errOutbox = factorRequerido("AUTH_OUTBOX_BACKOFF_FACTOR", os.Getenv("AUTH_OUTBOX_BACKOFF_FACTOR"))
+	if errOutbox != nil {
+		errs = append(errs, errOutbox)
+	}
+	cfg.OutboxBackoffMax, errOutbox = duracionRequerida("AUTH_OUTBOX_BACKOFF_MAX", os.Getenv("AUTH_OUTBOX_BACKOFF_MAX"))
+	if errOutbox != nil {
+		errs = append(errs, errOutbox)
 	}
 	switch cfg.OTPCanal {
 	case "simulador", "demo":
@@ -123,4 +146,16 @@ func duracionRequerida(key, valor string) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be a positive duration (e.g. 24h), got %q", key, valor)
 	}
 	return d, nil
+}
+
+// factorRequerido exige un multiplicador finito y mayor que cero sin default en código.
+func factorRequerido(key, valor string) (float64, error) {
+	if valor == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	f, err := strconv.ParseFloat(valor, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+		return 0, fmt.Errorf("%s must be a finite number greater than zero, got %q", key, valor)
+	}
+	return f, nil
 }
