@@ -12,6 +12,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const actualizarCelularCredencial = `-- name: ActualizarCelularCredencial :execrows
+UPDATE auth.credenciales
+SET celular = $1,
+    celular_verificado_en = now(),
+    celular_cambiado_en = now(),
+    actualizada_en = now()
+WHERE id = $2 AND estado = 'activo' AND celular <> $1
+`
+
+type ActualizarCelularCredencialParams struct {
+	Celular string      `json:"celular"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) ActualizarCelularCredencial(ctx context.Context, arg ActualizarCelularCredencialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, actualizarCelularCredencial, arg.Celular, arg.ID)
+	if err != nil {
+		return 0, fmt.Errorf("query ActualizarCelularCredencial: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
 const crearCredencial = `-- name: CrearCredencial :one
 INSERT INTO auth.credenciales (id, parte_id, correo, celular, valor_derivado, estado)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -54,6 +76,27 @@ func (q *Queries) CrearCredencial(ctx context.Context, arg CrearCredencialParams
 		err = fmt.Errorf("query CrearCredencial: %w", err)
 	}
 	return i, err
+}
+
+const credencialPorCelularNoCerrada = `-- name: CredencialPorCelularNoCerrada :one
+SELECT id
+FROM auth.credenciales
+WHERE celular = $1 AND estado <> 'cerrado' AND id <> $2
+`
+
+type CredencialPorCelularNoCerradaParams struct {
+	Celular string      `json:"celular"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) CredencialPorCelularNoCerrada(ctx context.Context, arg CredencialPorCelularNoCerradaParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, credencialPorCelularNoCerrada, arg.Celular, arg.ID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	if err != nil {
+		err = fmt.Errorf("query CredencialPorCelularNoCerrada: %w", err)
+	}
+	return id, err
 }
 
 const credencialPorCorreo = `-- name: CredencialPorCorreo :one

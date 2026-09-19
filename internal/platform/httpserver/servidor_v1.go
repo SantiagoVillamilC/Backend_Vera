@@ -61,6 +61,12 @@ type RefreshHandler interface {
 	Refresh(http.ResponseWriter, *http.Request)
 }
 
+// PhoneChangeHandler atiende la solicitud y la confirmación autenticadas del cambio de número.
+type PhoneChangeHandler interface {
+	PhoneChangeRequest(http.ResponseWriter, *http.Request)
+	PhoneChangeConfirm(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
 	Identidad    IdentidadDeLaPeticion
@@ -82,13 +88,15 @@ type DependenciasAuth struct {
 	Subcuentas   auth.AbridorDeSubcuentas
 	Recuperar2FA RecuperacionVerifyHandler
 	ResetClave   RecuperacionResetHandler
+	PhoneChange  PhoneChangeHandler
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
 type servidorV1 struct {
-	auth    AuthHandler
-	kyc     KYCHandler
-	consent ConsentHandler
+	auth        AuthHandler
+	kyc         KYCHandler
+	consent     ConsentHandler
+	phoneChange PhoneChangeHandler
 }
 
 var _ api.ServerInterface = servidorV1{}
@@ -147,11 +155,19 @@ func (s servidorV1) LogoutAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s servidorV1) PhoneChangeConfirm(w http.ResponseWriter, r *http.Request) {
-	sinImplementar(w, r)
+	if s.phoneChange == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.phoneChange.PhoneChangeConfirm(w, r)
 }
 
 func (s servidorV1) PhoneChangeRequest(w http.ResponseWriter, r *http.Request) {
-	sinImplementar(w, r)
+	if s.phoneChange == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.phoneChange.PhoneChangeRequest(w, r)
 }
 
 func (s servidorV1) ListSessions(w http.ResponseWriter, r *http.Request) {

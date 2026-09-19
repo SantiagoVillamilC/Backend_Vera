@@ -57,6 +57,8 @@ type Solicitud struct {
 	Contexto          string
 	Origen            string
 	CorreoNormalizado string
+	CelularNuevo      string
+	DesafioPadreID    uuid.UUID
 }
 
 // Desafio es lo que recibe el cliente: su id, la vigencia en segundos y el propósito, nunca el código.
@@ -170,26 +172,57 @@ func (g *GestorDesafios) CrearDesafio(ctx context.Context, solicitud Solicitud) 
 // persistir inserta el desafío y su evento en una sola transacción y confirma antes de entregar.
 func (g *GestorDesafios) persistir(ctx context.Context, solicitud Solicitud, codigo string, ahora time.Time) (repositorio.AuthDesafio, error) {
 	return enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (repositorio.AuthDesafio, error) {
-		fila, err := q.InsertarDesafio(ctx, repositorio.InsertarDesafioParams{
-			ID:                 pgtype.UUID{Bytes: uuid.New(), Valid: true},
-			ParteID:            uuidOPgtype(solicitud.ParteID),
-			CredencialID:       uuidOPgtype(solicitud.CredencialID),
-			Proposito:          string(solicitud.Proposito),
-			CelularDestino:     solicitud.Celular,
-			CodigoHmac:         hmacDeCodigo(g.pepper, codigo),
-			CreadoEn:           pgtype.Timestamptz{Time: ahora, Valid: true},
-			ExpiraEn:           pgtype.Timestamptz{Time: ahora.Add(vigenciaDesafio), Valid: true},
-			UltimoEnvioEn:      pgtype.Timestamptz{Time: ahora, Valid: true},
-			ContextoSolicitado: pgtype.Text{String: solicitud.Contexto, Valid: solicitud.Contexto != ""},
-		})
-		if err != nil {
-			return repositorio.AuthDesafio{}, fmt.Errorf("auth: insertar el desafío: %w", err)
-		}
-		if err := registrarEvento(ctx, g.eventos, q, g.eventoDeDesafio(solicitud, ahora, resultadoDesafioCreado)); err != nil {
-			return repositorio.AuthDesafio{}, err
-		}
-		return fila, nil
+		return g.persistirEn(ctx, q, solicitud, codigo, ahora)
 	})
+}
+
+// persistirEn inserta el desafío y su evento sobre el Querier de una transacción ajena.
+func (g *GestorDesafios) persistirEn(ctx context.Context, q *repositorio.Queries, solicitud Solicitud, codigo string, ahora time.Time) (repositorio.AuthDesafio, error) {
+	fila, err := q.InsertarDesafio(ctx, repositorio.InsertarDesafioParams{
+		ID:                 pgtype.UUID{Bytes: uuid.New(), Valid: true},
+		ParteID:            uuidOPgtype(solicitud.ParteID),
+		CredencialID:       uuidOPgtype(solicitud.CredencialID),
+		Proposito:          string(solicitud.Proposito),
+		CelularDestino:     solicitud.Celular,
+		CodigoHmac:         hmacDeCodigo(g.pepper, codigo),
+		CreadoEn:           pgtype.Timestamptz{Time: ahora, Valid: true},
+		ExpiraEn:           pgtype.Timestamptz{Time: ahora.Add(vigenciaDesafio), Valid: true},
+		UltimoEnvioEn:      pgtype.Timestamptz{Time: ahora, Valid: true},
+		ContextoSolicitado: pgtype.Text{String: solicitud.Contexto, Valid: solicitud.Contexto != ""},
+		CelularNuevo:       pgtype.Text{String: solicitud.CelularNuevo, Valid: solicitud.CelularNuevo != ""},
+		DesafioPadreID:     uuidOPgtype(solicitud.DesafioPadreID),
+	})
+	if err != nil {
+		return repositorio.AuthDesafio{}, fmt.Errorf("auth: insertar el desafío: %w", err)
+	}
+	if err := registrarEvento(ctx, g.eventos, q, g.eventoDeDesafio(solicitud, ahora, resultadoDesafioCreado)); err != nil {
+		return repositorio.AuthDesafio{}, err
+	}
+	return fila, nil
+}
+
+// crearDesafioEn genera el código y persiste el desafío sobre el Querier abierto del llamador, sin entregarlo.
+func (g *GestorDesafios) crearDesafioEn(ctx context.Context, q *repositorio.Queries, solicitud Solicitud, ahora time.Time) (Desafio, string, error) {
+	if err := solicitud.valida(); err != nil {
+		return Desafio{}, "", err
+	}
+	codigo, err := codigoDelDesafio(g.canal)
+	if err != nil {
+		return Desafio{}, "", err
+	}
+	fila, err := g.persistirEn(ctx, q, solicitud, codigo, ahora)
+	if err != nil {
+		return Desafio{}, "", err
+	}
+	return Desafio{ID: uuidDePgtype(fila.ID), ExpiraEnSegundos: int(vigenciaDesafio.Seconds()), Proposito: solicitud.Proposito}, codigo, nil
+}
+
+// enviarDesafioHijo entrega el código tras el commit con el mismo trato de entrega fallida de A2-06.1.
+func (g *GestorDesafios) enviarDesafioHijo(ctx context.Context, desafio Desafio, solicitud Solicitud, codigo string) error {
+	if _, err := g.canal.Enviar(ctx, solicitud.Celular, codigo); err != nil {
+		return g.entregaFallida(ctx, pgtype.UUID{Bytes: desafio.ID, Valid: true}, solicitud, err)
+	}
+	return nil
 }
 
 // entregaFallida invalida el desafío ya persistido, publica el evento y devuelve ErrEntregaFallida.

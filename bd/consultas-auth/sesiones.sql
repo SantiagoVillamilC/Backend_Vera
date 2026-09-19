@@ -60,3 +60,11 @@ SELECT rol, representada_id
 FROM auth.roles_de_parte
 WHERE parte_id = $1 AND revocado_en IS NULL
 ORDER BY rol, representada_id;
+
+-- name: CredencialDeSesion :one
+SELECT c.*
+FROM auth.sesiones s
+JOIN auth.credenciales c ON c.parte_id = s.parte_id
+WHERE s.familia_id = $1
+ORDER BY s.creada_en
+LIMIT 1;

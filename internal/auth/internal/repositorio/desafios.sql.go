@@ -23,7 +23,7 @@ WHERE id = $4
   AND reenvios < 3
   AND ultimo_envio_en <= $5
   AND expira_en > $2
-RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac, intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en, contexto_solicitado
+RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac, intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en, contexto_solicitado, celular_nuevo, desafio_padre_id
 `
 
 type ActualizarReenvioDesafioParams struct {
@@ -57,6 +57,8 @@ func (q *Queries) ActualizarReenvioDesafio(ctx context.Context, arg ActualizarRe
 		&i.ExpiraEn,
 		&i.UltimoEnvioEn,
 		&i.ContextoSolicitado,
+		&i.CelularNuevo,
+		&i.DesafioPadreID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query ActualizarReenvioDesafio: %w", err)
@@ -64,10 +66,66 @@ func (q *Queries) ActualizarReenvioDesafio(ctx context.Context, arg ActualizarRe
 	return i, err
 }
 
+const desafioHijoPendiente = `-- name: DesafioHijoPendiente :one
+SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
+       intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
+       contexto_solicitado, celular_nuevo, desafio_padre_id, expira_en <= now() AS expirado
+FROM auth.desafios
+WHERE desafio_padre_id = $1 AND estado = 'pendiente'
+ORDER BY creado_en DESC
+LIMIT 1
+`
+
+type DesafioHijoPendienteRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	ParteID            pgtype.UUID        `json:"parte_id"`
+	CredencialID       pgtype.UUID        `json:"credencial_id"`
+	Proposito          string             `json:"proposito"`
+	CelularDestino     string             `json:"celular_destino"`
+	CodigoHmac         []byte             `json:"codigo_hmac"`
+	Intentos           int32              `json:"intentos"`
+	Reenvios           int32              `json:"reenvios"`
+	Estado             string             `json:"estado"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
+	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
+	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	CelularNuevo       pgtype.Text        `json:"celular_nuevo"`
+	DesafioPadreID     pgtype.UUID        `json:"desafio_padre_id"`
+	Expirado           bool               `json:"expirado"`
+}
+
+func (q *Queries) DesafioHijoPendiente(ctx context.Context, desafioPadreID pgtype.UUID) (DesafioHijoPendienteRow, error) {
+	row := q.db.QueryRow(ctx, desafioHijoPendiente, desafioPadreID)
+	var i DesafioHijoPendienteRow
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.CredencialID,
+		&i.Proposito,
+		&i.CelularDestino,
+		&i.CodigoHmac,
+		&i.Intentos,
+		&i.Reenvios,
+		&i.Estado,
+		&i.CreadoEn,
+		&i.ExpiraEn,
+		&i.UltimoEnvioEn,
+		&i.ContextoSolicitado,
+		&i.CelularNuevo,
+		&i.DesafioPadreID,
+		&i.Expirado,
+	)
+	if err != nil {
+		err = fmt.Errorf("query DesafioHijoPendiente: %w", err)
+	}
+	return i, err
+}
+
 const desafioPendientePorID = `-- name: DesafioPendientePorID :one
 SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
        intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
-       contexto_solicitado, expira_en <= now() AS expirado
+       contexto_solicitado, celular_nuevo, desafio_padre_id, expira_en <= now() AS expirado
 FROM auth.desafios
 WHERE id = $1 AND estado = 'pendiente'
 `
@@ -86,6 +144,8 @@ type DesafioPendientePorIDRow struct {
 	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
 	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
 	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	CelularNuevo       pgtype.Text        `json:"celular_nuevo"`
+	DesafioPadreID     pgtype.UUID        `json:"desafio_padre_id"`
 	Expirado           bool               `json:"expirado"`
 }
 
@@ -106,6 +166,8 @@ func (q *Queries) DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (De
 		&i.ExpiraEn,
 		&i.UltimoEnvioEn,
 		&i.ContextoSolicitado,
+		&i.CelularNuevo,
+		&i.DesafioPadreID,
 		&i.Expirado,
 	)
 	if err != nil {
@@ -117,7 +179,7 @@ func (q *Queries) DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (De
 const desafioPorID = `-- name: DesafioPorID :one
 SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
        intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
-       contexto_solicitado, expira_en <= now() AS expirado
+       contexto_solicitado, celular_nuevo, desafio_padre_id, expira_en <= now() AS expirado
 FROM auth.desafios
 WHERE id = $1
 `
@@ -136,6 +198,8 @@ type DesafioPorIDRow struct {
 	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
 	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
 	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	CelularNuevo       pgtype.Text        `json:"celular_nuevo"`
+	DesafioPadreID     pgtype.UUID        `json:"desafio_padre_id"`
 	Expirado           bool               `json:"expirado"`
 }
 
@@ -156,6 +220,8 @@ func (q *Queries) DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorI
 		&i.ExpiraEn,
 		&i.UltimoEnvioEn,
 		&i.ContextoSolicitado,
+		&i.CelularNuevo,
+		&i.DesafioPadreID,
 		&i.Expirado,
 	)
 	if err != nil {
@@ -170,7 +236,7 @@ SET intentos = intentos + 1
 WHERE id = $1 AND estado = 'pendiente' AND intentos < 3
 RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
           intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
-          contexto_solicitado, expira_en <= now() AS expirado
+          contexto_solicitado, celular_nuevo, desafio_padre_id, expira_en <= now() AS expirado
 `
 
 type IncrementarIntentoDesafioRow struct {
@@ -187,6 +253,8 @@ type IncrementarIntentoDesafioRow struct {
 	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
 	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
 	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	CelularNuevo       pgtype.Text        `json:"celular_nuevo"`
+	DesafioPadreID     pgtype.UUID        `json:"desafio_padre_id"`
 	Expirado           bool               `json:"expirado"`
 }
 
@@ -207,6 +275,8 @@ func (q *Queries) IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID)
 		&i.ExpiraEn,
 		&i.UltimoEnvioEn,
 		&i.ContextoSolicitado,
+		&i.CelularNuevo,
+		&i.DesafioPadreID,
 		&i.Expirado,
 	)
 	if err != nil {
@@ -218,7 +288,8 @@ func (q *Queries) IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID)
 const insertarDesafio = `-- name: InsertarDesafio :one
 INSERT INTO auth.desafios (
     id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
-    estado, creado_en, expira_en, ultimo_envio_en, contexto_solicitado
+    estado, creado_en, expira_en, ultimo_envio_en, contexto_solicitado,
+    celular_nuevo, desafio_padre_id
 ) VALUES (
     $1,
     $2,
@@ -230,9 +301,11 @@ INSERT INTO auth.desafios (
     $7,
     $8,
     $9,
-    $10
+    $10,
+    $11,
+    $12
 )
-RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac, intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en, contexto_solicitado
+RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac, intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en, contexto_solicitado, celular_nuevo, desafio_padre_id
 `
 
 type InsertarDesafioParams struct {
@@ -246,6 +319,8 @@ type InsertarDesafioParams struct {
 	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
 	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
 	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	CelularNuevo       pgtype.Text        `json:"celular_nuevo"`
+	DesafioPadreID     pgtype.UUID        `json:"desafio_padre_id"`
 }
 
 func (q *Queries) InsertarDesafio(ctx context.Context, arg InsertarDesafioParams) (AuthDesafio, error) {
@@ -260,6 +335,8 @@ func (q *Queries) InsertarDesafio(ctx context.Context, arg InsertarDesafioParams
 		arg.ExpiraEn,
 		arg.UltimoEnvioEn,
 		arg.ContextoSolicitado,
+		arg.CelularNuevo,
+		arg.DesafioPadreID,
 	)
 	var i AuthDesafio
 	err := row.Scan(
@@ -276,6 +353,8 @@ func (q *Queries) InsertarDesafio(ctx context.Context, arg InsertarDesafioParams
 		&i.ExpiraEn,
 		&i.UltimoEnvioEn,
 		&i.ContextoSolicitado,
+		&i.CelularNuevo,
+		&i.DesafioPadreID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query InsertarDesafio: %w", err)

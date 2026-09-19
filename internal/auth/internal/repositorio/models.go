@@ -30,6 +30,8 @@ type AuthDesafio struct {
 	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
 	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
 	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	CelularNuevo       pgtype.Text        `json:"celular_nuevo"`
+	DesafioPadreID     pgtype.UUID        `json:"desafio_padre_id"`
 }
 
 type AuthTokensRestablecimiento struct {

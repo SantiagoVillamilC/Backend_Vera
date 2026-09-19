@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ActualizarCelularCredencial(ctx context.Context, arg ActualizarCelularCredencialParams) (int64, error)
 	ActualizarContextoDeFamilia(ctx context.Context, arg ActualizarContextoDeFamiliaParams) (int64, error)
 	ActualizarContrasena(ctx context.Context, arg ActualizarContrasenaParams) (int64, error)
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
@@ -25,8 +26,11 @@ type Querier interface {
 	CrearParte(ctx context.Context, arg CrearParteParams) (Parte, error)
 	CrearPersona(ctx context.Context, arg CrearPersonaParams) (Persona, error)
 	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
+	CredencialDeSesion(ctx context.Context, familiaID pgtype.UUID) (Credencial, error)
+	CredencialPorCelularNoCerrada(ctx context.Context, arg CredencialPorCelularNoCerradaParams) (pgtype.UUID, error)
 	CredencialPorCorreo(ctx context.Context, correo string) (Credencial, error)
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
+	DesafioHijoPendiente(ctx context.Context, desafioPadreID pgtype.UUID) (DesafioHijoPendienteRow, error)
 	DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (DesafioPendientePorIDRow, error)
 	DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error)
 	EmpresaDeParte(ctx context.Context, parteID pgtype.UUID) (EmpresaDeParteRow, error)

@@ -18,6 +18,7 @@ var clavesDeDetallePermitidas = map[string]struct{}{
 	"motivo":              {},
 	"dispositivo":         {},
 	"contexto_solicitado": {},
+	"celular_enmascarado": {},
 }
 
 // registradorConTx es un registrador que sabe escribir con el Querier de una transacción abierta.
