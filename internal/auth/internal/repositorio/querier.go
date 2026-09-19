@@ -19,6 +19,8 @@ type Querier interface {
 	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
 	DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (DesafioPendientePorIDRow, error)
+	DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error)
+	IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID) (IncrementarIntentoDesafioRow, error)
 	InsertarAviso(ctx context.Context, arg InsertarAvisoParams) (AvisoOutbox, error)
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
 	InsertarDesafio(ctx context.Context, arg InsertarDesafioParams) (AuthDesafio, error)
@@ -27,6 +29,8 @@ type Querier interface {
 	InvalidarDesafio(ctx context.Context, id pgtype.UUID) (int64, error)
 	ListarSesionesActivas(ctx context.Context, parteID pgtype.UUID) ([]Sesion, error)
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
+	MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error)
+	MarcarDesafioVerificado(ctx context.Context, id pgtype.UUID) (int64, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
