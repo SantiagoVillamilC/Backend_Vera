@@ -30,6 +30,8 @@ func entornoDeAuth(t *testing.T) {
 	t.Setenv("AUTH_OUTBOX_BACKOFF_FACTOR", "2")
 	t.Setenv("AUTH_OUTBOX_BACKOFF_MAX", "5m")
 	t.Setenv("AUTH_ARGON2_CONCURRENCIA", "4")
+	t.Setenv("KYC_PROVEEDOR", "simulador")
+	t.Setenv("KYC_SIMULADOR_RESULTADO", "verificado")
 }
 
 func baseDeConfig(t *testing.T) {
@@ -427,6 +429,39 @@ func TestLoadConfigAuthExigeVentanaPendienteYLimpieza(t *testing.T) {
 			}
 			if cfg.Auth.VentanaPendiente != 24*time.Hour || cfg.Auth.LimpiezaInterval != 15*time.Minute {
 				t.Errorf("VentanaPendiente = %s, LimpiezaInterval = %s, quiero 24h y 15m", cfg.Auth.VentanaPendiente, cfg.Auth.LimpiezaInterval)
+			}
+		})
+	}
+}
+
+func TestLoadConfigAuthExigeKYC(t *testing.T) {
+	casos := map[string]struct {
+		proveedor string
+		resultado string
+		wantErr   string
+	}{
+		"simulador con resultado": {proveedor: "simulador", resultado: "verificado"},
+		"sin proveedor":           {proveedor: "", resultado: "verificado", wantErr: "KYC_PROVEEDOR is required"},
+		"sin resultado":           {proveedor: "simulador", resultado: "", wantErr: "KYC_SIMULADOR_RESULTADO is required"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("KYC_PROVEEDOR", caso.proveedor)
+			t.Setenv("KYC_SIMULADOR_RESULTADO", caso.resultado)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Auth.KYCProveedor != caso.proveedor || cfg.Auth.KYCResultado != caso.resultado {
+				t.Errorf("KYC = (%q, %q), quiero (%q, %q)", cfg.Auth.KYCProveedor, cfg.Auth.KYCResultado, caso.proveedor, caso.resultado)
 			}
 		})
 	}

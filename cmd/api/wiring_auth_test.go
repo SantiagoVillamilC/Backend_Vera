@@ -13,6 +13,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/kycsim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/whatsapp"
 	"github.com/go-chi/chi/v5"
@@ -360,6 +361,39 @@ func TestRequireAuthRechazaAccessVencidoAlteradoOAjeno(t *testing.T) {
 			}
 			if code := codigoDeError(t, rec); code != "Unauthorized" {
 				t.Fatalf("code = %s, quiero Unauthorized", code)
+			}
+		})
+	}
+}
+
+// KYC_PROVEEDOR elige el proveedor; el simulador es el único valor admitido y un valor ajeno falla al arrancar.
+func TestProveedorKYCEligenPorKYCProveedor(t *testing.T) {
+	t.Parallel()
+
+	casos := map[string]struct {
+		cfg     ConfigAuth
+		wantErr string
+	}{
+		"simulador":   {cfg: ConfigAuth{KYCProveedor: "simulador", KYCResultado: "verificado"}},
+		"desconocido": {cfg: ConfigAuth{KYCProveedor: "otro"}, wantErr: "KYC_PROVEEDOR desconocido"},
+		"sin valor":   {cfg: ConfigAuth{}, wantErr: "KYC_PROVEEDOR desconocido"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+
+			proveedor, err := proveedorKYC(&Config{Auth: caso.cfg})
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("proveedorKYC error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("proveedorKYC: %v", err)
+			}
+			if _, ok := proveedor.(*kycsim.Simulador); !ok {
+				t.Fatalf("proveedor = %T, quiero *kycsim.Simulador", proveedor)
 			}
 		})
 	}

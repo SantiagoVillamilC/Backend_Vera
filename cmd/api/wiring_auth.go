@@ -12,10 +12,13 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/kyc"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/correosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/kycsim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/whatsapp"
@@ -106,6 +109,30 @@ func tokensDeAcceso(cfg *Config) (*auth.TokensDeAcceso, error) {
 // denylistDeSesiones construye la denylist sobre el cliente Redis compartido.
 func denylistDeSesiones(cliente *redis.Client) (auth.RevocadorDeSesiones, error) {
 	return denylist.NuevoRedis(cliente)
+}
+
+// lectorKYC construye el lector real del nivel de KYC que el núcleo consulta.
+func lectorKYC(pool *pgxpool.Pool) nucleo.LectorNivelKYC {
+	return kyc.NuevoLectorNivelKYC(pool)
+}
+
+// proveedorKYC elige el proveedor por KYC_PROVEEDOR; sin default, un valor ajeno falla al arrancar.
+func proveedorKYC(cfg *Config) (kyc.ProveedorKYC, error) {
+	switch cfg.Auth.KYCProveedor {
+	case "simulador":
+		return kycsim.Nuevo(cfg.Auth.KYCResultado)
+	default:
+		return nil, fmt.Errorf("KYC_PROVEEDOR desconocido %q", cfg.Auth.KYCProveedor)
+	}
+}
+
+// nuevoKYCHandler arma el módulo de KYC y su handler autenticado sobre el servicio del núcleo.
+func nuevoKYCHandler(pool *pgxpool.Pool, cfg *Config, subcuentas kyc.AbridorDeSubcuentas) (httpserver.KYCHandler, error) {
+	proveedor, err := proveedorKYC(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return httpserver.NuevoKYC(kyc.NuevoServicio(pool, proveedor, cfg.Auth.KYCProveedor, subcuentas)), nil
 }
 
 // identidadJWT arma el adaptador de la petición que valida el access y consulta la denylist del sid.

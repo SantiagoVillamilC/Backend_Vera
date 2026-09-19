@@ -72,7 +72,7 @@ func run() error {
 	resolutorDestino := auth.NuevoResolutorDestino(pool, cfg.Auth.EnfriamientoCambioNumero)
 	servicio := nucleo.NewServicio(
 		pool,
-		nucleo.LectorNivelKYCFijo{},
+		lectorKYC(pool),
 		riel,
 		custodiosim.NuevoLectorExtracto(cfg.CustodioExtractoURL, nil),
 		observabilidad.RastreadorSlog{},
@@ -152,9 +152,14 @@ func run() error {
 		return fmt.Errorf("servicio de cambio de número: %w", err)
 	}
 	restablecimiento := httpserver.NuevoRestablecimientoHandler(servicioRestablecimiento, servicioRestablecimiento)
+	handlerKYC, err := nuevoKYCHandler(pool, cfg, servicio)
+	if err != nil {
+		return fmt.Errorf("módulo KYC: %w", err)
+	}
 	deps := httpserver.DependenciasAuth{
 		Identidad:    identidadPeticion,
 		Auth:         httpserver.NuevoDispositivosHandler(servicioSesion),
+		KYC:          handlerKYC,
 		Redis:        clienteRedisAuth,
 		CanalOTP:     canal,
 		Contadores:   contadoresAuth,

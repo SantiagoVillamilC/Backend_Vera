@@ -80,3 +80,15 @@ func enTransaccion[T any](
 	}
 	return out, nil
 }
+
+// EnTransaccion expone el helper a los subpaquetes de auth que no ven enTransaccion, sin repetir el SET LOCAL ROLE.
+func EnTransaccion[T any](
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	fn func(ctx context.Context, q *repositorio.Queries) (T, error),
+) (T, error) {
+	return enTransaccion(ctx, poolDeAuth{pool: pool},
+		func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (T, error) {
+			return fn(ctx, q)
+		})
+}

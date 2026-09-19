@@ -74,3 +74,5 @@ sql:
           auth_outbox: AvisoOutbox
           auth_consentimiento: Consentimiento
           auth_textos_consentimiento: TextoConsentimiento
+          auth_kyc_estado: EstadoKYC
+          auth_kyc_verificacione: VerificacionKYC
