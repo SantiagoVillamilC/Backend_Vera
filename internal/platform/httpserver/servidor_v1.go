@@ -48,6 +48,11 @@ type VerificacionHandler interface {
 	VerificarCelular(http.ResponseWriter, *http.Request)
 }
 
+// LoginHandler atiende el desenlace público del inicio de sesión.
+type LoginHandler interface {
+	Login(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
 	Identidad    IdentidadDeLaPeticion
@@ -60,6 +65,7 @@ type DependenciasAuth struct {
 	Desafios     DesafiosHandler
 	Registro     RegistroHandler
 	Verificacion VerificacionHandler
+	Login        LoginHandler
 	Subcuentas   auth.AbridorDeSubcuentas
 }
 

@@ -114,6 +114,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	verificador, err := auth.NuevoVerificadorDeCredencialesPostgres(pool, derivador, contadoresAuth, clavesContadores, auth.NuevoRegistradorEventos(pool), auth.ParametrosArgon2Produccion())
+	if err != nil {
+		return fmt.Errorf("verificador de credenciales: %w", err)
+	}
+	gestorSesiones := auth.NuevoGestorSesiones(pool, auth.NuevoRegistradorEventos(pool))
+	servicioLogin, err := auth.NuevoServicioDeLogin(verificador, gestorDesafios, gestorSesiones)
+	if err != nil {
+		return fmt.Errorf("servicio de login: %w", err)
+	}
 	deps := httpserver.DependenciasAuth{
 		Identidad:    auth.UsuarioDePrueba{},
 		Redis:        clienteRedisAuth,
@@ -121,6 +130,7 @@ func run() error {
 		Contadores:   contadoresAuth,
 		Desafios:     httpserver.NuevoOTPHandler(gestorDesafios),
 		Verificacion: httpserver.NuevoVerificacionHandler(activador),
+		Login:        httpserver.NuevoLoginHandler(servicioLogin),
 		Subcuentas:   servicio,
 	}
 	registrador, err := auth.NuevoRegistradorDePersonas(pool, derivador, auth.NuevoRegistradorEventos(pool), gestorDesafios, deps.Subcuentas)
