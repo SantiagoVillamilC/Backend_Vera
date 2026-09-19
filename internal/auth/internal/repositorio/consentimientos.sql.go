@@ -72,22 +72,44 @@ func (q *Queries) CrearConsentimiento(ctx context.Context, arg CrearConsentimien
 	return i, err
 }
 
-const optInVigenteDeParte = `-- name: OptInVigenteDeParte :one
-SELECT aceptado
+const listarConsentimientosDeParte = `-- name: ListarConsentimientosDeParte :many
+SELECT id, parte_id, tipo, version_texto, texto, aceptado, accion, actor, origen, user_agent, metodo, ocurrido_en
 FROM auth.consentimientos
-WHERE parte_id = $1 AND tipo = 'whatsapp_optin'
+WHERE parte_id = $1
 ORDER BY ocurrido_en DESC
-LIMIT 1
 `
 
-func (q *Queries) OptInVigenteDeParte(ctx context.Context, parteID pgtype.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, optInVigenteDeParte, parteID)
-	var aceptado bool
-	err := row.Scan(&aceptado)
+func (q *Queries) ListarConsentimientosDeParte(ctx context.Context, parteID pgtype.UUID) ([]Consentimiento, error) {
+	rows, err := q.db.Query(ctx, listarConsentimientosDeParte, parteID)
 	if err != nil {
-		err = fmt.Errorf("query OptInVigenteDeParte: %w", err)
+		return nil, fmt.Errorf("query ListarConsentimientosDeParte: %w", err)
 	}
-	return aceptado, err
+	defer rows.Close()
+	items := []Consentimiento{}
+	for rows.Next() {
+		var i Consentimiento
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParteID,
+			&i.Tipo,
+			&i.VersionTexto,
+			&i.Texto,
+			&i.Aceptado,
+			&i.Accion,
+			&i.Actor,
+			&i.Origen,
+			&i.UserAgent,
+			&i.Metodo,
+			&i.OcurridoEn,
+		); err != nil {
+			return nil, fmt.Errorf("query ListarConsentimientosDeParte: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query ListarConsentimientosDeParte: %w", err)
+	}
+	return items, nil
 }
 
 const textoDeConsentimiento = `-- name: TextoDeConsentimiento :one
@@ -115,4 +137,27 @@ func (q *Queries) TextoDeConsentimiento(ctx context.Context, arg TextoDeConsenti
 		err = fmt.Errorf("query TextoDeConsentimiento: %w", err)
 	}
 	return i, err
+}
+
+const ultimoConsentimientoPorTipo = `-- name: UltimoConsentimientoPorTipo :one
+SELECT aceptado
+FROM auth.consentimientos
+WHERE parte_id = $1 AND tipo = $2
+ORDER BY ocurrido_en DESC
+LIMIT 1
+`
+
+type UltimoConsentimientoPorTipoParams struct {
+	ParteID pgtype.UUID `json:"parte_id"`
+	Tipo    string      `json:"tipo"`
+}
+
+func (q *Queries) UltimoConsentimientoPorTipo(ctx context.Context, arg UltimoConsentimientoPorTipoParams) (bool, error) {
+	row := q.db.QueryRow(ctx, ultimoConsentimientoPorTipo, arg.ParteID, arg.Tipo)
+	var aceptado bool
+	err := row.Scan(&aceptado)
+	if err != nil {
+		err = fmt.Errorf("query UltimoConsentimientoPorTipo: %w", err)
+	}
+	return aceptado, err
 }

@@ -20,9 +20,6 @@ const (
 	motivoRegistro = "registro_persona"
 	// resultadoRegistroCreado marca el evento de alta.
 	resultadoRegistroCreado = "creado"
-	// accionAceptar y accionRechazar son las acciones del consentimiento en el registro.
-	accionAceptar  = "aceptar"
-	accionRechazar = "rechazar"
 	// metodoRegistro identifica el origen funcional de la fila de consentimiento.
 	metodoRegistro = "registro"
 )
@@ -173,9 +170,9 @@ func (s *RegistradorDePersonas) registrarConsentimientos(ctx context.Context, q 
 		if err != nil {
 			return fmt.Errorf("auth: leer el texto del consentimiento %q: %w", consentimiento.tipo, err)
 		}
-		accion := accionRechazar
+		accion := AccionConsentimientoRevocar
 		if consentimiento.aceptado {
-			accion = accionAceptar
+			accion = AccionConsentimientoOtorgar
 		}
 		if _, err := q.CrearConsentimiento(ctx, repositorio.CrearConsentimientoParams{
 			ID:           uuidOPgtype(uuid.New()),

@@ -28,6 +28,12 @@ var ErrCelularSinVerificar = errors.New("auth: la credencial no tiene el celular
 // ErrConsentimientoRequerido es la falta de opt-in vigente para enviar el OTP: responde 403 ConsentRequired.
 var ErrConsentimientoRequerido = errors.New("auth: falta el consentimiento para enviar el OTP")
 
+// ErrWhatsappUnicoCanal es la revocacion del opt-in mientras WhatsApp es el unico canal del OTP: responde 409 (P-13).
+var ErrWhatsappUnicoCanal = errors.New("auth: WhatsApp es el unico canal del OTP y revocar el opt-in autobloquea el acceso")
+
+// ErrVersionDeConsentimientoInexistente es la version_texto que no esta en el catalogo para ese tipo: responde 422 vigente.
+var ErrVersionDeConsentimientoInexistente = errors.New("auth: la version del texto de consentimiento no existe para ese tipo")
+
 // ErrNombreInvalido es el nombre completo que no cumple la regla minima: responde 422 con nombre_completo/nombre.
 var ErrNombreInvalido = errors.New("auth: el nombre completo no cumple la regla")
 
@@ -130,7 +136,11 @@ func MapearError(err error) error {
 		return platformerrors.New("PhoneUnverified", "The phone number is not verified.", http.StatusForbidden)
 	case errors.Is(err, ErrConsentimientoRequerido):
 		return platformerrors.New("ConsentRequired", "The required consent is missing.", http.StatusForbidden)
+	case errors.Is(err, ErrWhatsappUnicoCanal):
+		return platformerrors.New("WhatsappUnicoCanal", "WhatsApp is the only OTP channel and revoking the opt-in would lock the account out.", http.StatusConflict)
 	case errors.Is(err, ErrNombreInvalido), errors.Is(err, ErrCelularInvalido), errors.Is(err, ErrNitInvalido), errors.Is(err, ErrRazonSocialInvalida):
+		return platformerrors.New("ValidationError", "Request validation failed.", http.StatusUnprocessableEntity)
+	case errors.Is(err, ErrVersionDeConsentimientoInexistente):
 		return platformerrors.New("ValidationError", "Request validation failed.", http.StatusUnprocessableEntity)
 	case errors.Is(err, ErrEntregaFallida):
 		return platformerrors.New("OtpDeliveryFailed", "The code could not be delivered.", http.StatusServiceUnavailable)
