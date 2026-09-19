@@ -151,6 +151,7 @@ func run() error {
 		return fmt.Errorf("registrador de personas: %w", err)
 	}
 	deps.Registro = httpserver.NuevoRegistroHandler(registrador)
+	deps.Companies = httpserver.NuevoEmpresasHandler(registrador)
 
 	opcionOutbox, despachadorAvisos := opcionOutboxDeAuth(pool, canal, cfg)
 	despachadorAvisos.Registrar(auth.TipoAvisoAbrirSubcuentas, auth.ManejadorAbrirSubcuentas(deps.Subcuentas))

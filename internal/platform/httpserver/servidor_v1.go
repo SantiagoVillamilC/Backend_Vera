@@ -62,6 +62,11 @@ type PhoneChangeHandler interface {
 	PhoneChangeConfirm(http.ResponseWriter, *http.Request)
 }
 
+// CompaniesHandler atiende la creación autenticada de empresa.
+type CompaniesHandler interface {
+	CreateCompany(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
 	Identidad    IdentidadDeLaPeticion
@@ -83,6 +88,7 @@ type DependenciasAuth struct {
 	Recuperar2FA RecuperacionVerifyHandler
 	ResetClave   RecuperacionResetHandler
 	PhoneChange  PhoneChangeHandler
+	Companies    CompaniesHandler
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
@@ -91,6 +97,7 @@ type servidorV1 struct {
 	kyc         KYCHandler
 	consent     ConsentHandler
 	phoneChange PhoneChangeHandler
+	companies   CompaniesHandler
 }
 
 var _ api.ServerInterface = servidorV1{}
@@ -114,6 +121,14 @@ func (s servidorV1) CreateConsent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.consent.CreateConsent(w, r)
+}
+
+func (s servidorV1) CreateCompany(w http.ResponseWriter, r *http.Request) {
+	if s.companies == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.companies.CreateCompany(w, r)
 }
 
 func (s servidorV1) SetContexto(w http.ResponseWriter, r *http.Request) {

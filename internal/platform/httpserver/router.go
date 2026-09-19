@@ -51,7 +51,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
 	nucleoHandler := nucleo.NewHandler(nucleoServicio)
-	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange}
+	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
