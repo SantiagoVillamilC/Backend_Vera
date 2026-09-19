@@ -51,21 +51,42 @@ func (e ConsentRequestAccion) Valid() bool {
 	}
 }
 
+// Defines values for ConsentRequestTipo.
+const (
+	ConsentRequestTipoBiometricos      ConsentRequestTipo = "biometricos"
+	ConsentRequestTipoTratamientoDatos ConsentRequestTipo = "tratamiento_datos"
+	ConsentRequestTipoWhatsappOptin    ConsentRequestTipo = "whatsapp_optin"
+)
+
+// Valid indicates whether the value is a known member of the ConsentRequestTipo enum.
+func (e ConsentRequestTipo) Valid() bool {
+	switch e {
+	case ConsentRequestTipoBiometricos:
+		return true
+	case ConsentRequestTipoTratamientoDatos:
+		return true
+	case ConsentRequestTipoWhatsappOptin:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConsentimientoTipo.
 const (
-	Biometricos      ConsentimientoTipo = "biometricos"
-	TratamientoDatos ConsentimientoTipo = "tratamiento_datos"
-	WhatsappOptin    ConsentimientoTipo = "whatsapp_optin"
+	ConsentimientoTipoBiometricos      ConsentimientoTipo = "biometricos"
+	ConsentimientoTipoTratamientoDatos ConsentimientoTipo = "tratamiento_datos"
+	ConsentimientoTipoWhatsappOptin    ConsentimientoTipo = "whatsapp_optin"
 )
 
 // Valid indicates whether the value is a known member of the ConsentimientoTipo enum.
 func (e ConsentimientoTipo) Valid() bool {
 	switch e {
-	case Biometricos:
+	case ConsentimientoTipoBiometricos:
 		return true
-	case TratamientoDatos:
+	case ConsentimientoTipoTratamientoDatos:
 		return true
-	case WhatsappOptin:
+	case ConsentimientoTipoWhatsappOptin:
 		return true
 	default:
 		return false
@@ -572,6 +593,7 @@ type APIError struct {
 	// MethodNotAllowed (metodo no permitido), NotFound (recurso inexistente),
 	// AuthUnavailable (fail closed de Redis o del canal),
 	// OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
+	// WhatsappUnicoCanal (409, revocar el opt-in de WhatsApp mientras sea el unico canal del OTP),
 	// InternalError (siempre generico). Los identificadores InvalidEmail, InvalidPhone,
 	// InvalidName, WeakPassword e InvalidNit ya no existen: los reemplaza
 	// ValidationError con details[{field, rule, param}].
@@ -603,12 +625,15 @@ type ConsentRequest struct {
 	Accion       *ConsentRequestAccion `json:"accion,omitempty" validate:"omitempty,oneof=otorgar revocar"`
 	Aceptado     *bool                 `json:"aceptado" validate:"required"`
 	Metodo       *string               `json:"metodo,omitempty" validate:"omitempty,max=64"`
-	Tipo         string                `json:"tipo" validate:"required"`
+	Tipo         ConsentRequestTipo    `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos"`
 	VersionTexto string                `json:"version_texto" validate:"required,max=64"`
 }
 
 // ConsentRequestAccion defines model for ConsentRequest.Accion.
 type ConsentRequestAccion string
+
+// ConsentRequestTipo defines model for ConsentRequest.Tipo.
+type ConsentRequestTipo string
 
 // Consentimiento defines model for Consentimiento.
 type Consentimiento struct {

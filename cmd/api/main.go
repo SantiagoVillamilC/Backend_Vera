@@ -160,6 +160,7 @@ func run() error {
 		Identidad:    identidadPeticion,
 		Auth:         httpserver.NuevoDispositivosHandler(servicioSesion),
 		KYC:          handlerKYC,
+		Consent:      httpserver.NuevoConsentimientosHandler(auth.NuevoServicioDeConsentimientos(pool)),
 		Redis:        clienteRedisAuth,
 		CanalOTP:     canal,
 		Contadores:   contadoresAuth,

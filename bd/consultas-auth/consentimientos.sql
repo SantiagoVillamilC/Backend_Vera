@@ -11,9 +11,15 @@ SELECT tipo, version, texto
 FROM auth.textos_consentimiento
 WHERE tipo = @tipo AND version = @version;
 
--- name: OptInVigenteDeParte :one
+-- name: UltimoConsentimientoPorTipo :one
 SELECT aceptado
 FROM auth.consentimientos
-WHERE parte_id = @parte_id AND tipo = 'whatsapp_optin'
+WHERE parte_id = @parte_id AND tipo = @tipo
 ORDER BY ocurrido_en DESC
 LIMIT 1;
+
+-- name: ListarConsentimientosDeParte :many
+SELECT *
+FROM auth.consentimientos
+WHERE parte_id = @parte_id
+ORDER BY ocurrido_en DESC;

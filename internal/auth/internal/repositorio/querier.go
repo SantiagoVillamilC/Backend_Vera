@@ -48,11 +48,11 @@ type Querier interface {
 	InvalidarDesafio(ctx context.Context, id pgtype.UUID) (int64, error)
 	InvalidarDesafioNoPendiente(ctx context.Context, id pgtype.UUID) (int64, error)
 	LeerEstadoKYC(ctx context.Context, parteID pgtype.UUID) (LeerEstadoKYCRow, error)
+	ListarConsentimientosDeParte(ctx context.Context, parteID pgtype.UUID) ([]Consentimiento, error)
 	ListarSesionesActivas(ctx context.Context, parteID pgtype.UUID) ([]Sesion, error)
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error)
 	MarcarDesafioVerificado(ctx context.Context, id pgtype.UUID) (int64, error)
-	OptInVigenteDeParte(ctx context.Context, parteID pgtype.UUID) (bool, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
@@ -73,6 +73,7 @@ type Querier interface {
 	TokenRestablecimientoVigente(ctx context.Context, tokenHash []byte) (TokenRestablecimientoVigenteRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
+	UltimoConsentimientoPorTipo(ctx context.Context, arg UltimoConsentimientoPorTipoParams) (bool, error)
 	UltimoDesafioDeRegistroPorCelular(ctx context.Context, celularDestino string) (UltimoDesafioDeRegistroPorCelularRow, error)
 	UpsertEstadoKYC(ctx context.Context, arg UpsertEstadoKYCParams) error
 	UsuarioDeParte(ctx context.Context, id pgtype.UUID) (UsuarioDeParteRow, error)

@@ -572,6 +572,8 @@ paths:
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "504":
@@ -612,6 +614,7 @@ components:
             MethodNotAllowed (metodo no permitido), NotFound (recurso inexistente),
             AuthUnavailable (fail closed de Redis o del canal),
             OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
+            WhatsappUnicoCanal (409, revocar el opt-in de WhatsApp mientras sea el unico canal del OTP),
             InternalError (siempre generico). Los identificadores InvalidEmail, InvalidPhone,
             InvalidName, WeakPassword e InvalidNit ya no existen: los reemplaza
             ValidationError con details[{field, rule, param}].
@@ -1361,8 +1364,9 @@ components:
       properties:
         tipo:
           type: string
+          enum: [tratamiento_datos, whatsapp_optin, biometricos]
           x-oapi-codegen-extra-tags:
-            validate: "required"
+            validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos"
         version_texto:
           type: string
           x-oapi-codegen-extra-tags:

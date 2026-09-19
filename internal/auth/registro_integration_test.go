@@ -219,6 +219,17 @@ func exigirConsentimientosCopiados(t *testing.T, pool *pgxpool.Pool, parteID uui
 			t.Errorf("texto de %s = %q, quiero el del catalogo %q", tipo, texto, catalogo)
 		}
 	}
+	var otorgadas int
+	if _, err := enTransaccion(t.Context(), poolDeAuth{pool: pool},
+		func(ctx context.Context, tx transaccionDeAuth, _ *repositorio.Queries) (struct{}, error) {
+			return struct{}{}, tx.QueryRow(ctx, `SELECT count(*) FROM auth.consentimientos WHERE parte_id = $1 AND accion = 'otorgar' AND aceptado`,
+				uuidOPgtype(parteID)).Scan(&otorgadas)
+		}); err != nil {
+		t.Fatalf("contar las acciones otorgar: %v", err)
+	}
+	if otorgadas != 2 {
+		t.Errorf("filas con accion otorgar = %d, quiero 2 (vocabulario del contrato)", otorgadas)
+	}
 }
 
 func TestRegistroValidoCreaLaCuentaPendiente(t *testing.T) {
@@ -347,7 +358,7 @@ func TestConsentimientoRechazaUpdateYDelete(t *testing.T) {
 			}
 			_, err := q.CrearConsentimiento(ctx, repositorio.CrearConsentimientoParams{
 				ID: uuidOPgtype(uuid.New()), ParteID: uuidOPgtype(parteID), Tipo: TipoConsentimientoWhatsApp,
-				VersionTexto: "v1", Texto: "marcador", Aceptado: true, Accion: accionAceptar, Origen: "127.0.0.1",
+				VersionTexto: "v1", Texto: "marcador", Aceptado: true, Accion: AccionConsentimientoOtorgar, Origen: "127.0.0.1",
 				UserAgent: "test", Metodo: metodoRegistro, OcurridoEn: pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true},
 			})
 			return struct{}{}, err
