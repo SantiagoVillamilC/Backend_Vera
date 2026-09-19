@@ -160,10 +160,11 @@ func (g *GestorDesafios) CrearDesafio(ctx context.Context, solicitud Solicitud) 
 	if err != nil {
 		return Desafio{}, err
 	}
+	desafio := Desafio{ID: uuidDePgtype(fila.ID), ExpiraEnSegundos: int(vigenciaDesafio.Seconds()), Proposito: solicitud.Proposito}
 	if _, err := g.canal.Enviar(ctx, solicitud.Celular, codigo); err != nil {
-		return Desafio{}, g.entregaFallida(ctx, fila.ID, solicitud, err)
+		return desafio, g.entregaFallida(ctx, fila.ID, solicitud, err)
 	}
-	return Desafio{ID: uuidDePgtype(fila.ID), ExpiraEnSegundos: int(vigenciaDesafio.Seconds()), Proposito: solicitud.Proposito}, nil
+	return desafio, nil
 }
 
 // persistir inserta el desafío y su evento en una sola transacción y confirma antes de entregar.
