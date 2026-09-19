@@ -22,6 +22,7 @@ func TestUsuarioDePruebaIdentidad(t *testing.T) {
 			want: identidad.Identidad{
 				UsuarioID: UsuarioDePruebaID,
 				SesionID:  UsuarioDePruebaSesionID,
+				ParteID:   UsuarioDePruebaID,
 				Contexto:  "usuario",
 			},
 		},

@@ -141,6 +141,7 @@ func run() error {
 	}
 	deps := httpserver.DependenciasAuth{
 		Identidad:    identidadPeticion,
+		Auth:         httpserver.NuevoDispositivosHandler(servicioSesion),
 		Redis:        clienteRedisAuth,
 		CanalOTP:     canal,
 		Contadores:   contadoresAuth,

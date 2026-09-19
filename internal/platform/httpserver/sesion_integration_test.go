@@ -41,6 +41,7 @@ func (a adaptadorJWTDePrueba) Identidad(r *http.Request) (identidad.Identidad, e
 	id := identidad.Identidad{
 		UsuarioID: claims.ParteID.String(),
 		SesionID:  claims.SesionID.String(),
+		ParteID:   claims.ParteID.String(),
 		Contexto:  auth.ContextoUsuario,
 		Rol:       claims.Rol,
 	}

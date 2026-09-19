@@ -136,6 +136,7 @@ func (a *adaptadorJWT) Identidad(r *http.Request) (identidad.Identidad, error) {
 	id := identidad.Identidad{
 		UsuarioID: claims.ParteID.String(),
 		SesionID:  claims.SesionID.String(),
+		ParteID:   claims.ParteID.String(),
 		Contexto:  auth.ContextoUsuario,
 		Rol:       claims.Rol,
 	}
