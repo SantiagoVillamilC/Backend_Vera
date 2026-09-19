@@ -76,6 +76,7 @@ type DependenciasAuth struct {
 	Login        LoginHandler
 	VerificarOtp VerificarOtpHandler
 	Refresh      RefreshHandler
+	Recuperacion RecuperacionHandler
 	Firmador     *auth.TokensDeAcceso
 	Denylist     auth.RevocadorDeSesiones
 	Subcuentas   auth.AbridorDeSubcuentas

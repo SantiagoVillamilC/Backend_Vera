@@ -115,6 +115,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("servicio de sesión: %w", err)
 	}
+	servicioRecuperacion, err := auth.NuevoServicioDeRecuperacion(pool, gestorDesafios, auth.NuevoRegistradorEventos(pool), contadoresAuth, clavesContadores, cfg.Auth.OTPPepper)
+	if err != nil {
+		return fmt.Errorf("servicio de recuperación: %w", err)
+	}
 	deps := httpserver.DependenciasAuth{
 		Identidad:    identidadPeticion,
 		Auth:         httpserver.NuevoDispositivosHandler(servicioSesion),
@@ -126,6 +130,7 @@ func run() error {
 		Login:        httpserver.NuevoLoginHandler(servicioLogin),
 		VerificarOtp: httpserver.NuevoSesionHandler(servicioSesion),
 		Refresh:      httpserver.NuevoSesionHandler(servicioSesion),
+		Recuperacion: httpserver.NuevoRecuperacionHandler(servicioRecuperacion),
 		Firmador:     tokensAuth,
 		Denylist:     denylistAuth,
 		Subcuentas:   servicio,
