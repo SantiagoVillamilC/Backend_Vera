@@ -106,12 +106,17 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("canal OTP: %w", err)
 	}
+	contadoresAuth, err := contadoresDeAuth(clienteRedisAuth)
+	if err != nil {
+		return fmt.Errorf("contadores de auth: %w", err)
+	}
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), httpserver.DependenciasAuth{
-			Identidad: auth.UsuarioDePrueba{},
-			Redis:     clienteRedisAuth,
-			CanalOTP:  canal,
+			Identidad:  auth.UsuarioDePrueba{},
+			Redis:      clienteRedisAuth,
+			CanalOTP:   canal,
+			Contadores: contadoresAuth,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

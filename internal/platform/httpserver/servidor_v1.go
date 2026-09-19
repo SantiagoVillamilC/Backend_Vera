@@ -35,12 +35,13 @@ type ConsentHandler interface {
 
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
-	Identidad IdentidadDeLaPeticion
-	Auth      AuthHandler
-	KYC       KYCHandler
-	Consent   ConsentHandler
-	Redis     *redis.Client
-	CanalOTP  auth.CanalOTP
+	Identidad  IdentidadDeLaPeticion
+	Auth       AuthHandler
+	KYC        KYCHandler
+	Consent    ConsentHandler
+	Redis      *redis.Client
+	CanalOTP   auth.CanalOTP
+	Contadores auth.Contadores
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
