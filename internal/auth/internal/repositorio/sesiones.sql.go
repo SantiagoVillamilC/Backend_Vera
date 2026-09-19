@@ -12,6 +12,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const actualizarContextoDeFamilia = `-- name: ActualizarContextoDeFamilia :execrows
+UPDATE auth.sesiones
+SET contexto_activo = $2
+WHERE familia_id = $1 AND usado_en IS NULL AND revocada_en IS NULL
+`
+
+type ActualizarContextoDeFamiliaParams struct {
+	FamiliaID      pgtype.UUID `json:"familia_id"`
+	ContextoActivo string      `json:"contexto_activo"`
+}
+
+func (q *Queries) ActualizarContextoDeFamilia(ctx context.Context, arg ActualizarContextoDeFamiliaParams) (int64, error) {
+	result, err := q.db.Exec(ctx, actualizarContextoDeFamilia, arg.FamiliaID, arg.ContextoActivo)
+	if err != nil {
+		return 0, fmt.Errorf("query ActualizarContextoDeFamilia: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertarSesion = `-- name: InsertarSesion :one
 INSERT INTO auth.sesiones (id, familia_id, parte_id, contexto_activo, dispositivo, refresh_hash, ultimo_uso_en, vence_en)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -125,6 +144,25 @@ func (q *Queries) RevocarFamilia(ctx context.Context, familiaID pgtype.UUID) (in
 	result, err := q.db.Exec(ctx, revocarFamilia, familiaID)
 	if err != nil {
 		return 0, fmt.Errorf("query RevocarFamilia: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
+const revocarFamiliaDeParte = `-- name: RevocarFamiliaDeParte :execrows
+UPDATE auth.sesiones
+SET revocada_en = now()
+WHERE familia_id = $1 AND parte_id = $2 AND revocada_en IS NULL
+`
+
+type RevocarFamiliaDeParteParams struct {
+	FamiliaID pgtype.UUID `json:"familia_id"`
+	ParteID   pgtype.UUID `json:"parte_id"`
+}
+
+func (q *Queries) RevocarFamiliaDeParte(ctx context.Context, arg RevocarFamiliaDeParteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revocarFamiliaDeParte, arg.FamiliaID, arg.ParteID)
+	if err != nil {
+		return 0, fmt.Errorf("query RevocarFamiliaDeParte: %w", err)
 	}
 	return result.RowsAffected(), nil
 }

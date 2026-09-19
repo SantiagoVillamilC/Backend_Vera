@@ -67,6 +67,12 @@ var ErrCuentaSuspendida = errors.New("auth: la cuenta está suspendida")
 // ErrSinRolDeEmpresa es el login con contexto empresa sin ningún rol vigente: responde 403 NoCompanyRole.
 var ErrSinRolDeEmpresa = errors.New("auth: la parte no tiene un rol de empresa vigente")
 
+// ErrSesionNoEncontrada es la sesión inexistente o de otra parte: responde 404 SessionNotFound.
+var ErrSesionNoEncontrada = errors.New("auth: la sesión no existe para la parte")
+
+// ErrContextoInvalido es el contexto pedido que no está disponible para la parte: responde 400 ContextInvalid.
+var ErrContextoInvalido = errors.New("auth: el contexto no está disponible para la parte")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -127,6 +133,10 @@ func MapearError(err error) error {
 		return platformerrors.New("AccountSuspended", "The account is suspended.", http.StatusForbidden)
 	case errors.Is(err, ErrSinRolDeEmpresa):
 		return platformerrors.New("NoCompanyRole", "The account has no active company role.", http.StatusForbidden)
+	case errors.Is(err, ErrSesionNoEncontrada):
+		return platformerrors.New("SessionNotFound", "The session was not found.", http.StatusNotFound)
+	case errors.Is(err, ErrContextoInvalido):
+		return platformerrors.New("ContextInvalid", "The requested context is not available.", http.StatusBadRequest)
 	default:
 		return err
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// AuthHandler agrupa los endpoints autenticados que el módulo de autenticación cuelga del contrato.
+// AuthHandler agrupa los endpoints autenticados de sesiones y contextos que el módulo cuelga del contrato.
 type AuthHandler interface {
 	Logout(http.ResponseWriter, *http.Request)
 	LogoutAll(http.ResponseWriter, *http.Request)
@@ -17,8 +17,6 @@ type AuthHandler interface {
 	DeleteSession(http.ResponseWriter, *http.Request, openapi_types.UUID)
 	ListContextos(http.ResponseWriter, *http.Request)
 	SetContexto(http.ResponseWriter, *http.Request)
-	PhoneChangeRequest(http.ResponseWriter, *http.Request)
-	PhoneChangeConfirm(http.ResponseWriter, *http.Request)
 }
 
 // KYCHandler agrupa los dos endpoints autenticados del módulo de KYC.
@@ -146,19 +144,11 @@ func (s servidorV1) LogoutAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s servidorV1) PhoneChangeConfirm(w http.ResponseWriter, r *http.Request) {
-	if s.auth == nil {
-		sinImplementar(w, r)
-		return
-	}
-	s.auth.PhoneChangeConfirm(w, r)
+	sinImplementar(w, r)
 }
 
 func (s servidorV1) PhoneChangeRequest(w http.ResponseWriter, r *http.Request) {
-	if s.auth == nil {
-		sinImplementar(w, r)
-		return
-	}
-	s.auth.PhoneChangeRequest(w, r)
+	sinImplementar(w, r)
 }
 
 func (s servidorV1) ListSessions(w http.ResponseWriter, r *http.Request) {

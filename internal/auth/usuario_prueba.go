@@ -31,6 +31,7 @@ func (UsuarioDePrueba) Identidad(r *http.Request) (identidad.Identidad, error) {
 	return identidad.Identidad{
 		UsuarioID: UsuarioDePruebaID,
 		SesionID:  UsuarioDePruebaSesionID,
+		ParteID:   UsuarioDePruebaID,
 		Contexto:  "usuario",
 	}, nil
 }

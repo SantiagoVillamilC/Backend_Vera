@@ -24,6 +24,16 @@ UPDATE auth.sesiones
 SET revocada_en = now()
 WHERE id = $1 AND parte_id = $2 AND revocada_en IS NULL;
 
+-- name: RevocarFamiliaDeParte :execrows
+UPDATE auth.sesiones
+SET revocada_en = now()
+WHERE familia_id = $1 AND parte_id = $2 AND revocada_en IS NULL;
+
+-- name: ActualizarContextoDeFamilia :execrows
+UPDATE auth.sesiones
+SET contexto_activo = $2
+WHERE familia_id = $1 AND usado_en IS NULL AND revocada_en IS NULL;
+
 -- name: RevocarFamilia :execrows
 UPDATE auth.sesiones
 SET revocada_en = now()

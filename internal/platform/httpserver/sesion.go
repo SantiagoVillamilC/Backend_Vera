@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
@@ -46,7 +47,7 @@ func (h *HandlerDeSesion) VerifyOtp(w http.ResponseWriter, r *http.Request) {
 	if !api.DecodeAndValidate(w, r, &entrada) {
 		return
 	}
-	resultado, err := h.servicio.VerificarOtp(r.Context(), entrada.ChallengeId, entrada.Codigo, "")
+	resultado, err := h.servicio.VerificarOtp(r.Context(), entrada.ChallengeId, entrada.Codigo, dispositivoDeLaPeticion(r))
 	if err != nil {
 		escribirErrorDeAuth(w, r, err)
 		return
@@ -66,6 +67,15 @@ func (h *HandlerDeSesion) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.WriteData(w, http.StatusOK, api.Tokens{AccessToken: tokens.AccessToken, RefreshToken: tokens.RefreshToken}, nil)
+}
+
+// dispositivoDeLaPeticion recorta el User-Agent a 120 runas para el listado de dispositivos.
+func dispositivoDeLaPeticion(r *http.Request) string {
+	runas := []rune(strings.TrimSpace(r.UserAgent()))
+	if len(runas) > 120 {
+		runas = runas[:120]
+	}
+	return string(runas)
 }
 
 // respuestaDeSesion traduce la sesión de dominio al contrato con el rol nulo en contexto usuario.

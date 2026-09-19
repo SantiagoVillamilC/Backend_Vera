@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ActualizarContextoDeFamilia(ctx context.Context, arg ActualizarContextoDeFamiliaParams) (int64, error)
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
 	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
 	CrearCodigoRespaldo(ctx context.Context, arg CrearCodigoRespaldoParams) error
@@ -24,6 +25,7 @@ type Querier interface {
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
 	DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (DesafioPendientePorIDRow, error)
 	DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error)
+	EmpresaDeParte(ctx context.Context, parteID pgtype.UUID) (EmpresaDeParteRow, error)
 	IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID) (IncrementarIntentoDesafioRow, error)
 	InsertarAviso(ctx context.Context, arg InsertarAvisoParams) (AvisoOutbox, error)
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
@@ -45,6 +47,7 @@ type Querier interface {
 	ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error)
 	ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
 	RevocarFamilia(ctx context.Context, familiaID pgtype.UUID) (int64, error)
+	RevocarFamiliaDeParte(ctx context.Context, arg RevocarFamiliaDeParteParams) (int64, error)
 	RevocarSesionDeParte(ctx context.Context, arg RevocarSesionDeParteParams) (int64, error)
 	RevocarSesionesDeParte(ctx context.Context, parteID pgtype.UUID) (int64, error)
 	RolesVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]RolesVigentesDeParteRow, error)

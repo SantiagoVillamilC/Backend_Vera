@@ -33,3 +33,24 @@ func (q *Queries) CrearEmpresa(ctx context.Context, arg CrearEmpresaParams) (Emp
 	}
 	return i, err
 }
+
+const empresaDeParte = `-- name: EmpresaDeParte :one
+SELECT nit, razon_social
+FROM auth.empresas
+WHERE parte_id = $1
+`
+
+type EmpresaDeParteRow struct {
+	Nit         string `json:"nit"`
+	RazonSocial string `json:"razon_social"`
+}
+
+func (q *Queries) EmpresaDeParte(ctx context.Context, parteID pgtype.UUID) (EmpresaDeParteRow, error) {
+	row := q.db.QueryRow(ctx, empresaDeParte, parteID)
+	var i EmpresaDeParteRow
+	err := row.Scan(&i.Nit, &i.RazonSocial)
+	if err != nil {
+		err = fmt.Errorf("query EmpresaDeParte: %w", err)
+	}
+	return i, err
+}

@@ -10,6 +10,7 @@ type clave struct{}
 type Identidad struct {
 	UsuarioID string
 	SesionID  string
+	ParteID   string
 	Contexto  string
 	Rol       string
 }
