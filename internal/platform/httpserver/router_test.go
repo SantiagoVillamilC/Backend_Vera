@@ -202,7 +202,7 @@ func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 // El handler autenticado ve el usuario_id que dejó RequireAuth, resuelto por el adaptador de prueba.
 func TestAuthenticatedRouteSeesTestUserID(t *testing.T) {
 	r := chi.NewRouter()
-	r.Use(RequireAuth(auth.UsuarioDePrueba{}))
+	r.Use(RequireAuth(auth.UsuarioDePrueba{}, RutasDeDinero))
 	r.Get("/quien-soy", func(w http.ResponseWriter, req *http.Request) {
 		id, ok := identidad.IdentidadDeContexto(req.Context())
 		if !ok {

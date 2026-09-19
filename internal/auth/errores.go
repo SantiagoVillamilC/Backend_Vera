@@ -85,6 +85,10 @@ func MapearError(err error) error {
 	switch {
 	case errors.Is(err, ErrSinIdentidad):
 		return platformerrors.New("Unauthorized", "Missing or invalid token.", http.StatusUnauthorized)
+	case errors.Is(err, ErrAccessInvalido):
+		return platformerrors.New("Unauthorized", "Missing or invalid token.", http.StatusUnauthorized)
+	case errors.Is(err, ErrSesionRevocada):
+		return platformerrors.New("Unauthorized", "Missing or invalid token.", http.StatusUnauthorized)
 	case errors.Is(err, ErrIdentificadorEnUso):
 		return platformerrors.New("DuplicateIdentifier", "The identifier is already registered.", http.StatusConflict)
 	case errors.Is(err, ErrConflictoDeEstado), errors.Is(err, ErrTransicionNoPermitida):

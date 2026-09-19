@@ -5,11 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/correosim"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
@@ -92,3 +97,77 @@ func canalOTP(cfg *Config) (auth.CanalOTP, error) {
 		return nil, fmt.Errorf("OTP_CANAL desconocido %q", cfg.Auth.OTPCanal)
 	}
 }
+
+// tokensDeAcceso construye el firmador desde JWT_SECRET, JWT_ISSUER y JWT_AUDIENCE.
+func tokensDeAcceso(cfg *Config) (*auth.TokensDeAcceso, error) {
+	return auth.NuevoTokensDeAcceso([]byte(cfg.JWTSecret), cfg.Auth.JWTIssuer, cfg.Auth.JWTAudience)
+}
+
+// denylistDeSesiones construye la denylist sobre el cliente Redis compartido.
+func denylistDeSesiones(cliente *redis.Client) (auth.RevocadorDeSesiones, error) {
+	return denylist.NuevoRedis(cliente)
+}
+
+// identidadJWT arma el adaptador de la petición que valida el access y consulta la denylist del sid.
+func identidadJWT(cfg *Config, denylist auth.RevocadorDeSesiones) (httpserver.IdentidadDeLaPeticion, error) {
+	tokens, err := tokensDeAcceso(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &adaptadorJWT{tokens: tokens, denylist: denylist}, nil
+}
+
+// adaptadorJWT implementa httpserver.IdentidadDeLaPeticion sobre el access firmado.
+type adaptadorJWT struct {
+	tokens   *auth.TokensDeAcceso
+	denylist auth.RevocadorDeSesiones
+}
+
+// Identidad valida el bearer, consulta la denylist y traduce el ctx a la identidad de dominio.
+func (a *adaptadorJWT) Identidad(r *http.Request) (identidad.Identidad, error) {
+	token, err := bearerDe(r)
+	if err != nil {
+		return identidad.Identidad{}, err
+	}
+	claims, err := a.tokens.Verificar(token)
+	if err != nil {
+		return identidad.Identidad{}, err
+	}
+	id := identidad.Identidad{
+		UsuarioID: claims.ParteID.String(),
+		SesionID:  claims.SesionID.String(),
+		Contexto:  auth.ContextoUsuario,
+		Rol:       claims.Rol,
+	}
+	if empresaID, esEmpresa := auth.EmpresaDeContexto(claims.Contexto); esEmpresa {
+		id.UsuarioID = empresaID.String()
+		id.Contexto = auth.ContextoEmpresa
+	}
+	if a.denylist == nil {
+		return id, nil
+	}
+	revocado, err := a.denylist.Revocado(r.Context(), claims.SesionID)
+	if err != nil {
+		return id, auth.ConFailClosed(err)
+	}
+	if revocado {
+		return id, auth.ErrSesionRevocada
+	}
+	return id, nil
+}
+
+// bearerDe extrae el token del encabezado Authorization Bearer.
+func bearerDe(r *http.Request) (string, error) {
+	const prefijo = "Bearer "
+	encabezado := r.Header.Get("Authorization")
+	if len(encabezado) <= len(prefijo) || !strings.EqualFold(encabezado[:len(prefijo)], prefijo) {
+		return "", auth.ErrSinIdentidad
+	}
+	token := strings.TrimSpace(encabezado[len(prefijo):])
+	if token == "" {
+		return "", auth.ErrSinIdentidad
+	}
+	return token, nil
+}
+
+var _ httpserver.IdentidadDeLaPeticion = (*adaptadorJWT)(nil)
