@@ -53,6 +53,11 @@ func (r *repoDeRecuperacion) PorCorreo(_ context.Context, correo string) (reposi
 	return r.credencial, r.existe, r.err
 }
 
+// PorCelular satisface el puerto del login; la recuperación no lo usa.
+func (r *repoDeRecuperacion) PorCelular(context.Context, string) (repositorio.Credencial, bool, error) {
+	return r.credencial, r.existe, r.err
+}
+
 func (r *repoDeRecuperacion) Rehash(context.Context, pgtype.UUID, pgtype.Text, string) (int64, error) {
 	return 0, nil
 }

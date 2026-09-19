@@ -140,6 +140,16 @@ type repositorioFalso struct {
 }
 
 func (r *repositorioFalso) PorCorreo(context.Context, string) (repositorio.Credencial, bool, error) {
+	return r.buscar()
+}
+
+// PorCelular devuelve la credencial configurada; el celular no cambia el resultado falso.
+func (r *repositorioFalso) PorCelular(context.Context, string) (repositorio.Credencial, bool, error) {
+	return r.buscar()
+}
+
+// buscar comparte el resultado y el error configurados por ambos identificadores.
+func (r *repositorioFalso) buscar() (repositorio.Credencial, bool, error) {
 	if r.err != nil {
 		return repositorio.Credencial{}, false, r.err
 	}
@@ -209,6 +219,7 @@ func TestAutenticarCorreoInexistenteYContrasenaMalaDanElMismoError(t *testing.T)
 func credencialConPHC(phc string) repositorio.Credencial {
 	return repositorio.Credencial{
 		Correo:        "existe@centinela.test",
+		Celular:       "+573001112233",
 		ValorDerivado: pgtype.Text{String: phc, Valid: true},
 		Estado:        string(EstadoActivo),
 	}
@@ -254,19 +265,19 @@ func TestAutenticarBloqueadaRespondeDemasiadosEnvios(t *testing.T) {
 	}
 }
 
-func TestAutenticarRellenoConCorreoInexistenteCuentaComoFallo(t *testing.T) {
-	correo := "nadie@centinela.test"
+func TestAutenticarRellenoConCelularInexistenteCuentaComoFallo(t *testing.T) {
+	celular := "+573000000001"
 	derivador := &derivadorFalso{coincide: true}
 	contadores := nuevosContadoresFalsos()
 	v := verificadorDePrueba(t, &repositorioFalso{existe: false}, derivador, contadores, &registradorFalso{})
 
-	err := exigirErrorAutenticacion(t, v, correo, rellenoContrasena)
+	err := exigirErrorAutenticacion(t, v, celular, rellenoContrasena)
 	if !errors.Is(err, ErrCredencialesInvalidas) {
 		t.Fatalf("error = %v, quiero ErrCredencialesInvalidas", err)
 	}
-	claveCuenta := PrefijoFallosCuenta + clavesDePrueba(t).ClaveDeCorreo(NormalizarCorreo(correo))
+	claveCuenta := PrefijoFallosCuenta + clavesDePrueba(t).ClaveDeCelular(celular)
 	if contadores.clavesIncrementadas()[claveCuenta] != 1 {
-		t.Fatalf("el relleno con correo inexistente no incrementó %q: %v", claveCuenta, contadores.clavesIncrementadas())
+		t.Fatalf("el relleno con celular inexistente no incrementó %q: %v", claveCuenta, contadores.clavesIncrementadas())
 	}
 }
 
@@ -318,31 +329,31 @@ func TestAutenticarOrigenCuentaYBloquea(t *testing.T) {
 	v := verificadorDePrueba(t, &repositorioFalso{existe: false}, &derivadorFalso{coincide: false}, contadores, &registradorFalso{})
 
 	for i := range maxEnviosPorOrigen {
-		correo := fmt.Sprintf("persona-%d@centinela.test", i)
-		if err := exigirErrorAutenticacion(t, v, correo, "mala"); !errors.Is(err, ErrCredencialesInvalidas) {
+		celular := fmt.Sprintf("+573000000%03d", i)
+		if err := exigirErrorAutenticacion(t, v, celular, "mala"); !errors.Is(err, ErrCredencialesInvalidas) {
 			t.Fatalf("intento %d del origen = %v, quiero ErrCredencialesInvalidas", i, err)
 		}
 	}
-	bloqueada := exigirErrorAutenticacion(t, v, "persona-final@centinela.test", "mala")
+	bloqueada := exigirErrorAutenticacion(t, v, "+573000000999", "mala")
 	if !errors.Is(bloqueada, ErrDemasiadosEnvios) {
 		t.Fatalf("tras %d intentos del mismo origen = %v, quiero ErrDemasiadosEnvios", maxEnviosPorOrigen, bloqueada)
 	}
 }
 
 func TestAutenticarFalloComparteLaVentanaDeCuenta(t *testing.T) {
-	correo := "fallona@centinela.test"
+	celular := "+573009998877"
 	contadores := nuevosContadoresFalsos()
 	repo := &repositorioFalso{existe: true, credencial: credencialConPHC(phcConParametros(ParametrosArgon2DePrueba()))}
 	v := verificadorDePrueba(t, repo, &derivadorFalso{coincide: false}, contadores, &registradorFalso{})
 
-	if err := exigirErrorAutenticacion(t, v, correo, "mala"); !errors.Is(err, ErrCredencialesInvalidas) {
+	if err := exigirErrorAutenticacion(t, v, celular, "mala"); !errors.Is(err, ErrCredencialesInvalidas) {
 		t.Fatalf("error = %v, quiero ErrCredencialesInvalidas", err)
 	}
-	claveCuenta := PrefijoFallosCuenta + clavesDePrueba(t).ClaveDeCorreo(NormalizarCorreo(correo))
+	claveCuenta := PrefijoFallosCuenta + clavesDePrueba(t).ClaveDeCelular(celular)
 	if got := contadores.ventanaDe(claveCuenta); got != ventanaFallos {
 		t.Fatalf("ventana de %q = %s, quiero la de A2-06.3 %s", claveCuenta, got, ventanaFallos)
 	}
-	claveVieja := PrefijoLoginCuenta + clavesDePrueba(t).ClaveDeCorreo(NormalizarCorreo(correo))
+	claveVieja := PrefijoLoginCuenta + clavesDePrueba(t).ClaveDeCelular(celular)
 	if contadores.tieneClave(claveVieja) {
 		t.Fatalf("el login no debe escribir %q", claveVieja)
 	}

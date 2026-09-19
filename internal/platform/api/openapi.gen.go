@@ -249,39 +249,6 @@ func (e KycVerificacionRequestNivel) Valid() bool {
 	}
 }
 
-// Defines values for LoginDataProposito.
-const (
-	LoginDataPropositoLogin    LoginDataProposito = "login"
-	LoginDataPropositoRegistro LoginDataProposito = "registro"
-)
-
-// Valid indicates whether the value is a known member of the LoginDataProposito enum.
-func (e LoginDataProposito) Valid() bool {
-	switch e {
-	case LoginDataPropositoLogin:
-		return true
-	case LoginDataPropositoRegistro:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LoginDataRequiereSegundoFactor.
-const (
-	LoginDataRequiereSegundoFactorTrue LoginDataRequiereSegundoFactor = true
-)
-
-// Valid indicates whether the value is a known member of the LoginDataRequiereSegundoFactor enum.
-func (e LoginDataRequiereSegundoFactor) Valid() bool {
-	switch e {
-	case LoginDataRequiereSegundoFactorTrue:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for LoginRequestContexto.
 const (
 	LoginRequestContextoEmpresa LoginRequestContexto = "empresa"
@@ -294,21 +261,6 @@ func (e LoginRequestContexto) Valid() bool {
 	case LoginRequestContextoEmpresa:
 		return true
 	case LoginRequestContextoUsuario:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LoginResponseSuccess.
-const (
-	LoginResponseSuccessTrue LoginResponseSuccess = true
-)
-
-// Valid indicates whether the value is a known member of the LoginResponseSuccess enum.
-func (e LoginResponseSuccess) Valid() bool {
-	switch e {
-	case LoginResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -790,43 +742,15 @@ type KycVerificacionRequest struct {
 // KycVerificacionRequestNivel defines model for KycVerificacionRequest.Nivel.
 type KycVerificacionRequestNivel string
 
-// LoginData defines model for LoginData.
-type LoginData struct {
-	ChallengeId openapi_types.UUID `json:"challenge_id"`
-
-	// ExpiraEnSegundos Example: 300
-	ExpiraEnSegundos      int                            `json:"expira_en_segundos"`
-	Mensaje               string                         `json:"mensaje"`
-	Proposito             LoginDataProposito             `json:"proposito" validate:"required,oneof=registro login"`
-	RequiereSegundoFactor LoginDataRequiereSegundoFactor `json:"requiere_segundo_factor"`
-}
-
-// LoginDataProposito defines model for LoginData.Proposito.
-type LoginDataProposito string
-
-// LoginDataRequiereSegundoFactor defines model for LoginData.RequiereSegundoFactor.
-type LoginDataRequiereSegundoFactor bool
-
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
+	Celular    string                `json:"celular" validate:"required,e164"`
 	Contexto   *LoginRequestContexto `json:"contexto,omitempty" validate:"omitempty,oneof=usuario empresa"`
 	Contrasena string                `json:"contrasena" validate:"required"`
-	Correo     string                `json:"correo" validate:"required,email"`
 }
 
 // LoginRequestContexto defines model for LoginRequest.Contexto.
 type LoginRequestContexto string
-
-// LoginResponse defines model for LoginResponse.
-type LoginResponse struct {
-	Data    LoginData               `json:"data"`
-	Error   *map[string]interface{} `json:"error"`
-	Meta    *Meta                   `json:"meta"`
-	Success LoginResponseSuccess    `json:"success"`
-}
-
-// LoginResponseSuccess defines model for LoginResponse.Success.
-type LoginResponseSuccess bool
 
 // Meta defines model for Meta.
 type Meta struct {

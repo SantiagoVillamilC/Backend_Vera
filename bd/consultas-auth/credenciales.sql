@@ -11,6 +11,10 @@ WHERE id = $1;
 SELECT * FROM auth.credenciales
 WHERE correo = $1 AND estado <> 'cerrado';
 
+-- name: CredencialPorCelular :one
+SELECT * FROM auth.credenciales
+WHERE celular = $1 AND estado <> 'cerrado';
+
 -- name: RehashCredencial :execrows
 UPDATE auth.credenciales
 SET valor_derivado = $1, actualizada_en = now()

@@ -78,7 +78,6 @@ func TestPublicRoutesAreStubsInEnvelope(t *testing.T) {
 		"/v1/auth/register/verify-phone",
 		"/v1/auth/otp/resend",
 		"/v1/auth/login",
-		"/v1/auth/login/verify-otp",
 		"/v1/auth/refresh",
 		"/v1/auth/recovery/request",
 		"/v1/auth/recovery/verify",
@@ -438,8 +437,8 @@ func TestRutasPublicasCoincidenConElContrato(t *testing.T) {
 			}
 		}
 	}
-	if publicas != 9 {
-		t.Fatalf("operaciones publicas = %d, quiero 9", publicas)
+	if publicas != 8 {
+		t.Fatalf("operaciones publicas = %d, quiero 8", publicas)
 	}
 	if privadas != 12 {
 		t.Fatalf("operaciones no publicas = %d, quiero 12", privadas)

@@ -56,41 +56,34 @@ func denylistDeSesionDePrueba(tb testing.TB) *denylistRedisDeSesion {
 	return &denylistRedisDeSesion{cliente: cliente}
 }
 
-// montajeDeSesion agrupa el servicio con sus colaboradores para el flujo de la unidad.
+// montajeDeSesion agrupa el login y la sesión con sus colaboradores para el flujo de la unidad.
 type montajeDeSesion struct {
 	login    *ServicioDeLogin
 	sesion   *ServicioDeSesion
 	tokens   *TokensDeAcceso
 	denylist *denylistRedisDeSesion
-	canal    *canalOTPFalso
 }
 
-// servicioDeSesionDePrueba arma el flujo completo (login, verificación y rotación) sobre Postgres y Redis reales.
+// servicioDeSesionDePrueba arma el flujo completo (login y rotación) sobre Postgres y Redis reales.
 func servicioDeSesionDePrueba(tb testing.TB, pool *pgxpool.Pool, derivador Derivador) montajeDeSesion {
 	tb.Helper()
 	eventos := &registradorEventosDeLogin{}
-	verificador, claves := verificadorDeLogin(tb, pool, derivador, eventos)
-	canal := &canalOTPFalso{}
-	gestor, err := NuevoGestorDesafios(pool, canal, eventos, SiempreOptIn{}, pepperDeDesafio,
-		ConRacionamiento(contadoresDeLogin(tb), claves))
-	if err != nil {
-		tb.Fatalf("gestor de desafíos: %v", err)
-	}
+	verificador, _ := verificadorDeLogin(tb, pool, derivador, eventos)
 	sesiones := NuevoGestorSesiones(pool, eventos)
-	login, err := NuevoServicioDeLogin(verificador, gestor, sesiones)
-	if err != nil {
-		tb.Fatalf("servicio de login: %v", err)
-	}
 	tokens, err := NuevoTokensDeAcceso([]byte("clave-de-firma-de-al-menos-32-bytes"), "centinela-auth", "centinela-api")
 	if err != nil {
 		tb.Fatalf("tokens de acceso: %v", err)
 	}
+	login, err := NuevoServicioDeLogin(verificador, pool, sesiones, tokens)
+	if err != nil {
+		tb.Fatalf("servicio de login: %v", err)
+	}
 	denylist := denylistDeSesionDePrueba(tb)
-	sesion, err := NuevoServicioDeSesion(pool, gestor, sesiones, tokens, denylist)
+	sesion, err := NuevoServicioDeSesion(pool, sesiones, tokens, denylist)
 	if err != nil {
 		tb.Fatalf("servicio de sesión: %v", err)
 	}
-	return montajeDeSesion{login: login, sesion: sesion, tokens: tokens, denylist: denylist, canal: canal}
+	return montajeDeSesion{login: login, sesion: sesion, tokens: tokens, denylist: denylist}
 }
 
 // envejecerRefresh mueve el uso del refresh fuera de la ventana de gracia.
@@ -106,26 +99,29 @@ func envejecerRefresh(tb testing.TB, pool *pgxpool.Pool, refresh string) {
 	}
 }
 
-// entrarYVerificar recorre login y verificación del OTP y devuelve la sesión emitida.
-func entrarYVerificar(tb testing.TB, m montajeDeSesion, correo, contrasena, contexto string) SesionEmitida {
+// entrarEmite corre el login directo y devuelve la sesión emitida.
+func entrarEmite(tb testing.TB, m montajeDeSesion, celular, contrasena, contexto string) SesionEmitida {
 	tb.Helper()
-	inicio, err := m.login.IniciarSesion(tb.Context(), correo, contrasena, contexto, "203.0.113.30")
+	emitida, err := m.login.IniciarSesion(tb.Context(), celular, contrasena, contexto, "203.0.113.30", "dispositivo-de-prueba")
 	if err != nil {
 		tb.Fatalf("IniciarSesion: %v", err)
-	}
-	emitida, err := m.sesion.VerificarOtp(tb.Context(), inicio.ChallengeID, m.canal.ultimoTexto, "")
-	if err != nil {
-		tb.Fatalf("VerificarOtp: %v", err)
 	}
 	return emitida
 }
 
-func TestVerificarOtpEmiteElParYElAccessConTodosLosClaims(t *testing.T) {
-	pool := abrirPoolDeAuth(t)
-	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
-	_, parteID, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+// entrarYVerificar conserva el nombre histórico: el login directo ya emite la sesión.
+func entrarYVerificar(tb testing.TB, m montajeDeSesion, celular, contrasena, contexto string) SesionEmitida {
+	tb.Helper()
+	return entrarEmite(tb, m, celular, contrasena, contexto)
+}
 
-	emitida := entrarYVerificar(t, m, correo, "contrasena-correcta", "")
+func TestLoginEmiteElParYElAccessConTodosLosClaims(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	derivador := derivadorDeLogin(t)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+
+	emitida := entrarEmite(t, m, celular, "contrasena-correcta", "")
 	if emitida.AccessToken == "" || emitida.RefreshToken == "" {
 		t.Fatalf("par vacío: %+v", emitida)
 	}
@@ -150,10 +146,11 @@ func TestVerificarOtpEmiteElParYElAccessConTodosLosClaims(t *testing.T) {
 
 func TestRotaElRefreshConVentanaDeGraciaYReusoRevocaLaFamilia(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
-	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
-	_, _, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+	derivador := derivadorDeLogin(t)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+	_, _, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
 
-	emitida := entrarYVerificar(t, m, correo, "contrasena-correcta", "")
+	emitida := entrarEmite(t, m, celular, "contrasena-correcta", "")
 	claims, err := m.tokens.Verificar(emitida.AccessToken)
 	if err != nil {
 		t.Fatalf("Verificar access: %v", err)
@@ -186,11 +183,12 @@ func TestRotaElRefreshConVentanaDeGraciaYReusoRevocaLaFamilia(t *testing.T) {
 
 func TestContextoEmpresaEmiteCtxConRolYElUuidDeLaEmpresa(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
-	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
-	_, parteID, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+	derivador := derivadorDeLogin(t)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
 	empresa, razonSocial := crearRolDeEmpresaDeInicioSesion(t, pool, parteID)
 
-	emitida := entrarYVerificar(t, m, correo, "contrasena-correcta", ContextoEmpresa)
+	emitida := entrarEmite(t, m, celular, "contrasena-correcta", ContextoEmpresa)
 	if emitida.Usuario.ID != empresa || emitida.Usuario.TipoCuenta != "empresa" {
 		t.Errorf("usuario = %+v, quiero la empresa %s", emitida.Usuario, empresa)
 	}
@@ -225,11 +223,12 @@ func TestContextoEmpresaEmiteCtxConRolYElUuidDeLaEmpresa(t *testing.T) {
 
 func TestParteEmpresaConLoginDirectoEmiteTipoCuentaEmpresa(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
-	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
-	_, parteID, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+	derivador := derivadorDeLogin(t)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
 	marcarParteComoEmpresaDeInicioSesion(t, pool, parteID)
 
-	emitida := entrarYVerificar(t, m, correo, "contrasena-correcta", "")
+	emitida := entrarEmite(t, m, celular, "contrasena-correcta", "")
 	if emitida.Usuario.TipoCuenta != "empresa" {
 		t.Errorf("tipo de cuenta = %q, quiero empresa", emitida.Usuario.TipoCuenta)
 	}

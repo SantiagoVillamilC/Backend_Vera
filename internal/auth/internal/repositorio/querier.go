@@ -27,6 +27,7 @@ type Querier interface {
 	CrearPersona(ctx context.Context, arg CrearPersonaParams) (Persona, error)
 	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
 	CredencialDeSesion(ctx context.Context, familiaID pgtype.UUID) (Credencial, error)
+	CredencialPorCelular(ctx context.Context, celular string) (Credencial, error)
 	CredencialPorCelularNoCerrada(ctx context.Context, arg CredencialPorCelularNoCerradaParams) (pgtype.UUID, error)
 	CredencialPorCorreo(ctx context.Context, correo string) (Credencial, error)
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)

@@ -12,22 +12,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// servicioDeInicioSesionDePrueba arma el servicio sobre Postgres y Redis reales con un canal falso.
-func servicioDeInicioSesionDePrueba(tb testing.TB, pool *pgxpool.Pool, derivador Derivador) (*ServicioDeLogin, *canalOTPFalso) {
+// servicioDeInicioSesionDePrueba arma el servicio de login sobre Postgres real con el firmador.
+func servicioDeInicioSesionDePrueba(tb testing.TB, pool *pgxpool.Pool, derivador Derivador) *ServicioDeLogin {
 	tb.Helper()
 	eventos := &registradorEventosDeLogin{}
-	verificador, claves := verificadorDeLogin(tb, pool, derivador, eventos)
-	canal := &canalOTPFalso{}
-	gestor, err := NuevoGestorDesafios(pool, canal, eventos, SiempreOptIn{}, pepperDeDesafio,
-		ConRacionamiento(contadoresDeLogin(tb), claves))
+	verificador, _ := verificadorDeLogin(tb, pool, derivador, eventos)
+	tokens, err := NuevoTokensDeAcceso([]byte("clave-de-firma-de-al-menos-32-bytes"), "centinela-auth", "centinela-api")
 	if err != nil {
-		tb.Fatalf("gestor de desafíos: %v", err)
+		tb.Fatalf("tokens de acceso: %v", err)
 	}
-	servicio, err := NuevoServicioDeLogin(verificador, gestor, NuevoGestorSesiones(pool, eventos))
+	servicio, err := NuevoServicioDeLogin(verificador, pool, NuevoGestorSesiones(pool, eventos), tokens)
 	if err != nil {
 		tb.Fatalf("servicio de login: %v", err)
 	}
-	return servicio, canal
+	return servicio
 }
 
 // sembrarCredencialDeInicioSesion crea la parte y su credencial y marca el celular si se pide.
@@ -102,95 +100,88 @@ func marcarParteComoEmpresaDeInicioSesion(tb testing.TB, pool *pgxpool.Pool, par
 	}
 }
 
-// leerDesafioDeInicioSesion lee la fila persistida del desafío.
-func leerDesafioDeInicioSesion(tb testing.TB, pool *pgxpool.Pool, id uuid.UUID) repositorio.DesafioPorIDRow {
+// contarSesionesDeParte cuenta las filas de auth.sesiones de la parte bajo rol_auth.
+func contarSesionesDeParte(tb testing.TB, pool *pgxpool.Pool, parteID uuid.UUID) int {
 	tb.Helper()
-	fila, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
-		func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (repositorio.DesafioPorIDRow, error) {
-			return q.DesafioPorID(ctx, pgUUID(id))
+	total, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
+		func(ctx context.Context, tx transaccionDeAuth, _ *repositorio.Queries) (int, error) {
+			var n int
+			err := tx.QueryRow(ctx, "SELECT count(*) FROM auth.sesiones WHERE parte_id = $1", pgUUID(parteID)).Scan(&n)
+			return n, err
 		})
 	if err != nil {
-		tb.Fatalf("leer el desafío: %v", err)
+		tb.Fatalf("contar las sesiones de la parte: %v", err)
 	}
-	return fila
+	return total
 }
 
-func TestIniciarSesionActivaPersisteElDesafioDeLoginYEntregaElCodigo(t *testing.T) {
+func TestIniciarSesionActivaEmiteElParYLaFamilia(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeLogin(t)
-	servicio, canal := servicioDeInicioSesionDePrueba(t, pool, derivador)
+	servicio := servicioDeInicioSesionDePrueba(t, pool, derivador)
 
-	_, _, correo, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
 
-	resultado, err := servicio.IniciarSesion(t.Context(), correo, "contrasena-correcta", "", "203.0.113.20")
+	resultado, err := servicio.IniciarSesion(t.Context(), celular, "contrasena-correcta", "", "203.0.113.20", "dispositivo-de-prueba")
 	if err != nil {
 		t.Fatalf("IniciarSesion: %v", err)
 	}
-	if resultado.Proposito != PropositoLogin || !resultado.RequiereSegundoFactor || resultado.ExpiraEnSegundos <= 0 {
-		t.Fatalf("resultado = %+v, quiero proposito login con vigencia", resultado)
+	if resultado.AccessToken == "" || resultado.RefreshToken == "" {
+		t.Fatalf("par vacío: %+v", resultado)
 	}
-	fila := leerDesafioDeInicioSesion(t, pool, resultado.ChallengeID)
-	if fila.Proposito != string(PropositoLogin) || fila.CelularDestino != celular {
-		t.Errorf("desafío = %+v, quiero proposito login al celular verificado", fila)
+	if resultado.Usuario.ID != parteID || resultado.Usuario.ContextoActivo != ContextoUsuario {
+		t.Errorf("usuario = %+v, quiero la persona %s en contexto usuario", resultado.Usuario, parteID)
 	}
-	if !fila.ContextoSolicitado.Valid || fila.ContextoSolicitado.String != ContextoUsuario {
-		t.Errorf("contexto_solicitado = %+v, quiero %q", fila.ContextoSolicitado, ContextoUsuario)
-	}
-	if canal.ultimoCelular != celular || len(canal.ultimoTexto) != longitudCodigo {
-		t.Errorf("el canal entregó (%q, %q), quiero el celular %q con un código de %d dígitos", canal.ultimoCelular, canal.ultimoTexto, celular, longitudCodigo)
+	if total := contarSesionesDeParte(t, pool, parteID); total != 1 {
+		t.Fatalf("sesiones de la parte = %d, quiero 1", total)
 	}
 }
 
-func TestIniciarSesionPendienteReanudaConDesafioDeRegistro(t *testing.T) {
+func TestIniciarSesionPendienteRespondeCelularSinVerificarSinSesion(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeLogin(t)
-	servicio, canal := servicioDeInicioSesionDePrueba(t, pool, derivador)
+	servicio := servicioDeInicioSesionDePrueba(t, pool, derivador)
 
-	_, _, correo, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoPendienteVerificacion, false)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoPendienteVerificacion, false)
 
-	resultado, err := servicio.IniciarSesion(t.Context(), correo, "contrasena-correcta", "", "203.0.113.21")
-	if err != nil {
-		t.Fatalf("IniciarSesion: %v", err)
+	_, err := servicio.IniciarSesion(t.Context(), celular, "contrasena-correcta", "", "203.0.113.21", "dispositivo-de-prueba")
+	if !errors.Is(err, ErrCelularSinVerificar) {
+		t.Fatalf("error = %v, quiero ErrCelularSinVerificar", err)
 	}
-	if resultado.Proposito != PropositoRegistro || resultado.Mensaje != MensajeDesafioRegistro {
-		t.Fatalf("resultado = %+v, quiero proposito registro para reanudar", resultado)
-	}
-	fila := leerDesafioDeInicioSesion(t, pool, resultado.ChallengeID)
-	if fila.Proposito != string(PropositoRegistro) || fila.CelularDestino != celular {
-		t.Errorf("desafío = %+v, quiero proposito registro al celular registrado", fila)
-	}
-	if canal.ultimoCelular != celular || len(canal.ultimoTexto) != longitudCodigo {
-		t.Errorf("el canal entregó (%q, %q), quiero el celular %q con un código de %d dígitos", canal.ultimoCelular, canal.ultimoTexto, celular, longitudCodigo)
+	if total := contarSesionesDeParte(t, pool, parteID); total != 0 {
+		t.Fatalf("la cuenta pendiente creó %d sesiones, quiero 0", total)
 	}
 }
 
-func TestIniciarSesionEmpresaConRolGuardaElContextoPedido(t *testing.T) {
+func TestIniciarSesionEmpresaConRolEmiteElContextoPedido(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeLogin(t)
-	servicio, _ := servicioDeInicioSesionDePrueba(t, pool, derivador)
+	servicio := servicioDeInicioSesionDePrueba(t, pool, derivador)
 
-	_, parteID, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
 	empresa, _ := crearRolDeEmpresaDeInicioSesion(t, pool, parteID)
 
-	resultado, err := servicio.IniciarSesion(t.Context(), correo, "contrasena-correcta", ContextoEmpresa, "203.0.113.22")
+	resultado, err := servicio.IniciarSesion(t.Context(), celular, "contrasena-correcta", ContextoEmpresa, "203.0.113.22", "dispositivo-de-prueba")
 	if err != nil {
 		t.Fatalf("IniciarSesion: %v", err)
 	}
-	fila := leerDesafioDeInicioSesion(t, pool, resultado.ChallengeID)
-	if !fila.ContextoSolicitado.Valid || fila.ContextoSolicitado.String != ContextoEmpresa {
-		t.Errorf("contexto_solicitado = %+v, quiero %q para %s", fila.ContextoSolicitado, ContextoEmpresa, empresa)
+	if resultado.Usuario.ContextoActivo != ContextoDeEmpresa(empresa) || resultado.Usuario.RolActivo != "representante_legal" {
+		t.Errorf("usuario = %+v, quiero contexto %s con rol representante_legal", resultado.Usuario, ContextoDeEmpresa(empresa))
 	}
 }
 
-func TestIniciarSesionEmpresaSinRolNoCreaDesafio(t *testing.T) {
+func TestIniciarSesionEmpresaSinRolRespondeSinRolDeEmpresa(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeLogin(t)
-	servicio, _ := servicioDeInicioSesionDePrueba(t, pool, derivador)
+	servicio := servicioDeInicioSesionDePrueba(t, pool, derivador)
 
-	_, _, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
 
-	_, err := servicio.IniciarSesion(t.Context(), correo, "contrasena-correcta", ContextoEmpresa, "203.0.113.23")
+	_, err := servicio.IniciarSesion(t.Context(), celular, "contrasena-correcta", ContextoEmpresa, "203.0.113.23", "dispositivo-de-prueba")
 	if !errors.Is(err, ErrSinRolDeEmpresa) {
 		t.Fatalf("error = %v, quiero ErrSinRolDeEmpresa", err)
+	}
+	if total := contarSesionesDeParte(t, pool, parteID); total != 0 {
+		t.Fatalf("el login de empresa sin rol creó %d sesiones, quiero 0", total)
 	}
 }

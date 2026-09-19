@@ -211,6 +211,54 @@ func (g *GestorSesiones) rolesVigentesEn(ctx context.Context, q *repositorio.Que
 	return roles, nil
 }
 
+// resolverContextoEn convierte el contexto pedido en el contexto_id concreto y su rol.
+func (g *GestorSesiones) resolverContextoEn(ctx context.Context, q *repositorio.Queries, parteID uuid.UUID, solicitado string) (string, string, error) {
+	if solicitado == "" || solicitado == ContextoUsuario {
+		return ContextoUsuario, "", nil
+	}
+	if solicitado != ContextoEmpresa {
+		return "", "", fmt.Errorf("auth: contexto de sesión desconocido %q", solicitado)
+	}
+	roles, err := g.rolesVigentesEn(ctx, q, parteID)
+	if err != nil {
+		return "", "", err
+	}
+	if len(roles) == 0 {
+		return "", "", ErrSinRolDeEmpresa
+	}
+	return ContextoDeEmpresa(roles[0].RepresentadaID), roles[0].Rol, nil
+}
+
+// usuarioEn arma el usuario de la sesión con el tipo de cuenta y el nombre del contexto activo.
+func (g *GestorSesiones) usuarioEn(ctx context.Context, q *repositorio.Queries, parteID uuid.UUID, contexto, rol string) (DatosUsuario, error) {
+	fila, err := q.UsuarioDeParte(ctx, pgtype.UUID{Bytes: parteID, Valid: true})
+	if err != nil {
+		return DatosUsuario{}, fmt.Errorf("auth: leer el usuario de la parte: %w", err)
+	}
+	usuario := DatosUsuario{
+		ID:             parteID,
+		TipoCuenta:     fila.Tipo,
+		Correo:         fila.Correo.String,
+		NombreCompleto: fila.NombreCompleto.String,
+		ContextoActivo: contexto,
+		RolActivo:      rol,
+	}
+	if empresaID, esEmpresa := EmpresaDeContexto(contexto); esEmpresa {
+		filaEmpresa, err := q.UsuarioDeParte(ctx, pgtype.UUID{Bytes: empresaID, Valid: true})
+		if err != nil {
+			return DatosUsuario{}, fmt.Errorf("auth: leer el usuario de la empresa: %w", err)
+		}
+		if !filaEmpresa.RazonSocial.Valid {
+			return DatosUsuario{}, fmt.Errorf("auth: la empresa %s no tiene razón social", empresaID)
+		}
+		usuario.ID = empresaID
+		usuario.TipoCuenta = filaEmpresa.Tipo
+		usuario.RazonSocial = filaEmpresa.RazonSocial.String
+		usuario.NombreCompleto = ""
+	}
+	return usuario, nil
+}
+
 // crearSesion inserta una sesión de la familia y devuelve su refresh en claro con la fila persistida.
 func (g *GestorSesiones) crearSesion(ctx context.Context, q *repositorio.Queries, parteID, familiaID uuid.UUID, contexto, dispositivo string, ahora, creadaPrimera time.Time) (string, repositorio.Sesion, error) {
 	refresh, hash, err := nuevoRefresh()

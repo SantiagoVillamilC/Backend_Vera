@@ -90,7 +90,7 @@ func TestEndpointsDeDispositivosYContextoDePuntaAPunta(t *testing.T) {
 		t.Fatalf("denylist: %v", err)
 	}
 	gestor := auth.NuevoGestorSesiones(pool, auth.NuevoRegistradorEventos(pool))
-	servicio, err := auth.NuevoServicioDeSesion(pool, &auth.GestorDesafios{}, gestor, tokens, d)
+	servicio, err := auth.NuevoServicioDeSesion(pool, gestor, tokens, d)
 	if err != nil {
 		t.Fatalf("servicio de sesión: %v", err)
 	}
