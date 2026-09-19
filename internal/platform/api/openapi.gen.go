@@ -177,6 +177,21 @@ func (e DesafioResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for EmpresaCreadaResponseSuccess.
+const (
+	EmpresaCreadaResponseSuccessTrue EmpresaCreadaResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the EmpresaCreadaResponseSuccess enum.
+func (e EmpresaCreadaResponseSuccess) Valid() bool {
+	switch e {
+	case EmpresaCreadaResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorResponseSuccess.
 const (
 	False ErrorResponseSuccess = false
@@ -661,6 +676,12 @@ type ContextosResponse struct {
 // ContextosResponseSuccess defines model for ContextosResponse.Success.
 type ContextosResponseSuccess bool
 
+// CrearEmpresaRequest defines model for CrearEmpresaRequest.
+type CrearEmpresaRequest struct {
+	Nit         string `json:"nit" validate:"required,nit"`
+	RazonSocial string `json:"razon_social" validate:"required,max=200"`
+}
+
 // Desafio defines model for Desafio.
 type Desafio struct {
 	ChallengeId openapi_types.UUID `json:"challenge_id"`
@@ -692,6 +713,24 @@ type Dispositivo struct {
 	Id          openapi_types.UUID `json:"id"`
 	UltimoUsoEn time.Time          `json:"ultimo_uso_en"`
 }
+
+// EmpresaCreada defines model for EmpresaCreada.
+type EmpresaCreada struct {
+	EmpresaId   openapi_types.UUID `json:"empresa_id"`
+	Nit         string             `json:"nit"`
+	RazonSocial string             `json:"razon_social"`
+}
+
+// EmpresaCreadaResponse defines model for EmpresaCreadaResponse.
+type EmpresaCreadaResponse struct {
+	Data    EmpresaCreada                `json:"data"`
+	Error   *map[string]interface{}      `json:"error"`
+	Meta    *Meta                        `json:"meta"`
+	Success EmpresaCreadaResponseSuccess `json:"success"`
+}
+
+// EmpresaCreadaResponseSuccess defines model for EmpresaCreadaResponse.Success.
+type EmpresaCreadaResponseSuccess bool
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
@@ -1014,6 +1053,9 @@ type VerifyPhoneRequest struct {
 // Error defines model for Error.
 type Error = ErrorResponse
 
+// CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
+type CreateCompanyJSONRequestBody = CrearEmpresaRequest
+
 // CreateConsentJSONRequestBody defines body for CreateConsent for application/json ContentType.
 type CreateConsentJSONRequestBody = ConsentRequest
 
@@ -1135,6 +1177,9 @@ func (t *RegisterRequest) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// CreateCompany Crea la empresa de la persona autenticada.
+	// (POST /v1/auth/companies)
+	CreateCompany(w http.ResponseWriter, r *http.Request)
 	// ListConsents Lista los consentimientos del usuario.
 	// (GET /v1/auth/consents)
 	ListConsents(w http.ResponseWriter, r *http.Request)
@@ -1176,6 +1221,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// CreateCompany Crea la empresa de la persona autenticada.
+// (POST /v1/auth/companies)
+func (_ Unimplemented) CreateCompany(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // ListConsents Lista los consentimientos del usuario.
 // (GET /v1/auth/consents)
@@ -1257,6 +1308,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// CreateCompany operation middleware
+func (siw *ServerInterfaceWrapper) CreateCompany(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCompany(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListConsents operation middleware
 func (siw *ServerInterfaceWrapper) ListConsents(w http.ResponseWriter, r *http.Request) {
@@ -1568,6 +1633,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/auth/contexto", wrapper.SetContexto)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/auth/companies", wrapper.CreateCompany)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/auth/phone/change/request", wrapper.PhoneChangeRequest)

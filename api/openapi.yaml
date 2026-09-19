@@ -406,6 +406,33 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/auth/companies:
+    post:
+      operationId: createCompany
+      summary: Crea la empresa de la persona autenticada.
+      tags: [contexto]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearEmpresaRequest"
+      responses:
+        "201":
+          description: Empresa creada y vinculada al representante.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmpresaCreadaResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+
   /v1/auth/phone/change/request:
     post:
       operationId: phoneChangeRequest
@@ -1142,6 +1169,46 @@ components:
           enum: [true]
         data:
           $ref: "#/components/schemas/ContextoActivo"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    CrearEmpresaRequest:
+      type: object
+      required: [razon_social, nit]
+      properties:
+        razon_social:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=200"
+        nit:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,nit"
+
+    EmpresaCreada:
+      type: object
+      required: [empresa_id, nit, razon_social]
+      properties:
+        empresa_id:
+          type: string
+          format: uuid
+        nit:
+          type: string
+        razon_social:
+          type: string
+
+    EmpresaCreadaResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/EmpresaCreada"
         error:
           type: object
           nullable: true
