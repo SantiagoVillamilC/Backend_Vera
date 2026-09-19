@@ -1,6 +1,8 @@
 -- name: TransicionarCredencial :execrows
 UPDATE auth.credenciales
-SET estado = sqlc.arg('nuevo'), actualizada_en = now()
+SET estado = sqlc.arg('nuevo'),
+    actualizada_en = now(),
+    celular_verificado_en = CASE WHEN sqlc.arg('nuevo') = 'activo' THEN now() ELSE celular_verificado_en END
 WHERE id = sqlc.arg('credencial_id') AND estado = sqlc.arg('esperado');
 
 -- name: RegistrarTransicionCredencial :exec
