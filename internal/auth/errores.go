@@ -58,6 +58,12 @@ var ErrDemasiadosReenvios = errors.New("auth: el desafío agotó los reenvíos")
 // ErrDemasiadosEnvios es el tope de cuenta, origen o fallos superado: responde 429 TooManyRequests genérico.
 var ErrDemasiadosEnvios = errors.New("auth: se superó el tope de envíos")
 
+// ErrCredencialesInvalidas es el correo inexistente o la contraseña que no coincide: responde 401 InvalidCredentials.
+var ErrCredencialesInvalidas = errors.New("auth: las credenciales no son válidas")
+
+// ErrCuentaSuspendida es la credencial suspendida con la contrasena correcta: responde 403 AccountSuspended.
+var ErrCuentaSuspendida = errors.New("auth: la cuenta está suspendida")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -108,6 +114,10 @@ func MapearError(err error) error {
 		return platformerrors.New("OtpTooManyResends", "Too many resends. Request a new code.", http.StatusTooManyRequests)
 	case errors.Is(err, ErrDemasiadosEnvios):
 		return platformerrors.New("TooManyRequests", "Too many requests. Try again later.", http.StatusTooManyRequests)
+	case errors.Is(err, ErrCredencialesInvalidas):
+		return platformerrors.New("InvalidCredentials", "The email or password is incorrect.", http.StatusUnauthorized)
+	case errors.Is(err, ErrCuentaSuspendida):
+		return platformerrors.New("AccountSuspended", "The account is suspended.", http.StatusForbidden)
 	default:
 		return err
 	}

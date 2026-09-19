@@ -83,6 +83,9 @@ func TestMapearError(t *testing.T) {
 		"codigo invalido es 400 OtpInvalid":        {err: ErrCodigoInvalido, code: "OtpInvalid", status: 400},
 		"codigo vencido es 400 OtpExpired":         {err: ErrCodigoExpirado, code: "OtpExpired", status: 400},
 		"demasiados intentos es 429":               {err: ErrDemasiadosIntentos, code: "OtpTooManyAttempts", status: 429},
+		"demasiados envios es 429 TooManyRequests": {err: ErrDemasiadosEnvios, code: "TooManyRequests", status: 429},
+		"credenciales invalidas es 401":            {err: ErrCredencialesInvalidas, code: "InvalidCredentials", status: 401},
+		"cuenta suspendida es 403":                 {err: ErrCuentaSuspendida, code: "AccountSuspended", status: 403},
 	}
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {

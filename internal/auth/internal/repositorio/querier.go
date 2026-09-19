@@ -20,6 +20,7 @@ type Querier interface {
 	CrearParte(ctx context.Context, arg CrearParteParams) (Parte, error)
 	CrearPersona(ctx context.Context, arg CrearPersonaParams) (Persona, error)
 	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
+	CredencialPorCorreo(ctx context.Context, correo string) (Credencial, error)
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
 	DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (DesafioPendientePorIDRow, error)
 	DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error)
@@ -39,6 +40,7 @@ type Querier interface {
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
 	RegistrarTransicionCredencial(ctx context.Context, arg RegistrarTransicionCredencialParams) error
+	RehashCredencial(ctx context.Context, arg RehashCredencialParams) (int64, error)
 	ReintentarAviso(ctx context.Context, arg ReintentarAvisoParams) (int32, error)
 	ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error)
 	ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)

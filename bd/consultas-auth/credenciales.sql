@@ -7,6 +7,15 @@ RETURNING *;
 SELECT * FROM auth.credenciales
 WHERE id = $1;
 
+-- name: CredencialPorCorreo :one
+SELECT * FROM auth.credenciales
+WHERE correo = $1 AND estado <> 'cerrado';
+
+-- name: RehashCredencial :execrows
+UPDATE auth.credenciales
+SET valor_derivado = $1, actualizada_en = now()
+WHERE id = $2 AND valor_derivado = $3;
+
 -- name: InsertarCredencialDePrueba :exec
 INSERT INTO auth.credenciales (id, parte_id, correo, celular, valor_derivado, estado)
 VALUES ($1, $2, $3, $4, NULL, 'sin_login')

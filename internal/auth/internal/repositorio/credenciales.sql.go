@@ -56,6 +56,33 @@ func (q *Queries) CrearCredencial(ctx context.Context, arg CrearCredencialParams
 	return i, err
 }
 
+const credencialPorCorreo = `-- name: CredencialPorCorreo :one
+SELECT id, parte_id, correo, celular, celular_verificado_en, correo_verificado_en, celular_cambiado_en, valor_derivado, estado, creada_en, actualizada_en FROM auth.credenciales
+WHERE correo = $1 AND estado <> 'cerrado'
+`
+
+func (q *Queries) CredencialPorCorreo(ctx context.Context, correo string) (Credencial, error) {
+	row := q.db.QueryRow(ctx, credencialPorCorreo, correo)
+	var i Credencial
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.Correo,
+		&i.Celular,
+		&i.CelularVerificadoEn,
+		&i.CorreoVerificadoEn,
+		&i.CelularCambiadoEn,
+		&i.ValorDerivado,
+		&i.Estado,
+		&i.CreadaEn,
+		&i.ActualizadaEn,
+	)
+	if err != nil {
+		err = fmt.Errorf("query CredencialPorCorreo: %w", err)
+	}
+	return i, err
+}
+
 const credencialPorID = `-- name: CredencialPorID :one
 SELECT id, parte_id, correo, celular, celular_verificado_en, correo_verificado_en, celular_cambiado_en, valor_derivado, estado, creada_en, actualizada_en FROM auth.credenciales
 WHERE id = $1
@@ -107,6 +134,26 @@ func (q *Queries) InsertarCredencialDePrueba(ctx context.Context, arg InsertarCr
 		return fmt.Errorf("query InsertarCredencialDePrueba: %w", err)
 	}
 	return nil
+}
+
+const rehashCredencial = `-- name: RehashCredencial :execrows
+UPDATE auth.credenciales
+SET valor_derivado = $1, actualizada_en = now()
+WHERE id = $2 AND valor_derivado = $3
+`
+
+type RehashCredencialParams struct {
+	ValorDerivado   pgtype.Text `json:"valor_derivado"`
+	ID              pgtype.UUID `json:"id"`
+	ValorDerivado_2 pgtype.Text `json:"valor_derivado_2"`
+}
+
+func (q *Queries) RehashCredencial(ctx context.Context, arg RehashCredencialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rehashCredencial, arg.ValorDerivado, arg.ID, arg.ValorDerivado_2)
+	if err != nil {
+		return 0, fmt.Errorf("query RehashCredencial: %w", err)
+	}
+	return result.RowsAffected(), nil
 }
 
 const resolverDestinoPorCelular = `-- name: ResolverDestinoPorCelular :one
