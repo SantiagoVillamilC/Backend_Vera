@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/whatsapp"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -34,4 +38,22 @@ func opcionLimpiezaDeAuth(pool *pgxpool.Pool, cfg *Config) jobs.OpcionDeAuth {
 		auth.NuevoCerrarPendientesWorker(pool, gestor, cfg.Auth.VentanaPendiente),
 		auth.TrabajoPeriodicoDeLimpieza(cfg.Auth.LimpiezaInterval),
 	)
+}
+
+// canalOTP elige el canal de OTP por OTP_CANAL; el adaptador de demo queda fuera del harness.
+func canalOTP(cfg *Config) (auth.CanalOTP, error) {
+	switch cfg.Auth.OTPCanal {
+	case "simulador":
+		simulador, err := otpsim.Nuevo(cfg.Auth.OTPSimuladorCodigoFijo)
+		if err != nil {
+			return nil, err
+		}
+		return simulador, nil
+	case "cloudapi":
+		return whatsapp.Nuevo(whatsapp.BaseGraphAPI, cfg.Auth.WhatsAppToken, cfg.Auth.WhatsAppPhoneID, cfg.Auth.WhatsAppTemplate, nil), nil
+	case "demo":
+		return nil, errors.New("OTP_CANAL=demo: el adaptador de WhatsApp de demostracion no esta implementado")
+	default:
+		return nil, fmt.Errorf("OTP_CANAL desconocido %q", cfg.Auth.OTPCanal)
+	}
 }
