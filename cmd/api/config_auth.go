@@ -24,6 +24,8 @@ type ConfigAuth struct {
 	WhatsAppTemplate         string
 	ContadoresPepper         []byte
 	OTPPepper                []byte
+	JWTIssuer                string
+	JWTAudience              string
 	EnfriamientoCambioNumero time.Duration
 	VentanaPendiente         time.Duration
 	LimpiezaInterval         time.Duration
@@ -43,11 +45,19 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 		WhatsAppToken:          os.Getenv("WHATSAPP_TOKEN"),
 		WhatsAppPhoneID:        os.Getenv("WHATSAPP_PHONE_ID"),
 		WhatsAppTemplate:       os.Getenv("WHATSAPP_TEMPLATE"),
+		JWTIssuer:              os.Getenv("JWT_ISSUER"),
+		JWTAudience:            os.Getenv("JWT_AUDIENCE"),
 	}
 
 	var errs []error
 	if err := validarRedisURL(cfg.RedisURL); err != nil {
 		errs = append(errs, err)
+	}
+	if cfg.JWTIssuer == "" {
+		errs = append(errs, errors.New("JWT_ISSUER is required"))
+	}
+	if cfg.JWTAudience == "" {
+		errs = append(errs, errors.New("JWT_AUDIENCE is required"))
 	}
 	pepper, errPepper := pepperRequerido("CONTADORES_PEPPER", os.Getenv("CONTADORES_PEPPER"))
 	if errPepper != nil {

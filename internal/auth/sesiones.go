@@ -47,11 +47,12 @@ type RolVigente struct {
 	RepresentadaID uuid.UUID
 }
 
-// sesionConRefresh es el par que devuelven la emisión y la rotación.
+// sesionConRefresh es el par que devuelven la emisión y la rotación, con la familia reusada si la hubo.
 type sesionConRefresh struct {
-	refresh string
-	sesion  Sesion
-	reusado bool
+	refresh        string
+	sesion         Sesion
+	familiaReusada uuid.UUID
+	reusado        bool
 }
 
 // GestorSesiones emite, rota y revoca sesiones, y publica cada cambio en el trail.
@@ -71,24 +72,8 @@ func NuevoGestorSesiones(pool *pgxpool.Pool, eventos RegistradorEventos) *Gestor
 // EmitirSesion abre una familia nueva y devuelve el refresh en claro con su sesión.
 func (g *GestorSesiones) EmitirSesion(ctx context.Context, parteID uuid.UUID, contexto, dispositivo string) (string, Sesion, error) {
 	out, err := enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (sesionConRefresh, error) {
-		ahora := time.Now().UTC()
-		refresh, fila, err := g.crearSesion(ctx, q, parteID, uuid.New(), contexto, dispositivo, ahora, ahora)
-		if err != nil {
-			return sesionConRefresh{}, err
-		}
-		sesion := sesionDeFila(fila)
-		err = registrarEvento(ctx, g.eventos, q, Evento{
-			Tipo:      TipoEventoEmisionSesion,
-			Actor:     sesion.ParteID,
-			SesionID:  sesion.ID,
-			Resultado: resultadoSesion,
-			Fecha:     ahora,
-			Contexto:  sesion.ContextoActivo,
-		})
-		if err != nil {
-			return sesionConRefresh{}, err
-		}
-		return sesionConRefresh{refresh: refresh, sesion: sesion}, nil
+		refresh, sesion, err := g.emitirSesionEn(ctx, q, parteID, contexto, dispositivo)
+		return sesionConRefresh{refresh: refresh, sesion: sesion}, err
 	})
 	if err != nil {
 		return "", Sesion{}, err
@@ -96,26 +81,59 @@ func (g *GestorSesiones) EmitirSesion(ctx context.Context, parteID uuid.UUID, co
 	return out.refresh, out.sesion, nil
 }
 
-// RotarRefresh marca el refresh como usado e inserta su sucesor en la misma familia.
-func (g *GestorSesiones) RotarRefresh(ctx context.Context, refreshEnClaro string) (string, Sesion, error) {
-	out, err := enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (sesionConRefresh, error) {
-		hash := hashDeRefresh(refreshEnClaro)
-		usada, err := q.RotarSesion(ctx, hash)
-		if err == nil {
-			return g.sucesoraDe(ctx, q, usada)
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return sesionConRefresh{}, fmt.Errorf("auth: rotar el refresh: %w", err)
-		}
-		return g.refreshSinFilas(ctx, q, hash)
+// emitirSesionEn inserta la familia nueva y su evento sobre la transacción abierta del llamador.
+func (g *GestorSesiones) emitirSesionEn(ctx context.Context, q *repositorio.Queries, parteID uuid.UUID, contexto, dispositivo string) (string, Sesion, error) {
+	ahora := time.Now().UTC()
+	refresh, fila, err := g.crearSesion(ctx, q, parteID, uuid.New(), contexto, dispositivo, ahora, ahora)
+	if err != nil {
+		return "", Sesion{}, err
+	}
+	sesion := sesionDeFila(fila)
+	err = registrarEvento(ctx, g.eventos, q, Evento{
+		Tipo:      TipoEventoEmisionSesion,
+		Actor:     sesion.ParteID,
+		SesionID:  sesion.ID,
+		Resultado: resultadoSesion,
+		Fecha:     ahora,
+		Contexto:  sesion.ContextoActivo,
 	})
 	if err != nil {
 		return "", Sesion{}, err
 	}
-	if out.reusado {
-		return "", Sesion{}, ErrRefreshReusado
+	return refresh, sesion, nil
+}
+
+// RotarRefresh marca el refresh como usado e inserta su sucesor en la misma familia.
+func (g *GestorSesiones) RotarRefresh(ctx context.Context, refreshEnClaro string) (string, Sesion, error) {
+	refresh, sesion, _, err := g.RotarRefreshConSid(ctx, refreshEnClaro)
+	return refresh, sesion, err
+}
+
+// RotarRefreshConSid rota y devuelve la familia reusada para publicarla en la denylist.
+func (g *GestorSesiones) RotarRefreshConSid(ctx context.Context, refreshEnClaro string) (string, Sesion, uuid.UUID, error) {
+	out, err := enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (sesionConRefresh, error) {
+		return g.rotarRefreshEn(ctx, q, refreshEnClaro)
+	})
+	if err != nil {
+		return "", Sesion{}, uuid.Nil, err
 	}
-	return out.refresh, out.sesion, nil
+	if out.reusado {
+		return "", Sesion{}, out.familiaReusada, ErrRefreshReusado
+	}
+	return out.refresh, out.sesion, uuid.Nil, nil
+}
+
+// rotarRefreshEn ejecuta la rotación y la detección de reuso sobre la transacción abierta.
+func (g *GestorSesiones) rotarRefreshEn(ctx context.Context, q *repositorio.Queries, refreshEnClaro string) (sesionConRefresh, error) {
+	hash := hashDeRefresh(refreshEnClaro)
+	usada, err := q.RotarSesion(ctx, hash)
+	if err == nil {
+		return g.sucesoraDe(ctx, q, usada)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return sesionConRefresh{}, fmt.Errorf("auth: rotar el refresh: %w", err)
+	}
+	return g.refreshSinFilas(ctx, q, hash)
 }
 
 // RevocarSesion revoca una sesión de la parte; si ya estaba revocada o no es suya, no falla.
@@ -175,11 +193,16 @@ func (g *GestorSesiones) ListarActivas(ctx context.Context, parteID uuid.UUID) (
 
 // RolesVigentesDeParte resuelve los roles de la parte en cada emisión; la consulta la reusan A2-07, A2-08 y A1-06.
 func (g *GestorSesiones) RolesVigentesDeParte(ctx context.Context, parteID uuid.UUID) ([]RolVigente, error) {
-	filas, err := enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) ([]repositorio.RolesVigentesDeParteRow, error) {
-		return q.RolesVigentesDeParte(ctx, pgtype.UUID{Bytes: parteID, Valid: true})
+	return enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) ([]RolVigente, error) {
+		return g.rolesVigentesEn(ctx, q, parteID)
 	})
+}
+
+// rolesVigentesEn resuelve los roles vigentes dentro de la transacción abierta del llamador.
+func (g *GestorSesiones) rolesVigentesEn(ctx context.Context, q *repositorio.Queries, parteID uuid.UUID) ([]RolVigente, error) {
+	filas, err := q.RolesVigentesDeParte(ctx, pgtype.UUID{Bytes: parteID, Valid: true})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("auth: resolver los roles de la parte: %w", err)
 	}
 	roles := make([]RolVigente, 0, len(filas))
 	for _, fila := range filas {
@@ -263,7 +286,7 @@ func (g *GestorSesiones) refreshSinFilas(ctx context.Context, q *repositorio.Que
 	if err != nil {
 		return sesionConRefresh{}, err
 	}
-	return sesionConRefresh{reusado: true}, nil
+	return sesionConRefresh{reusado: true, familiaReusada: uuidDePgtype(fila.FamiliaID)}, nil
 }
 
 // publicarRevocacion escribe el evento de revocación con el actor y la sesión disponibles.

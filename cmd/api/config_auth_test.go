@@ -15,6 +15,8 @@ const jwtDePrueba = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
 func entornoDeAuth(t *testing.T) {
 	t.Helper()
 	t.Setenv("REDIS_URL", "redis://:secreta@127.0.0.1:16381/0")
+	t.Setenv("JWT_ISSUER", "centinela-auth")
+	t.Setenv("JWT_AUDIENCE", "centinela-api")
 	t.Setenv("CONTADORES_PEPPER", strings.Repeat("11", 32))
 	t.Setenv("OTP_PEPPER", strings.Repeat("22", 32))
 	t.Setenv("OTP_CANAL", "simulador")

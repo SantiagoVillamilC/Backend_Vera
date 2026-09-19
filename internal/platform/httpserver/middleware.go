@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/go-chi/chi/v5/middleware"
@@ -133,8 +134,8 @@ func (tw *timeoutWriter) flush(w http.ResponseWriter) {
 	_, _ = w.Write(tw.body.Bytes())
 }
 
-// RequireAuth exige identidad válida en el grupo autenticado, la deja en el contexto y da 401 en el envelope ante cualquier error o id vacío.
-func RequireAuth(quien IdentidadDeLaPeticion) func(http.Handler) http.Handler {
+// RequireAuth exige identidad válida, cierra por la denylist y da 503 en las rutas de dinero si la dependencia falla.
+func RequireAuth(quien IdentidadDeLaPeticion, rutasDeDinero []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if quien == nil {
@@ -142,13 +143,34 @@ func RequireAuth(quien IdentidadDeLaPeticion) func(http.Handler) http.Handler {
 				return
 			}
 			id, err := quien.Identidad(r)
-			if err != nil || strings.TrimSpace(id.UsuarioID) == "" {
-				api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
+			if err == nil && strings.TrimSpace(id.UsuarioID) != "" {
+				next.ServeHTTP(w, r.WithContext(identidad.ConIdentidad(r.Context(), id)))
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(identidad.ConIdentidad(r.Context(), id)))
+			if errors.Is(err, auth.ErrAuthNoDisponible) {
+				if esRutaDeDinero(r, rutasDeDinero) {
+					api.WriteError(w, http.StatusServiceUnavailable, "AuthUnavailable", "Authentication is temporarily unavailable.", nil)
+					return
+				}
+				if strings.TrimSpace(id.UsuarioID) != "" {
+					next.ServeHTTP(w, r.WithContext(identidad.ConIdentidad(r.Context(), id)))
+					return
+				}
+			}
+			api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 		})
 	}
+}
+
+// esRutaDeDinero compara el método y la ruta exacta contra la lista explícita del router.
+func esRutaDeDinero(r *http.Request, rutasDeDinero []string) bool {
+	objetivo := r.Method + " " + r.URL.Path
+	for _, ruta := range rutasDeDinero {
+		if ruta == objetivo {
+			return true
+		}
+	}
+	return false
 }
 
 // clientIPKey da la clave del rate limit, cayendo a r.RemoteAddr sin puerto si ClientIP no resolvió una IP.

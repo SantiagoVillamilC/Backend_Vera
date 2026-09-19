@@ -196,7 +196,7 @@ func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 // router para poder observar el valor desde un handler.
 func TestAuthenticatedRouteSeesTestUserID(t *testing.T) {
 	r := chi.NewRouter()
-	r.Use(RequireAuth(auth.UsuarioDePrueba{}))
+	r.Use(RequireAuth(auth.UsuarioDePrueba{}, RutasDeDinero))
 	r.Get("/quien-soy", func(w http.ResponseWriter, req *http.Request) {
 		id, ok := identidad.IdentidadDeContexto(req.Context())
 		if !ok {

@@ -53,6 +53,7 @@ type Querier interface {
 	TextoDeConsentimiento(ctx context.Context, arg TextoDeConsentimientoParams) (TextoDeConsentimientoRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
+	UsuarioDeParte(ctx context.Context, id pgtype.UUID) (UsuarioDeParteRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

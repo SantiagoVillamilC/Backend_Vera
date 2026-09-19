@@ -21,6 +21,12 @@ const (
 	rateLimitWindow   = time.Minute
 )
 
+// RutasDeDinero son los endpoints que mueven dinero y por eso cierran si la denylist no responde.
+var RutasDeDinero = []string{
+	http.MethodPost + " /transferencias",
+	http.MethodPost + " /depositos",
+}
+
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
 func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth) http.Handler {
 	if autenticadorCustodio == nil {
@@ -35,7 +41,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Test-User"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))
@@ -54,8 +60,8 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 		r.Post("/v1/auth/register/verify-phone", verificacionDeCelular(authDeps.Verificacion))
 		r.Post("/v1/auth/otp/resend", reenvioDeOtp(authDeps.Desafios))
 		r.Post("/v1/auth/login", loginDeSesion(authDeps.Login))
-		r.Post("/v1/auth/login/verify-otp", sinImplementar)
-		r.Post("/v1/auth/refresh", sinImplementar)
+		r.Post("/v1/auth/login/verify-otp", verificacionDeOtp(authDeps.VerificarOtp))
+		r.Post("/v1/auth/refresh", rotacionDeRefresh(authDeps.Refresh))
 		r.Post("/v1/auth/recovery/request", sinImplementar)
 		r.Post("/v1/auth/recovery/verify", sinImplementar)
 		r.Post("/v1/auth/recovery/reset", sinImplementar)
@@ -66,7 +72,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	// Grupo autenticado: RequireAuth deja la identidad completa y solo acá corre.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
-		r.Use(RequireAuth(authDeps.Identidad))
+		r.Use(RequireAuth(authDeps.Identidad, RutasDeDinero))
 		r.Get("/saldo", nucleoHandler.Saldo)
 		r.Get("/movimientos", nucleoHandler.Movimientos)
 		r.Get("/transferencias/maximo", nucleoHandler.MontoMaximo)

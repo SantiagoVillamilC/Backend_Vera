@@ -99,14 +99,34 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("servicio de login: %w", err)
 	}
+	tokensAuth, err := tokensDeAcceso(cfg)
+	if err != nil {
+		return fmt.Errorf("tokens de acceso: %w", err)
+	}
+	denylistAuth, err := denylistDeSesiones(clienteRedisAuth)
+	if err != nil {
+		return fmt.Errorf("denylist de sesiones: %w", err)
+	}
+	identidadPeticion, err := identidadJWT(cfg, denylistAuth)
+	if err != nil {
+		return fmt.Errorf("identidad JWT: %w", err)
+	}
+	servicioSesion, err := auth.NuevoServicioDeSesion(pool, gestorDesafios, gestorSesiones, tokensAuth, denylistAuth)
+	if err != nil {
+		return fmt.Errorf("servicio de sesión: %w", err)
+	}
 	deps := httpserver.DependenciasAuth{
-		Identidad:    auth.UsuarioDePrueba{},
+		Identidad:    identidadPeticion,
 		Redis:        clienteRedisAuth,
 		CanalOTP:     canal,
 		Contadores:   contadoresAuth,
 		Desafios:     httpserver.NuevoOTPHandler(gestorDesafios),
 		Verificacion: httpserver.NuevoVerificacionHandler(activador),
 		Login:        httpserver.NuevoLoginHandler(servicioLogin),
+		VerificarOtp: httpserver.NuevoSesionHandler(servicioSesion),
+		Refresh:      httpserver.NuevoSesionHandler(servicioSesion),
+		Firmador:     tokensAuth,
+		Denylist:     denylistAuth,
 		Subcuentas:   servicio,
 	}
 	registrador, err := auth.NuevoRegistradorDePersonas(pool, derivador, auth.NuevoRegistradorEventos(pool), gestorDesafios, deps.Subcuentas)

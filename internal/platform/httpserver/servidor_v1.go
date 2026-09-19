@@ -53,6 +53,16 @@ type LoginHandler interface {
 	Login(http.ResponseWriter, *http.Request)
 }
 
+// VerificarOtpHandler atiende la verificación pública del segundo factor.
+type VerificarOtpHandler interface {
+	VerifyOtp(http.ResponseWriter, *http.Request)
+}
+
+// RefreshHandler atiende la rotación pública del refresh.
+type RefreshHandler interface {
+	Refresh(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
 	Identidad    IdentidadDeLaPeticion
@@ -66,6 +76,10 @@ type DependenciasAuth struct {
 	Registro     RegistroHandler
 	Verificacion VerificacionHandler
 	Login        LoginHandler
+	VerificarOtp VerificarOtpHandler
+	Refresh      RefreshHandler
+	Firmador     *auth.TokensDeAcceso
+	Denylist     auth.RevocadorDeSesiones
 	Subcuentas   auth.AbridorDeSubcuentas
 }
 

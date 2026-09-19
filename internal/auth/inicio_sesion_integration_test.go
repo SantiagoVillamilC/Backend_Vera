@@ -58,13 +58,19 @@ func parteDeCredencialDeInicioSesion(tb testing.TB, pool *pgxpool.Pool, correo s
 	return parte
 }
 
-// crearRolDeEmpresaDeInicioSesion crea una empresa y el rol del representante sobre ella.
-func crearRolDeEmpresaDeInicioSesion(tb testing.TB, pool *pgxpool.Pool, parteID uuid.UUID) uuid.UUID {
+// crearRolDeEmpresaDeInicioSesion crea la parte empresa, su fila en auth.empresas y el rol del representante.
+func crearRolDeEmpresaDeInicioSesion(tb testing.TB, pool *pgxpool.Pool, parteID uuid.UUID) (uuid.UUID, string) {
 	tb.Helper()
 	empresa := uuid.New()
+	razonSocial := "empresa-" + empresa.String()
 	if _, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
-		func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
+		func(ctx context.Context, tx transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
 			if _, err := q.CrearParte(ctx, repositorio.CrearParteParams{ID: pgUUID(empresa), Tipo: "empresa"}); err != nil {
+				return struct{}{}, err
+			}
+			if _, err := tx.Exec(ctx,
+				"INSERT INTO auth.empresas (parte_id, nit, razon_social) VALUES ($1, $2, $3)",
+				pgUUID(empresa), "nit-"+empresa.String(), razonSocial); err != nil {
 				return struct{}{}, err
 			}
 			_, err := q.CrearRolDeParte(ctx, repositorio.CrearRolDeParteParams{
@@ -76,7 +82,24 @@ func crearRolDeEmpresaDeInicioSesion(tb testing.TB, pool *pgxpool.Pool, parteID 
 		}); err != nil {
 		tb.Fatalf("crear el rol de empresa: %v", err)
 	}
-	return empresa
+	return empresa, razonSocial
+}
+
+// marcarParteComoEmpresaDeInicioSesion convierte una parte con credencial en empresa con razón social.
+func marcarParteComoEmpresaDeInicioSesion(tb testing.TB, pool *pgxpool.Pool, parteID uuid.UUID) {
+	tb.Helper()
+	if _, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
+		func(ctx context.Context, tx transaccionDeAuth, _ *repositorio.Queries) (struct{}, error) {
+			if _, err := tx.Exec(ctx, "UPDATE auth.partes SET tipo = 'empresa' WHERE id = $1", pgUUID(parteID)); err != nil {
+				return struct{}{}, err
+			}
+			_, err := tx.Exec(ctx,
+				"INSERT INTO auth.empresas (parte_id, nit, razon_social) VALUES ($1, $2, $3)",
+				pgUUID(parteID), "nit-"+parteID.String(), "empresa-directa-"+parteID.String())
+			return struct{}{}, err
+		}); err != nil {
+		tb.Fatalf("marcar la parte como empresa: %v", err)
+	}
 }
 
 // leerDesafioDeInicioSesion lee la fila persistida del desafío.
@@ -147,7 +170,7 @@ func TestIniciarSesionEmpresaConRolGuardaElContextoPedido(t *testing.T) {
 	servicio, _ := servicioDeInicioSesionDePrueba(t, pool, derivador)
 
 	_, parteID, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
-	empresa := crearRolDeEmpresaDeInicioSesion(t, pool, parteID)
+	empresa, _ := crearRolDeEmpresaDeInicioSesion(t, pool, parteID)
 
 	resultado, err := servicio.IniciarSesion(t.Context(), correo, "contrasena-correcta", ContextoEmpresa, "203.0.113.22")
 	if err != nil {
