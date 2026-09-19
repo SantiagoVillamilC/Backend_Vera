@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
@@ -29,6 +30,11 @@ func clienteRedis(cfg *Config) *redis.Client {
 		slog.Warn("Redis no responde al arrancar, auth fallará cerrado", "err", err)
 	}
 	return cliente
+}
+
+// contadoresDeAuth construye el adaptador Redis del puerto de contadores.
+func contadoresDeAuth(cliente *redis.Client) (auth.Contadores, error) {
+	return contadores.NuevoRedis(cliente)
 }
 
 // opcionLimpiezaDeAuth registra el cierre de pendientes vencidas en la cola auth de River.

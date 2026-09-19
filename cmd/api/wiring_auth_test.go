@@ -67,6 +67,14 @@ func TestCanalOTPEligenPorOTPCanal(t *testing.T) {
 	}
 }
 
+func TestContadoresDeAuthRechazaClienteNil(t *testing.T) {
+	t.Parallel()
+
+	if _, err := contadoresDeAuth(nil); err == nil {
+		t.Fatal("contadoresDeAuth(nil) devolvió nil, quiero error")
+	}
+}
+
 func TestCanalOTPRechazaElCodigoFijoInvalido(t *testing.T) {
 	t.Parallel()
 

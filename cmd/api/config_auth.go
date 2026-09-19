@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -18,6 +19,7 @@ type ConfigAuth struct {
 	WhatsAppToken            string
 	WhatsAppPhoneID          string
 	WhatsAppTemplate         string
+	ContadoresPepper         []byte
 	EnfriamientoCambioNumero time.Duration
 	VentanaPendiente         time.Duration
 	LimpiezaInterval         time.Duration
@@ -38,6 +40,11 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	if err := validarRedisURL(cfg.RedisURL); err != nil {
 		errs = append(errs, err)
 	}
+	pepper, errPepper := pepperRequerido("CONTADORES_PEPPER", os.Getenv("CONTADORES_PEPPER"))
+	if errPepper != nil {
+		errs = append(errs, errPepper)
+	}
+	cfg.ContadoresPepper = pepper
 	var errEnfriamiento error
 	cfg.EnfriamientoCambioNumero, errEnfriamiento = duracionRequerida("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", os.Getenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO"))
 	if errEnfriamiento != nil {
@@ -89,6 +96,21 @@ func validarRedisURL(raw string) error {
 		return fmt.Errorf("REDIS_URL must be a valid Redis URL, got host %q", u.Host)
 	}
 	return nil
+}
+
+// pepperRequerido decodifica un pepper en hex y exige al menos 32 bytes sin imprimir su valor.
+func pepperRequerido(key, valor string) ([]byte, error) {
+	if valor == "" {
+		return nil, fmt.Errorf("%s is required", key)
+	}
+	b, err := hex.DecodeString(valor)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be hex-encoded", key)
+	}
+	if len(b) < 32 {
+		return nil, fmt.Errorf("%s must decode to at least 32 bytes, got %d", key, len(b))
+	}
+	return b, nil
 }
 
 // duracionRequerida exige una duración positiva sin default en código.
