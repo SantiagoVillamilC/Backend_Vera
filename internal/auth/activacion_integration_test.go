@@ -317,6 +317,51 @@ func TestActivarCuentaRecortaElCelularAntesDelMatch(t *testing.T) {
 	}
 }
 
+func TestDosActivacionesConcurrentesDejanUnSoloDesenlace(t *testing.T) {
+	pool := abrirPoolDeAuthConcurrente(t)
+	canal := &canalConFijo{codigo: "123456"}
+	activador, gestor := activadorDePruebaReal(t, pool, canal)
+	cred := sembrarPendienteDeActivacion(t, pool)
+	desafioDeActivacion(t, gestor, cred)
+
+	resultados := make([]error, 2)
+	var wg sync.WaitGroup
+	for i := range resultados {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, resultados[i] = activador.ActivarCuenta(context.Background(), cred.celular, "123456")
+		}()
+	}
+	wg.Wait()
+
+	ganadas := 0
+	for _, err := range resultados {
+		switch {
+		case err == nil:
+			ganadas++
+		case errors.Is(err, ErrDesafioInvalido), errors.Is(err, ErrConflictoDeEstado):
+		default:
+			t.Errorf("error inesperado de la activacion concurrente: %v", err)
+		}
+	}
+	if ganadas != 1 {
+		t.Errorf("activaciones ganadoras = %d, quiero 1", ganadas)
+	}
+	if estado := leerEstado(t, pool, cred.credencialID); estado != string(EstadoActivo) {
+		t.Errorf("estado = %q, quiero activo", estado)
+	}
+	if !celularVerificadoDeCredencial(t, pool, cred.credencialID) {
+		t.Error("celular_verificado_en quedo nulo tras la activacion")
+	}
+	if total := contarTransiciones(t, pool, cred.credencialID); total != 1 {
+		t.Errorf("transiciones = %d, quiero 1", total)
+	}
+	if total := len(leerCodigosRespaldo(t, pool, cred.credencialID)); total != cantidadCodigosRespaldo {
+		t.Errorf("codigos emitidos = %d, quiero %d, una sola emision", total, cantidadCodigosRespaldo)
+	}
+}
+
 func TestCarreraLimpiezaContraActivacionDejaUnSoloDesenlace(t *testing.T) {
 	pool := abrirPoolDeAuthConcurrente(t)
 	canal := &canalConFijo{codigo: "123456"}

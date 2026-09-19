@@ -71,7 +71,25 @@ func (g *GestorDeEstados) TransicionarCredencial(ctx context.Context, q *reposit
 		return fmt.Errorf("%w: %s", ErrConflictoDeEstado, credencialID)
 	}
 
-	if err := registrarTransicion(ctx, q, credencialID, pgtype.Text{String: string(esperado), Valid: true}, nuevo, motivo); err != nil {
+	return g.dejarRastroDeTransicion(ctx, q, credencialID, esperado, nuevo, motivo)
+}
+
+// ActivarCredencial activa la pendiente con compare-and-set, sella celular_verificado_en y deja historial y evento en la misma transacción.
+func (g *GestorDeEstados) ActivarCredencial(ctx context.Context, q *repositorio.Queries, credencialID uuid.UUID, motivo string) error {
+	filas, err := q.ActivarCredencial(ctx, pgtype.UUID{Bytes: [16]byte(credencialID), Valid: true})
+	if err != nil {
+		return fmt.Errorf("auth: activar la credencial: %w", err)
+	}
+	if filas == 0 {
+		return fmt.Errorf("%w: %s", ErrConflictoDeEstado, credencialID)
+	}
+
+	return g.dejarRastroDeTransicion(ctx, q, credencialID, EstadoPendienteVerificacion, EstadoActivo, motivo)
+}
+
+// dejarRastroDeTransicion escribe la fila del historial y publica el evento de la transición ya aplicada.
+func (g *GestorDeEstados) dejarRastroDeTransicion(ctx context.Context, q *repositorio.Queries, credencialID uuid.UUID, anterior, nuevo EstadoCredencial, motivo string) error {
+	if err := registrarTransicion(ctx, q, credencialID, pgtype.Text{String: string(anterior), Valid: true}, nuevo, motivo); err != nil {
 		return err
 	}
 

@@ -863,6 +863,9 @@ components:
         id:
           type: string
           format: uuid
+        empresa_id:
+          type: string
+          format: uuid
         tipo_cuenta:
           type: string
           enum: [persona, empresa]

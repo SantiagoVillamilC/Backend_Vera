@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ActivarCredencial(ctx context.Context, credencialID pgtype.UUID) (int64, error)
 	ActualizarCelularCredencial(ctx context.Context, arg ActualizarCelularCredencialParams) (int64, error)
 	ActualizarContextoDeFamilia(ctx context.Context, arg ActualizarContextoDeFamiliaParams) (int64, error)
 	ActualizarContrasena(ctx context.Context, arg ActualizarContrasenaParams) (int64, error)
