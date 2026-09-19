@@ -47,18 +47,32 @@ func opcionLimpiezaDeAuth(pool *pgxpool.Pool, cfg *Config) jobs.OpcionDeAuth {
 	)
 }
 
-// opcionOutboxDeAuth registra el barrido del outbox de avisos en la cola auth de River.
-func opcionOutboxDeAuth(pool *pgxpool.Pool, canal auth.CanalOTP, cfg *Config) jobs.OpcionDeAuth {
+// opcionOutboxDeAuth registra el barrido del outbox y devuelve el despachador para registrarle efectos.
+func opcionOutboxDeAuth(pool *pgxpool.Pool, canal auth.CanalOTP, cfg *Config) (jobs.OpcionDeAuth, *auth.DespachadorDeAvisos) {
 	notificador := auth.NuevoNotificadorDeAvisos(correosim.Nuevo(), canal)
 	despachador := auth.NuevoDespachadorDeAvisos(pool, notificador, auth.PoliticaReintento{
 		Base:   cfg.Auth.OutboxBackoffBase,
 		Factor: cfg.Auth.OutboxBackoffFactor,
 		Tope:   cfg.Auth.OutboxBackoffMax,
 	})
-	return jobs.ConTrabajoDeAuth(
+	opcion := jobs.ConTrabajoDeAuth(
 		auth.NuevoDespacharAvisosWorker(despachador),
 		auth.TrabajoPeriodicoDeOutbox(cfg.Auth.OutboxInterval),
 	)
+	return opcion, despachador
+}
+
+// derivadorDeContrasenas arma Argon2id de producción con el tope de concurrencia del semáforo.
+func derivadorDeContrasenas(cfg *Config) (auth.Derivador, error) {
+	argon2, err := auth.NuevoDerivadorArgon2(auth.ParametrosArgon2Produccion())
+	if err != nil {
+		return nil, fmt.Errorf("derivador Argon2id: %w", err)
+	}
+	derivador, err := auth.NuevoDerivadorSemaforizado(argon2, cfg.Auth.Argon2Concurrencia)
+	if err != nil {
+		return nil, fmt.Errorf("semáforo de Argon2id: %w", err)
+	}
+	return derivador, nil
 }
 
 // canalOTP elige el canal de OTP por OTP_CANAL; el adaptador de demo queda fuera del harness.

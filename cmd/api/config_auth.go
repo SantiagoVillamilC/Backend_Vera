@@ -31,6 +31,7 @@ type ConfigAuth struct {
 	OutboxBackoffBase        time.Duration
 	OutboxBackoffFactor      float64
 	OutboxBackoffMax         time.Duration
+	Argon2Concurrencia       int
 }
 
 // cargarConfigAuth lee el bloque de auth y devuelve sus errores para el errors.Join del llamador.
@@ -92,6 +93,11 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	cfg.OutboxBackoffMax, errOutbox = duracionRequerida("AUTH_OUTBOX_BACKOFF_MAX", os.Getenv("AUTH_OUTBOX_BACKOFF_MAX"))
 	if errOutbox != nil {
 		errs = append(errs, errOutbox)
+	}
+	var errArgon2 error
+	cfg.Argon2Concurrencia, errArgon2 = enteroPositivoRequerido("AUTH_ARGON2_CONCURRENCIA", os.Getenv("AUTH_ARGON2_CONCURRENCIA"))
+	if errArgon2 != nil {
+		errs = append(errs, errArgon2)
 	}
 	switch cfg.OTPCanal {
 	case "simulador", "demo":
@@ -156,6 +162,18 @@ func duracionRequerida(key, valor string) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be a positive duration (e.g. 24h), got %q", key, valor)
 	}
 	return d, nil
+}
+
+// enteroPositivoRequerido exige un entero mayor que cero sin default en código.
+func enteroPositivoRequerido(key, valor string) (int, error) {
+	if valor == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	n, err := strconv.Atoi(valor)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("%s must be a positive integer, got %q", key, valor)
+	}
+	return n, nil
 }
 
 // factorRequerido exige un multiplicador finito y mayor que cero sin default en código.

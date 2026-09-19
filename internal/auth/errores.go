@@ -28,6 +28,12 @@ var ErrCelularSinVerificar = errors.New("auth: la credencial no tiene el celular
 // ErrConsentimientoRequerido es la falta de opt-in vigente para enviar el OTP: responde 403 ConsentRequired.
 var ErrConsentimientoRequerido = errors.New("auth: falta el consentimiento para enviar el OTP")
 
+// ErrNombreInvalido es el nombre completo que no cumple la regla minima: responde 422 con nombre_completo/nombre.
+var ErrNombreInvalido = errors.New("auth: el nombre completo no cumple la regla")
+
+// ErrCelularInvalido es el celular que E.164 acepta pero la numeracion rechaza: responde 422 con celular/e164.
+var ErrCelularInvalido = errors.New("auth: el celular no es un numero valido")
+
 // ErrEntregaFallida es el canal que no pudo entregar el código del desafío: responde 503 OtpDeliveryFailed.
 var ErrEntregaFallida = errors.New("auth: no se pudo entregar el código del desafío")
 
@@ -84,6 +90,8 @@ func MapearError(err error) error {
 		return platformerrors.New("PhoneUnverified", "The phone number is not verified.", http.StatusForbidden)
 	case errors.Is(err, ErrConsentimientoRequerido):
 		return platformerrors.New("ConsentRequired", "The required consent is missing.", http.StatusForbidden)
+	case errors.Is(err, ErrNombreInvalido), errors.Is(err, ErrCelularInvalido):
+		return platformerrors.New("ValidationError", "Request validation failed.", http.StatusUnprocessableEntity)
 	case errors.Is(err, ErrEntregaFallida):
 		return platformerrors.New("OtpDeliveryFailed", "The code could not be delivered.", http.StatusServiceUnavailable)
 	case errors.Is(err, ErrDesafioInvalido):

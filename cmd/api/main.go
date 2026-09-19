@@ -99,11 +99,32 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("claves de contadores: %w", err)
 	}
-	gestorDesafios, err := auth.NuevoGestorDesafios(pool, canal, auth.NuevoRegistradorEventos(pool), auth.SiempreOptIn{}, cfg.Auth.OTPPepper,
+	lectorOptIn := auth.NuevoLectorOptInDeConsentimientos(pool)
+	gestorDesafios, err := auth.NuevoGestorDesafios(pool, canal, auth.NuevoRegistradorEventos(pool), lectorOptIn, cfg.Auth.OTPPepper,
 		auth.ConRacionamiento(contadoresAuth, clavesContadores))
 	if err != nil {
 		return fmt.Errorf("gestor de desafíos: %w", err)
 	}
+	derivador, err := derivadorDeContrasenas(cfg)
+	if err != nil {
+		return err
+	}
+	deps := httpserver.DependenciasAuth{
+		Identidad:  auth.UsuarioDePrueba{},
+		Redis:      clienteRedisAuth,
+		CanalOTP:   canal,
+		Contadores: contadoresAuth,
+		Desafios:   httpserver.NuevoOTPHandler(gestorDesafios),
+		Subcuentas: servicio,
+	}
+	registrador, err := auth.NuevoRegistradorDePersonas(pool, derivador, auth.NuevoRegistradorEventos(pool), gestorDesafios, deps.Subcuentas)
+	if err != nil {
+		return fmt.Errorf("registrador de personas: %w", err)
+	}
+	deps.Registro = httpserver.NuevoRegistroHandler(registrador)
+
+	opcionOutbox, despachadorAvisos := opcionOutboxDeAuth(pool, canal, cfg)
+	despachadorAvisos.Registrar(auth.TipoAvisoAbrirSubcuentas, auth.ManejadorAbrirSubcuentas(deps.Subcuentas))
 
 	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
 	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
@@ -112,7 +133,7 @@ func run() error {
 		ConciliationWindow:   cfg.ConciliationWindow,
 		ExpirationInterval:   cfg.ExpirationInterval,
 		ExpirationTTL:        cfg.ExpirationTTL,
-	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutboxDeAuth(pool, canal, cfg))
+	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
 	if err != nil {
 		return fmt.Errorf("river: %w", err)
 	}
@@ -121,14 +142,8 @@ func run() error {
 	}
 
 	srv := &http.Server{
-		Addr: ":" + cfg.Port,
-		Handler: httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), httpserver.DependenciasAuth{
-			Identidad:  auth.UsuarioDePrueba{},
-			Redis:      clienteRedisAuth,
-			CanalOTP:   canal,
-			Contadores: contadoresAuth,
-			Desafios:   httpserver.NuevoOTPHandler(gestorDesafios),
-		}),
+		Addr:              ":" + cfg.Port,
+		Handler:           httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), deps),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

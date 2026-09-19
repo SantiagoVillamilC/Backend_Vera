@@ -72,3 +72,5 @@ sql:
           auth_eventos_autenticacion: EventoAutenticacion
           auth_sesione: Sesion
           auth_outbox: AvisoOutbox
+          auth_consentimiento: Consentimiento
+          auth_textos_consentimiento: TextoConsentimiento

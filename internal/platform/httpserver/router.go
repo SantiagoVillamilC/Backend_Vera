@@ -51,7 +51,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(publicTimeout))
-		r.Post("/v1/auth/register", sinImplementar)
+		r.Post("/v1/auth/register", registroDePersona(authDeps.Registro))
 		r.Post("/v1/auth/register/verify-phone", sinImplementar)
 		r.Post("/v1/auth/otp/resend", reenvioDeOtp(authDeps.Desafios))
 		r.Post("/v1/auth/login", sinImplementar)

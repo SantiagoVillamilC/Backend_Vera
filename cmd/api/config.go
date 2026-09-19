@@ -175,6 +175,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("auth_outbox_backoff_base", c.Auth.OutboxBackoffBase.String()),
 		slog.String("auth_outbox_backoff_factor", strconv.FormatFloat(c.Auth.OutboxBackoffFactor, 'g', -1, 64)),
 		slog.String("auth_outbox_backoff_max", c.Auth.OutboxBackoffMax.String()),
+		slog.Int("auth_argon2_concurrencia", c.Auth.Argon2Concurrencia),
 		slog.Bool("whatsapp_token_set", c.Auth.WhatsAppToken != ""),
 		slog.Bool("riel_simulador_url_set", c.RielSimuladorURL != ""),
 		slog.Bool("directorio_simulador_url_set", c.DirectorioSimuladorURL != ""),

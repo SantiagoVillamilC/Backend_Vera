@@ -25,6 +25,7 @@ func entornoDeAuth(t *testing.T) {
 	t.Setenv("AUTH_OUTBOX_BACKOFF_BASE", "5s")
 	t.Setenv("AUTH_OUTBOX_BACKOFF_FACTOR", "2")
 	t.Setenv("AUTH_OUTBOX_BACKOFF_MAX", "5m")
+	t.Setenv("AUTH_ARGON2_CONCURRENCIA", "4")
 }
 
 func baseDeConfig(t *testing.T) {
@@ -291,6 +292,39 @@ func TestLoadConfigAuthExigeElOutbox(t *testing.T) {
 				cfg.Auth.OutboxBackoffFactor != 2 || cfg.Auth.OutboxBackoffMax != 5*time.Minute {
 				t.Errorf("outbox = (%s, %s, %v, %s), quiero (10s, 5s, 2, 5m)",
 					cfg.Auth.OutboxInterval, cfg.Auth.OutboxBackoffBase, cfg.Auth.OutboxBackoffFactor, cfg.Auth.OutboxBackoffMax)
+			}
+		})
+	}
+}
+
+func TestLoadConfigAuthExigeArgon2Concurrencia(t *testing.T) {
+	casos := map[string]struct {
+		valor   string
+		wantErr string
+	}{
+		"valido":      {valor: "4"},
+		"ausente":     {valor: "", wantErr: "AUTH_ARGON2_CONCURRENCIA is required"},
+		"cero":        {valor: "0", wantErr: "AUTH_ARGON2_CONCURRENCIA must be a positive integer"},
+		"negativo":    {valor: "-1", wantErr: "AUTH_ARGON2_CONCURRENCIA must be a positive integer"},
+		"no numerico": {valor: "cuatro", wantErr: "AUTH_ARGON2_CONCURRENCIA must be a positive integer"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AUTH_ARGON2_CONCURRENCIA", caso.valor)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Auth.Argon2Concurrencia != 4 {
+				t.Errorf("Argon2Concurrencia = %d, quiero 4", cfg.Auth.Argon2Concurrencia)
 			}
 		})
 	}
