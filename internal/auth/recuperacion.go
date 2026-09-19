@@ -20,8 +20,6 @@ const (
 	resultadoRecuperacionRelleno = "solicitud_relleno"
 	// resultadoRecuperacionEntregaFallida marca el desafío real que el canal no entregó.
 	resultadoRecuperacionEntregaFallida = "entrega_fallida"
-	// celularDeRelleno es el destino inerte de la fila de relleno, que nunca recibe envío.
-	celularDeRelleno = "sin-destino"
 )
 
 // RecuperadorDeDesafios crea el desafío real de recuperación con el racionamiento ya consumido.

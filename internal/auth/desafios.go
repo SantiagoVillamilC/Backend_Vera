@@ -30,6 +30,8 @@ const (
 	resultadoEntregaFallida = "entrega_fallida"
 	// resultadoDesafioReenviado marca el código regenerado que reemplazó al anterior.
 	resultadoDesafioReenviado = "reenviado"
+	// celularDeRelleno es la marca explícita de la fila de relleno: la escribe la recuperación y la lee el reenvío.
+	celularDeRelleno = "sin-destino"
 )
 
 // Proposito es el motivo del desafío y queda atado a la verificación de A2-06.2.

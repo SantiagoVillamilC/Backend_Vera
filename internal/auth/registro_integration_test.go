@@ -387,6 +387,95 @@ func intentarEscrituraDeConsentimiento(t *testing.T, ctx context.Context, pool *
 	return err
 }
 
+// leerCierreDeAlta devuelve el estado de la credencial del correo y su ultima transicion.
+func leerCierreDeAlta(tb testing.TB, pool *pgxpool.Pool, correo string) (estado, anterior, nuevo, motivo string) {
+	tb.Helper()
+	if _, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
+		func(ctx context.Context, tx transaccionDeAuth, _ *repositorio.Queries) (struct{}, error) {
+			return struct{}{}, tx.QueryRow(ctx,
+				`SELECT c.estado, COALESCE(t.estado_anterior, ''), t.estado_nuevo, COALESCE(t.motivo, '')
+				 FROM auth.credenciales c JOIN auth.transiciones_credencial t ON t.credencial_id = c.id
+				 WHERE c.correo = $1 ORDER BY t.id DESC LIMIT 1`, correo).Scan(&estado, &anterior, &nuevo, &motivo)
+		}); err != nil {
+		tb.Fatalf("leer el cierre de la credencial de %q: %v", correo, err)
+	}
+	return estado, anterior, nuevo, motivo
+}
+
+// exigirAltaCompensada exige la credencial cerrada por la transicion de compensacion.
+func exigirAltaCompensada(t *testing.T, pool *pgxpool.Pool, correo string) {
+	t.Helper()
+	estado, anterior, nuevo, motivo := leerCierreDeAlta(t, pool, correo)
+	if estado != string(EstadoCerrado) || anterior != string(EstadoPendienteVerificacion) || nuevo != string(EstadoCerrado) || motivo != MotivoCompensacionEntregaFallida {
+		t.Errorf("cierre = (%q, %q -> %q, %q), quiero cerrado por %s desde pendiente_verificacion", estado, anterior, nuevo, motivo, MotivoCompensacionEntregaFallida)
+	}
+}
+
+func TestRegistroCompensaLaCuentaSiFallaElDesafio(t *testing.T) {
+	casos := map[string]error{
+		"entrega fallida del canal":        fmt.Errorf("%w: canal caido", ErrEntregaFallida),
+		"racionamiento fail closed":        ConFailClosed(errors.New("redis caido")),
+		"tope de envios de la cuenta":      ErrDemasiadosEnvios,
+		"opt-in de consentimiento vencido": ErrConsentimientoRequerido,
+	}
+	for nombre, causa := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			pool := abrirPoolDeAuth(t)
+			registrador, err := NuevoRegistradorDePersonas(pool, derivadorDeRegistro(t), NuevoRegistradorEventos(pool),
+				creadorDesafioFalso{err: causa}, &abridorDeSubcuentasFalso{})
+			if err != nil {
+				t.Fatalf("NuevoRegistradorDePersonas: %v", err)
+			}
+			solicitud := solicitudValidaDeRegistro("comp-desafio-"+uuid.NewString()+"@centinela.test", celularUnicoDeRegistro())
+
+			_, err = registrador.RegistrarPersona(t.Context(), solicitud)
+
+			if !errors.Is(err, causa) {
+				t.Fatalf("err = %v, quiero el error original %v sin enmascarar", err, causa)
+			}
+			exigirAltaCompensada(t, pool, solicitud.Correo)
+
+			// Residuo conocido: personas_documento_uk no es parcial, así que el reintento idéntico choca por el documento.
+			_, err = registradorConFakes(t, pool).RegistrarPersona(t.Context(), solicitud)
+			exigirConflictoGenerico(t, err)
+
+			otroDocumento := solicitud
+			otroDocumento.NumeroDocumento = "DOC-" + uuid.NewString()
+			reintento, err := registradorConFakes(t, pool).RegistrarPersona(t.Context(), otroDocumento)
+			if err != nil {
+				t.Fatalf("reintento con el mismo correo y celular y otro documento: %v", err)
+			}
+			if reintento.Estado != EstadoPendienteVerificacion {
+				t.Errorf("estado del reintento = %q, quiero %q", reintento.Estado, EstadoPendienteVerificacion)
+			}
+		})
+	}
+}
+
+func TestRegistroConCompensadorFallidoDevuelveElErrorDelDesafio(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	causa := fmt.Errorf("%w: canal caido", ErrEntregaFallida)
+	compensador := &compensadorFalso{err: errors.New("base caida")}
+	registrador, err := NuevoRegistradorDePersonas(pool, derivadorDeRegistro(t), NuevoRegistradorEventos(pool),
+		creadorDesafioFalso{err: causa}, &abridorDeSubcuentasFalso{}, ConCompensador(compensador))
+	if err != nil {
+		t.Fatalf("NuevoRegistradorDePersonas: %v", err)
+	}
+	correo := "comp-falla-" + uuid.NewString() + "@centinela.test"
+
+	_, err = registrador.RegistrarPersona(t.Context(), solicitudValidaDeRegistro(correo, celularUnicoDeRegistro()))
+
+	if !errors.Is(err, causa) {
+		t.Fatalf("err = %v, quiero el error del desafio y no el de la compensacion", err)
+	}
+	if len(compensador.llamadas) != 1 {
+		t.Errorf("llamadas al compensador = %d, quiero 1", len(compensador.llamadas))
+	}
+	if estado, _, _, _ := leerCierreDeAlta(t, pool, correo); estado != string(EstadoPendienteVerificacion) {
+		t.Errorf("estado = %q, quiero pendiente_verificacion porque la compensacion fallo", estado)
+	}
+}
+
 func TestRegistroEncolaCompensacionSiFallaLaApertura(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeRegistro(t)

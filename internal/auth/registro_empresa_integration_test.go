@@ -97,6 +97,41 @@ func leerContextoDeEventoRegistro(tb testing.TB, pool *pgxpool.Pool, parteID uui
 	return contexto
 }
 
+func TestRegistroEmpresaCompensaLaCuentaSiFallaElDesafio(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	causa := fmt.Errorf("%w: canal caido", ErrEntregaFallida)
+	registrador, err := NuevoRegistradorDePersonas(pool, derivadorDeRegistro(t), NuevoRegistradorEventos(pool),
+		creadorDesafioFalso{err: causa}, &abridorDeSubcuentasFalso{})
+	if err != nil {
+		t.Fatalf("NuevoRegistradorDePersonas: %v", err)
+	}
+	nit, correo, celular := nitUnicoDeRegistro(), "emp-comp-"+uuid.NewString()+"@centinela.test", celularUnicoDeRegistro()
+	solicitud := solicitudValidaDeRegistroEmpresa(nit, correo, celular, "DOC-"+uuid.NewString())
+
+	_, err = registrador.RegistrarEmpresa(t.Context(), solicitud)
+
+	if !errors.Is(err, causa) {
+		t.Fatalf("err = %v, quiero el error original %v sin enmascarar", err, causa)
+	}
+	exigirAltaCompensada(t, pool, correo)
+
+	// Residuo conocido: personas_documento_uk y empresas_nit_uk no son parciales, así que ni el documento ni el NIT quedan libres.
+	reintentador := registradorDeEmpresaConFakes(t, pool, &abridorDeSubcuentasFalso{})
+	_, err = reintentador.RegistrarEmpresa(t.Context(), solicitud)
+	exigirConflictoGenerico(t, err)
+	_, err = reintentador.RegistrarEmpresa(t.Context(), solicitudValidaDeRegistroEmpresa(nit, correo, celular, "DOC-"+uuid.NewString()))
+	exigirConflictoGenerico(t, err)
+
+	reintento, err := reintentador.RegistrarEmpresa(t.Context(),
+		solicitudValidaDeRegistroEmpresa(nitUnicoDeRegistro(), correo, celular, "DOC-"+uuid.NewString()))
+	if err != nil {
+		t.Fatalf("reintento con el mismo correo y celular, otro NIT y otro documento: %v", err)
+	}
+	if reintento.Estado != EstadoPendienteVerificacion {
+		t.Errorf("estado del reintento = %q, quiero %q", reintento.Estado, EstadoPendienteVerificacion)
+	}
+}
+
 func TestRegistroEmpresaCreaParteJuridicaRepresentanteYSubcuentas(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	subcuentas := &abridorDeSubcuentasFalso{}
