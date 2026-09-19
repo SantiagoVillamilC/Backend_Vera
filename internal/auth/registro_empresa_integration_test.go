@@ -301,6 +301,70 @@ func TestCrearEmpresaParaParteVinculaRepresentanteExistente(t *testing.T) {
 	}
 }
 
+func TestRegistroEmpresaConCorreoRepetidoEsGenerico(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	registrador := registradorDeEmpresaConFakes(t, pool, &abridorDeSubcuentasFalso{})
+	correo := "emp-dupc-" + uuid.NewString() + "@centinela.test"
+
+	if _, err := registrador.RegistrarEmpresa(t.Context(),
+		solicitudValidaDeRegistroEmpresa(nitUnicoDeRegistro(), correo, celularUnicoDeRegistro(), "DOC-"+uuid.NewString())); err != nil {
+		t.Fatalf("primer registro: %v", err)
+	}
+	empresasAntes := contarEnAuth(t, pool, `SELECT count(*) FROM auth.empresas`)
+	personasAntes := contarEnAuth(t, pool, `SELECT count(*) FROM auth.personas`)
+
+	_, err := registrador.RegistrarEmpresa(t.Context(),
+		solicitudValidaDeRegistroEmpresa(nitUnicoDeRegistro(), correo, celularUnicoDeRegistro(), "DOC-"+uuid.NewString()))
+	exigirConflictoGenerico(t, err)
+
+	if total := contarCredencialesPorCorreo(t, pool, correo); total != 1 {
+		t.Errorf("credenciales con el correo = %d, quiero 1", total)
+	}
+	if total := contarEnAuth(t, pool, `SELECT count(*) FROM auth.empresas`); total != empresasAntes {
+		t.Errorf("empresas = %d, quiero %d sin el segundo alta", total, empresasAntes)
+	}
+	if total := contarEnAuth(t, pool, `SELECT count(*) FROM auth.personas`); total != personasAntes {
+		t.Errorf("personas = %d, quiero %d sin el representante del segundo alta", total, personasAntes)
+	}
+}
+
+func TestRegistroEmpresaConCelularRepetidoEsGenerico(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	registrador := registradorDeEmpresaConFakes(t, pool, &abridorDeSubcuentasFalso{})
+	celular := celularUnicoDeRegistro()
+
+	if _, err := registrador.RegistrarEmpresa(t.Context(),
+		solicitudValidaDeRegistroEmpresa(nitUnicoDeRegistro(), "emp-dupc-"+uuid.NewString()+"@centinela.test", celular, "DOC-"+uuid.NewString())); err != nil {
+		t.Fatalf("primer registro: %v", err)
+	}
+
+	_, err := registrador.RegistrarEmpresa(t.Context(),
+		solicitudValidaDeRegistroEmpresa(nitUnicoDeRegistro(), "emp-dupc-"+uuid.NewString()+"@centinela.test", celular, "DOC-"+uuid.NewString()))
+	exigirConflictoGenerico(t, err)
+
+	if total := contarEnAuth(t, pool, `SELECT count(*) FROM auth.credenciales WHERE celular = $1`, celular); total != 1 {
+		t.Errorf("credenciales con el celular = %d, quiero 1", total)
+	}
+}
+
+func TestRegistroEmpresaConCorreoDePersonaEsGenerico(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	registrador := registradorDeEmpresaConFakes(t, pool, &abridorDeSubcuentasFalso{})
+	correo := "emp-vs-persona-" + uuid.NewString() + "@centinela.test"
+
+	if _, err := registrador.RegistrarPersona(t.Context(), solicitudValidaDeRegistro(correo, celularUnicoDeRegistro())); err != nil {
+		t.Fatalf("registro de persona: %v", err)
+	}
+
+	_, err := registrador.RegistrarEmpresa(t.Context(),
+		solicitudValidaDeRegistroEmpresa(nitUnicoDeRegistro(), correo, celularUnicoDeRegistro(), "DOC-"+uuid.NewString()))
+	exigirConflictoGenerico(t, err)
+
+	if total := contarCredencialesPorCorreo(t, pool, correo); total != 1 {
+		t.Errorf("credenciales con el correo = %d, quiero 1", total)
+	}
+}
+
 func TestCrearEmpresaParaParteConNitInvalidoNoCreaNada(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	registrador := registradorDeEmpresaConFakes(t, pool, &abridorDeSubcuentasFalso{})
