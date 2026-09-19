@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -106,6 +108,36 @@ func TestAvisoValidoExigeDireccionYPlantilla(t *testing.T) {
 				t.Errorf("valido() = %v, wantErr %v", err, caso.wantErr)
 			}
 		})
+	}
+}
+
+func TestElAvisoDeCambioNoLogueaElNumeroNiElCodigo(t *testing.T) {
+	const nuevo = "+573001112233"
+	const soporte = "soporte@sandbox.centinela.test"
+
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(original) })
+
+	base := avisoBaseDeCambio(soporte, nuevo, "2026-09-19T12:00:00Z")
+	correoAviso := base
+	correoAviso.Destino = DestinoCorreo
+	correoAviso.Correo = "dueno@centinela.test"
+
+	cuerpo := cuerpoDeAviso(correoAviso)
+	if !strings.Contains(cuerpo, "****2233") || !strings.Contains(cuerpo, soporte) {
+		t.Fatalf("el aviso no lleva el numero enmascarado ni el soporte: %q", cuerpo)
+	}
+	if strings.Contains(cuerpo, nuevo) || strings.Contains(cuerpo, "123456") {
+		t.Fatalf("el aviso filtra el numero completo o un codigo: %q", cuerpo)
+	}
+	notificador := NuevoNotificadorDeAvisos(&canalCorreoFalso{id: "c"}, &canalOTPFalso{id: "w"})
+	if _, err := notificador.Enviar(t.Context(), correoAviso); err != nil {
+		t.Fatalf("Enviar: %v", err)
+	}
+	if strings.Contains(buf.String(), nuevo) || strings.Contains(buf.String(), "123456") {
+		t.Fatalf("el log filtra el numero completo o un codigo: %q", buf.String())
 	}
 }
 

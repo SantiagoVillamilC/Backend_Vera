@@ -25,21 +25,27 @@ const (
 
 // Aviso es una notificación a encolar en el outbox; su payload nunca lleva un secreto.
 type Aviso struct {
-	Tipo      string
-	Destino   string
-	Correo    string
-	Celular   string
-	Plantilla string
-	ParteID   string
+	Tipo             string
+	Destino          string
+	Correo           string
+	Celular          string
+	Plantilla        string
+	ParteID          string
+	NuevoEnmascarado string
+	Fecha            string
+	ContactoSoporte  string
 }
 
-// payloadAviso es la forma persistida del aviso: destino, dirección, plantilla y referencia.
+// payloadAviso es la forma persistida del aviso: destino, dirección, plantilla, referencia y el cambio enmascarado.
 type payloadAviso struct {
-	Destino   string `json:"destino"`
-	Correo    string `json:"correo,omitempty"`
-	Celular   string `json:"celular,omitempty"`
-	Plantilla string `json:"plantilla"`
-	ParteID   string `json:"parte_id,omitempty"`
+	Destino          string `json:"destino"`
+	Correo           string `json:"correo,omitempty"`
+	Celular          string `json:"celular,omitempty"`
+	Plantilla        string `json:"plantilla"`
+	ParteID          string `json:"parte_id,omitempty"`
+	NuevoEnmascarado string `json:"numero_nuevo_enmascarado,omitempty"`
+	Fecha            string `json:"fecha,omitempty"`
+	ContactoSoporte  string `json:"contacto_soporte,omitempty"`
 }
 
 // Notificador entrega un aviso por el canal que su destino indique.
@@ -80,23 +86,35 @@ func (n *NotificadorDeAvisos) Enviar(ctx context.Context, aviso Aviso) (string, 
 
 // EncolarAviso inserta el aviso en auth.outbox dentro de la transacción del caso de uso.
 func EncolarAviso(ctx context.Context, q *repositorio.Queries, aviso Aviso) error {
-	if err := aviso.valido(); err != nil {
-		return err
-	}
-	payload, err := json.Marshal(payloadAviso{
-		Destino:   aviso.Destino,
-		Correo:    aviso.Correo,
-		Celular:   aviso.Celular,
-		Plantilla: aviso.Plantilla,
-		ParteID:   aviso.ParteID,
-	})
+	payload, err := payloadDeAviso(aviso)
 	if err != nil {
-		return fmt.Errorf("auth: serializar el payload del aviso %q: %w", aviso.Tipo, err)
+		return err
 	}
 	if _, err := q.InsertarAviso(ctx, repositorio.InsertarAvisoParams{Tipo: aviso.Tipo, Payload: payload}); err != nil {
 		return fmt.Errorf("auth: encolar el aviso %q: %w", aviso.Tipo, err)
 	}
 	return nil
+}
+
+// payloadDeAviso valida el aviso y devuelve su forma persistida, sin ningún secreto.
+func payloadDeAviso(aviso Aviso) ([]byte, error) {
+	if err := aviso.valido(); err != nil {
+		return nil, err
+	}
+	payload, err := json.Marshal(payloadAviso{
+		Destino:          aviso.Destino,
+		Correo:           aviso.Correo,
+		Celular:          aviso.Celular,
+		Plantilla:        aviso.Plantilla,
+		ParteID:          aviso.ParteID,
+		NuevoEnmascarado: aviso.NuevoEnmascarado,
+		Fecha:            aviso.Fecha,
+		ContactoSoporte:  aviso.ContactoSoporte,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("auth: serializar el payload del aviso %q: %w", aviso.Tipo, err)
+	}
+	return payload, nil
 }
 
 // valido exige tipo y, cuando el aviso notifica, la dirección de su destino y la plantilla.
@@ -123,10 +141,16 @@ func (a Aviso) valido() error {
 
 // asuntoDeAviso arma el asunto del correo; el texto definitivo está pendiente de fijar.
 func asuntoDeAviso(aviso Aviso) string {
+	if aviso.Tipo == TipoAvisoCambioNumero {
+		return "[PLANTILLA PENDIENTE] Aviso de cambio de numero"
+	}
 	return fmt.Sprintf("[PLANTILLA PENDIENTE] Aviso %s", aviso.Tipo)
 }
 
-// cuerpoDeAviso arma el cuerpo sin datos de la cuenta; el texto definitivo está pendiente de fijar.
+// cuerpoDeAviso arma el cuerpo sin secretos; el aviso del cambio lleva el numero enmascarado y el contacto de soporte.
 func cuerpoDeAviso(aviso Aviso) string {
+	if aviso.Tipo == TipoAvisoCambioNumero {
+		return fmt.Sprintf("[PLANTILLA PENDIENTE] Tu número cambió a %s el %s. Si no fuiste tú, escribe a %s.", aviso.NuevoEnmascarado, aviso.Fecha, aviso.ContactoSoporte)
+	}
 	return fmt.Sprintf("[PLANTILLA PENDIENTE] Plantilla %q: hubo un cambio. Si no fuiste tú, escribe a soporte.", aviso.Plantilla)
 }

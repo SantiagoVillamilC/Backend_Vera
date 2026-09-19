@@ -21,6 +21,7 @@ func entornoDeAuth(t *testing.T) {
 	t.Setenv("OTP_PEPPER", strings.Repeat("22", 32))
 	t.Setenv("OTP_CANAL", "simulador")
 	t.Setenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", "24h")
+	t.Setenv("AUTH_CONTACTO_SOPORTE", "soporte@sandbox.centinela.test")
 	t.Setenv("AUTH_RESET_TOKEN_TTL", "10m")
 	t.Setenv("AUTH_VENTANA_PENDIENTE", "24h")
 	t.Setenv("AUTH_LIMPIEZA_INTERVAL", "15m")
@@ -218,6 +219,36 @@ func TestLoadConfigAuthExigeEnfriamientoCambioNumero(t *testing.T) {
 			}
 			if cfg.Auth.EnfriamientoCambioNumero != 24*time.Hour {
 				t.Errorf("EnfriamientoCambioNumero = %s, quiero 24h", cfg.Auth.EnfriamientoCambioNumero)
+			}
+		})
+	}
+}
+
+func TestLoadConfigAuthExigeContactoSoporte(t *testing.T) {
+	casos := map[string]struct {
+		valor   string
+		wantErr string
+	}{
+		"valido":  {valor: "soporte@sandbox.centinela.test"},
+		"ausente": {valor: "", wantErr: "AUTH_CONTACTO_SOPORTE is required"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AUTH_CONTACTO_SOPORTE", caso.valor)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Auth.ContactoSoporte != caso.valor {
+				t.Errorf("ContactoSoporte = %q, quiero %q", cfg.Auth.ContactoSoporte, caso.valor)
 			}
 		})
 	}

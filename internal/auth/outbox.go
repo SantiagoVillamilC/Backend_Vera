@@ -237,12 +237,21 @@ func (d *DespachadorDeAvisos) registrarFallo(ctx context.Context, reclamado avis
 // manejadorDeNotificacion decodifica el payload y entrega el aviso por el notificador.
 func manejadorDeNotificacion(notificador Notificador) ManejadorDeAviso {
 	return func(ctx context.Context, tipo string, payload []byte) (string, error) {
-		var aviso Aviso
-		if err := json.Unmarshal(payload, &aviso); err != nil {
+		var fila payloadAviso
+		if err := json.Unmarshal(payload, &fila); err != nil {
 			return "", fmt.Errorf("auth: leer el payload del aviso: %w", err)
 		}
-		aviso.Tipo = tipo
-		return notificador.Enviar(ctx, aviso)
+		return notificador.Enviar(ctx, Aviso{
+			Tipo:             tipo,
+			Destino:          fila.Destino,
+			Correo:           fila.Correo,
+			Celular:          fila.Celular,
+			Plantilla:        fila.Plantilla,
+			ParteID:          fila.ParteID,
+			NuevoEnmascarado: fila.NuevoEnmascarado,
+			Fecha:            fila.Fecha,
+			ContactoSoporte:  fila.ContactoSoporte,
+		})
 	}
 }
 

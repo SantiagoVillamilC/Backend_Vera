@@ -123,7 +123,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("servicio de restablecimiento: %w", err)
 	}
-	servicioCambioNumero, err := auth.NuevoServicioDeCambioDeNumero(pool, gestorDesafios, gestorSesiones, derivador, denylistAuth, auth.NuevoRegistradorEventos(pool), contadoresAuth, clavesContadores, cfg.Auth.OTPPepper, cfg.Auth.EnfriamientoCambioNumero)
+	servicioCambioNumero, err := auth.NuevoServicioDeCambioDeNumero(pool, gestorDesafios, gestorSesiones, derivador, denylistAuth, auth.NuevoRegistradorEventos(pool), lectorOptIn, contadoresAuth, clavesContadores, cfg.Auth.OTPPepper, cfg.Auth.ContactoSoporte, cfg.Auth.EnfriamientoCambioNumero)
 	if err != nil {
 		return fmt.Errorf("servicio de cambio de número: %w", err)
 	}

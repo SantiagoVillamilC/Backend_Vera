@@ -28,6 +28,7 @@ type ConfigAuth struct {
 	JWTAudience              string
 	ResetTokenTTL            time.Duration
 	EnfriamientoCambioNumero time.Duration
+	ContactoSoporte          string
 	VentanaPendiente         time.Duration
 	LimpiezaInterval         time.Duration
 	OutboxInterval           time.Duration
@@ -48,6 +49,7 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 		WhatsAppTemplate:       os.Getenv("WHATSAPP_TEMPLATE"),
 		JWTIssuer:              os.Getenv("JWT_ISSUER"),
 		JWTAudience:            os.Getenv("JWT_AUDIENCE"),
+		ContactoSoporte:        os.Getenv("AUTH_CONTACTO_SOPORTE"),
 	}
 
 	var errs []error
@@ -82,6 +84,9 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	cfg.EnfriamientoCambioNumero, errEnfriamiento = duracionRequerida("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", os.Getenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO"))
 	if errEnfriamiento != nil {
 		errs = append(errs, errEnfriamiento)
+	}
+	if cfg.ContactoSoporte == "" {
+		errs = append(errs, errors.New("AUTH_CONTACTO_SOPORTE is required"))
 	}
 	var errVentana error
 	cfg.VentanaPendiente, errVentana = duracionRequerida("AUTH_VENTANA_PENDIENTE", os.Getenv("AUTH_VENTANA_PENDIENTE"))
