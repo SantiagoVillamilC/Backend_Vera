@@ -86,6 +86,7 @@ func TestMapearError(t *testing.T) {
 		"demasiados envios es 429 TooManyRequests": {err: ErrDemasiadosEnvios, code: "TooManyRequests", status: 429},
 		"credenciales invalidas es 401":            {err: ErrCredencialesInvalidas, code: "InvalidCredentials", status: 401},
 		"cuenta suspendida es 403":                 {err: ErrCuentaSuspendida, code: "AccountSuspended", status: 403},
+		"sin rol de empresa es 403":                {err: ErrSinRolDeEmpresa, code: "NoCompanyRole", status: 403},
 	}
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {

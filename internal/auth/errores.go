@@ -64,6 +64,9 @@ var ErrCredencialesInvalidas = errors.New("auth: las credenciales no son válida
 // ErrCuentaSuspendida es la credencial suspendida con la contrasena correcta: responde 403 AccountSuspended.
 var ErrCuentaSuspendida = errors.New("auth: la cuenta está suspendida")
 
+// ErrSinRolDeEmpresa es el login con contexto empresa sin ningún rol vigente: responde 403 NoCompanyRole.
+var ErrSinRolDeEmpresa = errors.New("auth: la parte no tiene un rol de empresa vigente")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -118,6 +121,8 @@ func MapearError(err error) error {
 		return platformerrors.New("InvalidCredentials", "The email or password is incorrect.", http.StatusUnauthorized)
 	case errors.Is(err, ErrCuentaSuspendida):
 		return platformerrors.New("AccountSuspended", "The account is suspended.", http.StatusForbidden)
+	case errors.Is(err, ErrSinRolDeEmpresa):
+		return platformerrors.New("NoCompanyRole", "The account has no active company role.", http.StatusForbidden)
 	default:
 		return err
 	}

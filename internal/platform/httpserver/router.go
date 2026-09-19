@@ -53,7 +53,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 		r.Post("/v1/auth/register", registroDePersona(authDeps.Registro))
 		r.Post("/v1/auth/register/verify-phone", verificacionDeCelular(authDeps.Verificacion))
 		r.Post("/v1/auth/otp/resend", reenvioDeOtp(authDeps.Desafios))
-		r.Post("/v1/auth/login", sinImplementar)
+		r.Post("/v1/auth/login", loginDeSesion(authDeps.Login))
 		r.Post("/v1/auth/login/verify-otp", sinImplementar)
 		r.Post("/v1/auth/refresh", sinImplementar)
 		r.Post("/v1/auth/recovery/request", sinImplementar)
