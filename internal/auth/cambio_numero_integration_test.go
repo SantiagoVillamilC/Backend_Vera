@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/correosim"
 	platformerrors "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/errors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -29,6 +30,9 @@ func celularDePrueba() string {
 	return fmt.Sprintf("+57300%07d", n%10000000)
 }
 
+// contactoSoporteDePrueba es el contacto de soporte de los avisos del cambio en las pruebas.
+const contactoSoporteDePrueba = "soporte@sandbox.centinela.test"
+
 // montajeDeCambio agrupa el servicio de cambio con sus colaboradores reales.
 type montajeDeCambio struct {
 	servicio     *ServicioDeCambioDeNumero
@@ -38,35 +42,53 @@ type montajeDeCambio struct {
 	denylist     *denylistRedisDeSesion
 	derivador    Derivador
 	claves       *Claves
+	optIn        LectorOptIn
+	eventos      RegistradorEventos
+}
+
+// opcionMontajeDeCambio ajusta el montaje del cambio antes de construir el servicio.
+type opcionMontajeDeCambio func(*montajeDeCambio)
+
+// conLectorOptIn fija el lector de opt-in del servicio de cambio.
+func conLectorOptIn(optIn LectorOptIn) opcionMontajeDeCambio {
+	return func(m *montajeDeCambio) { m.optIn = optIn }
+}
+
+// conRegistradorEventos fija el registrador de eventos del servicio de cambio.
+func conRegistradorEventos(eventos RegistradorEventos) opcionMontajeDeCambio {
+	return func(m *montajeDeCambio) { m.eventos = eventos }
 }
 
 // montajeCambioDePrueba arma el cambio completo sobre Postgres y Redis reales.
-func montajeCambioDePrueba(tb testing.TB, pool *pgxpool.Pool, enfriamiento time.Duration) montajeDeCambio {
+func montajeCambioDePrueba(tb testing.TB, pool *pgxpool.Pool, enfriamiento time.Duration, opciones ...opcionMontajeDeCambio) montajeDeCambio {
 	tb.Helper()
 
+	m := montajeDeCambio{optIn: SiempreOptIn{}, eventos: NuevoRegistradorEventos(pool)}
+	for _, opcion := range opciones {
+		opcion(&m)
+	}
 	derivador := derivadorDeLogin(tb)
-	eventos := NuevoRegistradorEventos(pool)
 	canal := nuevoCanalDeCodigoFijo("123456")
 	claves := clavesDeCambio(tb)
 	contadores := contadoresDeLogin(tb)
-	gestor, err := NuevoGestorDesafios(pool, canal, eventos, SiempreOptIn{}, pepperDeDesafio,
+	gestor, err := NuevoGestorDesafios(pool, canal, NuevoRegistradorEventos(pool), SiempreOptIn{}, pepperDeDesafio,
 		ConRacionamiento(contadores, claves))
 	if err != nil {
 		tb.Fatalf("gestor de desafíos: %v", err)
 	}
-	sesiones := NuevoGestorSesiones(pool, eventos)
+	sesiones := NuevoGestorSesiones(pool, NuevoRegistradorEventos(pool))
 	denylist := denylistDeSesionDePrueba(tb)
-	servicio, err := NuevoServicioDeCambioDeNumero(pool, gestor, sesiones, derivador, denylist, eventos, contadores, claves, pepperDeDesafio, enfriamiento)
+	servicio, err := NuevoServicioDeCambioDeNumero(pool, gestor, sesiones, derivador, denylist, m.eventos, m.optIn, contadores, claves, pepperDeDesafio, contactoSoporteDePrueba, enfriamiento)
 	if err != nil {
 		tb.Fatalf("servicio de cambio: %v", err)
 	}
-	recuperacion, err := NuevoServicioDeRecuperacion(pool, gestor, eventos, contadores, claves, pepperDeDesafio)
+	recuperacion, err := NuevoServicioDeRecuperacion(pool, gestor, NuevoRegistradorEventos(pool), contadores, claves, pepperDeDesafio)
 	if err != nil {
 		tb.Fatalf("servicio de recuperación: %v", err)
 	}
 	return montajeDeCambio{
 		servicio: servicio, sesiones: sesiones, recuperacion: recuperacion,
-		canal: canal, denylist: denylist, derivador: derivador, claves: claves,
+		canal: canal, denylist: denylist, derivador: derivador, claves: claves, optIn: m.optIn, eventos: m.eventos,
 	}
 }
 
@@ -487,5 +509,234 @@ func TestCambioDeNumeroBajoContextoEmpresaCambiaLaPersona(t *testing.T) {
 	}
 	if totalEmpresa != 0 {
 		t.Fatalf("la empresa tiene %d credenciales, quiero 0", totalEmpresa)
+	}
+}
+
+// sembrarOptInDeParte inserta el último consentimiento de WhatsApp de la parte.
+func sembrarOptInDeParte(tb testing.TB, pool *pgxpool.Pool, parteID uuid.UUID, aceptado bool) {
+	tb.Helper()
+
+	if _, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
+		func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
+			_, err := q.CrearConsentimiento(ctx, repositorio.CrearConsentimientoParams{
+				ID:           pgUUID(uuid.New()),
+				ParteID:      pgUUID(parteID),
+				Tipo:         TipoConsentimientoWhatsApp,
+				VersionTexto: "v1",
+				Texto:        "marcador de prueba",
+				Aceptado:     aceptado,
+				Accion:       "otorgar",
+				Origen:       "10.0.0.1",
+				Metodo:       "test",
+				OcurridoEn:   pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true},
+			})
+			return struct{}{}, err
+		}); err != nil {
+		tb.Fatalf("sembrar el opt-in de la parte: %v", err)
+	}
+}
+
+// avisoDeCambioEnOutbox es la fila del aviso del cambio que el test inspecciona.
+type avisoDeCambioEnOutbox struct {
+	destino          string
+	correo           string
+	celular          string
+	nuevoEnmascarado string
+	contactoSoporte  string
+	ultimoError      string
+	entregado        bool
+}
+
+// leerAvisosDeCambio lee como rol_auth los avisos del cambio que tocan el correo o el celular.
+func leerAvisosDeCambio(tb testing.TB, pool *pgxpool.Pool, correo, celular string) []avisoDeCambioEnOutbox {
+	tb.Helper()
+
+	var filas []avisoDeCambioEnOutbox
+	if _, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
+		func(ctx context.Context, tx transaccionDeAuth, _ *repositorio.Queries) (struct{}, error) {
+			rows, err := tx.Query(ctx, `SELECT payload->>'destino', coalesce(payload->>'correo',''), coalesce(payload->>'celular',''),
+					coalesce(payload->>'numero_nuevo_enmascarado',''), coalesce(payload->>'contacto_soporte',''),
+					coalesce(ultimo_error,''), despachado_en IS NOT NULL
+				  FROM auth.outbox
+				 WHERE tipo = $1 AND (payload->>'correo' = $2 OR payload->>'celular' = $3)
+				 ORDER BY id`, TipoAvisoCambioNumero, correo, celular)
+			if err != nil {
+				return struct{}{}, err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var fila avisoDeCambioEnOutbox
+				if err := rows.Scan(&fila.destino, &fila.correo, &fila.celular, &fila.nuevoEnmascarado, &fila.contactoSoporte, &fila.ultimoError, &fila.entregado); err != nil {
+					return struct{}{}, err
+				}
+				filas = append(filas, fila)
+			}
+			return struct{}{}, rows.Err()
+		}); err != nil {
+		tb.Fatalf("leer los avisos del cambio: %v", err)
+	}
+	return filas
+}
+
+// canalWhatsAppDeAvisos guarda en memoria el último aviso entregado a cada celular.
+type canalWhatsAppDeAvisos struct {
+	mu      sync.Mutex
+	ultimos map[string]string
+}
+
+// nuevoCanalWhatsAppDeAvisos arma el simulador en memoria de avisos por WhatsApp.
+func nuevoCanalWhatsAppDeAvisos() *canalWhatsAppDeAvisos {
+	return &canalWhatsAppDeAvisos{ultimos: map[string]string{}}
+}
+
+// Enviar guarda el aviso del celular y devuelve un id determinista.
+func (c *canalWhatsAppDeAvisos) Enviar(_ context.Context, celular, texto string) (string, error) {
+	c.mu.Lock()
+	c.ultimos[celular] = texto
+	c.mu.Unlock()
+	return "wa:" + celular, nil
+}
+
+// UltimoAviso devuelve el último aviso guardado para el celular y si existe.
+func (c *canalWhatsAppDeAvisos) UltimoAviso(celular string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	texto, ok := c.ultimos[celular]
+	return texto, ok
+}
+
+// registradorEventosQueFalla falla siempre para forzar la reversión del cambio.
+type registradorEventosQueFalla struct{}
+
+// Registrar devuelve siempre el error de prueba.
+func (registradorEventosQueFalla) Registrar(context.Context, Evento) error {
+	return errors.New("fallo de eventos forzado")
+}
+
+// TestHUAUT08DobleAvisoDelCambioDeNumero cubre los criterios 3 y 5: los dos avisos y la remisión a soporte.
+func TestHUAUT08DobleAvisoDelCambioDeNumero(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	m := montajeCambioDePrueba(t, pool, 24*time.Hour, conLectorOptIn(NuevoLectorOptInDeConsentimientos(pool)))
+	credencialID, parteID, correo, celularViejo := sembrarCredencialDeInicioSesion(t, pool, m.derivador, "contrasena-correcta", EstadoActivo, true)
+	sembrarOptInDeParte(t, pool, parteID, true)
+	codigos := sembrarCodigosRespaldo(t, pool, credencialID, 2)
+	sesion := sesionDeCambio(t, m, parteID, ContextoUsuario)
+	nuevo := celularDePrueba()
+
+	desafio, err := m.servicio.IniciarCambioDeNumero(t.Context(), sesion.FamiliaID, nuevo, "contrasena-correcta", &codigos[0], "10.0.0.20")
+	if err != nil {
+		t.Fatalf("IniciarCambioDeNumero: %v", err)
+	}
+	if _, err := m.servicio.ConfirmarCambioDeNumero(t.Context(), sesion.FamiliaID, desafio.ID, "123456", "10.0.0.20"); err != nil {
+		t.Fatalf("ConfirmarCambioDeNumero: %v", err)
+	}
+
+	filas := leerAvisosDeCambio(t, pool, correo, celularViejo)
+	if len(filas) != 2 {
+		t.Fatalf("avisos del cambio = %d, quiero 2: %+v", len(filas), filas)
+	}
+	porDestino := map[string]avisoDeCambioEnOutbox{}
+	enmascarado := "****" + nuevo[len(nuevo)-4:]
+	for _, fila := range filas {
+		porDestino[fila.destino] = fila
+		if fila.nuevoEnmascarado != enmascarado {
+			t.Errorf("destino %s: enmascarado = %q, quiero %q", fila.destino, fila.nuevoEnmascarado, enmascarado)
+		}
+		if fila.contactoSoporte != contactoSoporteDePrueba {
+			t.Errorf("destino %s: contacto de soporte = %q, quiero %q", fila.destino, fila.contactoSoporte, contactoSoporteDePrueba)
+		}
+		if strings.Contains(fila.nuevoEnmascarado, nuevo) || strings.Contains(fila.contactoSoporte, "123456") {
+			t.Errorf("el aviso filtra el número completo o un código: %+v", fila)
+		}
+	}
+	whatsapp, okWhatsApp := porDestino[DestinoWhatsApp]
+	if !okWhatsApp || whatsapp.celular != celularViejo {
+		t.Fatalf("el aviso de WhatsApp no fue al número viejo: %+v", whatsapp)
+	}
+	correoAviso, okCorreo := porDestino[DestinoCorreo]
+	if !okCorreo || correoAviso.correo != correo {
+		t.Fatalf("el aviso de correo no fue al correo registrado: %+v", correoAviso)
+	}
+	if contarEventosDeCambio(t, pool, credencialID, resultadoCambioNotificado) != 1 {
+		t.Fatalf("eventos notificado = %d, quiero 1", contarEventosDeCambio(t, pool, credencialID, resultadoCambioNotificado))
+	}
+
+	correoSim := correosim.Nuevo()
+	whatsappSim := nuevoCanalWhatsAppDeAvisos()
+	despachador := NuevoDespachadorDeAvisos(pool, NuevoNotificadorDeAvisos(correoSim, whatsappSim),
+		PoliticaReintento{Base: time.Second, Factor: 2, Tope: time.Minute})
+	if err := despachador.DespacharAvisos(t.Context()); err != nil {
+		t.Fatalf("despachar: %v", err)
+	}
+	avisoCorreo, ok := correoSim.UltimoAviso(correo)
+	if !ok || !strings.Contains(avisoCorreo.Cuerpo, enmascarado) {
+		t.Fatalf("el simulador de correo no recibió el aviso correcto: %+v", avisoCorreo)
+	}
+	avisoWhatsApp, ok := whatsappSim.UltimoAviso(celularViejo)
+	if !ok || !strings.Contains(avisoWhatsApp, contactoSoporteDePrueba) {
+		t.Fatalf("el simulador de WhatsApp no recibió el aviso del número viejo: %q", avisoWhatsApp)
+	}
+	if _, ok := whatsappSim.UltimoAviso(nuevo); ok {
+		t.Fatal("el número nuevo recibió un aviso, solo debía recibir el OTP")
+	}
+	for _, fila := range leerAvisosDeCambio(t, pool, correo, celularViejo) {
+		if !fila.entregado || fila.ultimoError != "" {
+			t.Errorf("el aviso %s no quedó entregado limpio: %+v", fila.destino, fila)
+		}
+	}
+}
+
+// TestHUAUT08ElAvisoNoQuedaSiElCambioReverta demuestra que el aviso se encola en la misma transacción.
+func TestHUAUT08ElAvisoNoQuedaSiElCambioReverta(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	m := montajeCambioDePrueba(t, pool, 24*time.Hour,
+		conLectorOptIn(NuevoLectorOptInDeConsentimientos(pool)),
+		conRegistradorEventos(registradorEventosQueFalla{}))
+	credencialID, parteID, correo, celularViejo := sembrarCredencialDeInicioSesion(t, pool, m.derivador, "contrasena-correcta", EstadoActivo, true)
+	sembrarOptInDeParte(t, pool, parteID, true)
+	codigos := sembrarCodigosRespaldo(t, pool, credencialID, 2)
+	sesion := sesionDeCambio(t, m, parteID, ContextoUsuario)
+
+	desafio, err := m.servicio.IniciarCambioDeNumero(t.Context(), sesion.FamiliaID, celularDePrueba(), "contrasena-correcta", &codigos[0], "10.0.0.21")
+	if err != nil {
+		t.Fatalf("IniciarCambioDeNumero: %v", err)
+	}
+	if _, err := m.servicio.ConfirmarCambioDeNumero(t.Context(), sesion.FamiliaID, desafio.ID, "123456", "10.0.0.21"); err == nil {
+		t.Fatal("el confirm debía fallar por el registrador forzado")
+	}
+	if filas := leerAvisosDeCambio(t, pool, correo, celularViejo); len(filas) != 0 {
+		t.Fatalf("avisos tras revertir = %d, quiero 0: %+v", len(filas), filas)
+	}
+	if leerCredencialDeCambio(t, pool, credencialID).Celular != celularViejo {
+		t.Fatal("la credencial cambió pese a la reversión")
+	}
+}
+
+// TestHUAUT08SinOptInSoloAvisaPorCorreo cubre el destino de WhatsApp condicionado al opt-in.
+func TestHUAUT08SinOptInSoloAvisaPorCorreo(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	m := montajeCambioDePrueba(t, pool, 24*time.Hour, conLectorOptIn(NuevoLectorOptInDeConsentimientos(pool)))
+	credencialID, parteID, correo, celularViejo := sembrarCredencialDeInicioSesion(t, pool, m.derivador, "contrasena-correcta", EstadoActivo, true)
+	sembrarOptInDeParte(t, pool, parteID, false)
+	codigos := sembrarCodigosRespaldo(t, pool, credencialID, 2)
+	sesion := sesionDeCambio(t, m, parteID, ContextoUsuario)
+
+	desafio, err := m.servicio.IniciarCambioDeNumero(t.Context(), sesion.FamiliaID, celularDePrueba(), "contrasena-correcta", &codigos[0], "10.0.0.22")
+	if err != nil {
+		t.Fatalf("IniciarCambioDeNumero: %v", err)
+	}
+	if _, err := m.servicio.ConfirmarCambioDeNumero(t.Context(), sesion.FamiliaID, desafio.ID, "123456", "10.0.0.22"); err != nil {
+		t.Fatalf("ConfirmarCambioDeNumero: %v", err)
+	}
+
+	filas := leerAvisosDeCambio(t, pool, correo, celularViejo)
+	if len(filas) != 1 || filas[0].destino != DestinoCorreo || filas[0].correo != correo {
+		t.Fatalf("avisos sin opt-in = %+v, quiero solo el de correo al correo registrado", filas)
+	}
+	if contarEventosDeCambio(t, pool, credencialID, resultadoCambioNotificadoSoloCorreo) != 1 {
+		t.Fatalf("eventos notificado_solo_correo = %d, quiero 1", contarEventosDeCambio(t, pool, credencialID, resultadoCambioNotificadoSoloCorreo))
+	}
+	if contarEventosDeCambio(t, pool, credencialID, resultadoCambioNotificado) != 0 {
+		t.Fatal("no debía quedar evento notificado con el opt-in revocado")
 	}
 }

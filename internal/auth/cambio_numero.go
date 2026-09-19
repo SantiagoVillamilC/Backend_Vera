@@ -27,6 +27,12 @@ const (
 	resultadoCambioConfirmado = "confirmado"
 	// resultadoCambioDenylistFallida marca los sid que no se pudieron publicar.
 	resultadoCambioDenylistFallida = "denylist_fallida"
+	// resultadoCambioNotificado marca el aviso que salió por correo y WhatsApp.
+	resultadoCambioNotificado = "notificado"
+	// resultadoCambioNotificadoSoloCorreo marca el aviso que salió solo por correo, sin opt-in.
+	resultadoCambioNotificadoSoloCorreo = "notificado_solo_correo"
+	// plantillaCambioNumero es el marcador de plantilla del aviso, pendiente de copy real.
+	plantillaCambioNumero = "cambio_numero"
 )
 
 // ResultadoCambio es el desenlace del cambio: quién, su contacto y los dos números involucrados.
@@ -41,21 +47,23 @@ type ResultadoCambio struct {
 
 // ServicioDeCambioDeNumero exige el factor fuerte y verifica el número nuevo antes de mover el ancla.
 type ServicioDeCambioDeNumero struct {
-	pool         abridorDeTransaccionesAuth
-	desafios     *GestorDesafios
-	sesiones     *GestorSesiones
-	derivador    Derivador
-	contadores   Contadores
-	claves       *Claves
-	denylist     RevocadorDeSesiones
-	eventos      RegistradorEventos
-	racionador   *RacionadorOTP
-	pepper       []byte
-	enfriamiento time.Duration
+	pool            abridorDeTransaccionesAuth
+	desafios        *GestorDesafios
+	sesiones        *GestorSesiones
+	derivador       Derivador
+	contadores      Contadores
+	claves          *Claves
+	denylist        RevocadorDeSesiones
+	eventos         RegistradorEventos
+	optIn           LectorOptIn
+	racionador      *RacionadorOTP
+	pepper          []byte
+	contactoSoporte string
+	enfriamiento    time.Duration
 }
 
-// NuevoServicioDeCambioDeNumero compone el cambio de número y exige una ventana de enfriamiento positiva.
-func NuevoServicioDeCambioDeNumero(pool *pgxpool.Pool, desafios *GestorDesafios, sesiones *GestorSesiones, derivador Derivador, denylist RevocadorDeSesiones, eventos RegistradorEventos, contadores Contadores, claves *Claves, pepper []byte, enfriamiento time.Duration) (*ServicioDeCambioDeNumero, error) {
+// NuevoServicioDeCambioDeNumero compone el cambio de número, con opt-in y contacto de soporte obligatorios.
+func NuevoServicioDeCambioDeNumero(pool *pgxpool.Pool, desafios *GestorDesafios, sesiones *GestorSesiones, derivador Derivador, denylist RevocadorDeSesiones, eventos RegistradorEventos, optIn LectorOptIn, contadores Contadores, claves *Claves, pepper []byte, contactoSoporte string, enfriamiento time.Duration) (*ServicioDeCambioDeNumero, error) {
 	if pool == nil || desafios == nil || sesiones == nil || derivador == nil || contadores == nil || claves == nil {
 		return nil, errors.New("auth: el cambio de número necesita pool, desafíos, sesiones, derivador, contadores y claves")
 	}
@@ -65,25 +73,33 @@ func NuevoServicioDeCambioDeNumero(pool *pgxpool.Pool, desafios *GestorDesafios,
 	if enfriamiento <= 0 {
 		return nil, errors.New("auth: la ventana de enfriamiento del cambio de número debe ser positiva")
 	}
+	if contactoSoporte == "" {
+		return nil, errors.New("auth: AUTH_CONTACTO_SOPORTE es obligatoria para el aviso del cambio")
+	}
 	if eventos == nil {
 		eventos = RegistradorNulo{}
+	}
+	if optIn == nil {
+		optIn = SiempreOptIn{}
 	}
 	racionador, err := NuevoRacionadorOTP(contadores, claves)
 	if err != nil {
 		return nil, err
 	}
 	return &ServicioDeCambioDeNumero{
-		pool:         poolDeAuth{pool: pool},
-		desafios:     desafios,
-		sesiones:     sesiones,
-		derivador:    derivador,
-		contadores:   contadores,
-		claves:       claves,
-		denylist:     denylist,
-		eventos:      eventos,
-		racionador:   racionador,
-		pepper:       pepper,
-		enfriamiento: enfriamiento,
+		pool:            poolDeAuth{pool: pool},
+		desafios:        desafios,
+		sesiones:        sesiones,
+		derivador:       derivador,
+		contadores:      contadores,
+		claves:          claves,
+		denylist:        denylist,
+		eventos:         eventos,
+		optIn:           optIn,
+		racionador:      racionador,
+		pepper:          pepper,
+		contactoSoporte: contactoSoporte,
+		enfriamiento:    enfriamiento,
 	}, nil
 }
 
@@ -118,6 +134,10 @@ func (s *ServicioDeCambioDeNumero) IniciarCambioDeNumero(ctx context.Context, se
 
 // ConfirmarCambioDeNumero encadena los dos OTP del camino B y aplica el cambio cuando el número nuevo se verifica.
 func (s *ServicioDeCambioDeNumero) ConfirmarCambioDeNumero(ctx context.Context, sesionID, challengeID uuid.UUID, codigo, origen string) (ResultadoCambio, error) {
+	conWhatsApp, errOptIn := s.optInDelCambio(ctx, sesionID)
+	if errOptIn != nil {
+		return ResultadoCambio{}, errOptIn
+	}
 	var (
 		resultado ResultadoCambio
 		dominio   error
@@ -125,7 +145,7 @@ func (s *ServicioDeCambioDeNumero) ConfirmarCambioDeNumero(ctx context.Context, 
 		familias  []uuid.UUID
 	)
 	_, err := enTransaccion(ctx, s.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
-		desenlace, err := s.confirmarEn(ctx, q, sesionID, challengeID, codigo, origen)
+		desenlace, err := s.confirmarEn(ctx, q, sesionID, challengeID, codigo, origen, conWhatsApp)
 		if err != nil {
 			var desafio errorDeDesafio
 			if errors.As(err, &desafio) {
@@ -174,7 +194,7 @@ type desafioHijoPendiente struct {
 }
 
 // confirmarEn resuelve el desafío de la persona y decide entre encadenar el OTP nuevo o aplicar el cambio.
-func (s *ServicioDeCambioDeNumero) confirmarEn(ctx context.Context, q *repositorio.Queries, sesionID, challengeID uuid.UUID, codigo, origen string) (desenlaceCambio, error) {
+func (s *ServicioDeCambioDeNumero) confirmarEn(ctx context.Context, q *repositorio.Queries, sesionID, challengeID uuid.UUID, codigo, origen string, conWhatsApp bool) (desenlaceCambio, error) {
 	credencial, err := q.CredencialDeSesion(ctx, uuidOPgtype(sesionID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return desenlaceCambio{}, ErrDesafioInvalido
@@ -193,16 +213,16 @@ func (s *ServicioDeCambioDeNumero) confirmarEn(ctx context.Context, q *repositor
 		return desenlaceCambio{}, ErrDesafioInvalido
 	}
 	if Proposito(fila.Proposito) == PropositoCambioNumeroViejo {
-		return s.confirmarNumeroViejo(ctx, q, credencial, fila, challengeID, codigo, origen)
+		return s.confirmarNumeroViejo(ctx, q, credencial, fila, challengeID, codigo, origen, conWhatsApp)
 	}
 	if Proposito(fila.Proposito) == PropositoCambioNumero && fila.Estado == estadoDesafioPendiente {
-		return s.aplicarCambio(ctx, q, credencial, uuidDePgtype(fila.ID), codigo, fila.CelularDestino, origen)
+		return s.aplicarCambio(ctx, q, credencial, uuidDePgtype(fila.ID), codigo, fila.CelularDestino, origen, conWhatsApp)
 	}
 	return desenlaceCambio{}, ErrDesafioInvalido
 }
 
 // confirmarNumeroViejo verifica el OTP del número viejo y, en el segundo confirm, el del número nuevo.
-func (s *ServicioDeCambioDeNumero) confirmarNumeroViejo(ctx context.Context, q *repositorio.Queries, credencial repositorio.Credencial, padre repositorio.DesafioPorIDRow, padreID uuid.UUID, codigo, origen string) (desenlaceCambio, error) {
+func (s *ServicioDeCambioDeNumero) confirmarNumeroViejo(ctx context.Context, q *repositorio.Queries, credencial repositorio.Credencial, padre repositorio.DesafioPorIDRow, padreID uuid.UUID, codigo, origen string, conWhatsApp bool) (desenlaceCambio, error) {
 	switch padre.Estado {
 	case estadoDesafioPendiente:
 		if _, err := s.desafios.VerificarDesafioEn(ctx, q, padreID, codigo, PropositoCambioNumeroViejo); err != nil {
@@ -243,14 +263,14 @@ func (s *ServicioDeCambioDeNumero) confirmarNumeroViejo(ctx context.Context, q *
 		if err != nil {
 			return desenlaceCambio{}, fmt.Errorf("auth: leer el desafío hijo del cambio: %w", err)
 		}
-		return s.aplicarCambio(ctx, q, credencial, uuidDePgtype(hijo.ID), codigo, hijo.CelularDestino, origen)
+		return s.aplicarCambio(ctx, q, credencial, uuidDePgtype(hijo.ID), codigo, hijo.CelularDestino, origen, conWhatsApp)
 	default:
 		return desenlaceCambio{}, ErrDesafioInvalido
 	}
 }
 
 // aplicarCambio verifica el OTP del número nuevo, mueve el ancla y deja las familias para la denylist.
-func (s *ServicioDeCambioDeNumero) aplicarCambio(ctx context.Context, q *repositorio.Queries, credencial repositorio.Credencial, desafioID uuid.UUID, codigo, celularNuevo, origen string) (desenlaceCambio, error) {
+func (s *ServicioDeCambioDeNumero) aplicarCambio(ctx context.Context, q *repositorio.Queries, credencial repositorio.Credencial, desafioID uuid.UUID, codigo, celularNuevo, origen string, conWhatsApp bool) (desenlaceCambio, error) {
 	if _, err := s.desafios.VerificarDesafioEn(ctx, q, desafioID, codigo, PropositoCambioNumero); err != nil {
 		return desenlaceCambio{}, errorDeDesafio{err}
 	}
@@ -271,7 +291,13 @@ func (s *ServicioDeCambioDeNumero) aplicarCambio(ctx context.Context, q *reposit
 	if err != nil {
 		return desenlaceCambio{}, fmt.Errorf("auth: listar las familias del cambio: %w", err)
 	}
+	if err := s.encolarAvisosCambio(ctx, q, credencial, celularNuevo, conWhatsApp); err != nil {
+		return desenlaceCambio{}, err
+	}
 	if err := s.registrarConfirmacion(ctx, q, credencial, celularNuevo, origen); err != nil {
+		return desenlaceCambio{}, err
+	}
+	if err := s.registrarNotificacion(ctx, q, credencial, celularNuevo, origen, conWhatsApp); err != nil {
 		return desenlaceCambio{}, err
 	}
 	return desenlaceCambio{
@@ -298,6 +324,68 @@ func (s *ServicioDeCambioDeNumero) registrarConfirmacion(ctx context.Context, q 
 		Origen:       origen,
 		Detalle:      map[string]string{"celular_enmascarado": enmascararCelular(celularNuevo)},
 	})
+}
+
+// registrarNotificacion escribe el evento del aviso con los canales por los que salió.
+func (s *ServicioDeCambioDeNumero) registrarNotificacion(ctx context.Context, q *repositorio.Queries, credencial repositorio.Credencial, celularNuevo, origen string, conWhatsApp bool) error {
+	resultado := resultadoCambioNotificadoSoloCorreo
+	if conWhatsApp {
+		resultado = resultadoCambioNotificado
+	}
+	return registrarEvento(ctx, s.eventos, q, Evento{
+		Tipo:         TipoEventoCambioNumero,
+		Actor:        uuidDePgtype(credencial.ParteID),
+		CredencialID: uuidDePgtype(credencial.ID),
+		Resultado:    resultado,
+		Fecha:        time.Now().UTC(),
+		Origen:       origen,
+		Detalle:      map[string]string{"celular_enmascarado": enmascararCelular(celularNuevo)},
+	})
+}
+
+// encolarAvisosCambio encola el aviso al correo y, con opt-in, al número viejo, dentro de la transacción.
+func (s *ServicioDeCambioDeNumero) encolarAvisosCambio(ctx context.Context, q *repositorio.Queries, credencial repositorio.Credencial, celularNuevo string, conWhatsApp bool) error {
+	base := avisoBaseDeCambio(s.contactoSoporte, celularNuevo, time.Now().UTC().Format(time.RFC3339))
+	correo := base
+	correo.Destino = DestinoCorreo
+	correo.Correo = credencial.Correo
+	if err := EncolarAviso(ctx, q, correo); err != nil {
+		return err
+	}
+	if !conWhatsApp || credencial.Celular == "" {
+		return nil
+	}
+	whatsapp := base
+	whatsapp.Destino = DestinoWhatsApp
+	whatsapp.Celular = credencial.Celular
+	return EncolarAviso(ctx, q, whatsapp)
+}
+
+// avisoBaseDeCambio arma el aviso del cambio con el número nuevo enmascarado y el contacto de soporte.
+func avisoBaseDeCambio(contactoSoporte, celularNuevo, fecha string) Aviso {
+	return Aviso{
+		Tipo:             TipoAvisoCambioNumero,
+		Plantilla:        plantillaCambioNumero,
+		NuevoEnmascarado: enmascararCelular(celularNuevo),
+		Fecha:            fecha,
+		ContactoSoporte:  contactoSoporte,
+	}
+}
+
+// optInDelCambio resuelve el opt-in de la parte antes de abrir la transacción del cambio.
+func (s *ServicioDeCambioDeNumero) optInDelCambio(ctx context.Context, sesionID uuid.UUID) (bool, error) {
+	credencial, err := s.credencialDeSesion(ctx, sesionID)
+	if errors.Is(err, ErrSesionNoEncontrada) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("auth: resolver la sesión para el opt-in del cambio: %w", err)
+	}
+	conWhatsApp, err := s.optIn.OptInVigente(ctx, uuidDePgtype(credencial.ParteID))
+	if err != nil {
+		return false, fmt.Errorf("auth: consultar el opt-in del aviso de cambio: %w", err)
+	}
+	return conWhatsApp, nil
 }
 
 // credencialDeSesion resuelve la credencial de la persona dueña de la familia de sesión, nunca por el contexto.

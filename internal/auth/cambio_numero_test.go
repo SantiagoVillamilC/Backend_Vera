@@ -66,7 +66,8 @@ func TestExigirCredencialUsable(t *testing.T) {
 
 func TestNuevoServicioDeCambioDeNumeroValidaSuEntrada(t *testing.T) {
 	pepper := make([]byte, 32)
-	if _, err := NuevoServicioDeCambioDeNumero(nil, nil, nil, nil, nil, nil, nil, nil, pepper, time.Hour); err == nil {
+	const soporte = "soporte@centinela.test"
+	if _, err := NuevoServicioDeCambioDeNumero(nil, nil, nil, nil, nil, nil, nil, nil, nil, pepper, soporte, time.Hour); err == nil {
 		t.Fatal("quiero error con dependencias nulas")
 	}
 	pool := &pgxpool.Pool{}
@@ -77,11 +78,14 @@ func TestNuevoServicioDeCambioDeNumeroValidaSuEntrada(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NuevasClaves: %v", err)
 	}
-	if _, err := NuevoServicioDeCambioDeNumero(pool, desafios, sesiones, derivador, nil, nil, &contadoresDeCambio{}, claves, pepper[:8], time.Hour); err == nil {
+	if _, err := NuevoServicioDeCambioDeNumero(pool, desafios, sesiones, derivador, nil, nil, nil, &contadoresDeCambio{}, claves, pepper[:8], soporte, time.Hour); err == nil {
 		t.Fatal("quiero error con un pepper corto")
 	}
-	if _, err := NuevoServicioDeCambioDeNumero(pool, desafios, sesiones, derivador, nil, nil, &contadoresDeCambio{}, claves, pepper, 0); err == nil {
+	if _, err := NuevoServicioDeCambioDeNumero(pool, desafios, sesiones, derivador, nil, nil, nil, &contadoresDeCambio{}, claves, pepper, soporte, 0); err == nil {
 		t.Fatal("quiero error con una ventana de enfriamiento no positiva")
+	}
+	if _, err := NuevoServicioDeCambioDeNumero(pool, desafios, sesiones, derivador, nil, nil, nil, &contadoresDeCambio{}, claves, pepper, "", time.Hour); err == nil {
+		t.Fatal("quiero error sin contacto de soporte")
 	}
 }
 

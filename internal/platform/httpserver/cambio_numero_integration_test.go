@@ -119,7 +119,7 @@ func TestCambioDeNumeroPorHTTPDejaElAccessViejoEn401(t *testing.T) {
 	if err != nil {
 		t.Fatalf("servicio de login: %v", err)
 	}
-	cambio, err := auth.NuevoServicioDeCambioDeNumero(pool, gestor, sesiones, derivador, denylistRedis, eventos, contadoresRedis, claves, pepperDeCambioHTTP, 24*time.Hour)
+	cambio, err := auth.NuevoServicioDeCambioDeNumero(pool, gestor, sesiones, derivador, denylistRedis, eventos, auth.NuevoLectorOptInDeConsentimientos(pool), contadoresRedis, claves, pepperDeCambioHTTP, "soporte@sandbox.centinela.test", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("servicio de cambio: %v", err)
 	}

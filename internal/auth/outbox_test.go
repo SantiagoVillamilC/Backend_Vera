@@ -99,6 +99,59 @@ func (n *notificadorFalso) Enviar(context.Context, Aviso) (string, error) {
 	return fmt.Sprintf("msg-%d", n.llamadas), nil
 }
 
+func TestDespachadorEntregaElCambioNumeroALosDosDestinos(t *testing.T) {
+	t.Parallel()
+
+	const nuevo = "+573001112233"
+	const soporte = "soporte@sandbox.centinela.test"
+	base := avisoBaseDeCambio(soporte, nuevo, "2026-09-19T12:00:00Z")
+	correoAviso := base
+	correoAviso.Destino = DestinoCorreo
+	correoAviso.Correo = "dueno@centinela.test"
+	whatsappAviso := base
+	whatsappAviso.Destino = DestinoWhatsApp
+	whatsappAviso.Celular = "+573001110000"
+
+	correoPayload, err := payloadDeAviso(correoAviso)
+	if err != nil {
+		t.Fatalf("serializar el aviso de correo: %v", err)
+	}
+	whatsappPayload, err := payloadDeAviso(whatsappAviso)
+	if err != nil {
+		t.Fatalf("serializar el aviso de whatsapp: %v", err)
+	}
+	almacen := nuevoAlmacenAvisosFalso(
+		avisoReclamado{id: 1, tipo: TipoAvisoCambioNumero, payload: correoPayload},
+		avisoReclamado{id: 2, tipo: TipoAvisoCambioNumero, payload: whatsappPayload},
+	)
+	correo := &canalCorreoFalso{id: "correo-1"}
+	whatsapp := &canalOTPFalso{id: "whatsapp-1"}
+	despachador := nuevoDespachadorDeAvisos(almacen, NuevoNotificadorDeAvisos(correo, whatsapp))
+
+	if err := despachador.DespacharAvisos(t.Context()); err != nil {
+		t.Fatalf("despachar: %v", err)
+	}
+	if !almacen.entregados[1] || !almacen.entregados[2] {
+		t.Fatalf("entregados = %v, quiero las dos filas", almacen.entregados)
+	}
+	if correo.ultimoCorreo != "dueno@centinela.test" || whatsapp.ultimoCelular != "+573001110000" {
+		t.Errorf("destinos incorrectos: correo=%q whatsapp=%q", correo.ultimoCorreo, whatsapp.ultimoCelular)
+	}
+	for nombre, cuerpo := range map[string]string{"correo": correo.ultimoCuerpo, "whatsapp": whatsapp.ultimoTexto} {
+		if !strings.Contains(cuerpo, "****2233") || !strings.Contains(cuerpo, soporte) {
+			t.Errorf("el aviso %s no lleva el numero enmascarado ni el soporte: %q", nombre, cuerpo)
+		}
+		if strings.Contains(cuerpo, nuevo) || strings.Contains(cuerpo, "123456") {
+			t.Errorf("el aviso %s filtra el numero completo o un codigo: %q", nombre, cuerpo)
+		}
+	}
+	for nombre, payload := range map[string][]byte{"correo": correoPayload, "whatsapp": whatsappPayload} {
+		if strings.Contains(string(payload), nuevo) || strings.Contains(string(payload), "123456") || !strings.Contains(string(payload), soporte) {
+			t.Errorf("el payload %s filtra datos o no lleva soporte: %s", nombre, payload)
+		}
+	}
+}
+
 func TestDespachadorReintentaYEntregaConCanalesFalsos(t *testing.T) {
 	t.Parallel()
 
