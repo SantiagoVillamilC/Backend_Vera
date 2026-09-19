@@ -18,10 +18,13 @@ type Querier interface {
 	CrearPersona(ctx context.Context, arg CrearPersonaParams) (Persona, error)
 	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
+	DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (DesafioPendientePorIDRow, error)
 	InsertarAviso(ctx context.Context, arg InsertarAvisoParams) (AvisoOutbox, error)
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
+	InsertarDesafio(ctx context.Context, arg InsertarDesafioParams) (AuthDesafio, error)
 	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
 	InsertarSesion(ctx context.Context, arg InsertarSesionParams) (Sesion, error)
+	InvalidarDesafio(ctx context.Context, id pgtype.UUID) (int64, error)
 	ListarSesionesActivas(ctx context.Context, parteID pgtype.UUID) ([]Sesion, error)
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)

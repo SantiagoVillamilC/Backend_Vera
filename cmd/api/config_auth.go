@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ type ConfigAuth struct {
 	WhatsAppPhoneID          string
 	WhatsAppTemplate         string
 	ContadoresPepper         []byte
+	OTPPepper                []byte
 	EnfriamientoCambioNumero time.Duration
 	VentanaPendiente         time.Duration
 	LimpiezaInterval         time.Duration
@@ -51,6 +53,14 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 		errs = append(errs, errPepper)
 	}
 	cfg.ContadoresPepper = pepper
+	pepperOTP, errPepperOTP := pepperRequerido("OTP_PEPPER", os.Getenv("OTP_PEPPER"))
+	if errPepperOTP != nil {
+		errs = append(errs, errPepperOTP)
+	}
+	cfg.OTPPepper = pepperOTP
+	if len(cfg.ContadoresPepper) > 0 && bytes.Equal(cfg.ContadoresPepper, cfg.OTPPepper) {
+		errs = append(errs, errors.New("OTP_PEPPER must differ from CONTADORES_PEPPER"))
+	}
 	var errEnfriamiento error
 	cfg.EnfriamientoCambioNumero, errEnfriamiento = duracionRequerida("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", os.Getenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO"))
 	if errEnfriamiento != nil {

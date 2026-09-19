@@ -8,6 +8,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuthDesafio struct {
+	ID                 pgtype.UUID        `json:"id"`
+	ParteID            pgtype.UUID        `json:"parte_id"`
+	CredencialID       pgtype.UUID        `json:"credencial_id"`
+	Proposito          string             `json:"proposito"`
+	CelularDestino     string             `json:"celular_destino"`
+	CodigoHmac         []byte             `json:"codigo_hmac"`
+	Intentos           int32              `json:"intentos"`
+	Reenvios           int32              `json:"reenvios"`
+	Estado             string             `json:"estado"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
+	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
+	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+}
+
 type AvisoOutbox struct {
 	ID                 int64              `json:"id"`
 	Tipo               string             `json:"tipo"`

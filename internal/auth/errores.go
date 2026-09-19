@@ -22,6 +22,15 @@ var ErrRefreshInvalido = errors.New("auth: el refresh no es válido")
 // ErrRefreshReusado es el refresh ya usado fuera de la ventana de gracia, que revoca la familia entera.
 var ErrRefreshReusado = errors.New("auth: el refresh ya fue usado")
 
+// ErrCelularSinVerificar es el destino de un desafío que exige celular verificado: responde 403 PhoneUnverified.
+var ErrCelularSinVerificar = errors.New("auth: la credencial no tiene el celular verificado")
+
+// ErrConsentimientoRequerido es la falta de opt-in vigente para enviar el OTP: responde 403 ConsentRequired.
+var ErrConsentimientoRequerido = errors.New("auth: falta el consentimiento para enviar el OTP")
+
+// ErrEntregaFallida es el canal que no pudo entregar el código del desafío: responde 503 OtpDeliveryFailed.
+var ErrEntregaFallida = errors.New("auth: no se pudo entregar el código del desafío")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -50,6 +59,12 @@ func MapearError(err error) error {
 		return platformerrors.New("RefreshReused", "The refresh token has already been used.", http.StatusUnauthorized)
 	case errors.Is(err, ErrRefreshInvalido):
 		return platformerrors.New("RefreshInvalid", "The refresh token is invalid or expired.", http.StatusUnauthorized)
+	case errors.Is(err, ErrCelularSinVerificar):
+		return platformerrors.New("PhoneUnverified", "The phone number is not verified.", http.StatusForbidden)
+	case errors.Is(err, ErrConsentimientoRequerido):
+		return platformerrors.New("ConsentRequired", "The required consent is missing.", http.StatusForbidden)
+	case errors.Is(err, ErrEntregaFallida):
+		return platformerrors.New("OtpDeliveryFailed", "The code could not be delivered.", http.StatusServiceUnavailable)
 	default:
 		return err
 	}
