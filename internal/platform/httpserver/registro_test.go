@@ -18,8 +18,10 @@ import (
 
 // registradorDePrueba captura la solicitud y devuelve una cuenta pendiente o el error configurado.
 type registradorDePrueba struct {
-	err       error
-	capturado auth.SolicitudDeRegistro
+	err              error
+	errEmpresa       error
+	capturado        auth.SolicitudDeRegistro
+	capturadoEmpresa auth.SolicitudDeRegistroEmpresa
 }
 
 func (f *registradorDePrueba) RegistrarPersona(_ context.Context, solicitud auth.SolicitudDeRegistro) (auth.Registro, error) {
@@ -35,6 +37,25 @@ func (f *registradorDePrueba) RegistrarPersona(_ context.Context, solicitud auth
 		Estado:         auth.EstadoPendienteVerificacion,
 		FechaCreacion:  time.Now().UTC(),
 		Desafio:        auth.Desafio{ID: uuid.New(), ExpiraEnSegundos: 300, Proposito: auth.PropositoRegistro},
+	}, nil
+}
+
+func (f *registradorDePrueba) RegistrarEmpresa(_ context.Context, solicitud auth.SolicitudDeRegistroEmpresa) (auth.RegistroEmpresa, error) {
+	f.capturadoEmpresa = solicitud
+	if f.errEmpresa != nil {
+		return auth.RegistroEmpresa{}, f.errEmpresa
+	}
+	return auth.RegistroEmpresa{
+		EmpresaParteID:       uuid.New(),
+		RepresentanteParteID: uuid.New(),
+		CredencialID:         uuid.New(),
+		RazonSocial:          solicitud.RazonSocial,
+		NIT:                  solicitud.NIT,
+		Correo:               auth.NormalizarCorreo(solicitud.Correo),
+		Celular:              solicitud.Celular,
+		Estado:               auth.EstadoPendienteVerificacion,
+		FechaCreacion:        time.Now().UTC(),
+		Desafio:              auth.Desafio{ID: uuid.New(), ExpiraEnSegundos: 300, Proposito: auth.PropositoRegistro},
 	}, nil
 }
 
@@ -211,8 +232,9 @@ func exigirDetail(t *testing.T, campo, regla string) func(*testing.T, *registrad
 	}
 }
 
-func TestRegistroHandlerRamaEmpresaResponde501(t *testing.T) {
-	cuerpo := map[string]any{
+// cuerpoDeRegistroEmpresa arma un alta de empresa válida que cada caso ajusta.
+func cuerpoDeRegistroEmpresa() map[string]any {
+	return map[string]any{
 		"tipo_cuenta":  "empresa",
 		"razon_social": "Centinela SAS",
 		"nit":          "9001234568",
@@ -224,16 +246,110 @@ func TestRegistroHandlerRamaEmpresaResponde501(t *testing.T) {
 			"tipo_documento":   "CC",
 			"numero_documento": "1020304050",
 		},
-		"consentimientos": []map[string]any{{"tipo": "tratamiento_datos", "version_texto": "v1", "aceptado": true}},
+		"consentimientos": []map[string]any{
+			{"tipo": "tratamiento_datos", "version_texto": "v1", "aceptado": true},
+			{"tipo": "whatsapp_optin", "version_texto": "v1", "aceptado": true},
+		},
 	}
-	crudo, err := json.Marshal(cuerpo)
-	if err != nil {
-		t.Fatalf("serializar el cuerpo: %v", err)
+}
+
+// exigirDetailAnidado comprueba que details incluye el campo pedido con su regla.
+func exigirDetailAnidado(t *testing.T, campo, regla string) func(*testing.T, *registradorDePrueba, *httptest.ResponseRecorder) {
+	return func(t *testing.T, _ *registradorDePrueba, rec *httptest.ResponseRecorder) {
+		t.Helper()
+		env := decodeEnvelope(t, rec)
+		apiErr, _ := env["error"].(map[string]any)
+		details, _ := apiErr["details"].([]any)
+		for _, detalle := range details {
+			campos, _ := detalle.(map[string]any)
+			if campos["field"] == campo && campos["rule"] == regla {
+				return
+			}
+		}
+		t.Fatalf("details = %v, quiero %s/%s", details, campo, regla)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(crudo))
-	rec := httptest.NewRecorder()
+}
 
-	routerDeRegistro(NuevoRegistroHandler(&registradorDePrueba{})).ServeHTTP(rec, req)
+func TestRegistroHandlerEmpresaCasosDeCriterio(t *testing.T) {
+	tests := map[string]struct {
+		cuerpo     func() map[string]any
+		errEmpresa error
+		wantStatus int
+		wantCode   string
+		verificar  func(t *testing.T, fake *registradorDePrueba, rec *httptest.ResponseRecorder)
+	}{
+		"1 campos faltantes con details anidados": {
+			cuerpo:     func() map[string]any { return map[string]any{"tipo_cuenta": "empresa"} },
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "ValidationError",
+			verificar:  exigirDetailAnidado(t, "representante_legal.nombre_completo", "required"),
+		},
+		"2 nit sin digito de verificacion": {
+			cuerpo: func() map[string]any {
+				c := cuerpoDeRegistroEmpresa()
+				c["nit"] = "900123456"
+				return c
+			},
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "ValidationError",
+			verificar:  exigirDetailAnidado(t, "nit", "nit"),
+		},
+		"2 nit con digito de verificacion malo": {
+			cuerpo: func() map[string]any {
+				c := cuerpoDeRegistroEmpresa()
+				c["nit"] = "9001234569"
+				return c
+			},
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "ValidationError",
+			verificar:  exigirDetailAnidado(t, "nit", "nit"),
+		},
+		"empresa valida 201 con razon social nit y desafio": {
+			cuerpo:     cuerpoDeRegistroEmpresa,
+			wantStatus: http.StatusCreated,
+			verificar: func(t *testing.T, fake *registradorDePrueba, rec *httptest.ResponseRecorder) {
+				t.Helper()
+				datos := datosDeRespuesta(t, rec)
+				if datos["tipo_cuenta"] != "empresa" || datos["razon_social"] != "Centinela SAS" || datos["nit"] != "9001234568" {
+					t.Fatalf("data = %v, quiero empresa con razón social y NIT", datos)
+				}
+				if datos["id"] == nil || datos["desafio"] == nil {
+					t.Fatalf("data = %v, quiero id y desafío", datos)
+				}
+				if fake.capturadoEmpresa.RepresentanteNombre != "Ana Centinela" {
+					t.Fatalf("representante capturado = %q", fake.capturadoEmpresa.RepresentanteNombre)
+				}
+			},
+		},
+		"empresa con NIT repetido responde 409 generico": {
+			cuerpo:     cuerpoDeRegistroEmpresa,
+			errEmpresa: auth.ErrIdentificadorEnUso,
+			wantStatus: http.StatusConflict,
+			wantCode:   "DuplicateIdentifier",
+		},
+	}
 
-	assertErrorEnvelope(t, rec, http.StatusNotImplemented, "NotImplemented")
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			fake := &registradorDePrueba{errEmpresa: tc.errEmpresa}
+			cuerpo, err := json.Marshal(tc.cuerpo())
+			if err != nil {
+				t.Fatalf("serializar el cuerpo: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(cuerpo))
+			rec := httptest.NewRecorder()
+
+			routerDeRegistro(NuevoRegistroHandler(fake)).ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, quiero %d (cuerpo %q)", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			if tc.wantCode != "" {
+				assertErrorEnvelope(t, rec, tc.wantStatus, tc.wantCode)
+			}
+			if tc.verificar != nil {
+				tc.verificar(t, fake, rec)
+			}
+		})
+	}
 }

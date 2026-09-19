@@ -147,7 +147,7 @@ func (s *RegistradorDePersonas) escribirCuenta(ctx context.Context, q *repositor
 	if err := RegistrarTransicion(ctx, q, credencialID, "", EstadoPendienteVerificacion, motivoRegistro); err != nil {
 		return datosPersistidos{}, err
 	}
-	if err := s.registrarConsentimientos(ctx, q, parteID, entrada, ahora); err != nil {
+	if err := s.registrarConsentimientos(ctx, q, parteID, entrada.consentimientos, entrada.origen, entrada.userAgent, ahora); err != nil {
 		return datosPersistidos{}, err
 	}
 	if err := s.registrarEventoDeRegistro(ctx, q, parteID, credencialID, entrada, ahora); err != nil {
@@ -164,8 +164,8 @@ func (s *RegistradorDePersonas) escribirCuenta(ctx context.Context, q *repositor
 }
 
 // registrarConsentimientos copia el texto vigente del servidor y persiste cada consentimiento declarado.
-func (s *RegistradorDePersonas) registrarConsentimientos(ctx context.Context, q *repositorio.Queries, parteID uuid.UUID, entrada entradaDeRegistro, ahora time.Time) error {
-	for _, consentimiento := range entrada.consentimientos {
+func (s *RegistradorDePersonas) registrarConsentimientos(ctx context.Context, q *repositorio.Queries, parteID uuid.UUID, consentimientos []consentimientoResuelto, origen, userAgent string, ahora time.Time) error {
+	for _, consentimiento := range consentimientos {
 		texto, err := q.TextoDeConsentimiento(ctx, repositorio.TextoDeConsentimientoParams{Tipo: consentimiento.tipo, Version: consentimiento.versionTexto})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrConsentimientoRequerido
@@ -186,8 +186,8 @@ func (s *RegistradorDePersonas) registrarConsentimientos(ctx context.Context, q 
 			Aceptado:     consentimiento.aceptado,
 			Accion:       accion,
 			Actor:        uuidOPgtype(parteID),
-			Origen:       entrada.origen,
-			UserAgent:    entrada.userAgent,
+			Origen:       origen,
+			UserAgent:    userAgent,
 			Metodo:       metodoRegistro,
 			OcurridoEn:   pgtype.Timestamptz{Time: ahora, Valid: true},
 		}); err != nil {

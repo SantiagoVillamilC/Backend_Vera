@@ -36,7 +36,7 @@ type DesafiosHandler interface {
 	ResendOtp(http.ResponseWriter, *http.Request)
 }
 
-// RegistroHandler atiende el alta pública de persona.
+// RegistroHandler atiende el alta pública de persona y de empresa.
 type RegistroHandler interface {
 	Register(http.ResponseWriter, *http.Request)
 }
