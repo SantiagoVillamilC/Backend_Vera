@@ -16,6 +16,7 @@ func entornoDeAuth(t *testing.T) {
 	t.Helper()
 	t.Setenv("REDIS_URL", "redis://:secreta@127.0.0.1:16381/0")
 	t.Setenv("CONTADORES_PEPPER", strings.Repeat("11", 32))
+	t.Setenv("OTP_PEPPER", strings.Repeat("22", 32))
 	t.Setenv("OTP_CANAL", "simulador")
 	t.Setenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", "24h")
 	t.Setenv("AUTH_VENTANA_PENDIENTE", "24h")
@@ -127,6 +128,7 @@ func TestConfigLogValueRegistraAuth(t *testing.T) {
 		OTPCanal:         "simulador",
 		WhatsAppToken:    "token-de-whatsapp",
 		ContadoresPepper: bytes.Repeat([]byte{0x44}, 32),
+		OTPPepper:        bytes.Repeat([]byte{0x55}, 32),
 	}}
 
 	var buf bytes.Buffer
@@ -144,9 +146,43 @@ func TestConfigLogValueRegistraAuth(t *testing.T) {
 	if !ok {
 		t.Fatalf("config no se agrupó: %s", buf.String())
 	}
-	if grupo["redis_url_set"] != true || grupo["contadores_pepper_set"] != true || grupo["otp_canal"] != "simulador" || grupo["whatsapp_token_set"] != true {
-		t.Errorf("faltan los campos de auth: redis_url_set=%v contadores_pepper_set=%v otp_canal=%v whatsapp_token_set=%v",
-			grupo["redis_url_set"], grupo["contadores_pepper_set"], grupo["otp_canal"], grupo["whatsapp_token_set"])
+	if grupo["redis_url_set"] != true || grupo["contadores_pepper_set"] != true || grupo["otp_pepper_set"] != true ||
+		grupo["otp_canal"] != "simulador" || grupo["whatsapp_token_set"] != true {
+		t.Errorf("faltan los campos de auth: redis_url_set=%v contadores_pepper_set=%v otp_pepper_set=%v otp_canal=%v whatsapp_token_set=%v",
+			grupo["redis_url_set"], grupo["contadores_pepper_set"], grupo["otp_pepper_set"], grupo["otp_canal"], grupo["whatsapp_token_set"])
+	}
+}
+
+func TestLoadConfigAuthExigeOTPPepperDistinto(t *testing.T) {
+	casos := map[string]struct {
+		valor   string
+		wantErr string
+	}{
+		"valido":       {valor: strings.Repeat("ab", 32)},
+		"hex invalido": {valor: strings.Repeat("zz", 32), wantErr: "OTP_PEPPER must be hex-encoded"},
+		"ausente":      {valor: "", wantErr: "OTP_PEPPER is required"},
+		"corto":        {valor: strings.Repeat("ab", 31), wantErr: "OTP_PEPPER must decode to at least 32 bytes"},
+		"igual":        {valor: strings.Repeat("11", 32), wantErr: "OTP_PEPPER must differ from CONTADORES_PEPPER"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("OTP_PEPPER", caso.valor)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if len(cfg.Auth.OTPPepper) != 32 {
+				t.Errorf("OTPPepper = %d bytes, quiero 32", len(cfg.Auth.OTPPepper))
+			}
+		})
 	}
 }
 

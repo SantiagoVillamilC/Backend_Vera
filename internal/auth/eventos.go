@@ -26,6 +26,8 @@ const (
 	TipoEventoReusoDetectado = "reuso_detectado"
 	// TipoEventoRevocacion marca la revocación de una sesión o credencial.
 	TipoEventoRevocacion = "revocacion"
+	// TipoEventoDesafio marca la creación y la entrega de un desafío OTP.
+	TipoEventoDesafio = "desafio"
 )
 
 // Evento es una acción de autenticación del trail de auditoría, sin ningún campo donde quepa un secreto.

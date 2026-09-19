@@ -92,6 +92,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("custodio_extracto_url_set", c.CustodioExtractoURL != ""),
 		slog.Bool("redis_url_set", c.Auth.RedisURL != ""),
 		slog.Bool("contadores_pepper_set", len(c.Auth.ContadoresPepper) > 0),
+		slog.Bool("otp_pepper_set", len(c.Auth.OTPPepper) > 0),
 		slog.String("otp_canal", c.Auth.OTPCanal),
 		slog.String("auth_enfriamiento_cambio_numero", c.Auth.EnfriamientoCambioNumero.String()),
 		slog.String("auth_ventana_pendiente", c.Auth.VentanaPendiente.String()),
