@@ -10,12 +10,13 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// RegistradorDePersonas es el servicio de alta de persona que el handler consume.
+// RegistradorDePersonas es el servicio de alta de persona y empresa que el handler consume.
 type RegistradorDePersonas interface {
 	RegistrarPersona(ctx context.Context, solicitud auth.SolicitudDeRegistro) (auth.Registro, error)
+	RegistrarEmpresa(ctx context.Context, solicitud auth.SolicitudDeRegistroEmpresa) (auth.RegistroEmpresa, error)
 }
 
-// HandlerDeRegistro atiende el alta pública de persona y el 501 de la rama empresa.
+// HandlerDeRegistro atiende el alta pública de persona y de empresa.
 type HandlerDeRegistro struct{ registrador RegistradorDePersonas }
 
 // NuevoRegistroHandler construye el handler sobre el servicio de registro.
@@ -31,7 +32,7 @@ func registroDePersona(handler RegistroHandler) http.HandlerFunc {
 	return handler.Register
 }
 
-// Register decodifica por tipo_cuenta: la rama persona sigue y la empresa responde 501.
+// Register decodifica por tipo_cuenta y despacha el alta de persona o de empresa.
 func (h *HandlerDeRegistro) Register(w http.ResponseWriter, r *http.Request) {
 	decodificado, ok := api.DecodeDiscriminated(w, r, "tipo_cuenta", map[string]any{
 		"persona": &api.RegisterPersonaRequest{},
@@ -40,12 +41,14 @@ func (h *HandlerDeRegistro) Register(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	persona, ok := decodificado.(*api.RegisterPersonaRequest)
-	if !ok {
+	switch entrada := decodificado.(type) {
+	case *api.RegisterPersonaRequest:
+		h.registrarPersona(w, r, entrada)
+	case *api.RegisterEmpresaRequest:
+		h.registrarEmpresa(w, r, entrada)
+	default:
 		sinImplementar(w, r)
-		return
 	}
-	h.registrarPersona(w, r, persona)
 }
 
 // registrarPersona llama al servicio y responde 201 con la cuenta pendiente, nunca con tokens.
@@ -67,6 +70,29 @@ func (h *HandlerDeRegistro) registrarPersona(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	api.WriteData(w, http.StatusCreated, respuestaDeRegistro(registro), nil)
+}
+
+// registrarEmpresa llama al servicio y responde 201 con la empresa pendiente, nunca con tokens.
+func (h *HandlerDeRegistro) registrarEmpresa(w http.ResponseWriter, r *http.Request, entrada *api.RegisterEmpresaRequest) {
+	origen, _ := clientIPKey(r)
+	registro, err := h.registrador.RegistrarEmpresa(r.Context(), auth.SolicitudDeRegistroEmpresa{
+		RazonSocial:                  entrada.RazonSocial,
+		NIT:                          entrada.Nit,
+		Correo:                       entrada.Correo,
+		Contrasena:                   entrada.Contrasena,
+		Celular:                      entrada.Celular,
+		RepresentanteNombre:          entrada.RepresentanteLegal.NombreCompleto,
+		RepresentanteTipoDocumento:   string(entrada.RepresentanteLegal.TipoDocumento),
+		RepresentanteNumeroDocumento: entrada.RepresentanteLegal.NumeroDocumento,
+		Consentimientos:              convertirConsentimientos(entrada.Consentimientos),
+		Origen:                       origen,
+		UserAgent:                    r.UserAgent(),
+	})
+	if err != nil {
+		escribirErrorDeRegistroEmpresa(w, r, err)
+		return
+	}
+	api.WriteData(w, http.StatusCreated, respuestaDeRegistroEmpresa(registro), nil)
 }
 
 // convertirConsentimientos traduce el contrato al vocabulario del servicio sin perder el nulo.
@@ -98,6 +124,46 @@ func respuestaDeRegistro(registro auth.Registro) api.Registro {
 			ExpiraEnSegundos: registro.Desafio.ExpiraEnSegundos,
 			Proposito:        api.DesafioProposito(registro.Desafio.Proposito),
 		},
+	}
+}
+
+// respuestaDeRegistroEmpresa arma la respuesta 201 con la razón social y el NIT, sin secretos.
+func respuestaDeRegistroEmpresa(registro auth.RegistroEmpresa) api.Registro {
+	razonSocial, nit := registro.RazonSocial, registro.NIT
+	return api.Registro{
+		Id:            openapi_types.UUID(registro.RepresentanteParteID),
+		TipoCuenta:    api.RegistroTipoCuentaEmpresa,
+		Correo:        registro.Correo,
+		Celular:       registro.Celular,
+		Estado:        api.RegistroEstado(registro.Estado),
+		FechaCreacion: registro.FechaCreacion,
+		RazonSocial:   &razonSocial,
+		Nit:           &nit,
+		Desafio: api.Desafio{
+			ChallengeId:      openapi_types.UUID(registro.Desafio.ID),
+			ExpiraEnSegundos: registro.Desafio.ExpiraEnSegundos,
+			Proposito:        api.DesafioProposito(registro.Desafio.Proposito),
+		},
+	}
+}
+
+// escribirErrorDeRegistroEmpresa nombra el campo anidado del representante y delega el resto en auth.
+func escribirErrorDeRegistroEmpresa(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, auth.ErrNombreInvalido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "representante_legal.nombre_completo", Rule: "nombre"}})
+	case errors.Is(err, auth.ErrCelularInvalido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "celular", Rule: "e164"}})
+	case errors.Is(err, auth.ErrNitInvalido):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "nit", Rule: "nit"}})
+	case errors.Is(err, auth.ErrRazonSocialInvalida):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "razon_social", Rule: "max"}})
+	default:
+		escribirErrorDeAuth(w, r, err)
 	}
 }
 

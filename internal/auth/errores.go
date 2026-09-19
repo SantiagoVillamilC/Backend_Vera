@@ -34,6 +34,12 @@ var ErrNombreInvalido = errors.New("auth: el nombre completo no cumple la regla"
 // ErrCelularInvalido es el celular que E.164 acepta pero la numeracion rechaza: responde 422 con celular/e164.
 var ErrCelularInvalido = errors.New("auth: el celular no es un numero valido")
 
+// ErrNitInvalido es el NIT cuyo digito de verificacion DIAN no cuadra: responde 422 con nit/nit.
+var ErrNitInvalido = errors.New("auth: el NIT no tiene un digito de verificacion valido")
+
+// ErrRazonSocialInvalida es la razon social vacia o demasiado larga: responde 422 con razon_social/max.
+var ErrRazonSocialInvalida = errors.New("auth: la razon social no cumple la regla")
+
 // ErrEntregaFallida es el canal que no pudo entregar el código del desafío: responde 503 OtpDeliveryFailed.
 var ErrEntregaFallida = errors.New("auth: no se pudo entregar el código del desafío")
 
@@ -109,7 +115,7 @@ func MapearError(err error) error {
 		return platformerrors.New("PhoneUnverified", "The phone number is not verified.", http.StatusForbidden)
 	case errors.Is(err, ErrConsentimientoRequerido):
 		return platformerrors.New("ConsentRequired", "The required consent is missing.", http.StatusForbidden)
-	case errors.Is(err, ErrNombreInvalido), errors.Is(err, ErrCelularInvalido):
+	case errors.Is(err, ErrNombreInvalido), errors.Is(err, ErrCelularInvalido), errors.Is(err, ErrNitInvalido), errors.Is(err, ErrRazonSocialInvalida):
 		return platformerrors.New("ValidationError", "Request validation failed.", http.StatusUnprocessableEntity)
 	case errors.Is(err, ErrEntregaFallida):
 		return platformerrors.New("OtpDeliveryFailed", "The code could not be delivered.", http.StatusServiceUnavailable)
