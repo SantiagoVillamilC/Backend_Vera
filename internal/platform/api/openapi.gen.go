@@ -977,9 +977,10 @@ type UsuarioTipoCuenta string
 
 // Verificacion defines model for Verificacion.
 type Verificacion struct {
+	Celular string `json:"celular"`
+
 	// CodigosRespaldo Codigos de respaldo de un solo uso, presentes solo en la activacion.
 	CodigosRespaldo *[]string          `json:"codigos_respaldo,omitempty"`
-	Correo          string             `json:"correo"`
 	Estado          VerificacionEstado `json:"estado"`
 	Id              openapi_types.UUID `json:"id"`
 }
@@ -1002,6 +1003,12 @@ type VerificacionResponseSuccess bool
 type VerifyOtpRequest struct {
 	ChallengeId openapi_types.UUID `json:"challenge_id" validate:"required"`
 	Codigo      string             `json:"codigo" validate:"required,len=6,number"`
+}
+
+// VerifyPhoneRequest defines model for VerifyPhoneRequest.
+type VerifyPhoneRequest struct {
+	Celular string `json:"celular" validate:"required,e164"`
+	Codigo  string `json:"codigo" validate:"required,len=6,number"`
 }
 
 // Error defines model for Error.

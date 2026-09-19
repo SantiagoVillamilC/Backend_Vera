@@ -6,12 +6,11 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
-	"github.com/google/uuid"
 )
 
 // ActivadorDeCuenta es el servicio que activa la cuenta tras verificar el celular.
 type ActivadorDeCuenta interface {
-	ActivarCuenta(ctx context.Context, id uuid.UUID, codigo string) (auth.Activacion, error)
+	ActivarCuenta(ctx context.Context, celular, codigo string) (auth.Activacion, error)
 }
 
 // HandlerDeVerificacion atiende la verificacion publica del celular y la activacion de la cuenta.
@@ -32,11 +31,11 @@ func verificacionDeCelular(handler VerificacionHandler) http.HandlerFunc {
 
 // VerificarCelular valida el codigo, activa la cuenta y responde 200 con los codigos de respaldo.
 func (h *HandlerDeVerificacion) VerificarCelular(w http.ResponseWriter, r *http.Request) {
-	var entrada api.VerifyOtpRequest
+	var entrada api.VerifyPhoneRequest
 	if !api.DecodeAndValidate(w, r, &entrada) {
 		return
 	}
-	activacion, err := h.activador.ActivarCuenta(r.Context(), entrada.ChallengeId, entrada.Codigo)
+	activacion, err := h.activador.ActivarCuenta(r.Context(), entrada.Celular, entrada.Codigo)
 	if err != nil {
 		escribirErrorDeAuth(w, r, err)
 		return
@@ -49,7 +48,7 @@ func respuestaDeVerificacion(activacion auth.Activacion) api.Verificacion {
 	codigos := activacion.CodigosRespaldo
 	return api.Verificacion{
 		Id:              activacion.ParteID,
-		Correo:          activacion.Correo,
+		Celular:         activacion.Celular,
 		Estado:          api.VerificacionEstadoActivo,
 		CodigosRespaldo: &codigos,
 	}

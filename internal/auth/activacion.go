@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,7 +18,7 @@ const motivoCelularVerificado = "celular_verificado"
 // Activacion es la cuenta ya activa con los codigos de respaldo que se muestran una sola vez.
 type Activacion struct {
 	ParteID         uuid.UUID
-	Correo          string
+	Celular         string
 	CodigosRespaldo []string
 }
 
@@ -36,13 +38,22 @@ func NuevoActivadorDeCuenta(pool *pgxpool.Pool, desafios *GestorDesafios, estado
 	return &ActivadorDeCuenta{pool: pool, desafios: desafios, estados: estados, pepper: pepper}, nil
 }
 
-// ActivarCuenta verifica el desafio de registro y activa con compare-and-set en una sola transaccion.
-func (s *ActivadorDeCuenta) ActivarCuenta(ctx context.Context, id uuid.UUID, codigo string) (Activacion, error) {
+// ActivarCuenta resuelve el desafio de registro por celular y activa con compare-and-set en una sola transaccion.
+func (s *ActivadorDeCuenta) ActivarCuenta(ctx context.Context, celular, codigo string) (Activacion, error) {
+	celular = strings.TrimSpace(celular)
 	var activacion Activacion
 	var dominio error
 	if _, err := enTransaccion(ctx, poolDeAuth{pool: s.pool},
 		func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
-			resultado, err := s.desafios.VerificarDesafioEn(ctx, q, id, codigo, PropositoRegistro)
+			fila, err := q.UltimoDesafioDeRegistroPorCelular(ctx, celular)
+			if errors.Is(err, pgx.ErrNoRows) {
+				dominio = ErrDesafioInvalido
+				return struct{}{}, nil
+			}
+			if err != nil {
+				return struct{}{}, fmt.Errorf("auth: resolver el desafio de registro por celular: %w", err)
+			}
+			resultado, err := s.desafios.VerificarDesafioEn(ctx, q, uuidDePgtype(fila.ID), codigo, PropositoRegistro)
 			if err != nil {
 				dominio = err
 				return struct{}{}, nil
@@ -67,7 +78,7 @@ func (s *ActivadorDeCuenta) activarConCodigos(ctx context.Context, q *repositori
 	if err != nil {
 		return struct{}{}, err
 	}
-	*activacion = Activacion{ParteID: resultado.ParteID, Correo: credencial.Correo, CodigosRespaldo: codigos}
+	*activacion = Activacion{ParteID: resultado.ParteID, Celular: credencial.Celular, CodigosRespaldo: codigos}
 	return struct{}{}, nil
 }
 

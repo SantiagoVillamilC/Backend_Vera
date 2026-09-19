@@ -69,6 +69,7 @@ type Querier interface {
 	TokenRestablecimientoVigente(ctx context.Context, tokenHash []byte) (TokenRestablecimientoVigenteRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
+	UltimoDesafioDeRegistroPorCelular(ctx context.Context, celularDestino string) (UltimoDesafioDeRegistroPorCelularRow, error)
 	UsuarioDeParte(ctx context.Context, id pgtype.UUID) (UsuarioDeParteRow, error)
 }
 
