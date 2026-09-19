@@ -1,10 +1,17 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base32"
+	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -62,4 +69,26 @@ func normalizarCodigoRespaldo(codigo string) string {
 // hmacDeCodigoRespaldo deriva el codigo normalizado con OTP_PEPPER para no guardarlo en claro.
 func hmacDeCodigoRespaldo(pepper []byte, codigo string) []byte {
 	return hmacDeCodigo(pepper, normalizarCodigoRespaldo(codigo))
+}
+
+// ConsumirCodigoRespaldo compara en tiempo constante los codigos vigentes y marca usado el que coincide.
+func ConsumirCodigoRespaldo(ctx context.Context, q repositorio.Querier, pepper []byte, credencialID uuid.UUID, codigo string) error {
+	pendientes, err := q.CodigosRespaldoPendientesDeCredencial(ctx, uuidOPgtype(credencialID))
+	if err != nil {
+		return fmt.Errorf("auth: leer los codigos de respaldo vigentes: %w", err)
+	}
+	presentado := hmacDeCodigoRespaldo(pepper, codigo)
+	for _, fila := range pendientes {
+		if subtle.ConstantTimeCompare(presentado, fila.CodigoHmac) != 1 {
+			continue
+		}
+		if _, err := q.ConsumirCodigoRespaldo(ctx, fila.ID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+			return fmt.Errorf("auth: consumir el codigo de respaldo: %w", err)
+		}
+		return nil
+	}
+	return ErrSegundoFactorRequerido
 }

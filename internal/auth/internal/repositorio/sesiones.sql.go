@@ -31,6 +31,32 @@ func (q *Queries) ActualizarContextoDeFamilia(ctx context.Context, arg Actualiza
 	return result.RowsAffected(), nil
 }
 
+const familiasVigentesDeParte = `-- name: FamiliasVigentesDeParte :many
+SELECT DISTINCT familia_id
+FROM auth.sesiones
+WHERE parte_id = $1 AND revocada_en IS NULL
+`
+
+func (q *Queries) FamiliasVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, familiasVigentesDeParte, parteID)
+	if err != nil {
+		return nil, fmt.Errorf("query FamiliasVigentesDeParte: %w", err)
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var familia_id pgtype.UUID
+		if err := rows.Scan(&familia_id); err != nil {
+			return nil, fmt.Errorf("query FamiliasVigentesDeParte: %w", err)
+		}
+		items = append(items, familia_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query FamiliasVigentesDeParte: %w", err)
+	}
+	return items, nil
+}
+
 const insertarSesion = `-- name: InsertarSesion :one
 INSERT INTO auth.sesiones (id, familia_id, parte_id, contexto_activo, dispositivo, refresh_hash, ultimo_uso_en, vence_en)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

@@ -32,6 +32,15 @@ type AuthDesafio struct {
 	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
 }
 
+type AuthTokensRestablecimiento struct {
+	ID           pgtype.UUID        `json:"id"`
+	CredencialID pgtype.UUID        `json:"credencial_id"`
+	TokenHash    []byte             `json:"token_hash"`
+	ExpiraEn     pgtype.Timestamptz `json:"expira_en"`
+	UsadoEn      pgtype.Timestamptz `json:"usado_en"`
+	CreadoEn     pgtype.Timestamptz `json:"creado_en"`
+}
+
 type AvisoOutbox struct {
 	ID                 int64              `json:"id"`
 	Tipo               string             `json:"tipo"`
