@@ -23,6 +23,7 @@ const (
 	PrefijoOTPCuenta    = "otp:cuenta:"
 	PrefijoOTPOrigen    = "otp:origen:"
 	PrefijoLoginCuenta  = "login:cuenta:"
+	PrefijoLoginOrigen  = "login:origen:"
 	PrefijoFallosCuenta = "fallos:cuenta:"
 )
 
