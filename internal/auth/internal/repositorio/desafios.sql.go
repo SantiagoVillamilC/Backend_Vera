@@ -297,6 +297,20 @@ func (q *Queries) InvalidarDesafio(ctx context.Context, id pgtype.UUID) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const invalidarDesafioNoPendiente = `-- name: InvalidarDesafioNoPendiente :execrows
+UPDATE auth.desafios
+SET estado = 'invalidado'
+WHERE id = $1 AND estado <> 'invalidado'
+`
+
+func (q *Queries) InvalidarDesafioNoPendiente(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, invalidarDesafioNoPendiente, id)
+	if err != nil {
+		return 0, fmt.Errorf("query InvalidarDesafioNoPendiente: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
 const marcarDesafioExpirado = `-- name: MarcarDesafioExpirado :execrows
 UPDATE auth.desafios
 SET estado = 'expirado'

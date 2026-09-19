@@ -12,6 +12,54 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const codigosRespaldoPendientesDeCredencial = `-- name: CodigosRespaldoPendientesDeCredencial :many
+SELECT id, codigo_hmac
+FROM auth.codigos_respaldo
+WHERE credencial_id = $1 AND usado_en IS NULL
+`
+
+type CodigosRespaldoPendientesDeCredencialRow struct {
+	ID         pgtype.UUID `json:"id"`
+	CodigoHmac []byte      `json:"codigo_hmac"`
+}
+
+func (q *Queries) CodigosRespaldoPendientesDeCredencial(ctx context.Context, credencialID pgtype.UUID) ([]CodigosRespaldoPendientesDeCredencialRow, error) {
+	rows, err := q.db.Query(ctx, codigosRespaldoPendientesDeCredencial, credencialID)
+	if err != nil {
+		return nil, fmt.Errorf("query CodigosRespaldoPendientesDeCredencial: %w", err)
+	}
+	defer rows.Close()
+	items := []CodigosRespaldoPendientesDeCredencialRow{}
+	for rows.Next() {
+		var i CodigosRespaldoPendientesDeCredencialRow
+		if err := rows.Scan(&i.ID, &i.CodigoHmac); err != nil {
+			return nil, fmt.Errorf("query CodigosRespaldoPendientesDeCredencial: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query CodigosRespaldoPendientesDeCredencial: %w", err)
+	}
+	return items, nil
+}
+
+const consumirCodigoRespaldo = `-- name: ConsumirCodigoRespaldo :one
+UPDATE auth.codigos_respaldo
+SET usado_en = now()
+WHERE id = $1 AND usado_en IS NULL
+RETURNING id
+`
+
+func (q *Queries) ConsumirCodigoRespaldo(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, consumirCodigoRespaldo, id)
+	var id_2 pgtype.UUID
+	err := row.Scan(&id_2)
+	if err != nil {
+		err = fmt.Errorf("query ConsumirCodigoRespaldo: %w", err)
+	}
+	return id_2, err
+}
+
 const crearCodigoRespaldo = `-- name: CrearCodigoRespaldo :exec
 INSERT INTO auth.codigos_respaldo (id, credencial_id, codigo_hmac)
 VALUES ($1, $2, $3)

@@ -50,6 +50,11 @@ FROM auth.sesiones
 WHERE parte_id = $1 AND revocada_en IS NULL AND usado_en IS NULL AND vence_en > now()
 ORDER BY ultimo_uso_en DESC;
 
+-- name: FamiliasVigentesDeParte :many
+SELECT DISTINCT familia_id
+FROM auth.sesiones
+WHERE parte_id = $1 AND revocada_en IS NULL;
+
 -- name: RolesVigentesDeParte :many
 SELECT rol, representada_id
 FROM auth.roles_de_parte

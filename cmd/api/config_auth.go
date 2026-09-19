@@ -26,6 +26,7 @@ type ConfigAuth struct {
 	OTPPepper                []byte
 	JWTIssuer                string
 	JWTAudience              string
+	ResetTokenTTL            time.Duration
 	EnfriamientoCambioNumero time.Duration
 	VentanaPendiente         time.Duration
 	LimpiezaInterval         time.Duration
@@ -71,6 +72,11 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	cfg.OTPPepper = pepperOTP
 	if len(cfg.ContadoresPepper) > 0 && bytes.Equal(cfg.ContadoresPepper, cfg.OTPPepper) {
 		errs = append(errs, errors.New("OTP_PEPPER must differ from CONTADORES_PEPPER"))
+	}
+	var errResetToken error
+	cfg.ResetTokenTTL, errResetToken = duracionRequerida("AUTH_RESET_TOKEN_TTL", os.Getenv("AUTH_RESET_TOKEN_TTL"))
+	if errResetToken != nil {
+		errs = append(errs, errResetToken)
 	}
 	var errEnfriamiento error
 	cfg.EnfriamientoCambioNumero, errEnfriamiento = duracionRequerida("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", os.Getenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO"))

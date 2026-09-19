@@ -170,6 +170,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("jwt_issuer", c.Auth.JWTIssuer),
 		slog.String("jwt_audience", c.Auth.JWTAudience),
 		slog.String("otp_canal", c.Auth.OTPCanal),
+		slog.String("auth_reset_token_ttl", c.Auth.ResetTokenTTL.String()),
 		slog.String("auth_enfriamiento_cambio_numero", c.Auth.EnfriamientoCambioNumero.String()),
 		slog.String("auth_ventana_pendiente", c.Auth.VentanaPendiente.String()),
 		slog.String("auth_limpieza_interval", c.Auth.LimpiezaInterval.String()),

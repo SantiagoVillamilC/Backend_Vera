@@ -21,6 +21,7 @@ func entornoDeAuth(t *testing.T) {
 	t.Setenv("OTP_PEPPER", strings.Repeat("22", 32))
 	t.Setenv("OTP_CANAL", "simulador")
 	t.Setenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", "24h")
+	t.Setenv("AUTH_RESET_TOKEN_TTL", "10m")
 	t.Setenv("AUTH_VENTANA_PENDIENTE", "24h")
 	t.Setenv("AUTH_LIMPIEZA_INTERVAL", "15m")
 	t.Setenv("AUTH_OUTBOX_INTERVAL", "10s")
@@ -217,6 +218,39 @@ func TestLoadConfigAuthExigeEnfriamientoCambioNumero(t *testing.T) {
 			}
 			if cfg.Auth.EnfriamientoCambioNumero != 24*time.Hour {
 				t.Errorf("EnfriamientoCambioNumero = %s, quiero 24h", cfg.Auth.EnfriamientoCambioNumero)
+			}
+		})
+	}
+}
+
+func TestLoadConfigAuthExigeResetTokenTTL(t *testing.T) {
+	casos := map[string]struct {
+		valor   string
+		wantErr string
+	}{
+		"valido":      {valor: "10m"},
+		"ausente":     {valor: "", wantErr: "AUTH_RESET_TOKEN_TTL is required"},
+		"cero":        {valor: "0s", wantErr: "AUTH_RESET_TOKEN_TTL must be a positive duration"},
+		"negativo":    {valor: "-1m", wantErr: "AUTH_RESET_TOKEN_TTL must be a positive duration"},
+		"no numerico": {valor: "diez minutos", wantErr: "AUTH_RESET_TOKEN_TTL must be a positive duration"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AUTH_RESET_TOKEN_TTL", caso.valor)
+
+			cfg, err := LoadConfig()
+			if caso.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.wantErr) {
+					t.Fatalf("LoadConfig error = %v, quiero que contenga %q", err, caso.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Auth.ResetTokenTTL != 10*time.Minute {
+				t.Errorf("ResetTokenTTL = %s, quiero 10m", cfg.Auth.ResetTokenTTL)
 			}
 		})
 	}

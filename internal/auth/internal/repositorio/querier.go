@@ -12,8 +12,12 @@ import (
 
 type Querier interface {
 	ActualizarContextoDeFamilia(ctx context.Context, arg ActualizarContextoDeFamiliaParams) (int64, error)
+	ActualizarContrasena(ctx context.Context, arg ActualizarContrasenaParams) (int64, error)
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
 	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
+	CodigosRespaldoPendientesDeCredencial(ctx context.Context, credencialID pgtype.UUID) ([]CodigosRespaldoPendientesDeCredencialRow, error)
+	ConsumirCodigoRespaldo(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
+	ConsumirTokenRestablecimiento(ctx context.Context, tokenHash []byte) (pgtype.UUID, error)
 	CrearCodigoRespaldo(ctx context.Context, arg CrearCodigoRespaldoParams) error
 	CrearConsentimiento(ctx context.Context, arg CrearConsentimientoParams) (Consentimiento, error)
 	CrearCredencial(ctx context.Context, arg CrearCredencialParams) (Credencial, error)
@@ -26,13 +30,16 @@ type Querier interface {
 	DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (DesafioPendientePorIDRow, error)
 	DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error)
 	EmpresaDeParte(ctx context.Context, parteID pgtype.UUID) (EmpresaDeParteRow, error)
+	FamiliasVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]pgtype.UUID, error)
 	IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID) (IncrementarIntentoDesafioRow, error)
 	InsertarAviso(ctx context.Context, arg InsertarAvisoParams) (AvisoOutbox, error)
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
 	InsertarDesafio(ctx context.Context, arg InsertarDesafioParams) (AuthDesafio, error)
 	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
 	InsertarSesion(ctx context.Context, arg InsertarSesionParams) (Sesion, error)
+	InsertarTokenRestablecimiento(ctx context.Context, arg InsertarTokenRestablecimientoParams) error
 	InvalidarDesafio(ctx context.Context, id pgtype.UUID) (int64, error)
+	InvalidarDesafioNoPendiente(ctx context.Context, id pgtype.UUID) (int64, error)
 	ListarSesionesActivas(ctx context.Context, parteID pgtype.UUID) ([]Sesion, error)
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error)
@@ -54,6 +61,7 @@ type Querier interface {
 	RotarSesion(ctx context.Context, refreshHash []byte) (Sesion, error)
 	SesionPorRefreshHash(ctx context.Context, refreshHash []byte) (Sesion, error)
 	TextoDeConsentimiento(ctx context.Context, arg TextoDeConsentimientoParams) (TextoDeConsentimientoRow, error)
+	TokenRestablecimientoVigente(ctx context.Context, tokenHash []byte) (TokenRestablecimientoVigenteRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
 	UsuarioDeParte(ctx context.Context, id pgtype.UUID) (UsuarioDeParteRow, error)

@@ -80,6 +80,8 @@ type DependenciasAuth struct {
 	Firmador     *auth.TokensDeAcceso
 	Denylist     auth.RevocadorDeSesiones
 	Subcuentas   auth.AbridorDeSubcuentas
+	Recuperar2FA RecuperacionVerifyHandler
+	ResetClave   RecuperacionResetHandler
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.

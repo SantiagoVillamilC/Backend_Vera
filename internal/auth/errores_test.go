@@ -87,6 +87,8 @@ func TestMapearError(t *testing.T) {
 		"credenciales invalidas es 401":            {err: ErrCredencialesInvalidas, code: "InvalidCredentials", status: 401},
 		"cuenta suspendida es 403":                 {err: ErrCuentaSuspendida, code: "AccountSuspended", status: 403},
 		"sin rol de empresa es 403":                {err: ErrSinRolDeEmpresa, code: "NoCompanyRole", status: 403},
+		"segundo factor invalido es 401":           {err: ErrSegundoFactorRequerido, code: "SecondFactorRequired", status: 401},
+		"reset invalido es 400":                    {err: ErrResetInvalido, code: "ResetInvalid", status: 400},
 	}
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {

@@ -22,6 +22,11 @@ UPDATE auth.desafios
 SET estado = 'invalidado'
 WHERE id = $1 AND estado = 'pendiente';
 
+-- name: InvalidarDesafioNoPendiente :execrows
+UPDATE auth.desafios
+SET estado = 'invalidado'
+WHERE id = $1 AND estado <> 'invalidado';
+
 -- name: DesafioPendientePorID :one
 SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
        intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,

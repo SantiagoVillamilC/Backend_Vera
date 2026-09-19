@@ -79,6 +79,12 @@ var ErrSesionNoEncontrada = errors.New("auth: la sesión no existe para la parte
 // ErrContextoInvalido es el contexto pedido que no está disponible para la parte: responde 400 ContextInvalid.
 var ErrContextoInvalido = errors.New("auth: el contexto no está disponible para la parte")
 
+// ErrSegundoFactorRequerido es el código de respaldo inválido o ya usado: responde 401 SecondFactorRequired.
+var ErrSegundoFactorRequerido = errors.New("auth: el segundo factor no es válido")
+
+// ErrResetInvalido es el token de restablecimiento ausente, vencido o ya usado: responde 400 ResetInvalid.
+var ErrResetInvalido = errors.New("auth: el token de restablecimiento no es válido")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -143,6 +149,10 @@ func MapearError(err error) error {
 		return platformerrors.New("SessionNotFound", "The session was not found.", http.StatusNotFound)
 	case errors.Is(err, ErrContextoInvalido):
 		return platformerrors.New("ContextInvalid", "The requested context is not available.", http.StatusBadRequest)
+	case errors.Is(err, ErrSegundoFactorRequerido):
+		return platformerrors.New("SecondFactorRequired", "The second factor is invalid.", http.StatusUnauthorized)
+	case errors.Is(err, ErrResetInvalido):
+		return platformerrors.New("ResetInvalid", "The reset token is invalid or expired.", http.StatusBadRequest)
 	default:
 		return err
 	}
