@@ -31,6 +31,37 @@ func (q *Queries) ActualizarContextoDeFamilia(ctx context.Context, arg Actualiza
 	return result.RowsAffected(), nil
 }
 
+const credencialDeSesion = `-- name: CredencialDeSesion :one
+SELECT c.id, c.parte_id, c.correo, c.celular, c.celular_verificado_en, c.correo_verificado_en, c.celular_cambiado_en, c.valor_derivado, c.estado, c.creada_en, c.actualizada_en
+FROM auth.sesiones s
+JOIN auth.credenciales c ON c.parte_id = s.parte_id
+WHERE s.familia_id = $1
+ORDER BY s.creada_en
+LIMIT 1
+`
+
+func (q *Queries) CredencialDeSesion(ctx context.Context, familiaID pgtype.UUID) (Credencial, error) {
+	row := q.db.QueryRow(ctx, credencialDeSesion, familiaID)
+	var i Credencial
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.Correo,
+		&i.Celular,
+		&i.CelularVerificadoEn,
+		&i.CorreoVerificadoEn,
+		&i.CelularCambiadoEn,
+		&i.ValorDerivado,
+		&i.Estado,
+		&i.CreadaEn,
+		&i.ActualizadaEn,
+	)
+	if err != nil {
+		err = fmt.Errorf("query CredencialDeSesion: %w", err)
+	}
+	return i, err
+}
+
 const familiasVigentesDeParte = `-- name: FamiliasVigentesDeParte :many
 SELECT DISTINCT familia_id
 FROM auth.sesiones

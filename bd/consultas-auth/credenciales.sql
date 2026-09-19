@@ -16,6 +16,19 @@ UPDATE auth.credenciales
 SET valor_derivado = $1, actualizada_en = now()
 WHERE id = $2 AND valor_derivado = $3;
 
+-- name: ActualizarCelularCredencial :execrows
+UPDATE auth.credenciales
+SET celular = sqlc.arg('celular'),
+    celular_verificado_en = now(),
+    celular_cambiado_en = now(),
+    actualizada_en = now()
+WHERE id = sqlc.arg('id') AND estado = 'activo' AND celular <> sqlc.arg('celular');
+
+-- name: CredencialPorCelularNoCerrada :one
+SELECT id
+FROM auth.credenciales
+WHERE celular = sqlc.arg('celular') AND estado <> 'cerrado' AND id <> sqlc.arg('id');
+
 -- name: InsertarCredencialDePrueba :exec
 INSERT INTO auth.credenciales (id, parte_id, correo, celular, valor_derivado, estado)
 VALUES ($1, $2, $3, $4, NULL, 'sin_login')

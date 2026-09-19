@@ -85,6 +85,12 @@ var ErrSegundoFactorRequerido = errors.New("auth: el segundo factor no es válid
 // ErrResetInvalido es el token de restablecimiento ausente, vencido o ya usado: responde 400 ResetInvalid.
 var ErrResetInvalido = errors.New("auth: el token de restablecimiento no es válido")
 
+// ErrCambioNumeroEnEnfriamiento es un segundo cambio de número dentro de la ventana del último: responde 429 PhoneChangeCooldown.
+var ErrCambioNumeroEnEnfriamiento = errors.New("auth: el cambio de número está en enfriamiento")
+
+// ErrCelularNuevoIgual es el número nuevo igual al actual de la credencial: responde 422 con nuevo_celular/distinto.
+var ErrCelularNuevoIgual = errors.New("auth: el número nuevo es igual al actual")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -153,6 +159,10 @@ func MapearError(err error) error {
 		return platformerrors.New("SecondFactorRequired", "The second factor is invalid.", http.StatusUnauthorized)
 	case errors.Is(err, ErrResetInvalido):
 		return platformerrors.New("ResetInvalid", "The reset token is invalid or expired.", http.StatusBadRequest)
+	case errors.Is(err, ErrCambioNumeroEnEnfriamiento):
+		return platformerrors.New("PhoneChangeCooldown", "A phone change is already in cooldown.", http.StatusTooManyRequests)
+	case errors.Is(err, ErrCelularNuevoIgual):
+		return platformerrors.New("ValidationError", "Request validation failed.", http.StatusUnprocessableEntity)
 	default:
 		return err
 	}

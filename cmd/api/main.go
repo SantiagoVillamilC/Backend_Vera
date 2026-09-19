@@ -147,6 +147,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("servicio de restablecimiento: %w", err)
 	}
+	servicioCambioNumero, err := auth.NuevoServicioDeCambioDeNumero(pool, gestorDesafios, gestorSesiones, derivador, denylistAuth, auth.NuevoRegistradorEventos(pool), contadoresAuth, clavesContadores, cfg.Auth.OTPPepper, cfg.Auth.EnfriamientoCambioNumero)
+	if err != nil {
+		return fmt.Errorf("servicio de cambio de número: %w", err)
+	}
 	restablecimiento := httpserver.NuevoRestablecimientoHandler(servicioRestablecimiento, servicioRestablecimiento)
 	deps := httpserver.DependenciasAuth{
 		Identidad:    identidadPeticion,
@@ -162,6 +166,7 @@ func run() error {
 		Recuperacion: httpserver.NuevoRecuperacionHandler(servicioRecuperacion),
 		Recuperar2FA: restablecimiento,
 		ResetClave:   restablecimiento,
+		PhoneChange:  httpserver.NuevoCambioDeNumeroHandler(servicioCambioNumero),
 		Firmador:     tokensAuth,
 		Denylist:     denylistAuth,
 		Subcuentas:   servicio,

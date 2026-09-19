@@ -89,6 +89,8 @@ func TestMapearError(t *testing.T) {
 		"sin rol de empresa es 403":                {err: ErrSinRolDeEmpresa, code: "NoCompanyRole", status: 403},
 		"segundo factor invalido es 401":           {err: ErrSegundoFactorRequerido, code: "SecondFactorRequired", status: 401},
 		"reset invalido es 400":                    {err: ErrResetInvalido, code: "ResetInvalid", status: 400},
+		"cambio de numero en enfriamiento es 429":  {err: ErrCambioNumeroEnEnfriamiento, code: "PhoneChangeCooldown", status: 429},
+		"celular nuevo igual es 422":               {err: ErrCelularNuevoIgual, code: "ValidationError", status: 422},
 	}
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {
