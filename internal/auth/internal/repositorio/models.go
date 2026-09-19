@@ -89,6 +89,13 @@ type Empresa struct {
 	RazonSocial string      `json:"razon_social"`
 }
 
+type EstadoKYC struct {
+	ParteID       pgtype.UUID        `json:"parte_id"`
+	Producto      string             `json:"producto"`
+	EstadoKyc     string             `json:"estado_kyc"`
+	ActualizadoEn pgtype.Timestamptz `json:"actualizado_en"`
+}
+
 type EventoAutenticacion struct {
 	ID           int64              `json:"id"`
 	Tipo         string             `json:"tipo"`
@@ -154,4 +161,15 @@ type TransicionCredencial struct {
 	EstadoNuevo    string             `json:"estado_nuevo"`
 	Motivo         pgtype.Text        `json:"motivo"`
 	OcurridaEn     pgtype.Timestamptz `json:"ocurrida_en"`
+}
+
+type VerificacionKYC struct {
+	ID                  int64              `json:"id"`
+	ParteID             pgtype.UUID        `json:"parte_id"`
+	NivelSolicitado     string             `json:"nivel_solicitado"`
+	Medio               string             `json:"medio"`
+	Proveedor           pgtype.Text        `json:"proveedor"`
+	Resultado           string             `json:"resultado"`
+	ReferenciaProveedor pgtype.Text        `json:"referencia_proveedor"`
+	OcurridaEn          pgtype.Timestamptz `json:"ocurrida_en"`
 }

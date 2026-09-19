@@ -15,6 +15,7 @@ type Querier interface {
 	ActualizarContextoDeFamilia(ctx context.Context, arg ActualizarContextoDeFamiliaParams) (int64, error)
 	ActualizarContrasena(ctx context.Context, arg ActualizarContrasenaParams) (int64, error)
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
+	AsegurarEstadoKYC(ctx context.Context, arg AsegurarEstadoKYCParams) error
 	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
 	CodigosRespaldoPendientesDeCredencial(ctx context.Context, credencialID pgtype.UUID) ([]CodigosRespaldoPendientesDeCredencialRow, error)
 	ConsumirCodigoRespaldo(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
@@ -43,8 +44,10 @@ type Querier interface {
 	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
 	InsertarSesion(ctx context.Context, arg InsertarSesionParams) (Sesion, error)
 	InsertarTokenRestablecimiento(ctx context.Context, arg InsertarTokenRestablecimientoParams) error
+	InsertarVerificacionKYC(ctx context.Context, arg InsertarVerificacionKYCParams) error
 	InvalidarDesafio(ctx context.Context, id pgtype.UUID) (int64, error)
 	InvalidarDesafioNoPendiente(ctx context.Context, id pgtype.UUID) (int64, error)
+	LeerEstadoKYC(ctx context.Context, parteID pgtype.UUID) (LeerEstadoKYCRow, error)
 	ListarSesionesActivas(ctx context.Context, parteID pgtype.UUID) ([]Sesion, error)
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error)
@@ -66,10 +69,12 @@ type Querier interface {
 	RotarSesion(ctx context.Context, refreshHash []byte) (Sesion, error)
 	SesionPorRefreshHash(ctx context.Context, refreshHash []byte) (Sesion, error)
 	TextoDeConsentimiento(ctx context.Context, arg TextoDeConsentimientoParams) (TextoDeConsentimientoRow, error)
+	TipoDeParte(ctx context.Context, id pgtype.UUID) (string, error)
 	TokenRestablecimientoVigente(ctx context.Context, tokenHash []byte) (TokenRestablecimientoVigenteRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
 	UltimoDesafioDeRegistroPorCelular(ctx context.Context, celularDestino string) (UltimoDesafioDeRegistroPorCelularRow, error)
+	UpsertEstadoKYC(ctx context.Context, arg UpsertEstadoKYCParams) error
 	UsuarioDeParte(ctx context.Context, id pgtype.UUID) (UsuarioDeParteRow, error)
 }
 

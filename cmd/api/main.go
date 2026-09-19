@@ -56,9 +56,17 @@ func run() error {
 	resolutorDestino := auth.NuevoResolutorDestino(pool, cfg.Auth.EnfriamientoCambioNumero)
 	servicio := nucleo.NewServicio(
 		pool,
-		nucleo.KYCNoDisponible{},
-		nucleo.RielNoDisponible{},
-		nucleo.CustodioNoDisponible{},
+		lectorKYC(pool),
+		riel,
+		custodiosim.NuevoLectorExtracto(cfg.CustodioExtractoURL, nil),
+		observabilidad.RastreadorSlog{},
+		nucleo.ConResolutorDestino(resolutorDestino),
+		nucleo.ConDirectorio(directorio),
+		nucleo.ConPoliticaReintentoOutbox(nucleo.PoliticaReintentoOutbox{
+			Base:   cfg.OutboxBackoffBase,
+			Factor: cfg.OutboxBackoffFactor,
+			Tope:   cfg.OutboxBackoffMax,
+		}),
 	)
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
@@ -128,9 +136,14 @@ func run() error {
 		return fmt.Errorf("servicio de cambio de número: %w", err)
 	}
 	restablecimiento := httpserver.NuevoRestablecimientoHandler(servicioRestablecimiento, servicioRestablecimiento)
+	handlerKYC, err := nuevoKYCHandler(pool, cfg, servicio)
+	if err != nil {
+		return fmt.Errorf("módulo KYC: %w", err)
+	}
 	deps := httpserver.DependenciasAuth{
 		Identidad:    identidadPeticion,
 		Auth:         httpserver.NuevoDispositivosHandler(servicioSesion),
+		KYC:          handlerKYC,
 		Redis:        clienteRedisAuth,
 		CanalOTP:     canal,
 		Contadores:   contadoresAuth,

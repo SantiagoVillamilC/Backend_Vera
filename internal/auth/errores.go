@@ -91,6 +91,9 @@ var ErrCambioNumeroEnEnfriamiento = errors.New("auth: el cambio de número está
 // ErrCelularNuevoIgual es el número nuevo igual al actual de la credencial: responde 422 con nuevo_celular/distinto.
 var ErrCelularNuevoIgual = errors.New("auth: el número nuevo es igual al actual")
 
+// ErrKYCPlenoRequerido es la empresa que no puede operar hasta tener KYC pleno: responde 403 KycRequired (HU-AUT-09, H5).
+var ErrKYCPlenoRequerido = platformerrors.New("KycRequired", "The company requires full KYC before operating.", http.StatusForbidden)
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -163,6 +166,8 @@ func MapearError(err error) error {
 		return platformerrors.New("PhoneChangeCooldown", "A phone change is already in cooldown.", http.StatusTooManyRequests)
 	case errors.Is(err, ErrCelularNuevoIgual):
 		return platformerrors.New("ValidationError", "Request validation failed.", http.StatusUnprocessableEntity)
+	case errors.Is(err, ErrKYCPlenoRequerido):
+		return ErrKYCPlenoRequerido
 	default:
 		return err
 	}

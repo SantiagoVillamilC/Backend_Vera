@@ -36,6 +36,8 @@ type ConfigAuth struct {
 	OutboxBackoffFactor      float64
 	OutboxBackoffMax         time.Duration
 	Argon2Concurrencia       int
+	KYCProveedor             string
+	KYCResultado             string
 }
 
 // cargarConfigAuth lee el bloque de auth y devuelve sus errores para el errors.Join del llamador.
@@ -136,6 +138,16 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 		errs = append(errs, errors.New("OTP_CANAL is required"))
 	default:
 		errs = append(errs, fmt.Errorf("OTP_CANAL must be simulador, cloudapi or demo, got %q", cfg.OTPCanal))
+	}
+	cfg.KYCProveedor = os.Getenv("KYC_PROVEEDOR")
+	switch cfg.KYCProveedor {
+	case "":
+		errs = append(errs, errors.New("KYC_PROVEEDOR is required"))
+	case "simulador":
+		cfg.KYCResultado = os.Getenv("KYC_SIMULADOR_RESULTADO")
+		if cfg.KYCResultado == "" {
+			errs = append(errs, errors.New("KYC_SIMULADOR_RESULTADO is required when KYC_PROVEEDOR=simulador"))
+		}
 	}
 	return cfg, errs
 }
