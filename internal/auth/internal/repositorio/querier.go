@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
 	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
+	CrearConsentimiento(ctx context.Context, arg CrearConsentimientoParams) (Consentimiento, error)
 	CrearCredencial(ctx context.Context, arg CrearCredencialParams) (Credencial, error)
 	CrearEmpresa(ctx context.Context, arg CrearEmpresaParams) (Empresa, error)
 	CrearParte(ctx context.Context, arg CrearParteParams) (Parte, error)
@@ -32,6 +33,7 @@ type Querier interface {
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error)
 	MarcarDesafioVerificado(ctx context.Context, id pgtype.UUID) (int64, error)
+	OptInVigenteDeParte(ctx context.Context, parteID pgtype.UUID) (bool, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
@@ -45,6 +47,7 @@ type Querier interface {
 	RolesVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]RolesVigentesDeParteRow, error)
 	RotarSesion(ctx context.Context, refreshHash []byte) (Sesion, error)
 	SesionPorRefreshHash(ctx context.Context, refreshHash []byte) (Sesion, error)
+	TextoDeConsentimiento(ctx context.Context, arg TextoDeConsentimientoParams) (TextoDeConsentimientoRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
 }

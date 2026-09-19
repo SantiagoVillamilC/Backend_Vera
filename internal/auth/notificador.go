@@ -30,14 +30,16 @@ type Aviso struct {
 	Correo    string
 	Celular   string
 	Plantilla string
+	ParteID   string
 }
 
-// payloadAviso es la forma persistida del aviso: destino, dirección y plantilla.
+// payloadAviso es la forma persistida del aviso: destino, dirección, plantilla y referencia.
 type payloadAviso struct {
 	Destino   string `json:"destino"`
 	Correo    string `json:"correo,omitempty"`
 	Celular   string `json:"celular,omitempty"`
 	Plantilla string `json:"plantilla"`
+	ParteID   string `json:"parte_id,omitempty"`
 }
 
 // Notificador entrega un aviso por el canal que su destino indique.
@@ -86,6 +88,7 @@ func EncolarAviso(ctx context.Context, q *repositorio.Queries, aviso Aviso) erro
 		Correo:    aviso.Correo,
 		Celular:   aviso.Celular,
 		Plantilla: aviso.Plantilla,
+		ParteID:   aviso.ParteID,
 	})
 	if err != nil {
 		return fmt.Errorf("auth: serializar el payload del aviso %q: %w", aviso.Tipo, err)

@@ -35,6 +35,21 @@ type AvisoOutbox struct {
 	IDMensajeProveedor pgtype.Text        `json:"id_mensaje_proveedor"`
 }
 
+type Consentimiento struct {
+	ID           pgtype.UUID        `json:"id"`
+	ParteID      pgtype.UUID        `json:"parte_id"`
+	Tipo         string             `json:"tipo"`
+	VersionTexto string             `json:"version_texto"`
+	Texto        string             `json:"texto"`
+	Aceptado     bool               `json:"aceptado"`
+	Accion       string             `json:"accion"`
+	Actor        pgtype.UUID        `json:"actor"`
+	Origen       string             `json:"origen"`
+	UserAgent    string             `json:"user_agent"`
+	Metodo       string             `json:"metodo"`
+	OcurridoEn   pgtype.Timestamptz `json:"ocurrido_en"`
+}
+
 type Credencial struct {
 	ID                  pgtype.UUID        `json:"id"`
 	ParteID             pgtype.UUID        `json:"parte_id"`
@@ -104,6 +119,13 @@ type Sesion struct {
 	UsadoEn        pgtype.Timestamptz `json:"usado_en"`
 	RevocadaEn     pgtype.Timestamptz `json:"revocada_en"`
 	VenceEn        pgtype.Timestamptz `json:"vence_en"`
+}
+
+type TextoConsentimiento struct {
+	Tipo         string             `json:"tipo"`
+	Version      string             `json:"version"`
+	Texto        string             `json:"texto"`
+	VigenteDesde pgtype.Timestamptz `json:"vigente_desde"`
 }
 
 type TransicionCredencial struct {

@@ -38,6 +38,11 @@ type DesafiosHandler interface {
 	ResendOtp(http.ResponseWriter, *http.Request)
 }
 
+// RegistroHandler atiende el alta pública de persona.
+type RegistroHandler interface {
+	Register(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
 	Identidad  IdentidadDeLaPeticion
@@ -48,6 +53,8 @@ type DependenciasAuth struct {
 	CanalOTP   auth.CanalOTP
 	Contadores auth.Contadores
 	Desafios   DesafiosHandler
+	Registro   RegistroHandler
+	Subcuentas auth.AbridorDeSubcuentas
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
