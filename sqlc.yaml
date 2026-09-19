@@ -64,3 +64,4 @@ sql:
           auth_transiciones_credencial: TransicionCredencial
           auth_eventos_autenticacion: EventoAutenticacion
           auth_sesione: Sesion
+          auth_outbox: AvisoOutbox

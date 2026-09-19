@@ -11,20 +11,24 @@ import (
 )
 
 type Querier interface {
+	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
 	CrearCredencial(ctx context.Context, arg CrearCredencialParams) (Credencial, error)
 	CrearEmpresa(ctx context.Context, arg CrearEmpresaParams) (Empresa, error)
 	CrearParte(ctx context.Context, arg CrearParteParams) (Parte, error)
 	CrearPersona(ctx context.Context, arg CrearPersonaParams) (Persona, error)
 	CrearRolDeParte(ctx context.Context, arg CrearRolDeParteParams) (RolDeParte, error)
 	CredencialPorID(ctx context.Context, id pgtype.UUID) (Credencial, error)
+	InsertarAviso(ctx context.Context, arg InsertarAvisoParams) (AvisoOutbox, error)
 	InsertarCredencialDePrueba(ctx context.Context, arg InsertarCredencialDePruebaParams) error
 	InsertarParteDePrueba(ctx context.Context, id pgtype.UUID) error
 	InsertarSesion(ctx context.Context, arg InsertarSesionParams) (Sesion, error)
 	ListarSesionesActivas(ctx context.Context, parteID pgtype.UUID) ([]Sesion, error)
+	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
 	RegistrarTransicionCredencial(ctx context.Context, arg RegistrarTransicionCredencialParams) error
+	ReintentarAviso(ctx context.Context, arg ReintentarAvisoParams) (int32, error)
 	ResolverDestinoPorCelular(ctx context.Context, arg ResolverDestinoPorCelularParams) (pgtype.UUID, error)
 	ResolverDestinoPorID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
 	RevocarFamilia(ctx context.Context, familiaID pgtype.UUID) (int64, error)
@@ -33,6 +37,7 @@ type Querier interface {
 	RolesVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]RolesVigentesDeParteRow, error)
 	RotarSesion(ctx context.Context, refreshHash []byte) (Sesion, error)
 	SesionPorRefreshHash(ctx context.Context, refreshHash []byte) (Sesion, error)
+	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
 	TransicionarCredencial(ctx context.Context, arg TransicionarCredencialParams) (int64, error)
 }
 
