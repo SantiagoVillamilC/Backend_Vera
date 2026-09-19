@@ -28,3 +28,28 @@ SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
        contexto_solicitado, expira_en <= now() AS expirado
 FROM auth.desafios
 WHERE id = $1 AND estado = 'pendiente';
+
+-- name: IncrementarIntentoDesafio :one
+UPDATE auth.desafios
+SET intentos = intentos + 1
+WHERE id = $1 AND estado = 'pendiente' AND intentos < 3
+RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
+          intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
+          contexto_solicitado, expira_en <= now() AS expirado;
+
+-- name: DesafioPorID :one
+SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
+       intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
+       contexto_solicitado, expira_en <= now() AS expirado
+FROM auth.desafios
+WHERE id = $1;
+
+-- name: MarcarDesafioVerificado :execrows
+UPDATE auth.desafios
+SET estado = 'verificado'
+WHERE id = $1 AND estado = 'pendiente';
+
+-- name: MarcarDesafioExpirado :execrows
+UPDATE auth.desafios
+SET estado = 'expirado'
+WHERE id = $1 AND estado = 'pendiente';

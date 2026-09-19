@@ -31,6 +31,18 @@ var ErrConsentimientoRequerido = errors.New("auth: falta el consentimiento para 
 // ErrEntregaFallida es el canal que no pudo entregar el código del desafío: responde 503 OtpDeliveryFailed.
 var ErrEntregaFallida = errors.New("auth: no se pudo entregar el código del desafío")
 
+// ErrDesafioInvalido es un desafío inexistente, ya usado o en otro estado: responde 400 ChallengeInvalid.
+var ErrDesafioInvalido = errors.New("auth: el desafío no es válido")
+
+// ErrCodigoInvalido es el código presentado que no coincide con el del desafío: responde 400 OtpInvalid.
+var ErrCodigoInvalido = errors.New("auth: el código del desafío no coincide")
+
+// ErrCodigoExpirado es el desafío cuya vigencia terminó: responde 400 OtpExpired.
+var ErrCodigoExpirado = errors.New("auth: el código del desafío expiró")
+
+// ErrDemasiadosIntentos es el desafío que agotó sus intentos: responde 429 OtpTooManyAttempts.
+var ErrDemasiadosIntentos = errors.New("auth: el desafío agotó los intentos")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -65,6 +77,14 @@ func MapearError(err error) error {
 		return platformerrors.New("ConsentRequired", "The required consent is missing.", http.StatusForbidden)
 	case errors.Is(err, ErrEntregaFallida):
 		return platformerrors.New("OtpDeliveryFailed", "The code could not be delivered.", http.StatusServiceUnavailable)
+	case errors.Is(err, ErrDesafioInvalido):
+		return platformerrors.New("ChallengeInvalid", "The challenge is invalid or no longer usable.", http.StatusBadRequest)
+	case errors.Is(err, ErrCodigoInvalido):
+		return platformerrors.New("OtpInvalid", "The code is invalid.", http.StatusBadRequest)
+	case errors.Is(err, ErrCodigoExpirado):
+		return platformerrors.New("OtpExpired", "The code has expired.", http.StatusBadRequest)
+	case errors.Is(err, ErrDemasiadosIntentos):
+		return platformerrors.New("OtpTooManyAttempts", "Too many attempts. Request a new code.", http.StatusTooManyRequests)
 	default:
 		return err
 	}

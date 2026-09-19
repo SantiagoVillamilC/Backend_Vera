@@ -62,6 +62,107 @@ func (q *Queries) DesafioPendientePorID(ctx context.Context, id pgtype.UUID) (De
 	return i, err
 }
 
+const desafioPorID = `-- name: DesafioPorID :one
+SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
+       intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
+       contexto_solicitado, expira_en <= now() AS expirado
+FROM auth.desafios
+WHERE id = $1
+`
+
+type DesafioPorIDRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	ParteID            pgtype.UUID        `json:"parte_id"`
+	CredencialID       pgtype.UUID        `json:"credencial_id"`
+	Proposito          string             `json:"proposito"`
+	CelularDestino     string             `json:"celular_destino"`
+	CodigoHmac         []byte             `json:"codigo_hmac"`
+	Intentos           int32              `json:"intentos"`
+	Reenvios           int32              `json:"reenvios"`
+	Estado             string             `json:"estado"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
+	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
+	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	Expirado           bool               `json:"expirado"`
+}
+
+func (q *Queries) DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error) {
+	row := q.db.QueryRow(ctx, desafioPorID, id)
+	var i DesafioPorIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.CredencialID,
+		&i.Proposito,
+		&i.CelularDestino,
+		&i.CodigoHmac,
+		&i.Intentos,
+		&i.Reenvios,
+		&i.Estado,
+		&i.CreadoEn,
+		&i.ExpiraEn,
+		&i.UltimoEnvioEn,
+		&i.ContextoSolicitado,
+		&i.Expirado,
+	)
+	if err != nil {
+		err = fmt.Errorf("query DesafioPorID: %w", err)
+	}
+	return i, err
+}
+
+const incrementarIntentoDesafio = `-- name: IncrementarIntentoDesafio :one
+UPDATE auth.desafios
+SET intentos = intentos + 1
+WHERE id = $1 AND estado = 'pendiente' AND intentos < 3
+RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
+          intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
+          contexto_solicitado, expira_en <= now() AS expirado
+`
+
+type IncrementarIntentoDesafioRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	ParteID            pgtype.UUID        `json:"parte_id"`
+	CredencialID       pgtype.UUID        `json:"credencial_id"`
+	Proposito          string             `json:"proposito"`
+	CelularDestino     string             `json:"celular_destino"`
+	CodigoHmac         []byte             `json:"codigo_hmac"`
+	Intentos           int32              `json:"intentos"`
+	Reenvios           int32              `json:"reenvios"`
+	Estado             string             `json:"estado"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
+	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
+	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	Expirado           bool               `json:"expirado"`
+}
+
+func (q *Queries) IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID) (IncrementarIntentoDesafioRow, error) {
+	row := q.db.QueryRow(ctx, incrementarIntentoDesafio, id)
+	var i IncrementarIntentoDesafioRow
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.CredencialID,
+		&i.Proposito,
+		&i.CelularDestino,
+		&i.CodigoHmac,
+		&i.Intentos,
+		&i.Reenvios,
+		&i.Estado,
+		&i.CreadoEn,
+		&i.ExpiraEn,
+		&i.UltimoEnvioEn,
+		&i.ContextoSolicitado,
+		&i.Expirado,
+	)
+	if err != nil {
+		err = fmt.Errorf("query IncrementarIntentoDesafio: %w", err)
+	}
+	return i, err
+}
+
 const insertarDesafio = `-- name: InsertarDesafio :one
 INSERT INTO auth.desafios (
     id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
@@ -140,6 +241,34 @@ func (q *Queries) InvalidarDesafio(ctx context.Context, id pgtype.UUID) (int64, 
 	result, err := q.db.Exec(ctx, invalidarDesafio, id)
 	if err != nil {
 		return 0, fmt.Errorf("query InvalidarDesafio: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
+const marcarDesafioExpirado = `-- name: MarcarDesafioExpirado :execrows
+UPDATE auth.desafios
+SET estado = 'expirado'
+WHERE id = $1 AND estado = 'pendiente'
+`
+
+func (q *Queries) MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, marcarDesafioExpirado, id)
+	if err != nil {
+		return 0, fmt.Errorf("query MarcarDesafioExpirado: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
+const marcarDesafioVerificado = `-- name: MarcarDesafioVerificado :execrows
+UPDATE auth.desafios
+SET estado = 'verificado'
+WHERE id = $1 AND estado = 'pendiente'
+`
+
+func (q *Queries) MarcarDesafioVerificado(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, marcarDesafioVerificado, id)
+	if err != nil {
+		return 0, fmt.Errorf("query MarcarDesafioVerificado: %w", err)
 	}
 	return result.RowsAffected(), nil
 }
