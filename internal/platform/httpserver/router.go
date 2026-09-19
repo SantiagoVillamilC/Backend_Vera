@@ -61,7 +61,6 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 		r.Post("/v1/auth/register/verify-phone", verificacionDeCelular(authDeps.Verificacion))
 		r.Post("/v1/auth/otp/resend", reenvioDeOtp(authDeps.Desafios))
 		r.Post("/v1/auth/login", loginDeSesion(authDeps.Login))
-		r.Post("/v1/auth/login/verify-otp", verificacionDeOtp(authDeps.VerificarOtp))
 		r.Post("/v1/auth/refresh", rotacionDeRefresh(authDeps.Refresh))
 		r.Post("/v1/auth/recovery/request", recuperacionDeSesion(authDeps.Recuperacion))
 		r.Post("/v1/auth/recovery/verify", verificacionDeRecuperacion(authDeps.Recuperar2FA))

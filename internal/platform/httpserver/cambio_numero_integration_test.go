@@ -34,7 +34,7 @@ func celularHTTPDePrueba() string {
 	return fmt.Sprintf("+57300%07d", n%10000000)
 }
 
-// sembrarCredencialHTTP inserta parte y credencial activa con el celular verificado.
+// sembrarCredencialHTTP inserta parte y credencial activa con el celular verificado y devuelve su id.
 func sembrarCredencialHTTP(t *testing.T, pool *pgxpool.Pool, derivador auth.Derivador, correo, celular, contrasena string) uuid.UUID {
 	t.Helper()
 
@@ -115,13 +115,9 @@ func TestCambioDeNumeroPorHTTPDejaElAccessViejoEn401(t *testing.T) {
 		t.Fatalf("verificador: %v", err)
 	}
 	sesiones := auth.NuevoGestorSesiones(pool, eventos)
-	login, err := auth.NuevoServicioDeLogin(verificador, gestor, sesiones)
+	login, err := auth.NuevoServicioDeLogin(verificador, pool, sesiones, tokens)
 	if err != nil {
 		t.Fatalf("servicio de login: %v", err)
-	}
-	sesionServicio, err := auth.NuevoServicioDeSesion(pool, gestor, sesiones, tokens, denylistRedis)
-	if err != nil {
-		t.Fatalf("servicio de sesión: %v", err)
 	}
 	cambio, err := auth.NuevoServicioDeCambioDeNumero(pool, gestor, sesiones, derivador, denylistRedis, eventos, contadoresRedis, claves, pepperDeCambioHTTP, 24*time.Hour)
 	if err != nil {
@@ -129,8 +125,9 @@ func TestCambioDeNumeroPorHTTPDejaElAccessViejoEn401(t *testing.T) {
 	}
 
 	correo := "cambio-http-" + uuid.NewString() + "@centinela.test"
-	sembrarCredencialHTTP(t, pool, derivador, correo, celularHTTPDePrueba(), "contrasena-correcta")
-	acceso := iniciarSesionHTTP(t, login, sesionServicio, correo)
+	celular := celularHTTPDePrueba()
+	sembrarCredencialHTTP(t, pool, derivador, correo, celular, "contrasena-correcta")
+	acceso := iniciarSesionHTTP(t, login, celular)
 	nuevo := celularHTTPDePrueba()
 
 	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
@@ -172,17 +169,13 @@ func TestCambioDeNumeroPorHTTPDejaElAccessViejoEn401(t *testing.T) {
 	assertErrorEnvelope(t, viejo, http.StatusUnauthorized, "Unauthorized")
 }
 
-// iniciarSesionHTTP corre login y verify-otp y devuelve el access emitido.
-func iniciarSesionHTTP(t *testing.T, login *auth.ServicioDeLogin, sesion *auth.ServicioDeSesion, correo string) string {
+// iniciarSesionHTTP corre el login directo por celular y devuelve el access emitido.
+func iniciarSesionHTTP(t *testing.T, login *auth.ServicioDeLogin, celular string) string {
 	t.Helper()
 
-	desenlace, err := login.IniciarSesion(t.Context(), correo, "contrasena-correcta", auth.ContextoUsuario, "10.0.0.1")
+	emision, err := login.IniciarSesion(t.Context(), celular, "contrasena-correcta", auth.ContextoUsuario, "10.0.0.1", "dispositivo-de-prueba")
 	if err != nil {
 		t.Fatalf("IniciarSesion: %v", err)
-	}
-	emision, err := sesion.VerificarOtp(t.Context(), desenlace.ChallengeID, "123456", "dispositivo-de-prueba")
-	if err != nil {
-		t.Fatalf("VerificarOtp: %v", err)
 	}
 	return emision.AccessToken
 }

@@ -7,30 +7,20 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
-	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// ServicioDeSesion verifica el segundo factor y rota el refresh.
+// ServicioDeSesion rota el refresh de la sesión.
 type ServicioDeSesion interface {
-	VerificarOtp(ctx context.Context, id uuid.UUID, codigo, dispositivo string) (auth.SesionEmitida, error)
 	RotarRefresh(ctx context.Context, refreshEnClaro string) (auth.TokensRotados, error)
 }
 
-// HandlerDeSesion atiende la verificación del OTP y la rotación del refresh.
+// HandlerDeSesion atiende la rotación del refresh.
 type HandlerDeSesion struct{ servicio ServicioDeSesion }
 
 // NuevoSesionHandler construye el handler sobre el servicio de sesión.
 func NuevoSesionHandler(servicio ServicioDeSesion) *HandlerDeSesion {
 	return &HandlerDeSesion{servicio: servicio}
-}
-
-// verificacionDeOtp elige el handler real o el stub 501 cuando no está inyectado.
-func verificacionDeOtp(handler VerificarOtpHandler) http.HandlerFunc {
-	if handler == nil {
-		return sinImplementar
-	}
-	return handler.VerifyOtp
 }
 
 // rotacionDeRefresh elige el handler real o el stub 501 cuando no está inyectado.
@@ -39,20 +29,6 @@ func rotacionDeRefresh(handler RefreshHandler) http.HandlerFunc {
 		return sinImplementar
 	}
 	return handler.Refresh
-}
-
-// VerifyOtp valida el cuerpo, verifica el desafío de login y responde el par con el usuario.
-func (h *HandlerDeSesion) VerifyOtp(w http.ResponseWriter, r *http.Request) {
-	var entrada api.VerifyOtpRequest
-	if !api.DecodeAndValidate(w, r, &entrada) {
-		return
-	}
-	resultado, err := h.servicio.VerificarOtp(r.Context(), entrada.ChallengeId, entrada.Codigo, dispositivoDeLaPeticion(r))
-	if err != nil {
-		escribirErrorDeAuth(w, r, err)
-		return
-	}
-	api.WriteData(w, http.StatusOK, respuestaDeSesion(resultado), nil)
 }
 
 // Refresh valida el cuerpo, rota el refresh y responde el par nuevo.

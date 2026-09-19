@@ -12,11 +12,11 @@ import (
 func TestDispositivosRevocacionYContextosDeLaParte(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
-	_, parteID, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
 	empresa, razonSocial := crearRolDeEmpresaDeInicioSesion(t, pool, parteID)
 
-	primera := entrarYVerificar(t, m, correo, "contrasena-correcta", "")
-	segunda := entrarYVerificar(t, m, correo, "contrasena-correcta", "")
+	primera := entrarYVerificar(t, m, celular, "contrasena-correcta", "")
+	segunda := entrarYVerificar(t, m, celular, "contrasena-correcta", "")
 	familiaPrimera := familiaDeAccess(t, m, primera.AccessToken)
 	familiaSegunda := familiaDeAccess(t, m, segunda.AccessToken)
 
@@ -108,9 +108,9 @@ func TestDispositivosRevocacionYContextosDeLaParte(t *testing.T) {
 func TestCerrarSesionActualPublicaElSidDeLaFamilia(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
-	_, parteID, correo, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
 
-	emitida := entrarYVerificar(t, m, correo, "contrasena-correcta", "")
+	emitida := entrarYVerificar(t, m, celular, "contrasena-correcta", "")
 	familia := familiaDeAccess(t, m, emitida.AccessToken)
 
 	if err := m.sesion.CerrarSesionActual(t.Context(), parteID, familia); err != nil {

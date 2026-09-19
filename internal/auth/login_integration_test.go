@@ -92,8 +92,14 @@ func sembrarCredencialDeLogin(tb testing.TB, pool *pgxpool.Pool, derivador Deriv
 // sembrarCredencialDeLoginConCorreo crea una parte y su credencial con el correo y el estado pedidos.
 func sembrarCredencialDeLoginConCorreo(tb testing.TB, pool *pgxpool.Pool, derivador Derivador, correo, contrasena string, estado EstadoCredencial) (uuid.UUID, string) {
 	tb.Helper()
-
 	id := uuid.New()
+	sembrarCredencialConCelular(tb, pool, derivador, id, correo, "+57"+id.String(), contrasena, estado)
+	return id, correo
+}
+
+// sembrarCredencialConCelular crea una parte y su credencial con el identificador, el correo y el estado pedidos.
+func sembrarCredencialConCelular(tb testing.TB, pool *pgxpool.Pool, derivador Derivador, id uuid.UUID, correo, celular, contrasena string, estado EstadoCredencial) {
+	tb.Helper()
 	parte := uuid.New()
 	phc, err := derivador.Derivar(context.Background(), contrasena)
 	if err != nil {
@@ -108,7 +114,7 @@ func sembrarCredencialDeLoginConCorreo(tb testing.TB, pool *pgxpool.Pool, deriva
 				ID:            pgUUID(id),
 				ParteID:       pgUUID(parte),
 				Correo:        correo,
-				Celular:       "+57" + id.String(),
+				Celular:       celular,
 				ValorDerivado: pgtype.Text{String: phc, Valid: true},
 				Estado:        string(estado),
 			})
@@ -116,7 +122,6 @@ func sembrarCredencialDeLoginConCorreo(tb testing.TB, pool *pgxpool.Pool, deriva
 		}); err != nil {
 		tb.Fatalf("sembrar credencial: %v", err)
 	}
-	return id, correo
 }
 
 // verificadorDeLogin arma el verificador sobre el pool y Redis reales.
@@ -140,12 +145,12 @@ func TestAutenticarCredencialActivaConContrasenaCorrecta(t *testing.T) {
 	v, _ := verificadorDeLogin(t, pool, derivador, eventos)
 
 	id, correo := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoActivo)
-	credencial, err := v.Autenticar(t.Context(), correo, "contrasena-correcta", "203.0.113.9")
+	credencial, err := v.Autenticar(t.Context(), celularDeCredencial(id), "contrasena-correcta", "203.0.113.9")
 	if err != nil {
 		t.Fatalf("Autenticar: %v", err)
 	}
-	if credencial.CredencialID != id || credencial.Estado != EstadoActivo {
-		t.Errorf("credencial = %+v, quiero id %s activo", credencial, id)
+	if credencial.CredencialID != id || credencial.Estado != EstadoActivo || credencial.Correo != correo {
+		t.Errorf("credencial = %+v, quiero id %s activo con correo %s", credencial, id, correo)
 	}
 	eventos.exigirEvento(t, TipoEventoInicioSesion, resultadoLoginOk)
 }
@@ -155,12 +160,12 @@ func TestAutenticarSuspendidaSoloTrasProbarLaContrasena(t *testing.T) {
 	derivador := derivadorDeLogin(t)
 	v, _ := verificadorDeLogin(t, pool, derivador, &registradorEventosDeLogin{})
 
-	_, correo := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoSuspendido)
+	id, _ := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoSuspendido)
 
-	if _, err := v.Autenticar(t.Context(), correo, "contrasena-correcta", "203.0.113.9"); !errors.Is(err, ErrCuentaSuspendida) {
+	if _, err := v.Autenticar(t.Context(), celularDeCredencial(id), "contrasena-correcta", "203.0.113.9"); !errors.Is(err, ErrCuentaSuspendida) {
 		t.Fatalf("con contrasena buena quiero ErrCuentaSuspendida, obtuve %v", err)
 	}
-	if _, err := v.Autenticar(t.Context(), correo, "contrasena-mala", "203.0.113.9"); !errors.Is(err, ErrCredencialesInvalidas) {
+	if _, err := v.Autenticar(t.Context(), celularDeCredencial(id), "contrasena-mala", "203.0.113.9"); !errors.Is(err, ErrCredencialesInvalidas) {
 		t.Fatalf("con contrasena mala quiero ErrCredencialesInvalidas, obtuve %v", err)
 	}
 }
@@ -170,35 +175,36 @@ func TestAutenticarCerradaRespondeCredencialesInvalidas(t *testing.T) {
 	derivador := derivadorDeLogin(t)
 	v, _ := verificadorDeLogin(t, pool, derivador, &registradorEventosDeLogin{})
 
-	_, correo := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoCerrado)
-	if _, err := v.Autenticar(t.Context(), correo, "contrasena-correcta", "203.0.113.9"); !errors.Is(err, ErrCredencialesInvalidas) {
+	id, _ := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoCerrado)
+	if _, err := v.Autenticar(t.Context(), celularDeCredencial(id), "contrasena-correcta", "203.0.113.9"); !errors.Is(err, ErrCredencialesInvalidas) {
 		t.Fatalf("quiero ErrCredencialesInvalidas, obtuve %v", err)
 	}
 }
 
-func TestAutenticarTrasNFallosBloqueaTambienElCorreoInexistente(t *testing.T) {
+func TestAutenticarTrasNFallosBloqueaTambienElCelularInexistente(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeLogin(t)
 	v, _ := verificadorDeLogin(t, pool, derivador, &registradorEventosDeLogin{})
 
-	_, correo := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoActivo)
+	id, _ := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoActivo)
+	celular := celularDeCredencial(id)
 	for i := 0; i <= maxFallosPorCuenta; i++ {
-		if _, err := v.Autenticar(t.Context(), correo, "contrasena-mala", "203.0.113.9"); !errors.Is(err, ErrCredencialesInvalidas) && !errors.Is(err, ErrDemasiadosEnvios) {
+		if _, err := v.Autenticar(t.Context(), celular, "contrasena-mala", "203.0.113.9"); !errors.Is(err, ErrCredencialesInvalidas) && !errors.Is(err, ErrDemasiadosEnvios) {
 			t.Fatalf("fallo %d: %v", i, err)
 		}
 	}
-	if _, err := v.Autenticar(t.Context(), correo, "contrasena-correcta", "203.0.113.9"); !errors.Is(err, ErrDemasiadosEnvios) {
+	if _, err := v.Autenticar(t.Context(), celular, "contrasena-correcta", "203.0.113.9"); !errors.Is(err, ErrDemasiadosEnvios) {
 		t.Fatalf("tras N fallos quiero ErrDemasiadosEnvios, obtuve %v", err)
 	}
 
-	inexistente := "nadie-" + uuid.NewString() + "@centinela.test"
+	inexistente := "+57300" + uuid.NewString()[:7]
 	for i := 0; i <= maxFallosPorCuenta; i++ {
 		if _, err := v.Autenticar(t.Context(), inexistente, "contrasena-mala", "203.0.113.9"); !errors.Is(err, ErrCredencialesInvalidas) && !errors.Is(err, ErrDemasiadosEnvios) {
 			t.Fatalf("inexistente fallo %d: %v", i, err)
 		}
 	}
 	if _, err := v.Autenticar(t.Context(), inexistente, "contrasena-mala", "203.0.113.9"); !errors.Is(err, ErrDemasiadosEnvios) {
-		t.Fatalf("el correo inexistente debe agotar el mismo umbral, obtuve %v", err)
+		t.Fatalf("el celular inexistente debe agotar el mismo umbral, obtuve %v", err)
 	}
 }
 
@@ -207,36 +213,39 @@ func TestAutenticarRellenoInexistenteCuentaElFalloIgualQueLaCuentaReal(t *testin
 	derivador := derivadorDeLogin(t)
 	v, claves := verificadorDeLogin(t, pool, derivador, &registradorEventosDeLogin{})
 
-	_, correoReal := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoActivo)
-	inexistente := "nadie-" + uuid.NewString() + "@centinela.test"
+	idReal, _ := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoActivo)
+	celularReal := celularDeCredencial(idReal)
+	inexistente := "+57300" + uuid.NewString()[:7]
 
-	if _, err := v.Autenticar(t.Context(), correoReal, "contrasena-mala", "203.0.113.60"); !errors.Is(err, ErrCredencialesInvalidas) {
+	if _, err := v.Autenticar(t.Context(), celularReal, "contrasena-mala", "203.0.113.60"); !errors.Is(err, ErrCredencialesInvalidas) {
 		t.Fatalf("cuenta real = %v, quiero ErrCredencialesInvalidas", err)
 	}
 	if _, err := v.Autenticar(t.Context(), inexistente, rellenoContrasena, "203.0.113.61"); !errors.Is(err, ErrCredencialesInvalidas) {
-		t.Fatalf("relleno con correo inexistente = %v, quiero ErrCredencialesInvalidas", err)
+		t.Fatalf("relleno con celular inexistente = %v, quiero ErrCredencialesInvalidas", err)
 	}
 
-	claveReal := PrefijoFallosCuenta + claves.ClaveDeCorreo(NormalizarCorreo(correoReal))
-	claveInexistente := PrefijoFallosCuenta + claves.ClaveDeCorreo(NormalizarCorreo(inexistente))
+	claveReal := PrefijoFallosCuenta + claves.ClaveDeCelular(celularReal)
+	claveInexistente := PrefijoFallosCuenta + claves.ClaveDeCelular(inexistente)
 	if got := leerContadorDeLogin(t, claveReal); got != 1 {
 		t.Fatalf("fallos de la cuenta real = %d, quiero 1", got)
 	}
 	if got := leerContadorDeLogin(t, claveInexistente); got != 1 {
-		t.Fatalf("fallos del correo inexistente = %d, quiero 1 (el relleno ya no sale limpio)", got)
+		t.Fatalf("fallos del celular inexistente = %d, quiero 1 (el relleno ya no sale limpio)", got)
 	}
 }
 
-func TestAutenticarTrasCerrarYRegistrarElMismoCorreoAutenticaLaNoCerrada(t *testing.T) {
+func TestAutenticarTrasCerrarYRegistrarElMismoCelularAutenticaLaNoCerrada(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeLogin(t)
 	v, _ := verificadorDeLogin(t, pool, derivador, &registradorEventosDeLogin{})
 
-	correo := "login-reuso-" + uuid.NewString() + "@centinela.test"
-	sembrarCredencialDeLoginConCorreo(t, pool, derivador, correo, "contrasena-cerrada", EstadoCerrado)
-	idActiva, _ := sembrarCredencialDeLoginConCorreo(t, pool, derivador, correo, "contrasena-activa", EstadoActivo)
+	celular := "+57300" + uuid.NewString()[:7]
+	correoCerrado := "login-cerrado-" + uuid.NewString() + "@centinela.test"
+	sembrarCredencialConCelular(t, pool, derivador, uuid.New(), correoCerrado, celular, "contrasena-cerrada", EstadoCerrado)
+	idActiva := uuid.New()
+	sembrarCredencialConCelular(t, pool, derivador, idActiva, "login-activa-"+uuid.NewString()+"@centinela.test", celular, "contrasena-activa", EstadoActivo)
 
-	credencial, err := v.Autenticar(t.Context(), correo, "contrasena-activa", "203.0.113.70")
+	credencial, err := v.Autenticar(t.Context(), celular, "contrasena-activa", "203.0.113.70")
 	if err != nil {
 		t.Fatalf("Autenticar: %v", err)
 	}
@@ -244,6 +253,9 @@ func TestAutenticarTrasCerrarYRegistrarElMismoCorreoAutenticaLaNoCerrada(t *test
 		t.Fatalf("CredencialID = %s, quiero la no cerrada %s", credencial.CredencialID, idActiva)
 	}
 }
+
+// celularDeCredencial deriva el celular sembrado a partir del id de la credencial.
+func celularDeCredencial(id uuid.UUID) string { return "+57" + id.String() }
 
 // leerContadorDeLogin lee el valor crudo de una clave de contador en el Redis del carril.
 func leerContadorDeLogin(tb testing.TB, clave string) int64 {
@@ -328,17 +340,18 @@ func leerValorDerivado(tb testing.TB, pool *pgxpool.Pool, id uuid.UUID) string {
 	return valor
 }
 
-func TestTimingMedianaCorreoInexistenteYContrasenaMala(t *testing.T) {
+func TestTimingMedianaCelularInexistenteYContrasenaMala(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	derivador := derivadorDeLogin(t)
 	v, _ := verificadorDeLogin(t, pool, derivador, &registradorEventosDeLogin{})
 
-	_, correo := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoActivo)
-	inexistente := "nadie-" + uuid.NewString() + "@centinela.test"
+	id, _ := sembrarCredencialDeLogin(t, pool, derivador, "contrasena-correcta", EstadoActivo)
+	celular := celularDeCredencial(id)
+	inexistente := "+57300" + uuid.NewString()[:7]
 
 	medianaInexistente := medianaDeAutenticacion(t, v, inexistente, "contrasena-mala")
-	medianaMala := medianaDeAutenticacion(t, v, correo, "contrasena-mala")
-	t.Logf("mediana correo inexistente = %s; mediana contrasena mala = %s", medianaInexistente, medianaMala)
+	medianaMala := medianaDeAutenticacion(t, v, celular, "contrasena-mala")
+	t.Logf("mediana celular inexistente = %s; mediana contrasena mala = %s", medianaInexistente, medianaMala)
 
 	if medianaInexistente > 10*medianaMala || medianaMala > 10*medianaInexistente {
 		t.Errorf("las medianas difieren en más de un orden de magnitud: inexistente=%s mala=%s", medianaInexistente, medianaMala)
@@ -346,13 +359,13 @@ func TestTimingMedianaCorreoInexistenteYContrasenaMala(t *testing.T) {
 }
 
 // medianaDeAutenticacion corre 20 intentos fallidos y devuelve la mediana de su duración.
-func medianaDeAutenticacion(t *testing.T, v *VerificadorDeCredenciales, correo, contrasena string) time.Duration {
+func medianaDeAutenticacion(t *testing.T, v *VerificadorDeCredenciales, celular, contrasena string) time.Duration {
 	t.Helper()
 	const iteraciones = 20
 	muestras := make([]time.Duration, 0, iteraciones)
 	for range iteraciones {
 		inicio := time.Now()
-		_, _ = v.Autenticar(t.Context(), correo, contrasena, "203.0.113.9")
+		_, _ = v.Autenticar(t.Context(), celular, contrasena, "203.0.113.9")
 		muestras = append(muestras, time.Since(inicio))
 	}
 	for i := range muestras {

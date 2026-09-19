@@ -119,13 +119,13 @@ func run() error {
 		return fmt.Errorf("verificador de credenciales: %w", err)
 	}
 	gestorSesiones := auth.NuevoGestorSesiones(pool, auth.NuevoRegistradorEventos(pool))
-	servicioLogin, err := auth.NuevoServicioDeLogin(verificador, gestorDesafios, gestorSesiones)
-	if err != nil {
-		return fmt.Errorf("servicio de login: %w", err)
-	}
 	tokensAuth, err := tokensDeAcceso(cfg)
 	if err != nil {
 		return fmt.Errorf("tokens de acceso: %w", err)
+	}
+	servicioLogin, err := auth.NuevoServicioDeLogin(verificador, pool, gestorSesiones, tokensAuth)
+	if err != nil {
+		return fmt.Errorf("servicio de login: %w", err)
 	}
 	denylistAuth, err := denylistDeSesiones(clienteRedisAuth)
 	if err != nil {
@@ -135,7 +135,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("identidad JWT: %w", err)
 	}
-	servicioSesion, err := auth.NuevoServicioDeSesion(pool, gestorDesafios, gestorSesiones, tokensAuth, denylistAuth)
+	servicioSesion, err := auth.NuevoServicioDeSesion(pool, gestorSesiones, tokensAuth, denylistAuth)
 	if err != nil {
 		return fmt.Errorf("servicio de sesión: %w", err)
 	}
@@ -161,7 +161,6 @@ func run() error {
 		Desafios:     httpserver.NuevoOTPHandler(gestorDesafios),
 		Verificacion: httpserver.NuevoVerificacionHandler(activador),
 		Login:        httpserver.NuevoLoginHandler(servicioLogin),
-		VerificarOtp: httpserver.NuevoSesionHandler(servicioSesion),
 		Refresh:      httpserver.NuevoSesionHandler(servicioSesion),
 		Recuperacion: httpserver.NuevoRecuperacionHandler(servicioRecuperacion),
 		Recuperar2FA: restablecimiento,

@@ -132,7 +132,7 @@ paths:
   /v1/auth/login:
     post:
       operationId: login
-      summary: Valida credenciales y crea el desafio del segundo factor.
+      summary: Valida el celular y la contrasena y emite el par de tokens.
       tags: [public, login]
       security: []
       requestBody:
@@ -143,42 +143,6 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: |
-            Se requiere el codigo y no se emiten tokens. Con la cuenta pendiente de verificacion
-            responde un desafio nuevo con proposito registro para reanudar la verificacion.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResponse"
-        "400":
-          $ref: "#/components/responses/Error"
-        "401":
-          $ref: "#/components/responses/Error"
-        "403":
-          $ref: "#/components/responses/Error"
-        "422":
-          $ref: "#/components/responses/Error"
-        "429":
-          $ref: "#/components/responses/Error"
-        "503":
-          $ref: "#/components/responses/Error"
-        "504":
-          $ref: "#/components/responses/Error"
-
-  /v1/auth/login/verify-otp:
-    post:
-      operationId: verifyOtp
-      summary: Verifica el codigo y emite el par de tokens.
-      tags: [public, login]
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/VerifyOtpRequest"
-      responses:
-        "200":
           description: Par de tokens y usuario.
           content:
             application/json:
@@ -187,6 +151,8 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        "403":
           $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
@@ -954,14 +920,13 @@ components:
 
     LoginRequest:
       type: object
-      required: [correo, contrasena]
+      required: [celular, contrasena]
       properties:
-        correo:
+        celular:
           type: string
-          format: email
           x-go-type: string
           x-oapi-codegen-extra-tags:
-            validate: "required,email"
+            validate: "required,e164"
         contrasena:
           type: string
           x-go-type: string
@@ -973,42 +938,6 @@ components:
           default: usuario
           x-oapi-codegen-extra-tags:
             validate: "omitempty,oneof=usuario empresa"
-
-    LoginData:
-      type: object
-      required: [requiere_segundo_factor, challenge_id, expira_en_segundos, mensaje, proposito]
-      properties:
-        requiere_segundo_factor:
-          type: boolean
-          enum: [true]
-        challenge_id:
-          type: string
-          format: uuid
-        expira_en_segundos:
-          type: integer
-          example: 300
-        mensaje:
-          type: string
-        proposito:
-          type: string
-          enum: [registro, login]
-          x-oapi-codegen-extra-tags:
-            validate: "required,oneof=registro login"
-
-    LoginResponse:
-      type: object
-      required: [success, data, error, meta]
-      properties:
-        success:
-          type: boolean
-          enum: [true]
-        data:
-          $ref: "#/components/schemas/LoginData"
-        error:
-          type: object
-          nullable: true
-        meta:
-          $ref: "#/components/schemas/Meta"
 
     Usuario:
       type: object

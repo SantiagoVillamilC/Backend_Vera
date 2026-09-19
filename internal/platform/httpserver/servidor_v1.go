@@ -51,11 +51,6 @@ type LoginHandler interface {
 	Login(http.ResponseWriter, *http.Request)
 }
 
-// VerificarOtpHandler atiende la verificación pública del segundo factor.
-type VerificarOtpHandler interface {
-	VerifyOtp(http.ResponseWriter, *http.Request)
-}
-
 // RefreshHandler atiende la rotación pública del refresh.
 type RefreshHandler interface {
 	Refresh(http.ResponseWriter, *http.Request)
@@ -80,7 +75,6 @@ type DependenciasAuth struct {
 	Registro     RegistroHandler
 	Verificacion VerificacionHandler
 	Login        LoginHandler
-	VerificarOtp VerificarOtpHandler
 	Refresh      RefreshHandler
 	Recuperacion RecuperacionHandler
 	Firmador     *auth.TokensDeAcceso

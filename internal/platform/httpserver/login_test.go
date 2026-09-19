@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,17 +10,18 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 )
 
-// iniciadorFalso devuelve el desenlace y el error configurados sin tocar la base.
+// iniciadorFalso devuelve la sesión y el error configurados sin tocar la base.
 type iniciadorFalso struct {
-	resultado auth.LoginData
+	resultado auth.SesionEmitida
 	err       error
 	llamadas  int
 }
 
-func (i *iniciadorFalso) IniciarSesion(context.Context, string, string, string, string) (auth.LoginData, error) {
+func (i *iniciadorFalso) IniciarSesion(context.Context, string, string, string, string, string) (auth.SesionEmitida, error) {
 	i.llamadas++
 	return i.resultado, i.err
 }
@@ -36,68 +38,62 @@ func routerConLogin(iniciador IniciadorDeSesion) http.Handler {
 	})
 }
 
-func TestLoginHandlerDesenlacesDelSegundoFactor(t *testing.T) {
+func TestLoginHandlerDesenlacesDelLoginDirecto(t *testing.T) {
+	parte := uuid.New()
 	casos := map[string]struct {
 		cuerpo       string
-		resultado    auth.LoginData
+		resultado    auth.SesionEmitida
 		err          error
 		estado       int
 		codigo       string
 		campoDetalle string
 		reglaDetalle string
 	}{
-		"sin correo": {
+		"sin celular": {
 			cuerpo:       `{"contrasena":"secreta123"}`,
 			estado:       http.StatusUnprocessableEntity,
 			codigo:       "ValidationError",
-			campoDetalle: "correo",
+			campoDetalle: "celular",
 			reglaDetalle: "required",
 		},
 		"sin contrasena": {
-			cuerpo:       `{"correo":"persona@centinela.test"}`,
+			cuerpo:       `{"celular":"+573001112233"}`,
 			estado:       http.StatusUnprocessableEntity,
 			codigo:       "ValidationError",
 			campoDetalle: "contrasena",
 			reglaDetalle: "required",
 		},
-		"correo invalido": {
-			cuerpo:       `{"correo":"no-es-correo","contrasena":"secreta123"}`,
+		"celular invalido": {
+			cuerpo:       `{"celular":"no-es-celular","contrasena":"secreta123"}`,
 			estado:       http.StatusUnprocessableEntity,
 			codigo:       "ValidationError",
-			campoDetalle: "correo",
-			reglaDetalle: "email",
+			campoDetalle: "celular",
+			reglaDetalle: "e164",
 		},
 		"credenciales invalidas": {
-			cuerpo: `{"correo":"persona@centinela.test","contrasena":"mala"}`,
+			cuerpo: `{"celular":"+573001112233","contrasena":"mala"}`,
 			err:    auth.ErrCredencialesInvalidas,
 			estado: http.StatusUnauthorized,
 			codigo: "InvalidCredentials",
 		},
 		"empresa sin rol": {
-			cuerpo: `{"correo":"persona@centinela.test","contrasena":"secreta123","contexto":"empresa"}`,
+			cuerpo: `{"celular":"+573001112233","contrasena":"secreta123","contexto":"empresa"}`,
 			err:    auth.ErrSinRolDeEmpresa,
 			estado: http.StatusForbidden,
 			codigo: "NoCompanyRole",
 		},
 		"cuenta pendiente": {
-			cuerpo: `{"correo":"persona@centinela.test","contrasena":"secreta123"}`,
-			resultado: auth.LoginData{
-				Proposito:             auth.PropositoRegistro,
-				ChallengeID:           uuid.New(),
-				ExpiraEnSegundos:      300,
-				Mensaje:               auth.MensajeDesafioRegistro,
-				RequiereSegundoFactor: true,
-			},
-			estado: http.StatusOK,
+			cuerpo: `{"celular":"+573001112233","contrasena":"secreta123"}`,
+			err:    auth.ErrCelularSinVerificar,
+			estado: http.StatusForbidden,
+			codigo: "PhoneUnverified",
 		},
 		"cuenta activa": {
-			cuerpo: `{"correo":"persona@centinela.test","contrasena":"secreta123"}`,
-			resultado: auth.LoginData{
-				Proposito:             auth.PropositoLogin,
-				ChallengeID:           uuid.New(),
-				ExpiraEnSegundos:      300,
-				Mensaje:               auth.MensajeDesafioLogin,
-				RequiereSegundoFactor: true,
+			cuerpo: `{"celular":"+573001112233","contrasena":"secreta123"}`,
+			resultado: auth.SesionEmitida{
+				AccessToken:  "access",
+				RefreshToken: "refresh",
+				Usuario:      auth.DatosUsuario{ID: parte, TipoCuenta: "persona", Correo: "persona@centinela.test", ContextoActivo: "usuario"},
 			},
 			estado: http.StatusOK,
 		},
@@ -121,7 +117,7 @@ func TestLoginHandlerDesenlacesDelSegundoFactor(t *testing.T) {
 				assertDetalleDeValidacion(t, rec, caso.campoDetalle, caso.reglaDetalle)
 			}
 			if caso.estado == http.StatusOK {
-				assertLoginSinTokens(t, rec, caso.resultado)
+				assertSesionDelLogin(t, rec, caso.resultado)
 			}
 		})
 	}
@@ -142,37 +138,29 @@ func assertDetalleDeValidacion(t *testing.T, rec *httptest.ResponseRecorder, cam
 	t.Fatalf("no hay detail %s/%s en %q", campo, regla, rec.Body.String())
 }
 
-// assertLoginSinTokens exige el LoginData esperado y que el 200 no traiga tokens.
-func assertLoginSinTokens(t *testing.T, rec *httptest.ResponseRecorder, esperado auth.LoginData) {
+// assertSesionDelLogin exige el 200 con access, refresh y usuario, y sin challenge.
+func assertSesionDelLogin(t *testing.T, rec *httptest.ResponseRecorder, esperado auth.SesionEmitida) {
 	t.Helper()
 	cuerpo := rec.Body.String()
-	if strings.Contains(cuerpo, "access_token") || strings.Contains(cuerpo, "refresh_token") {
-		t.Fatalf("el 200 trae tokens: %q", cuerpo)
+	if strings.Contains(cuerpo, "challenge_id") {
+		t.Fatalf("el 200 de login trae challenge_id: %q", cuerpo)
 	}
-	env := decodeEnvelope(t, rec)
-	datos, ok := env["data"].(map[string]any)
-	if !ok {
-		t.Fatalf("data ausente en %q", cuerpo)
+	var env struct {
+		Data api.Sesion `json:"data"`
 	}
-	if datos["proposito"] != string(esperado.Proposito) {
-		t.Fatalf("proposito = %v, quiero %q", datos["proposito"], esperado.Proposito)
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("respuesta no JSON: %v", err)
 	}
-	if datos["requiere_segundo_factor"] != true {
-		t.Fatalf("requiere_segundo_factor = %v, quiero true", datos["requiere_segundo_factor"])
+	if env.Data.AccessToken != esperado.AccessToken || env.Data.RefreshToken != esperado.RefreshToken {
+		t.Fatalf("par = %+v, quiero access/refresh", env.Data)
 	}
-	if datos["challenge_id"] == nil || datos["challenge_id"] == "" {
-		t.Fatalf("challenge_id ausente en %q", cuerpo)
-	}
-	if int(datos["expira_en_segundos"].(float64)) != esperado.ExpiraEnSegundos {
-		t.Fatalf("expira_en_segundos = %v, quiero %d", datos["expira_en_segundos"], esperado.ExpiraEnSegundos)
-	}
-	if datos["mensaje"] != esperado.Mensaje {
-		t.Fatalf("mensaje = %v, quiero %q", datos["mensaje"], esperado.Mensaje)
+	if env.Data.Usuario.Id != esperado.Usuario.ID {
+		t.Fatalf("usuario = %+v, quiero %s", env.Data.Usuario, esperado.Usuario.ID)
 	}
 }
 
 func TestLoginConServicioNuloResponde501(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"correo":"persona@centinela.test","contrasena":"secreta123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"celular":"+573001112233","contrasena":"secreta123"}`))
 	rec := httptest.NewRecorder()
 
 	routerConLogin(nil).ServeHTTP(rec, req)

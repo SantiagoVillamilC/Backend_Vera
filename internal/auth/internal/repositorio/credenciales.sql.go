@@ -78,6 +78,33 @@ func (q *Queries) CrearCredencial(ctx context.Context, arg CrearCredencialParams
 	return i, err
 }
 
+const credencialPorCelular = `-- name: CredencialPorCelular :one
+SELECT id, parte_id, correo, celular, celular_verificado_en, correo_verificado_en, celular_cambiado_en, valor_derivado, estado, creada_en, actualizada_en FROM auth.credenciales
+WHERE celular = $1 AND estado <> 'cerrado'
+`
+
+func (q *Queries) CredencialPorCelular(ctx context.Context, celular string) (Credencial, error) {
+	row := q.db.QueryRow(ctx, credencialPorCelular, celular)
+	var i Credencial
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.Correo,
+		&i.Celular,
+		&i.CelularVerificadoEn,
+		&i.CorreoVerificadoEn,
+		&i.CelularCambiadoEn,
+		&i.ValorDerivado,
+		&i.Estado,
+		&i.CreadaEn,
+		&i.ActualizadaEn,
+	)
+	if err != nil {
+		err = fmt.Errorf("query CredencialPorCelular: %w", err)
+	}
+	return i, err
+}
+
 const credencialPorCelularNoCerrada = `-- name: CredencialPorCelularNoCerrada :one
 SELECT id
 FROM auth.credenciales

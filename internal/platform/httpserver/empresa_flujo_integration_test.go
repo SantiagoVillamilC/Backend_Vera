@@ -100,12 +100,12 @@ func construirPilaDeAuthDeEmpresa(t *testing.T, pool *pgxpool.Pool, cliente *red
 	verificador, err := auth.NuevoVerificadorDeCredencialesPostgres(pool, derivador, contadoresAuth, claves, eventos, auth.ParametrosArgon2DePrueba())
 	exigirSinError(t, err, "verificador")
 	gestorSesiones := auth.NuevoGestorSesiones(pool, eventos)
-	servicioLogin, err := auth.NuevoServicioDeLogin(verificador, gestor, gestorSesiones)
-	exigirSinError(t, err, "servicio de login")
 	tokens := tokensDeIntegracion(t)
+	servicioLogin, err := auth.NuevoServicioDeLogin(verificador, pool, gestorSesiones, tokens)
+	exigirSinError(t, err, "servicio de login")
 	denylistAuth, err := denylist.NuevoRedis(cliente)
 	exigirSinError(t, err, "denylist")
-	servicioSesion, err := auth.NuevoServicioDeSesion(pool, gestor, gestorSesiones, tokens, denylistAuth)
+	servicioSesion, err := auth.NuevoServicioDeSesion(pool, gestorSesiones, tokens, denylistAuth)
 	exigirSinError(t, err, "servicio de sesión")
 	return pilaDeAuthDeEmpresa{
 		derivador: derivador, eventos: eventos, gestor: gestor, activador: activador,
@@ -127,7 +127,6 @@ func montajeDeEmpresaDeIntegracion(t *testing.T, pool *pgxpool.Pool) montajeDeEm
 		Registro:     NuevoRegistroHandler(registrador),
 		Verificacion: NuevoVerificacionHandler(pila.activador),
 		Login:        NuevoLoginHandler(pila.servicioLogin),
-		VerificarOtp: NuevoSesionHandler(pila.servicioSesion),
 		Refresh:      NuevoSesionHandler(pila.servicioSesion),
 	})
 	return montajeDeEmpresa{router: router, tokens: pila.tokens, identidad: identidad}
@@ -158,9 +157,9 @@ func cuerpoDeAltaEmpresa(t *testing.T, datos datosDeAltaEmpresa, documento strin
 	return string(serializado)
 }
 
-// cuerpoDeLoginEmpresa arma el login con el contexto de empresa.
+// cuerpoDeLoginEmpresa arma el login por celular con el contexto de empresa.
 func cuerpoDeLoginEmpresa(datos datosDeAltaEmpresa) string {
-	return `{"correo":"` + datos.correo + `","contrasena":"` + datos.contrasena + `","contexto":"empresa"}`
+	return `{"celular":"` + datos.celular + `","contrasena":"` + datos.contrasena + `","contexto":"empresa"}`
 }
 
 // cuerpoDeVerificacion arma la verificación con el código fijo del simulador.
@@ -234,21 +233,12 @@ func exigirVerificacionActiva(t *testing.T, m montajeDeEmpresa, pool *pgxpool.Po
 	}
 }
 
-// sesionDeEmpresaCriterio7 hace login con contexto empresa, verifica el OTP y afirma el access y el usuario.
+// sesionDeEmpresaCriterio7 hace login directo con contexto empresa y afirma el access y el usuario.
 func sesionDeEmpresaCriterio7(t *testing.T, m montajeDeEmpresa, datos datosDeAltaEmpresa) api.Sesion {
 	t.Helper()
 	rec := pedirDeDispositivos(m.router, http.MethodPost, "/v1/auth/login", "", cuerpoDeLoginEmpresa(datos))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login empresa = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
-	}
-	login := decodificarData[api.LoginData](t, rec)
-	if string(login.Proposito) != "login" || !bool(login.RequiereSegundoFactor) {
-		t.Fatalf("login = %+v, quiero proposito login con segundo factor", login)
-	}
-
-	rec = pedirDeDispositivos(m.router, http.MethodPost, "/v1/auth/login/verify-otp", "", cuerpoDeVerificacion(login.ChallengeId.String()))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("verify-otp empresa = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
 	}
 	sesion := decodificarData[api.Sesion](t, rec)
 	if string(sesion.Usuario.TipoCuenta) != "empresa" || sesion.Usuario.RazonSocial == nil || *sesion.Usuario.RazonSocial != datos.razonSocial {

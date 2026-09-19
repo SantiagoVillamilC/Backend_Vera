@@ -84,7 +84,11 @@ func montajeRestablecimientoDePrueba(tb testing.TB, pool *pgxpool.Pool) montajeD
 		tb.Fatalf("gestor de desafíos: %v", err)
 	}
 	sesiones := NuevoGestorSesiones(pool, eventos)
-	login, err := NuevoServicioDeLogin(verificador, gestor, sesiones)
+	tokens, err := NuevoTokensDeAcceso([]byte("clave-de-firma-de-al-menos-32-bytes"), "centinela-auth", "centinela-api")
+	if err != nil {
+		tb.Fatalf("tokens de acceso: %v", err)
+	}
+	login, err := NuevoServicioDeLogin(verificador, pool, sesiones, tokens)
 	if err != nil {
 		tb.Fatalf("servicio de login: %v", err)
 	}
@@ -361,14 +365,7 @@ func TestRestablecimientoFlujoCompleto(t *testing.T) {
 		t.Fatalf("RestablecerContrasena: %v", err)
 	}
 
-	nuevo, err := m.login.IniciarSesion(t.Context(), correo, "contrasena-nueva", "", "10.41.1.3")
-	if err != nil {
-		t.Fatalf("login con la contraseña nueva: %v", err)
-	}
-	if nuevo.ChallengeID == uuid.Nil {
-		t.Error("el login con la contraseña nueva no devolvió challenge_id")
-	}
-	if _, err := m.login.IniciarSesion(t.Context(), correo, "contrasena-vieja", "", "10.41.1.4"); !errors.Is(err, ErrCredencialesInvalidas) {
+	if _, err := m.login.IniciarSesion(t.Context(), celular, "contrasena-vieja", "", "10.41.1.4", "dispositivo-de-prueba"); !errors.Is(err, ErrCredencialesInvalidas) {
 		t.Fatalf("login con la contraseña vieja = %v, quiero ErrCredencialesInvalidas", err)
 	}
 
@@ -377,7 +374,7 @@ func TestRestablecimientoFlujoCompleto(t *testing.T) {
 		t.Fatalf("ListarActivas: %v", err)
 	}
 	if len(activas) != 0 {
-		t.Errorf("sesiones activas = %d, quiero 0", len(activas))
+		t.Errorf("sesiones activas tras el reset = %d, quiero 0", len(activas))
 	}
 	revocado, err := m.denylist.Revocado(t.Context(), sesion.FamiliaID)
 	if err != nil {
@@ -388,6 +385,14 @@ func TestRestablecimientoFlujoCompleto(t *testing.T) {
 	}
 	if _, _, err := m.sesiones.RotarRefresh(t.Context(), refresh); !errors.Is(err, ErrRefreshInvalido) {
 		t.Fatalf("rotar el refresh revocado = %v, quiero ErrRefreshInvalido", err)
+	}
+
+	nuevo, err := m.login.IniciarSesion(t.Context(), celular, "contrasena-nueva", "", "10.41.1.3", "dispositivo-de-prueba")
+	if err != nil {
+		t.Fatalf("login con la contraseña nueva: %v", err)
+	}
+	if nuevo.AccessToken == "" || nuevo.RefreshToken == "" {
+		t.Error("el login con la contraseña nueva no devolvió el par de tokens")
 	}
 
 	if total := contarAvisosPorDestino(t, pool, DestinoCorreo, correo); total != 1 {

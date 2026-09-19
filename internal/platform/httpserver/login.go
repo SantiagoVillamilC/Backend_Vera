@@ -6,15 +6,14 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// IniciadorDeSesion es el servicio que resuelve el login y crea el desafío del segundo factor.
+// IniciadorDeSesion es el servicio que autentica por celular y emite el par de tokens.
 type IniciadorDeSesion interface {
-	IniciarSesion(ctx context.Context, correo, contrasena, contexto, origen string) (auth.LoginData, error)
+	IniciarSesion(ctx context.Context, celular, contrasena, contexto, origen, dispositivo string) (auth.SesionEmitida, error)
 }
 
-// HandlerDeLogin atiende el desenlace público del inicio de sesión.
+// HandlerDeLogin atiende el inicio de sesión público.
 type HandlerDeLogin struct{ iniciador IniciadorDeSesion }
 
 // NuevoLoginHandler construye el handler sobre el servicio de login.
@@ -30,7 +29,7 @@ func loginDeSesion(handler LoginHandler) http.HandlerFunc {
 	return handler.Login
 }
 
-// Login valida el cuerpo, inicia la sesión y responde el desafío sin tokens.
+// Login valida el cuerpo, autentica por celular y responde el par de tokens con el usuario.
 func (h *HandlerDeLogin) Login(w http.ResponseWriter, r *http.Request) {
 	var entrada api.LoginRequest
 	if !api.DecodeAndValidate(w, r, &entrada) {
@@ -41,21 +40,10 @@ func (h *HandlerDeLogin) Login(w http.ResponseWriter, r *http.Request) {
 	if entrada.Contexto != nil {
 		contexto = string(*entrada.Contexto)
 	}
-	resultado, err := h.iniciador.IniciarSesion(r.Context(), entrada.Correo, entrada.Contrasena, contexto, origen)
+	resultado, err := h.iniciador.IniciarSesion(r.Context(), entrada.Celular, entrada.Contrasena, contexto, origen, dispositivoDeLaPeticion(r))
 	if err != nil {
 		escribirErrorDeAuth(w, r, err)
 		return
 	}
-	api.WriteData(w, http.StatusOK, respuestaDeLogin(resultado), nil)
-}
-
-// respuestaDeLogin traduce el desenlace del servicio al contrato, sin access ni refresh.
-func respuestaDeLogin(resultado auth.LoginData) api.LoginData {
-	return api.LoginData{
-		ChallengeId:           openapi_types.UUID(resultado.ChallengeID),
-		ExpiraEnSegundos:      resultado.ExpiraEnSegundos,
-		Mensaje:               resultado.Mensaje,
-		Proposito:             api.LoginDataProposito(resultado.Proposito),
-		RequiereSegundoFactor: api.LoginDataRequiereSegundoFactor(resultado.RequiereSegundoFactor),
-	}
+	api.WriteData(w, http.StatusOK, respuestaDeSesion(resultado), nil)
 }

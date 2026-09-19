@@ -47,6 +47,13 @@ func (c *Claves) ClaveDeCorreo(correoNormalizado string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// ClaveDeCelular devuelve el HMAC-SHA256 en hex del celular, exista o no la cuenta.
+func (c *Claves) ClaveDeCelular(celular string) string {
+	mac := hmac.New(sha256.New, c.pepper)
+	mac.Write([]byte(celular))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // ClaveDeOrigen devuelve la IP canonicalizada, con prefijo /64 en IPv6.
 func (c *Claves) ClaveDeOrigen(ip string) string {
 	return httprate.CanonicalizeIP(ip)
