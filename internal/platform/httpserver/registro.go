@@ -127,11 +127,13 @@ func respuestaDeRegistro(registro auth.Registro) api.Registro {
 	}
 }
 
-// respuestaDeRegistroEmpresa arma la respuesta 201 con la razón social y el NIT, sin secretos.
+// respuestaDeRegistroEmpresa arma la respuesta 201 con la razón social, el NIT y el empresa_id, sin secretos.
 func respuestaDeRegistroEmpresa(registro auth.RegistroEmpresa) api.Registro {
 	razonSocial, nit := registro.RazonSocial, registro.NIT
+	empresaID := openapi_types.UUID(registro.EmpresaParteID)
 	return api.Registro{
 		Id:            openapi_types.UUID(registro.RepresentanteParteID),
+		EmpresaId:     &empresaID,
 		TipoCuenta:    api.RegistroTipoCuentaEmpresa,
 		Correo:        registro.Correo,
 		Celular:       registro.Celular,

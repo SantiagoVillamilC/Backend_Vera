@@ -12,6 +12,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const activarCredencial = `-- name: ActivarCredencial :execrows
+UPDATE auth.credenciales
+SET estado = 'activo',
+    actualizada_en = now(),
+    celular_verificado_en = now()
+WHERE id = $1 AND estado = 'pendiente_verificacion'
+`
+
+func (q *Queries) ActivarCredencial(ctx context.Context, credencialID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, activarCredencial, credencialID)
+	if err != nil {
+		return 0, fmt.Errorf("query ActivarCredencial: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
 const pendientesVencidasParaCierre = `-- name: PendientesVencidasParaCierre :many
 SELECT id
 FROM auth.credenciales
@@ -75,8 +91,7 @@ func (q *Queries) RegistrarTransicionCredencial(ctx context.Context, arg Registr
 const transicionarCredencial = `-- name: TransicionarCredencial :execrows
 UPDATE auth.credenciales
 SET estado = $1,
-    actualizada_en = now(),
-    celular_verificado_en = CASE WHEN $1 = 'activo' THEN now() ELSE celular_verificado_en END
+    actualizada_en = now()
 WHERE id = $2 AND estado = $3
 `
 

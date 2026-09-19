@@ -200,6 +200,128 @@ func TestCerrarSesionPorRefreshConDenylistQueFallaDejaLaFamiliaRevocada(t *testi
 	}
 }
 
+func TestCerrarSesionPorRefreshDejaLaFamiliaRevocadaEnBaseAlPublicarElSid(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	derivador := derivadorDeLogin(t)
+	_, parteID, _, _ := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+	refresh, _, err := m.gestor.EmitirSesion(t.Context(), parteID, ContextoUsuario, "prueba")
+	if err != nil {
+		t.Fatalf("EmitirSesion: %v", err)
+	}
+	espia := &denylistQueLeeLaBase{pool: pool}
+	servicio, err := NuevoServicioDeSesion(pool, m.gestor, m.tokens, espia)
+	if err != nil {
+		t.Fatalf("NuevoServicioDeSesion: %v", err)
+	}
+
+	if err := servicio.CerrarSesionPorRefresh(t.Context(), parteID, refresh); err != nil {
+		t.Fatalf("CerrarSesionPorRefresh: %v", err)
+	}
+	if len(espia.sinRevocarAlPublicar) != 1 || espia.sinRevocarAlPublicar[0] != 0 {
+		t.Fatalf("sesiones sin revocar al publicar = %v, quiero una publicación con 0", espia.sinRevocarAlPublicar)
+	}
+	fila := leerFilaDeRefresh(t, pool, refresh)
+	if !fila.RevocadaEn.Valid {
+		t.Fatalf("la familia quedó sin revocada_en")
+	}
+	t.Logf("logout: revocada_en=%s, sesiones sin revocar al publicar el sid=%v", fila.RevocadaEn.Time.UTC(), espia.sinRevocarAlPublicar)
+}
+
+func TestCerrarTodasLasSesionesDejaTodoRevocadoEnBaseAlPublicarCadaSid(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	derivador := derivadorDeLogin(t)
+	_, parteID, _, _ := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+	refreshes := make([]string, 0, 2)
+	for range 2 {
+		refresh, _, err := m.gestor.EmitirSesion(t.Context(), parteID, ContextoUsuario, "prueba")
+		if err != nil {
+			t.Fatalf("EmitirSesion: %v", err)
+		}
+		refreshes = append(refreshes, refresh)
+	}
+	espia := &denylistQueLeeLaBase{pool: pool}
+	servicio, err := NuevoServicioDeSesion(pool, m.gestor, m.tokens, espia)
+	if err != nil {
+		t.Fatalf("NuevoServicioDeSesion: %v", err)
+	}
+
+	if err := servicio.CerrarTodasLasSesiones(t.Context(), parteID); err != nil {
+		t.Fatalf("CerrarTodasLasSesiones: %v", err)
+	}
+	if len(espia.sinRevocarAlPublicar) != 2 {
+		t.Fatalf("publicaciones = %d, quiero una por familia", len(espia.sinRevocarAlPublicar))
+	}
+	for i, pendientes := range espia.sinRevocarAlPublicar {
+		if pendientes != 0 {
+			t.Errorf("publicación %d con %d sesiones sin revocar en base", i, pendientes)
+		}
+	}
+	for _, refresh := range refreshes {
+		if fila := leerFilaDeRefresh(t, pool, refresh); !fila.RevocadaEn.Valid {
+			t.Errorf("una familia quedó sin revocada_en")
+		}
+	}
+}
+
+func TestCerrarTodasLasSesionesConDenylistQueFallaDejaTodasLasFamiliasRevocadas(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	derivador := derivadorDeLogin(t)
+	_, parteID, _, _ := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+	refreshes := make([]string, 0, 2)
+	for range 2 {
+		refresh, _, err := m.gestor.EmitirSesion(t.Context(), parteID, ContextoUsuario, "prueba")
+		if err != nil {
+			t.Fatalf("EmitirSesion: %v", err)
+		}
+		refreshes = append(refreshes, refresh)
+	}
+	servicio, err := NuevoServicioDeSesion(pool, m.gestor, m.tokens, denylistQueFalla{})
+	if err != nil {
+		t.Fatalf("NuevoServicioDeSesion: %v", err)
+	}
+
+	if err := servicio.CerrarTodasLasSesiones(t.Context(), parteID); !errors.Is(err, ErrAuthNoDisponible) {
+		t.Fatalf("denylist caída = %v, quiero ErrAuthNoDisponible", err)
+	}
+	for _, refresh := range refreshes {
+		if fila := leerFilaDeRefresh(t, pool, refresh); !fila.RevocadaEn.Valid {
+			t.Errorf("una familia debe quedar revocada aunque la denylist falle")
+		}
+		if _, err := m.sesion.RotarRefresh(t.Context(), refresh); !errors.Is(err, ErrRefreshInvalido) {
+			t.Errorf("refresh tras el 503 = %v, quiero ErrRefreshInvalido", err)
+		}
+	}
+}
+
+// denylistQueLeeLaBase cuenta, al publicar cada sid, las sesiones de esa familia que siguen sin revocar en base.
+type denylistQueLeeLaBase struct {
+	pool                 *pgxpool.Pool
+	sinRevocarAlPublicar []int
+}
+
+// Revocar consulta la base con otra conexión y anota cuántas sesiones de la familia siguen vigentes.
+func (d *denylistQueLeeLaBase) Revocar(ctx context.Context, sesionID uuid.UUID, _ time.Duration) error {
+	pendientes, err := enTransaccion(ctx, poolDeAuth{pool: d.pool},
+		func(ctx context.Context, tx transaccionDeAuth, _ *repositorio.Queries) (int, error) {
+			var n int
+			err := tx.QueryRow(ctx, `SELECT count(*) FROM auth.sesiones WHERE familia_id = $1 AND revocada_en IS NULL`, pgUUID(sesionID)).Scan(&n)
+			return n, err
+		})
+	if err != nil {
+		return err
+	}
+	d.sinRevocarAlPublicar = append(d.sinRevocarAlPublicar, pendientes)
+	return nil
+}
+
+// Revocado nunca se consulta en estos casos.
+func (d *denylistQueLeeLaBase) Revocado(context.Context, uuid.UUID) (bool, error) { return false, nil }
+
+var _ RevocadorDeSesiones = (*denylistQueLeeLaBase)(nil)
+
 func TestRotacionCapaLaFamiliaA45DiasDelPrimerUso(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))

@@ -17,6 +17,7 @@ type fakeTransaccionAuth struct {
 	errExec   error
 	errCommit error
 	fila      pgx.Row
+	filas     pgx.Rows
 }
 
 func (f *fakeTransaccionAuth) Exec(_ context.Context, sql string, _ ...interface{}) (pgconn.CommandTag, error) {
@@ -25,7 +26,7 @@ func (f *fakeTransaccionAuth) Exec(_ context.Context, sql string, _ ...interface
 }
 
 func (f *fakeTransaccionAuth) Query(context.Context, string, ...interface{}) (pgx.Rows, error) {
-	return nil, nil
+	return f.filas, nil
 }
 
 func (f *fakeTransaccionAuth) QueryRow(context.Context, string, ...interface{}) pgx.Row {

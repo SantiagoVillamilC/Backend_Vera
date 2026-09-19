@@ -71,18 +71,22 @@ func familiaVigenteDeParte(ctx context.Context, q *repositorio.Queries, parteID 
 	return uuidDePgtype(fila.FamiliaID), nil
 }
 
-// CerrarTodasLasSesiones publica el sid de cada familia vigente y revoca todas las sesiones de la parte.
+// CerrarTodasLasSesiones revoca todas las sesiones de la parte y después publica el sid de cada familia que estaba vigente.
 func (s *ServicioDeSesion) CerrarTodasLasSesiones(ctx context.Context, parteID uuid.UUID) error {
 	sesiones, err := s.sesiones.ListarActivas(ctx, parteID)
 	if err != nil {
 		return err
 	}
+	if err := s.sesiones.RevocarTodas(ctx, parteID); err != nil {
+		return err
+	}
+	var primerFallo error
 	for _, sesion := range sesiones {
-		if err := s.publicarSid(ctx, sesion.FamiliaID); err != nil {
-			return err
+		if err := s.publicarSid(ctx, sesion.FamiliaID); err != nil && primerFallo == nil {
+			primerFallo = err
 		}
 	}
-	return s.sesiones.RevocarTodas(ctx, parteID)
+	return primerFallo
 }
 
 // RevocarDispositivo revoca la familia si pertenece a la parte y publica su sid.

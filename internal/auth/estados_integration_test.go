@@ -124,6 +124,20 @@ func leerUltimaTransicion(tb testing.TB, pool *pgxpool.Pool, id uuid.UUID) (stri
 	return anterior, nuevo, motivo
 }
 
+// leerSelloDelCelular lee celular_verificado_en como rol_auth y libera la conexión del pool.
+func leerSelloDelCelular(tb testing.TB, pool *pgxpool.Pool, id uuid.UUID) pgtype.Timestamptz {
+	tb.Helper()
+
+	tx, _ := abrirTransaccionDePrueba(tb, pool)
+	var sello pgtype.Timestamptz
+	err := tx.QueryRow(tb.Context(), "SELECT celular_verificado_en FROM auth.credenciales WHERE id = $1", pgUUID(id)).Scan(&sello)
+	_ = tx.Rollback(tb.Context())
+	if err != nil {
+		tb.Fatalf("leer el sello del celular: %v", err)
+	}
+	return sello
+}
+
 func TestTransicionPermitidaEscribeElHistorial(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	id, _, _ := sembrarPendiente(t, pool, 0)
@@ -131,13 +145,16 @@ func TestTransicionPermitidaEscribeElHistorial(t *testing.T) {
 
 	if _, err := enTransaccion(t.Context(), poolDeAuth{pool: pool},
 		func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
-			return struct{}{}, gestor.TransicionarCredencial(ctx, q, id, EstadoPendienteVerificacion, EstadoActivo, "celular_verificado")
+			return struct{}{}, gestor.ActivarCredencial(ctx, q, id, "celular_verificado")
 		}); err != nil {
-		t.Fatalf("transicionar: %v", err)
+		t.Fatalf("activar: %v", err)
 	}
 
 	if got := leerEstado(t, pool, id); got != string(EstadoActivo) {
 		t.Errorf("estado = %q, quiero %q", got, EstadoActivo)
+	}
+	if sello := leerSelloDelCelular(t, pool, id); !sello.Valid {
+		t.Error("la activación no selló celular_verificado_en")
 	}
 	if total := contarTransiciones(t, pool, id); total != 1 {
 		t.Errorf("transiciones = %d, quiero 1", total)
@@ -168,6 +185,34 @@ func TestTransicionNoPermitidaNoTocaNada(t *testing.T) {
 	}
 }
 
+func TestSegundaActivacionNoEncuentraFilaYConservaElSello(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	id, _, _ := sembrarPendiente(t, pool, 0)
+	gestor := NuevoGestorDeEstados(RegistradorNulo{})
+	activar := func() error {
+		_, err := enTransaccion(t.Context(), poolDeAuth{pool: pool},
+			func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
+				return struct{}{}, gestor.ActivarCredencial(ctx, q, id, "celular_verificado")
+			})
+		return err
+	}
+
+	if err := activar(); err != nil {
+		t.Fatalf("primera activación: %v", err)
+	}
+	primero := leerSelloDelCelular(t, pool, id)
+
+	if err := activar(); !errors.Is(err, ErrConflictoDeEstado) {
+		t.Fatalf("segunda activación = %v, quiero %v", err, ErrConflictoDeEstado)
+	}
+	if segundo := leerSelloDelCelular(t, pool, id); !segundo.Time.Equal(primero.Time) {
+		t.Errorf("el sello cambió de %s a %s", primero.Time, segundo.Time)
+	}
+	if total := contarTransiciones(t, pool, id); total != 1 {
+		t.Errorf("transiciones = %d, quiero 1", total)
+	}
+}
+
 func TestCompareAndSetSoloUnaActivacionGana(t *testing.T) {
 	pool := abrirPoolDeAuthConcurrente(t)
 	id, _, _ := sembrarPendiente(t, pool, 0)
@@ -181,7 +226,7 @@ func TestCompareAndSetSoloUnaActivacionGana(t *testing.T) {
 			defer wg.Done()
 			_, err := enTransaccion(context.Background(), poolDeAuth{pool: pool},
 				func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
-					return struct{}{}, gestor.TransicionarCredencial(ctx, q, id, EstadoPendienteVerificacion, EstadoActivo, "celular_verificado")
+					return struct{}{}, gestor.ActivarCredencial(ctx, q, id, "celular_verificado")
 				})
 			resultados[i] = err
 		}(i)
@@ -267,7 +312,7 @@ func TestCarreraJobContraActivacionDejaUnaSolaTransicion(t *testing.T) {
 		defer wg.Done()
 		_, errActivacion = enTransaccion(context.Background(), poolDeAuth{pool: pool},
 			func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
-				return struct{}{}, gestor.TransicionarCredencial(ctx, q, id, EstadoPendienteVerificacion, EstadoActivo, "celular_verificado")
+				return struct{}{}, gestor.ActivarCredencial(ctx, q, id, "celular_verificado")
 			})
 	}()
 	go func() {

@@ -188,10 +188,40 @@ func altaDeEmpresaCriterio6Y8(t *testing.T, m montajeDeEmpresa, pool *pgxpool.Po
 		t.Fatalf("registro = %+v, quiero empresa pendiente con razón social, NIT y desafío de registro", registro)
 	}
 	datos.representanteID = registro.Id.String()
+	exigirEmpresaIdDeLaEmpresa(t, pool, registro, datos)
 
 	rechazoDeCorreoRepetidoEsGenerico(t, m, datos)
 	exigirVerificacionActiva(t, m, pool, datos)
 	return datos
+}
+
+// exigirEmpresaIdDeLaEmpresa exige que empresa_id sea el partes.id de la empresa con ese NIT y que el id del representante siga intacto.
+func exigirEmpresaIdDeLaEmpresa(t *testing.T, pool *pgxpool.Pool, registro api.Registro, datos datosDeAltaEmpresa) {
+	t.Helper()
+	if registro.EmpresaId == nil {
+		t.Fatalf("el 201 de empresa no trae empresa_id: %+v", registro)
+	}
+	if registro.EmpresaId.String() == registro.Id.String() {
+		t.Fatalf("empresa_id = id = %s, quiero la empresa distinta del representante", registro.Id)
+	}
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(t.Context(), "SET LOCAL ROLE rol_auth"); err != nil {
+		t.Fatalf("SET LOCAL ROLE rol_auth: %v", err)
+	}
+	var total int
+	if err := tx.QueryRow(t.Context(),
+		`SELECT count(*) FROM auth.partes p JOIN auth.empresas e ON e.parte_id = p.id WHERE p.id = $1 AND p.tipo = 'empresa' AND e.nit = $2`,
+		registro.EmpresaId.String(), datos.nit).Scan(&total); err != nil {
+		t.Fatalf("contar la parte de la empresa: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("empresa_id %s no es el partes.id de la empresa con NIT %s", registro.EmpresaId, datos.nit)
+	}
+	t.Logf("201 empresa: id=%s (representante) empresa_id=%s (partes.id) nit=%s razon_social=%s", registro.Id, registro.EmpresaId, *registro.Nit, *registro.RazonSocial)
 }
 
 // rechazoDeCorreoRepetidoEsGenerico prueba otro alta de empresa con el mismo correo y exige el 409 sin filtrar el dato.

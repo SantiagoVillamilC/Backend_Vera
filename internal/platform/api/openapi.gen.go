@@ -921,16 +921,17 @@ type RegisterRequest struct {
 
 // Registro defines model for Registro.
 type Registro struct {
-	Celular        string             `json:"celular"`
-	Correo         string             `json:"correo"`
-	Desafio        Desafio            `json:"desafio"`
-	Estado         RegistroEstado     `json:"estado"`
-	FechaCreacion  time.Time          `json:"fecha_creacion"`
-	Id             openapi_types.UUID `json:"id"`
-	Nit            *string            `json:"nit,omitempty"`
-	NombreCompleto *string            `json:"nombre_completo,omitempty"`
-	RazonSocial    *string            `json:"razon_social,omitempty"`
-	TipoCuenta     RegistroTipoCuenta `json:"tipo_cuenta"`
+	Celular        string              `json:"celular"`
+	Correo         string              `json:"correo"`
+	Desafio        Desafio             `json:"desafio"`
+	EmpresaId      *openapi_types.UUID `json:"empresa_id,omitempty"`
+	Estado         RegistroEstado      `json:"estado"`
+	FechaCreacion  time.Time           `json:"fecha_creacion"`
+	Id             openapi_types.UUID  `json:"id"`
+	Nit            *string             `json:"nit,omitempty"`
+	NombreCompleto *string             `json:"nombre_completo,omitempty"`
+	RazonSocial    *string             `json:"razon_social,omitempty"`
+	TipoCuenta     RegistroTipoCuenta  `json:"tipo_cuenta"`
 }
 
 // RegistroEstado defines model for Registro.Estado.

@@ -67,7 +67,7 @@ func (s *ActivadorDeCuenta) ActivarCuenta(ctx context.Context, celular, codigo s
 
 // activarConCodigos aplica el compare-and-set, sella el celular y emite los codigos en la misma transaccion.
 func (s *ActivadorDeCuenta) activarConCodigos(ctx context.Context, q *repositorio.Queries, resultado ResultadoDesafio, activacion *Activacion) (struct{}, error) {
-	if err := s.estados.TransicionarCredencial(ctx, q, resultado.CredencialID, EstadoPendienteVerificacion, EstadoActivo, motivoCelularVerificado); err != nil {
+	if err := s.estados.ActivarCredencial(ctx, q, resultado.CredencialID, motivoCelularVerificado); err != nil {
 		return struct{}{}, err
 	}
 	credencial, err := q.CredencialPorID(ctx, uuidOPgtype(resultado.CredencialID))
