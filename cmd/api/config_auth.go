@@ -14,6 +14,7 @@ import (
 type ConfigAuth struct {
 	RedisURL                 string
 	OTPCanal                 string
+	OTPSimuladorCodigoFijo   string
 	WhatsAppToken            string
 	WhatsAppPhoneID          string
 	WhatsAppTemplate         string
@@ -25,11 +26,12 @@ type ConfigAuth struct {
 // cargarConfigAuth lee el bloque de auth y devuelve sus errores para el errors.Join del llamador.
 func cargarConfigAuth() (ConfigAuth, []error) {
 	cfg := ConfigAuth{
-		RedisURL:         os.Getenv("REDIS_URL"),
-		OTPCanal:         os.Getenv("OTP_CANAL"),
-		WhatsAppToken:    os.Getenv("WHATSAPP_TOKEN"),
-		WhatsAppPhoneID:  os.Getenv("WHATSAPP_PHONE_ID"),
-		WhatsAppTemplate: os.Getenv("WHATSAPP_TEMPLATE"),
+		RedisURL:               os.Getenv("REDIS_URL"),
+		OTPCanal:               os.Getenv("OTP_CANAL"),
+		OTPSimuladorCodigoFijo: os.Getenv("OTP_SIMULADOR_CODIGO_FIJO"),
+		WhatsAppToken:          os.Getenv("WHATSAPP_TOKEN"),
+		WhatsAppPhoneID:        os.Getenv("WHATSAPP_PHONE_ID"),
+		WhatsAppTemplate:       os.Getenv("WHATSAPP_TEMPLATE"),
 	}
 
 	var errs []error

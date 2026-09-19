@@ -102,11 +102,16 @@ func run() error {
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
+	canal, err := canalOTP(cfg)
+	if err != nil {
+		return fmt.Errorf("canal OTP: %w", err)
+	}
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), httpserver.DependenciasAuth{
 			Identidad: auth.UsuarioDePrueba{},
 			Redis:     clienteRedisAuth,
+			CanalOTP:  canal,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

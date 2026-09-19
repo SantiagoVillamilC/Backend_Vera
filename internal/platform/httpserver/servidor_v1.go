@@ -3,6 +3,7 @@ package httpserver
 import (
 	"net/http"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/redis/go-redis/v9"
@@ -39,6 +40,7 @@ type DependenciasAuth struct {
 	KYC       KYCHandler
 	Consent   ConsentHandler
 	Redis     *redis.Client
+	CanalOTP  auth.CanalOTP
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
