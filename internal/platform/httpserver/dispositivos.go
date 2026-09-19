@@ -14,7 +14,7 @@ import (
 // ControlDeSesiones lista y revoca las sesiones y resuelve el contexto activo de la parte.
 type ControlDeSesiones interface {
 	ListarDispositivos(ctx context.Context, parteID uuid.UUID) ([]auth.Sesion, error)
-	CerrarSesionActual(ctx context.Context, parteID, familiaID uuid.UUID) error
+	CerrarSesionPorRefresh(ctx context.Context, parteID uuid.UUID, refreshToken string) error
 	CerrarTodasLasSesiones(ctx context.Context, parteID uuid.UUID) error
 	RevocarDispositivo(ctx context.Context, parteID, familiaID uuid.UUID) error
 	ListarContextos(ctx context.Context, parteID uuid.UUID) ([]auth.ContextoDeParte, error)
@@ -29,13 +29,17 @@ func NuevoDispositivosHandler(servicio ControlDeSesiones) *HandlerDeDispositivos
 	return &HandlerDeDispositivos{servicio: servicio}
 }
 
-// Logout revoca la familia del access actual y responde 204.
+// Logout revoca la familia del refresh del cuerpo y responde 204.
 func (h *HandlerDeDispositivos) Logout(w http.ResponseWriter, r *http.Request) {
-	parteID, familiaID, ok := idsDeDispositivo(w, r)
+	var entrada api.RefreshRequest
+	if !api.DecodeAndValidate(w, r, &entrada) {
+		return
+	}
+	parteID, _, ok := idsDeDispositivo(w, r)
 	if !ok {
 		return
 	}
-	if err := h.servicio.CerrarSesionActual(r.Context(), parteID, familiaID); err != nil {
+	if err := h.servicio.CerrarSesionPorRefresh(r.Context(), parteID, entrada.RefreshToken); err != nil {
 		escribirErrorDeAuth(w, r, err)
 		return
 	}

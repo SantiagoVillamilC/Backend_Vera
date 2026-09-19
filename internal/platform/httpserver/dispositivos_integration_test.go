@@ -185,3 +185,52 @@ func TestEndpointsDeDispositivosYContextoDePuntaAPunta(t *testing.T) {
 		t.Fatalf("GET sessions tras logout-all = %d, quiero 401 (cuerpo %q)", rec.Code, rec.Body.String())
 	}
 }
+
+func TestLogoutConRefreshRevocaLaFamiliaDePuntaAPunta(t *testing.T) {
+	pool := abrirPoolDeIntegracion(t)
+	parteID, err := uuid.Parse(auth.SembrarParteDePruebaConID(t, pool, uuid.NewString()))
+	if err != nil {
+		t.Fatalf("uuid de la parte: %v", err)
+	}
+
+	tokens := tokensDeIntegracion(t)
+	d, err := denylist.NuevoRedis(clienteRedisDeIntegracion(t))
+	if err != nil {
+		t.Fatalf("denylist: %v", err)
+	}
+	gestor := auth.NuevoGestorSesiones(pool, auth.NuevoRegistradorEventos(pool))
+	servicio, err := auth.NuevoServicioDeSesion(pool, gestor, tokens, d)
+	if err != nil {
+		t.Fatalf("servicio de sesión: %v", err)
+	}
+	refresh1, sesion1, err := gestor.EmitirSesion(t.Context(), parteID, auth.ContextoUsuario, "primera")
+	if err != nil {
+		t.Fatalf("emitir la primera sesión: %v", err)
+	}
+	refresh2, sesion2, err := gestor.EmitirSesion(t.Context(), parteID, auth.ContextoUsuario, "segunda")
+	if err != nil {
+		t.Fatalf("emitir la segunda sesión: %v", err)
+	}
+	access1 := firmarAccessDeIntegracion(t, tokens, parteID, sesion1.FamiliaID, auth.ContextoUsuario, "")
+	access2 := firmarAccessDeIntegracion(t, tokens, parteID, sesion2.FamiliaID, auth.ContextoUsuario, "")
+
+	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+		Identidad: adaptadorJWTDePrueba{tokens: tokens, denylist: d},
+		Auth:      NuevoDispositivosHandler(servicio),
+		Refresh:   NuevoSesionHandler(servicio),
+	})
+
+	rec := pedirDeDispositivos(r, http.MethodPost, "/v1/auth/logout", access2, `{"refresh_token":"`+refresh1+`"}`)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("POST logout = %d, quiero 204 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	if rec := pedirDeDispositivos(r, http.MethodPost, "/v1/auth/refresh", "", `{"refresh_token":"`+refresh1+`"}`); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("refresh de la familia cerrada = %d, quiero 401 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	if rec := pedirDeDispositivos(r, http.MethodGet, "/v1/auth/sessions", access1, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("access de la familia cerrada = %d, quiero 401 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+	if rec := pedirDeDispositivos(r, http.MethodPost, "/v1/auth/refresh", "", `{"refresh_token":"`+refresh2+`"}`); rec.Code != http.StatusOK {
+		t.Fatalf("refresh de la otra familia = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+	}
+}

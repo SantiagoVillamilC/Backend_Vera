@@ -286,12 +286,24 @@ paths:
   /v1/auth/logout:
     post:
       operationId: logout
-      summary: Revoca el refresh del dispositivo actual.
+      summary: Revoca la sesion del refresh presentado.
       tags: [sesion]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
       responses:
         "204":
           description: Sesion cerrada.
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"

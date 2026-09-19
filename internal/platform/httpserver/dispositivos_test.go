@@ -35,8 +35,8 @@ func (s *servicioDeDispositivosFalso) ListarDispositivos(context.Context, uuid.U
 	return s.sesiones, s.listaErr
 }
 
-// CerrarSesionActual devuelve el error configurado.
-func (s *servicioDeDispositivosFalso) CerrarSesionActual(context.Context, uuid.UUID, uuid.UUID) error {
+// CerrarSesionPorRefresh devuelve el error configurado.
+func (s *servicioDeDispositivosFalso) CerrarSesionPorRefresh(context.Context, uuid.UUID, string) error {
 	return s.cerrarErr
 }
 
@@ -235,9 +235,25 @@ func TestLogoutConDenylistQueFallaResponde503(t *testing.T) {
 	servicio := &servicioDeDispositivosFalso{cerrarErr: auth.ConFailClosed(errors.New("redis caido"))}
 	r := routerDeDispositivos(servicio)
 
-	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout", "")
+	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout", `{"refresh_token":"vigente"}`)
 
 	assertErrorEnvelope(t, rec, http.StatusServiceUnavailable, "AuthUnavailable")
+}
+
+func TestLogoutSinRefreshTokenResponde422(t *testing.T) {
+	r := routerDeDispositivos(&servicioDeDispositivosFalso{})
+
+	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout", `{}`)
+
+	assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
+}
+
+func TestLogoutConRefreshInvalidoResponde401(t *testing.T) {
+	r := routerDeDispositivos(&servicioDeDispositivosFalso{cerrarErr: auth.ErrRefreshInvalido})
+
+	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout", `{"refresh_token":"ajeno"}`)
+
+	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "RefreshInvalid")
 }
 
 func TestLogoutAllConDenylistQueFallaResponde503(t *testing.T) {
@@ -251,9 +267,13 @@ func TestLogoutAllConDenylistQueFallaResponde503(t *testing.T) {
 
 func TestLogoutYLogoutAllResponden204(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{})
-	for _, ruta := range []string{"/v1/auth/logout", "/v1/auth/logout-all"} {
+	casos := map[string]string{
+		"/v1/auth/logout":     `{"refresh_token":"vigente"}`,
+		"/v1/auth/logout-all": "",
+	}
+	for ruta, cuerpo := range casos {
 		t.Run(ruta, func(t *testing.T) {
-			rec := pedirConCredencial(r, http.MethodPost, ruta, "")
+			rec := pedirConCredencial(r, http.MethodPost, ruta, cuerpo)
 			if rec.Code != http.StatusNoContent {
 				t.Fatalf("status = %d, quiero 204 (cuerpo %q)", rec.Code, rec.Body.String())
 			}
