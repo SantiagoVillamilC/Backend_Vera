@@ -162,9 +162,9 @@ func cuerpoDeLoginEmpresa(datos datosDeAltaEmpresa) string {
 	return `{"celular":"` + datos.celular + `","contrasena":"` + datos.contrasena + `","contexto":"empresa"}`
 }
 
-// cuerpoDeVerificacion arma la verificación con el código fijo del simulador.
-func cuerpoDeVerificacion(challengeID string) string {
-	return `{"challenge_id":"` + challengeID + `","codigo":"123456"}`
+// cuerpoDeVerificacion arma la verificación con el celular y el código fijo del simulador.
+func cuerpoDeVerificacion(celular string) string {
+	return `{"celular":"` + celular + `","codigo":"123456"}`
 }
 
 // altaDeEmpresaCriterio6Y8 registra la empresa, exige el 409 genérico y verifica el celular del representante.
@@ -190,7 +190,7 @@ func altaDeEmpresaCriterio6Y8(t *testing.T, m montajeDeEmpresa, pool *pgxpool.Po
 	datos.representanteID = registro.Id.String()
 
 	rechazoDeCorreoRepetidoEsGenerico(t, m, datos)
-	exigirVerificacionActiva(t, m, pool, datos, registro.Desafio.ChallengeId.String())
+	exigirVerificacionActiva(t, m, pool, datos)
 	return datos
 }
 
@@ -217,15 +217,15 @@ func rechazoDeCorreoRepetidoEsGenerico(t *testing.T, m montajeDeEmpresa, datos d
 }
 
 // exigirVerificacionActiva verifica el celular del representante, exige los códigos de respaldo y el rol intacto.
-func exigirVerificacionActiva(t *testing.T, m montajeDeEmpresa, pool *pgxpool.Pool, datos datosDeAltaEmpresa, challengeID string) {
+func exigirVerificacionActiva(t *testing.T, m montajeDeEmpresa, pool *pgxpool.Pool, datos datosDeAltaEmpresa) {
 	t.Helper()
-	rec := pedirDeDispositivos(m.router, http.MethodPost, "/v1/auth/register/verify-phone", "", cuerpoDeVerificacion(challengeID))
+	rec := pedirDeDispositivos(m.router, http.MethodPost, "/v1/auth/register/verify-phone", "", cuerpoDeVerificacion(datos.celular))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("verify-phone = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
 	}
 	verificacion := decodificarData[api.Verificacion](t, rec)
 	if string(verificacion.Estado) != "activo" || verificacion.Id.String() != datos.representanteID ||
-		verificacion.Correo != datos.correo || verificacion.CodigosRespaldo == nil || len(*verificacion.CodigosRespaldo) == 0 {
+		verificacion.Celular != datos.celular || verificacion.CodigosRespaldo == nil || len(*verificacion.CodigosRespaldo) == 0 {
 		t.Fatalf("verificación = %+v, quiero al representante activo con códigos de respaldo", verificacion)
 	}
 	if total := contarRolesVigentesDeEmpresa(t, pool, datos.representanteID); total != 1 {

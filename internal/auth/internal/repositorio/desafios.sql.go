@@ -417,3 +417,60 @@ func (q *Queries) MarcarDesafioVerificado(ctx context.Context, id pgtype.UUID) (
 	}
 	return result.RowsAffected(), nil
 }
+
+const ultimoDesafioDeRegistroPorCelular = `-- name: UltimoDesafioDeRegistroPorCelular :one
+SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
+       intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
+       contexto_solicitado, celular_nuevo, desafio_padre_id, expira_en <= now() AS expirado
+FROM auth.desafios
+WHERE proposito = 'registro'
+  AND celular_destino = $1
+ORDER BY creado_en DESC
+LIMIT 1
+`
+
+type UltimoDesafioDeRegistroPorCelularRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	ParteID            pgtype.UUID        `json:"parte_id"`
+	CredencialID       pgtype.UUID        `json:"credencial_id"`
+	Proposito          string             `json:"proposito"`
+	CelularDestino     string             `json:"celular_destino"`
+	CodigoHmac         []byte             `json:"codigo_hmac"`
+	Intentos           int32              `json:"intentos"`
+	Reenvios           int32              `json:"reenvios"`
+	Estado             string             `json:"estado"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
+	UltimoEnvioEn      pgtype.Timestamptz `json:"ultimo_envio_en"`
+	ContextoSolicitado pgtype.Text        `json:"contexto_solicitado"`
+	CelularNuevo       pgtype.Text        `json:"celular_nuevo"`
+	DesafioPadreID     pgtype.UUID        `json:"desafio_padre_id"`
+	Expirado           bool               `json:"expirado"`
+}
+
+func (q *Queries) UltimoDesafioDeRegistroPorCelular(ctx context.Context, celularDestino string) (UltimoDesafioDeRegistroPorCelularRow, error) {
+	row := q.db.QueryRow(ctx, ultimoDesafioDeRegistroPorCelular, celularDestino)
+	var i UltimoDesafioDeRegistroPorCelularRow
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.CredencialID,
+		&i.Proposito,
+		&i.CelularDestino,
+		&i.CodigoHmac,
+		&i.Intentos,
+		&i.Reenvios,
+		&i.Estado,
+		&i.CreadoEn,
+		&i.ExpiraEn,
+		&i.UltimoEnvioEn,
+		&i.ContextoSolicitado,
+		&i.CelularNuevo,
+		&i.DesafioPadreID,
+		&i.Expirado,
+	)
+	if err != nil {
+		err = fmt.Errorf("query UltimoDesafioDeRegistroPorCelular: %w", err)
+	}
+	return i, err
+}

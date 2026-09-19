@@ -192,15 +192,15 @@ func TestActivarCuentaVerificaActivaYEmiteCodigos(t *testing.T) {
 	cred := sembrarPendienteDeActivacion(t, pool)
 	desafio := desafioDeActivacion(t, gestor, cred)
 
-	activacion, err := activador.ActivarCuenta(t.Context(), desafio.ID, "123456")
+	activacion, err := activador.ActivarCuenta(t.Context(), cred.celular, "123456")
 	if err != nil {
 		t.Fatalf("ActivarCuenta: %v", err)
 	}
 	if activacion.ParteID != cred.parteID {
 		t.Errorf("ParteID = %s, quiero %s", activacion.ParteID, cred.parteID)
 	}
-	if activacion.Correo == "" {
-		t.Error("la activacion devolvio el correo vacio")
+	if activacion.Celular != cred.celular {
+		t.Errorf("Celular = %q, quiero %q", activacion.Celular, cred.celular)
 	}
 	if len(activacion.CodigosRespaldo) != cantidadCodigosRespaldo {
 		t.Fatalf("codigos devueltos = %d, quiero %d", len(activacion.CodigosRespaldo), cantidadCodigosRespaldo)
@@ -234,12 +234,12 @@ func TestActivarCuentaConElDesafioYaUsadoEsInvalido(t *testing.T) {
 	canal := &canalConFijo{codigo: "123456"}
 	activador, gestor := activadorDePruebaReal(t, pool, canal)
 	cred := sembrarPendienteDeActivacion(t, pool)
-	desafio := desafioDeActivacion(t, gestor, cred)
+	desafioDeActivacion(t, gestor, cred)
 
-	if _, err := activador.ActivarCuenta(t.Context(), desafio.ID, "123456"); err != nil {
+	if _, err := activador.ActivarCuenta(t.Context(), cred.celular, "123456"); err != nil {
 		t.Fatalf("primera activacion: %v", err)
 	}
-	if _, err := activador.ActivarCuenta(t.Context(), desafio.ID, "123456"); !errors.Is(err, ErrDesafioInvalido) {
+	if _, err := activador.ActivarCuenta(t.Context(), cred.celular, "123456"); !errors.Is(err, ErrDesafioInvalido) {
 		t.Fatalf("segunda activacion = %v, quiero ErrDesafioInvalido", err)
 	}
 	if estado := leerEstado(t, pool, cred.credencialID); estado != string(EstadoActivo) {
@@ -250,7 +250,7 @@ func TestActivarCuentaConElDesafioYaUsadoEsInvalido(t *testing.T) {
 	}
 }
 
-func TestActivarCuentaConCodigosMalosAgotaYLuegoDaDemasiadosIntentos(t *testing.T) {
+func TestActivarCuentaConCodigosMalosInvalidaElDesafio(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	canal := &canalConFijo{codigo: "123456"}
 	activador, gestor := activadorDePruebaReal(t, pool, canal)
@@ -258,12 +258,15 @@ func TestActivarCuentaConCodigosMalosAgotaYLuegoDaDemasiadosIntentos(t *testing.
 	desafio := desafioDeActivacion(t, gestor, cred)
 
 	for intento := 1; intento <= 3; intento++ {
-		if _, err := activador.ActivarCuenta(t.Context(), desafio.ID, "000000"); !errors.Is(err, ErrCodigoInvalido) {
+		if _, err := activador.ActivarCuenta(t.Context(), cred.celular, "000000"); !errors.Is(err, ErrCodigoInvalido) {
 			t.Fatalf("intento %d = %v, quiero ErrCodigoInvalido", intento, err)
 		}
 	}
-	if _, err := activador.ActivarCuenta(t.Context(), desafio.ID, "000000"); !errors.Is(err, ErrDemasiadosIntentos) {
+	if _, err := activador.ActivarCuenta(t.Context(), cred.celular, "000000"); !errors.Is(err, ErrDemasiadosIntentos) {
 		t.Fatalf("cuarto intento = %v, quiero ErrDemasiadosIntentos", err)
+	}
+	if estado := leerFilaDesafio(t, pool, desafio.ID).estado; estado != "invalidado" {
+		t.Errorf("estado del desafio = %q, quiero invalidado", estado)
 	}
 	if estado := leerEstado(t, pool, cred.credencialID); estado != string(EstadoPendienteVerificacion) {
 		t.Errorf("estado = %q, quiero pendiente_verificacion", estado)
@@ -276,13 +279,51 @@ func TestActivarCuentaConCodigosMalosAgotaYLuegoDaDemasiadosIntentos(t *testing.
 	}
 }
 
+func TestActivarCuentaConDesafioVencidoRespondeExpirado(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	canal := &canalConFijo{codigo: "123456"}
+	activador, gestor := activadorDePruebaReal(t, pool, canal)
+	cred := sembrarPendienteDeActivacion(t, pool)
+	desafio := desafioDeActivacion(t, gestor, cred)
+	vencerDesafio(t, pool, desafio.ID)
+
+	if _, err := activador.ActivarCuenta(t.Context(), cred.celular, "123456"); !errors.Is(err, ErrCodigoExpirado) {
+		t.Fatalf("desafio vencido = %v, quiero ErrCodigoExpirado", err)
+	}
+	if estado := leerEstado(t, pool, cred.credencialID); estado != string(EstadoPendienteVerificacion) {
+		t.Errorf("estado = %q, quiero pendiente_verificacion", estado)
+	}
+	if total := len(leerCodigosRespaldo(t, pool, cred.credencialID)); total != 0 {
+		t.Errorf("codigos emitidos sobre el desafio vencido = %d, quiero 0", total)
+	}
+}
+
+func TestActivarCuentaRecortaElCelularAntesDelMatch(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	canal := &canalConFijo{codigo: "123456"}
+	activador, gestor := activadorDePruebaReal(t, pool, canal)
+	cred := sembrarPendienteDeActivacion(t, pool)
+	desafioDeActivacion(t, gestor, cred)
+
+	activacion, err := activador.ActivarCuenta(t.Context(), " "+cred.celular+" ", "123456")
+	if err != nil {
+		t.Fatalf("ActivarCuenta con espacios: %v", err)
+	}
+	if activacion.Celular != cred.celular {
+		t.Errorf("Celular = %q, quiero %q", activacion.Celular, cred.celular)
+	}
+	if estado := leerEstado(t, pool, cred.credencialID); estado != string(EstadoActivo) {
+		t.Errorf("estado = %q, quiero activo", estado)
+	}
+}
+
 func TestCarreraLimpiezaContraActivacionDejaUnSoloDesenlace(t *testing.T) {
 	pool := abrirPoolDeAuthConcurrente(t)
 	canal := &canalConFijo{codigo: "123456"}
 	activador, gestor := activadorDePruebaReal(t, pool, canal)
 	cred := sembrarPendienteDeActivacion(t, pool)
 	envejecerCredencial(t, pool, cred.credencialID, 2*time.Hour)
-	desafio := desafioDeActivacion(t, gestor, cred)
+	desafioDeActivacion(t, gestor, cred)
 	estados := NuevoGestorDeEstados(NuevoRegistradorEventos(pool))
 
 	var wg sync.WaitGroup
@@ -290,7 +331,7 @@ func TestCarreraLimpiezaContraActivacionDejaUnSoloDesenlace(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		_, errActivacion = activador.ActivarCuenta(context.Background(), desafio.ID, "123456")
+		_, errActivacion = activador.ActivarCuenta(context.Background(), cred.celular, "123456")
 	}()
 	go func() {
 		defer wg.Done()

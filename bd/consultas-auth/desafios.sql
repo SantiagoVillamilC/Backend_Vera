@@ -37,6 +37,16 @@ SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
 FROM auth.desafios
 WHERE id = $1 AND estado = 'pendiente';
 
+-- name: UltimoDesafioDeRegistroPorCelular :one
+SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
+       intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
+       contexto_solicitado, celular_nuevo, desafio_padre_id, expira_en <= now() AS expirado
+FROM auth.desafios
+WHERE proposito = 'registro'
+  AND celular_destino = $1
+ORDER BY creado_en DESC
+LIMIT 1;
+
 -- name: IncrementarIntentoDesafio :one
 UPDATE auth.desafios
 SET intentos = intentos + 1

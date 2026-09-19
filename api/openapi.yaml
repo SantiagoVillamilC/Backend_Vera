@@ -80,7 +80,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VerifyOtpRequest"
+              $ref: "#/components/schemas/VerifyPhoneRequest"
       responses:
         "200":
           description: Celular verificado y cuenta activa.
@@ -870,6 +870,20 @@ components:
         meta:
           $ref: "#/components/schemas/Meta"
 
+    VerifyPhoneRequest:
+      type: object
+      required: [celular, codigo]
+      properties:
+        celular:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required,e164"
+        codigo:
+          type: string
+          pattern: "^[0-9]{6}$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,len=6,number"
+
     VerifyOtpRequest:
       type: object
       required: [challenge_id, codigo]
@@ -897,12 +911,12 @@ components:
 
     Verificacion:
       type: object
-      required: [id, correo, estado]
+      required: [id, celular, estado]
       properties:
         id:
           type: string
           format: uuid
-        correo:
+        celular:
           type: string
         estado:
           type: string

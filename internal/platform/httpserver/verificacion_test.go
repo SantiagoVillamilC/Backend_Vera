@@ -19,15 +19,15 @@ import (
 
 // activadorDePrueba captura la llamada y devuelve la activacion o el error configurados.
 type activadorDePrueba struct {
-	err             error
-	capturadoID     uuid.UUID
-	capturadoCodigo string
-	activacion      auth.Activacion
+	err              error
+	capturadoCelular string
+	capturadoCodigo  string
+	activacion       auth.Activacion
 }
 
 // ActivarCuenta implementa la interfaz que consume el handler.
-func (f *activadorDePrueba) ActivarCuenta(_ context.Context, id uuid.UUID, codigo string) (auth.Activacion, error) {
-	f.capturadoID, f.capturadoCodigo = id, codigo
+func (f *activadorDePrueba) ActivarCuenta(_ context.Context, celular, codigo string) (auth.Activacion, error) {
+	f.capturadoCelular, f.capturadoCodigo = celular, codigo
 	if f.err != nil {
 		return auth.Activacion{}, f.err
 	}
@@ -42,11 +42,11 @@ func routerConVerificacion(handler VerificacionHandler) http.Handler {
 	})
 }
 
-// peticionDeVerificacion arma el POST de activacion con el desafio y el codigo indicados.
-func peticionDeVerificacion(t *testing.T, challengeID uuid.UUID, codigo string) *http.Request {
+// peticionDeVerificacion arma el POST de activacion con el celular y el codigo indicados.
+func peticionDeVerificacion(t *testing.T, celular, codigo string) *http.Request {
 	t.Helper()
 
-	body, err := json.Marshal(map[string]string{"challenge_id": challengeID.String(), "codigo": codigo})
+	body, err := json.Marshal(map[string]string{"celular": celular, "codigo": codigo})
 	if err != nil {
 		t.Fatalf("serializar el cuerpo: %v", err)
 	}
@@ -65,26 +65,28 @@ func codigosDeRespaldoDePrueba() []string {
 }
 
 func TestVerificarCelularActivaYDevuelveLosCodigos(t *testing.T) {
-	challengeID := uuid.New()
 	parteID := uuid.New()
 	codigos := codigosDeRespaldoDePrueba()
-	falso := &activadorDePrueba{activacion: auth.Activacion{ParteID: parteID, Correo: "ana@centinela.test", CodigosRespaldo: codigos}}
+	falso := &activadorDePrueba{activacion: auth.Activacion{ParteID: parteID, Celular: "+573001234567", CodigosRespaldo: codigos}}
 	rec := httptest.NewRecorder()
 
-	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, challengeID, "123456"))
+	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, "+573001234567", "123456"))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
 	}
-	if falso.capturadoID != challengeID || falso.capturadoCodigo != "123456" {
-		t.Errorf("capturado = (%s, %q), quiero (%s, 123456)", falso.capturadoID, falso.capturadoCodigo, challengeID)
+	if falso.capturadoCelular != "+573001234567" || falso.capturadoCodigo != "123456" {
+		t.Errorf("capturado = (%s, %q), quiero (+573001234567, 123456)", falso.capturadoCelular, falso.capturadoCodigo)
 	}
 	data := datosDeRespuesta(t, rec)
 	if data["id"] != parteID.String() {
 		t.Errorf("id = %v, quiero %s", data["id"], parteID)
 	}
-	if data["correo"] != "ana@centinela.test" {
-		t.Errorf("correo = %v, quiero ana@centinela.test", data["correo"])
+	if data["celular"] != "+573001234567" {
+		t.Errorf("celular = %v, quiero +573001234567", data["celular"])
+	}
+	if _, hayCorreo := data["correo"]; hayCorreo {
+		t.Errorf("la respuesta no debe traer correo: %v", data)
 	}
 	if data["estado"] != string(api.VerificacionEstadoActivo) {
 		t.Errorf("estado = %v, quiero activo", data["estado"])
@@ -119,22 +121,58 @@ func TestVerificarCelularMapeaErroresAlEnvelope(t *testing.T) {
 			falso := &activadorDePrueba{err: caso.err}
 			rec := httptest.NewRecorder()
 
-			routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, uuid.New(), "123456"))
+			routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, "+573001234567", "123456"))
 
 			assertErrorEnvelope(t, rec, caso.status, caso.code)
 		})
 	}
 }
 
-func TestVerificarCelularSinCodigoResponde422(t *testing.T) {
+func TestVerificarCelularSinDesafioResponde400ChallengeInvalid(t *testing.T) {
+	falso := &activadorDePrueba{err: auth.ErrDesafioInvalido}
+	rec := httptest.NewRecorder()
+
+	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, "+573009999999", "123456"))
+
+	assertErrorEnvelope(t, rec, http.StatusBadRequest, "ChallengeInvalid")
+}
+
+func TestVerificarCelularCodigoMaloTresVecesResponde429(t *testing.T) {
+	falso := &activadorDePrueba{}
+	router := routerConVerificacion(NuevoVerificacionHandler(falso))
+
+	for intento := 1; intento <= 3; intento++ {
+		falso.err = auth.ErrCodigoInvalido
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, peticionDeVerificacion(t, "+573001234567", "000000"))
+		assertErrorEnvelope(t, rec, http.StatusBadRequest, "OtpInvalid")
+	}
+	falso.err = auth.ErrDemasiadosIntentos
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, peticionDeVerificacion(t, "+573001234567", "000000"))
+	assertErrorEnvelope(t, rec, http.StatusTooManyRequests, "OtpTooManyAttempts")
+}
+
+func TestVerificarCelularMalformadoResponde422ConReglaE164(t *testing.T) {
 	falso := &activadorDePrueba{}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register/verify-phone", strings.NewReader(`{}`))
+
+	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, "3001234567", "123456"))
+
+	assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
+	assertDetalleDeValidacion(t, rec, "celular", "e164")
+}
+
+func TestVerificarCelularSinCelularResponde422(t *testing.T) {
+	falso := &activadorDePrueba{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register/verify-phone", strings.NewReader(`{"codigo":"123456"}`))
 	req.Header.Set("Content-Type", "application/json")
 
 	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, req)
 
 	assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
+	assertDetalleDeValidacion(t, rec, "celular", "required")
 }
 
 // capturadorSlog acumula el texto de cada registro de slog para inspeccionarlo.
@@ -180,10 +218,10 @@ func TestVerificarCelularNoLogueaLosCodigosDeRespaldo(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(previo) })
 
 	codigos := codigosDeRespaldoDePrueba()
-	falso := &activadorDePrueba{activacion: auth.Activacion{ParteID: uuid.New(), Correo: "ana@centinela.test", CodigosRespaldo: codigos}}
+	falso := &activadorDePrueba{activacion: auth.Activacion{ParteID: uuid.New(), Celular: "+573001234567", CodigosRespaldo: codigos}}
 	rec := httptest.NewRecorder()
 
-	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, uuid.New(), "123456"))
+	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, peticionDeVerificacion(t, "+573001234567", "123456"))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
