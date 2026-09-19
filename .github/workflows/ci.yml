@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, staging, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test and lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify go.mod and go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
+
+      # El repositorio arrastra deuda de lint anterior a este workflow. Se revisa
+      # solo lo que introduce cada cambio, contra la base del PR o el commit
+      # anterior en un push, para no bloquear por hallazgos viejos.
+      - name: Lint (only issues introduced by this change)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            BASE_SHA="HEAD~1"
+          fi
+          if git rev-parse --verify "$BASE_SHA" >/dev/null 2>&1; then
+            "$(go env GOPATH)/bin/golangci-lint" run --new-from-rev="$BASE_SHA"
+          else
+            echo "::warning::No hay revisión base para comparar, se omite el lint."
+          fi
