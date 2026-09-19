@@ -63,3 +63,4 @@ sql:
           auth_credenciale: Credencial
           auth_transiciones_credencial: TransicionCredencial
           auth_eventos_autenticacion: EventoAutenticacion
+          auth_sesione: Sesion
