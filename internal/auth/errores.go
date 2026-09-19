@@ -43,6 +43,15 @@ var ErrCodigoExpirado = errors.New("auth: el código del desafío expiró")
 // ErrDemasiadosIntentos es el desafío que agotó sus intentos: responde 429 OtpTooManyAttempts.
 var ErrDemasiadosIntentos = errors.New("auth: el desafío agotó los intentos")
 
+// ErrEnfriamientoReenvio es el reenvío pedido antes de la ventana de espera: responde 429 OtpResendCooldown.
+var ErrEnfriamientoReenvio = errors.New("auth: todavía no pasó el enfriamiento del reenvío")
+
+// ErrDemasiadosReenvios es el desafío que agotó sus reenvíos: responde 429 OtpTooManyResends.
+var ErrDemasiadosReenvios = errors.New("auth: el desafío agotó los reenvíos")
+
+// ErrDemasiadosEnvios es el tope de cuenta, origen o fallos superado: responde 429 TooManyRequests genérico.
+var ErrDemasiadosEnvios = errors.New("auth: se superó el tope de envíos")
+
 // ConFailClosed convierte el error de una dependencia en ErrAuthNoDisponible para que el mapeo responda 503.
 func ConFailClosed(err error) error {
 	if err == nil {
@@ -85,6 +94,12 @@ func MapearError(err error) error {
 		return platformerrors.New("OtpExpired", "The code has expired.", http.StatusBadRequest)
 	case errors.Is(err, ErrDemasiadosIntentos):
 		return platformerrors.New("OtpTooManyAttempts", "Too many attempts. Request a new code.", http.StatusTooManyRequests)
+	case errors.Is(err, ErrEnfriamientoReenvio):
+		return platformerrors.New("OtpResendCooldown", "A new code was requested too soon.", http.StatusTooManyRequests)
+	case errors.Is(err, ErrDemasiadosReenvios):
+		return platformerrors.New("OtpTooManyResends", "Too many resends. Request a new code.", http.StatusTooManyRequests)
+	case errors.Is(err, ErrDemasiadosEnvios):
+		return platformerrors.New("TooManyRequests", "Too many requests. Try again later.", http.StatusTooManyRequests)
 	default:
 		return err
 	}

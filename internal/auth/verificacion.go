@@ -81,6 +81,9 @@ func (g *GestorDesafios) VerificarDesafioEn(ctx context.Context, q *repositorio.
 				return ResultadoDesafio{}, fmt.Errorf("auth: invalidar el desafío agotado: %w", err)
 			}
 		}
+		if err := g.registrarFalloDeCuenta(ctx, q, fila.CredencialID); err != nil {
+			return ResultadoDesafio{}, err
+		}
 		if err := g.registrarVerificacion(ctx, q, fila.ParteID, fila.CredencialID, fila.Proposito, resultadoVerificacionCodigoInvalido); err != nil {
 			return ResultadoDesafio{}, err
 		}
@@ -138,6 +141,21 @@ func (g *GestorDesafios) registrarVerificacion(ctx context.Context, q *repositor
 		Fecha:        time.Now().UTC(),
 		Detalle:      map[string]string{"proposito": proposito},
 	})
+}
+
+// registrarFalloDeCuenta acumula el fallo del código inválido en el contador de la cuenta.
+func (g *GestorDesafios) registrarFalloDeCuenta(ctx context.Context, q *repositorio.Queries, credencialID pgtype.UUID) error {
+	if g.racionador == nil || !credencialID.Valid {
+		return nil
+	}
+	credencial, err := q.CredencialPorID(ctx, credencialID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("auth: leer la credencial del fallo: %w", err)
+	}
+	return g.racionador.RegistrarFallo(ctx, credencial.Correo)
 }
 
 // resultadoDeDesafio mapea la fila confirmada al resultado que consume el llamador.

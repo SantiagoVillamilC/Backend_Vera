@@ -12,6 +12,58 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const actualizarReenvioDesafio = `-- name: ActualizarReenvioDesafio :one
+UPDATE auth.desafios
+SET codigo_hmac = $1,
+    reenvios = reenvios + 1,
+    ultimo_envio_en = $2,
+    expira_en = $3
+WHERE id = $4
+  AND estado = 'pendiente'
+  AND reenvios < 3
+  AND ultimo_envio_en <= $5
+  AND expira_en > $2
+RETURNING id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac, intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en, contexto_solicitado
+`
+
+type ActualizarReenvioDesafioParams struct {
+	CodigoHmac []byte             `json:"codigo_hmac"`
+	Ahora      pgtype.Timestamptz `json:"ahora"`
+	ExpiraEn   pgtype.Timestamptz `json:"expira_en"`
+	ID         pgtype.UUID        `json:"id"`
+	Umbral     pgtype.Timestamptz `json:"umbral"`
+}
+
+func (q *Queries) ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error) {
+	row := q.db.QueryRow(ctx, actualizarReenvioDesafio,
+		arg.CodigoHmac,
+		arg.Ahora,
+		arg.ExpiraEn,
+		arg.ID,
+		arg.Umbral,
+	)
+	var i AuthDesafio
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.CredencialID,
+		&i.Proposito,
+		&i.CelularDestino,
+		&i.CodigoHmac,
+		&i.Intentos,
+		&i.Reenvios,
+		&i.Estado,
+		&i.CreadoEn,
+		&i.ExpiraEn,
+		&i.UltimoEnvioEn,
+		&i.ContextoSolicitado,
+	)
+	if err != nil {
+		err = fmt.Errorf("query ActualizarReenvioDesafio: %w", err)
+	}
+	return i, err
+}
+
 const desafioPendientePorID = `-- name: DesafioPendientePorID :one
 SELECT id, parte_id, credencial_id, proposito, celular_destino, codigo_hmac,
        intentos, reenvios, estado, creado_en, expira_en, ultimo_envio_en,
