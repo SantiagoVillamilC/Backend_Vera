@@ -62,6 +62,7 @@ type montajeDeSesion struct {
 	sesion   *ServicioDeSesion
 	tokens   *TokensDeAcceso
 	denylist *denylistRedisDeSesion
+	gestor   *GestorSesiones
 }
 
 // servicioDeSesionDePrueba arma el flujo completo (login y rotación) sobre Postgres y Redis reales.
@@ -83,7 +84,7 @@ func servicioDeSesionDePrueba(tb testing.TB, pool *pgxpool.Pool, derivador Deriv
 	if err != nil {
 		tb.Fatalf("servicio de sesión: %v", err)
 	}
-	return montajeDeSesion{login: login, sesion: sesion, tokens: tokens, denylist: denylist}
+	return montajeDeSesion{login: login, sesion: sesion, tokens: tokens, denylist: denylist, gestor: sesiones}
 }
 
 // envejecerRefresh mueve el uso del refresh fuera de la ventana de gracia.

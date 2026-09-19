@@ -24,7 +24,7 @@ const (
 	// vigenciaInactividad es el tope de vida de un refresh desde su último uso.
 	vigenciaInactividad = 30 * 24 * time.Hour
 	// vigenciaAbsolutaFamilia es el tope de vida de la familia desde su primera sesión.
-	vigenciaAbsolutaFamilia = 90 * 24 * time.Hour
+	vigenciaAbsolutaFamilia = 45 * 24 * time.Hour
 	// resultadoSesion es el resultado de los eventos de sesión que no traen un valor propio.
 	resultadoSesion = "ok"
 )

@@ -61,10 +61,15 @@ func TestVencimientoDeSesionRespetaLosDosTopes(t *testing.T) {
 			creadaPrimera: base,
 			want:          base.Add(30 * 24 * time.Hour),
 		},
-		"el tope absoluto de la familia gana cerca de los 90 dias": {
+		"el tope absoluto de la familia gana cerca de los 45 dias": {
 			ultimoUso:     base,
-			creadaPrimera: base.Add(-85 * 24 * time.Hour),
+			creadaPrimera: base.Add(-40 * 24 * time.Hour),
 			want:          base.Add(5 * 24 * time.Hour),
+		},
+		"una familia de 46 dias ya vencio por el tope absoluto": {
+			ultimoUso:     base,
+			creadaPrimera: base.Add(-46 * 24 * time.Hour),
+			want:          base.Add(-1 * 24 * time.Hour),
 		},
 		"la inactividad gana con familia joven": {
 			ultimoUso:     base,

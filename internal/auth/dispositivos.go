@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
 	"github.com/google/uuid"
@@ -31,16 +32,43 @@ func (s *ServicioDeSesion) ListarDispositivos(ctx context.Context, parteID uuid.
 	return s.sesiones.ListarActivas(ctx, parteID)
 }
 
-// CerrarSesionActual publica el sid de la familia y la revoca, sin fallar si ya estaba revocada.
-func (s *ServicioDeSesion) CerrarSesionActual(ctx context.Context, parteID, familiaID uuid.UUID) error {
-	if err := s.publicarSid(ctx, familiaID); err != nil {
+// CerrarSesionPorRefresh revoca la familia del refresh presentado y publica su sid.
+func (s *ServicioDeSesion) CerrarSesionPorRefresh(ctx context.Context, parteID uuid.UUID, refreshToken string) error {
+	var familiaID uuid.UUID
+	_, err := enTransaccion(ctx, s.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
+		familia, err := familiaVigenteDeParte(ctx, q, parteID, refreshToken)
+		if err != nil {
+			return struct{}{}, err
+		}
+		familiaID = familia
+		if _, err := q.RevocarFamiliaDeParte(ctx, repositorio.RevocarFamiliaDeParteParams{
+			FamiliaID: pgtype.UUID{Bytes: familia, Valid: true},
+			ParteID:   pgtype.UUID{Bytes: parteID, Valid: true},
+		}); err != nil {
+			return struct{}{}, fmt.Errorf("auth: revocar la familia de la parte: %w", err)
+		}
+		return struct{}{}, s.sesiones.publicarRevocacion(ctx, q, parteID, familiaID, "")
+	})
+	if err != nil {
 		return err
 	}
-	err := s.sesiones.RevocarFamiliaDeParte(ctx, parteID, familiaID)
-	if errors.Is(err, ErrSesionNoEncontrada) {
-		return nil
+	return s.publicarSid(ctx, familiaID)
+}
+
+// familiaVigenteDeParte resuelve el refresh y exige que esté vigente y sea de la parte.
+func familiaVigenteDeParte(ctx context.Context, q *repositorio.Queries, parteID uuid.UUID, refreshToken string) (uuid.UUID, error) {
+	fila, err := q.SesionPorRefreshHash(ctx, hashDeRefresh(refreshToken))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrRefreshInvalido
 	}
-	return err
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("auth: buscar la sesión del refresh: %w", err)
+	}
+	vencida := !fila.VenceEn.Valid || !fila.VenceEn.Time.After(time.Now().UTC())
+	if uuidDePgtype(fila.ParteID) != parteID || fila.RevocadaEn.Valid || vencida {
+		return uuid.Nil, ErrRefreshInvalido
+	}
+	return uuidDePgtype(fila.FamiliaID), nil
 }
 
 // CerrarTodasLasSesiones publica el sid de cada familia vigente y revoca todas las sesiones de la parte.

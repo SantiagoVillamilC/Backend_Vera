@@ -3,10 +3,15 @@
 package auth
 
 import (
+	"context"
 	"errors"
+	"os"
 	"testing"
+	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestDispositivosRevocacionYContextosDeLaParte(t *testing.T) {
@@ -105,7 +110,7 @@ func TestDispositivosRevocacionYContextosDeLaParte(t *testing.T) {
 	}
 }
 
-func TestCerrarSesionActualPublicaElSidDeLaFamilia(t *testing.T) {
+func TestCerrarSesionPorRefreshRevocaLaFamiliaYPublicaElSid(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
 	_, parteID, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
@@ -113,14 +118,168 @@ func TestCerrarSesionActualPublicaElSidDeLaFamilia(t *testing.T) {
 	emitida := entrarYVerificar(t, m, celular, "contrasena-correcta", "")
 	familia := familiaDeAccess(t, m, emitida.AccessToken)
 
-	if err := m.sesion.CerrarSesionActual(t.Context(), parteID, familia); err != nil {
-		t.Fatalf("CerrarSesionActual: %v", err)
+	servicio, err := NuevoServicioDeSesion(pool, NuevoGestorSesiones(pool, NuevoRegistradorEventos(pool)), m.tokens, m.denylist)
+	if err != nil {
+		t.Fatalf("NuevoServicioDeSesion: %v", err)
+	}
+	if err := servicio.CerrarSesionPorRefresh(t.Context(), parteID, emitida.RefreshToken); err != nil {
+		t.Fatalf("CerrarSesionPorRefresh: %v", err)
 	}
 	if revocado, err := m.denylist.Revocado(t.Context(), familia); err != nil || !revocado {
 		t.Fatalf("logout no publicó el sid: (%v, %v)", revocado, err)
 	}
+	if fila := leerFilaDeRefresh(t, pool, emitida.RefreshToken); !fila.RevocadaEn.Valid {
+		t.Fatalf("logout no revocó la familia %s en la base", familia)
+	}
+	if total := contarEnAuth(t, pool,
+		`SELECT count(*) FROM auth.eventos_autenticacion WHERE tipo = $1 AND sesion_id = $2`,
+		TipoEventoRevocacion, pgUUID(familia)); total == 0 {
+		t.Fatalf("logout no registró el evento de revocación de la familia %s", familia)
+	}
 	if _, err := m.sesion.RotarRefresh(t.Context(), emitida.RefreshToken); !errors.Is(err, ErrRefreshInvalido) {
 		t.Fatalf("refresh tras logout = %v, quiero ErrRefreshInvalido", err)
+	}
+}
+
+func TestCerrarSesionPorRefreshAjenoNoRevocaLaFamilia(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
+	_, _, _, celularA := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+	_, parteB, _, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+
+	emitida := entrarYVerificar(t, m, celularA, "contrasena-correcta", "")
+	familia := familiaDeAccess(t, m, emitida.AccessToken)
+
+	if err := m.sesion.CerrarSesionPorRefresh(t.Context(), parteB, emitida.RefreshToken); !errors.Is(err, ErrRefreshInvalido) {
+		t.Fatalf("refresh ajeno = %v, quiero ErrRefreshInvalido sin revocar", err)
+	}
+	if revocado, err := m.denylist.Revocado(t.Context(), familia); err != nil || revocado {
+		t.Fatalf("la familia ajena quedó publicada en la denylist: (%v, %v)", revocado, err)
+	}
+	if fila := leerFilaDeRefresh(t, pool, emitida.RefreshToken); fila.RevocadaEn.Valid {
+		t.Fatalf("la familia ajena quedó revocada en la base")
+	}
+	if _, err := m.sesion.RotarRefresh(t.Context(), emitida.RefreshToken); err != nil {
+		t.Fatalf("el refresh propio debía seguir vigente: %v", err)
+	}
+}
+
+func TestCerrarSesionPorRefreshSinRefreshRespondeInvalido(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
+	_, parteID, _, _ := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+
+	if err := m.sesion.CerrarSesionPorRefresh(t.Context(), parteID, "refresh-inexistente"); !errors.Is(err, ErrRefreshInvalido) {
+		t.Fatalf("refresh inexistente = %v, quiero ErrRefreshInvalido", err)
+	}
+}
+
+func TestCerrarSesionPorRefreshConDenylistQueFallaDejaLaFamiliaRevocada(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	derivador := derivadorDeLogin(t)
+	_, parteID, _, _ := sembrarCredencialDeInicioSesion(t, pool, derivador, "contrasena-correcta", EstadoActivo, true)
+	m := servicioDeSesionDePrueba(t, pool, derivador)
+
+	refresh, _, err := m.gestor.EmitirSesion(t.Context(), parteID, ContextoUsuario, "prueba")
+	if err != nil {
+		t.Fatalf("EmitirSesion: %v", err)
+	}
+	servicio, err := NuevoServicioDeSesion(pool, m.gestor, m.tokens, denylistQueFalla{})
+	if err != nil {
+		t.Fatalf("NuevoServicioDeSesion: %v", err)
+	}
+
+	if err := servicio.CerrarSesionPorRefresh(t.Context(), parteID, refresh); !errors.Is(err, ErrAuthNoDisponible) {
+		t.Fatalf("denylist caída = %v, quiero ErrAuthNoDisponible", err)
+	}
+	if fila := leerFilaDeRefresh(t, pool, refresh); !fila.RevocadaEn.Valid {
+		t.Fatalf("la familia debe quedar revocada aunque la denylist falle")
+	}
+	if _, err := m.sesion.RotarRefresh(t.Context(), refresh); !errors.Is(err, ErrRefreshInvalido) {
+		t.Fatalf("refresh tras el 503 = %v, quiero ErrRefreshInvalido", err)
+	}
+}
+
+func TestRotacionCapaLaFamiliaA45DiasDelPrimerUso(t *testing.T) {
+	pool := abrirPoolDeAuth(t)
+	m := servicioDeSesionDePrueba(t, pool, derivadorDeLogin(t))
+	_, _, _, celular := sembrarCredencialDeInicioSesion(t, pool, derivadorDeLogin(t), "contrasena-correcta", EstadoActivo, true)
+
+	emitida := entrarYVerificar(t, m, celular, "contrasena-correcta", "")
+	familia := familiaDeAccess(t, m, emitida.AccessToken)
+	primera := leerFilaDeRefresh(t, pool, emitida.RefreshToken)
+	if got := primera.VenceEn.Time.Sub(primera.CreadaEn.Time); got < vigenciaInactividad-time.Minute || got > vigenciaInactividad+time.Minute {
+		t.Fatalf("vence_en inicial = %s, quiero 30 días de inactividad", got)
+	}
+
+	envejecerPrimeraSesionDeFamilia(t, familia, 20*24*time.Hour)
+	primera = leerFilaDeRefresh(t, pool, emitida.RefreshToken)
+	rotados, err := m.sesion.RotarRefresh(t.Context(), emitida.RefreshToken)
+	if err != nil {
+		t.Fatalf("RotarRefresh: %v", err)
+	}
+	sucesora := leerFilaDeRefresh(t, pool, rotados.RefreshToken)
+	tope := primera.CreadaEn.Time.Add(vigenciaAbsolutaFamilia)
+	t.Logf("familia=%s primera_creada_en=%s sucesora_vence_en=%s delta_dias=%.4f",
+		familia, primera.CreadaEn.Time.UTC(), sucesora.VenceEn.Time.UTC(),
+		sucesora.VenceEn.Time.Sub(primera.CreadaEn.Time).Hours()/24)
+	if delta := sucesora.VenceEn.Time.Sub(tope); delta > time.Minute || delta < -time.Minute {
+		t.Fatalf("vence_en rotado = %s, quiero el tope absoluto %s (45 días desde %s)", sucesora.VenceEn.Time, tope, primera.CreadaEn.Time)
+	}
+	if !sucesora.VenceEn.Time.Before(time.Now().UTC().Add(vigenciaInactividad)) {
+		t.Fatalf("el tope absoluto debería ganarle a la inactividad")
+	}
+}
+
+// denylistQueFalla falla toda publicación para probar el fail closed.
+type denylistQueFalla struct{}
+
+// Revocar devuelve el error de la denylist marcado como fail closed.
+func (denylistQueFalla) Revocar(context.Context, uuid.UUID, time.Duration) error {
+	return ConFailClosed(errors.New("denylist caída"))
+}
+
+// Revocado también falla, cerrada.
+func (denylistQueFalla) Revocado(context.Context, uuid.UUID) (bool, error) {
+	return false, ConFailClosed(errors.New("denylist caída"))
+}
+
+var _ RevocadorDeSesiones = denylistQueFalla{}
+
+// leerFilaDeRefresh lee la fila de la sesión del refresh bajo rol_auth.
+func leerFilaDeRefresh(tb testing.TB, pool *pgxpool.Pool, refresh string) repositorio.Sesion {
+	tb.Helper()
+	fila, err := enTransaccion(tb.Context(), poolDeAuth{pool: pool},
+		func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (repositorio.Sesion, error) {
+			return q.SesionPorRefreshHash(ctx, hashDeRefresh(refresh))
+		})
+	if err != nil {
+		tb.Fatalf("leer la fila del refresh: %v", err)
+	}
+	return fila
+}
+
+// envejecerPrimeraSesionDeFamilia mueve hacia atrás la primera sesión como dueño del esquema.
+func envejecerPrimeraSesionDeFamilia(tb testing.TB, familia uuid.UUID, edad time.Duration) {
+	tb.Helper()
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		tb.Fatalf("DATABASE_URL es obligatoria para envejecer la familia como dueño del esquema")
+	}
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		tb.Fatalf("parsear DATABASE_URL: %v", err)
+	}
+	cfg.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		tb.Fatalf("abrir pool dueño: %v", err)
+	}
+	tb.Cleanup(pool.Close)
+	if _, err := pool.Exec(tb.Context(),
+		"UPDATE auth.sesiones SET creada_en = $2, ultimo_uso_en = $2 WHERE familia_id = $1",
+		pgUUID(familia), time.Now().Add(-edad)); err != nil {
+		tb.Fatalf("envejecer la familia como dueño: %v", err)
 	}
 }
 

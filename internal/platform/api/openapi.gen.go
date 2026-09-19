@@ -1013,6 +1013,9 @@ type CreateConsentJSONRequestBody = ConsentRequest
 // SetContextoJSONRequestBody defines body for SetContexto for application/json ContentType.
 type SetContextoJSONRequestBody = ContextoRequest
 
+// LogoutJSONRequestBody defines body for Logout for application/json ContentType.
+type LogoutJSONRequestBody = RefreshRequest
+
 // PhoneChangeConfirmJSONRequestBody defines body for PhoneChangeConfirm for application/json ContentType.
 type PhoneChangeConfirmJSONRequestBody = VerifyOtpRequest
 
@@ -1137,7 +1140,7 @@ type ServerInterface interface {
 	// ListContextos Lista los contextos del usuario.
 	// (GET /v1/auth/contextos)
 	ListContextos(w http.ResponseWriter, r *http.Request)
-	// Logout Revoca el refresh del dispositivo actual.
+	// Logout Revoca la sesion del refresh presentado.
 	// (POST /v1/auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
 	// LogoutAll Revoca todos los refresh del usuario.
@@ -1191,7 +1194,7 @@ func (_ Unimplemented) ListContextos(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Logout Revoca el refresh del dispositivo actual.
+// Logout Revoca la sesion del refresh presentado.
 // (POST /v1/auth/logout)
 func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
