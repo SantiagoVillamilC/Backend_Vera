@@ -43,18 +43,24 @@ type RegistroHandler interface {
 	Register(http.ResponseWriter, *http.Request)
 }
 
+// VerificacionHandler atiende la verificación pública del celular y la activación.
+type VerificacionHandler interface {
+	VerificarCelular(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
-	Identidad  IdentidadDeLaPeticion
-	Auth       AuthHandler
-	KYC        KYCHandler
-	Consent    ConsentHandler
-	Redis      *redis.Client
-	CanalOTP   auth.CanalOTP
-	Contadores auth.Contadores
-	Desafios   DesafiosHandler
-	Registro   RegistroHandler
-	Subcuentas auth.AbridorDeSubcuentas
+	Identidad    IdentidadDeLaPeticion
+	Auth         AuthHandler
+	KYC          KYCHandler
+	Consent      ConsentHandler
+	Redis        *redis.Client
+	CanalOTP     auth.CanalOTP
+	Contadores   auth.Contadores
+	Desafios     DesafiosHandler
+	Registro     RegistroHandler
+	Verificacion VerificacionHandler
+	Subcuentas   auth.AbridorDeSubcuentas
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.

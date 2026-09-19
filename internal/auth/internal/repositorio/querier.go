@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
 	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
+	CrearCodigoRespaldo(ctx context.Context, arg CrearCodigoRespaldoParams) error
 	CrearConsentimiento(ctx context.Context, arg CrearConsentimientoParams) (Consentimiento, error)
 	CrearCredencial(ctx context.Context, arg CrearCredencialParams) (Credencial, error)
 	CrearEmpresa(ctx context.Context, arg CrearEmpresaParams) (Empresa, error)

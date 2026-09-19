@@ -105,17 +105,23 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("gestor de desafíos: %w", err)
 	}
+	gestorEstados := auth.NuevoGestorDeEstados(auth.NuevoRegistradorEventos(pool))
+	activador, err := auth.NuevoActivadorDeCuenta(pool, gestorDesafios, gestorEstados, cfg.Auth.OTPPepper)
+	if err != nil {
+		return fmt.Errorf("activador de cuenta: %w", err)
+	}
 	derivador, err := derivadorDeContrasenas(cfg)
 	if err != nil {
 		return err
 	}
 	deps := httpserver.DependenciasAuth{
-		Identidad:  auth.UsuarioDePrueba{},
-		Redis:      clienteRedisAuth,
-		CanalOTP:   canal,
-		Contadores: contadoresAuth,
-		Desafios:   httpserver.NuevoOTPHandler(gestorDesafios),
-		Subcuentas: servicio,
+		Identidad:    auth.UsuarioDePrueba{},
+		Redis:        clienteRedisAuth,
+		CanalOTP:     canal,
+		Contadores:   contadoresAuth,
+		Desafios:     httpserver.NuevoOTPHandler(gestorDesafios),
+		Verificacion: httpserver.NuevoVerificacionHandler(activador),
+		Subcuentas:   servicio,
 	}
 	registrador, err := auth.NuevoRegistradorDePersonas(pool, derivador, auth.NuevoRegistradorEventos(pool), gestorDesafios, deps.Subcuentas)
 	if err != nil {

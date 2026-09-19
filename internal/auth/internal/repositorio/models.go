@@ -8,6 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuthCodigosRespaldo struct {
+	ID           pgtype.UUID        `json:"id"`
+	CredencialID pgtype.UUID        `json:"credencial_id"`
+	CodigoHmac   []byte             `json:"codigo_hmac"`
+	UsadoEn      pgtype.Timestamptz `json:"usado_en"`
+	CreadoEn     pgtype.Timestamptz `json:"creado_en"`
+}
+
 type AuthDesafio struct {
 	ID                 pgtype.UUID        `json:"id"`
 	ParteID            pgtype.UUID        `json:"parte_id"`

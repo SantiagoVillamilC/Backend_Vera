@@ -74,7 +74,9 @@ func (q *Queries) RegistrarTransicionCredencial(ctx context.Context, arg Registr
 
 const transicionarCredencial = `-- name: TransicionarCredencial :execrows
 UPDATE auth.credenciales
-SET estado = $1, actualizada_en = now()
+SET estado = $1,
+    actualizada_en = now(),
+    celular_verificado_en = CASE WHEN $1 = 'activo' THEN now() ELSE celular_verificado_en END
 WHERE id = $2 AND estado = $3
 `
 
