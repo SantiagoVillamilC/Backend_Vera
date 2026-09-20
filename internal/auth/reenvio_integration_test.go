@@ -260,13 +260,13 @@ func TestReenviarDesafioDeRellenoNoEnviaYElRealSi(t *testing.T) {
 		t.Fatalf("el reenvio del relleno toco el canal: (%q, %q)", canal.ultimoCelular, canal.ultimoTexto)
 	}
 
-	celular := "+57300" + strings.ReplaceAll(uuid.NewString(), "-", "")[:7]
-	real, err := gestor.CrearDesafio(t.Context(), auth.Solicitud{Proposito: auth.PropositoRegistro, Celular: celular, Origen: origen})
+	parteID, credencialID, _, celular := sembrarCredencialExterna(t, pool)
+	real, err := gestorReenvioExterno(t, pool, canal, cliente).CrearDesafio(t.Context(), auth.Solicitud{ParteID: parteID, CredencialID: credencialID, Proposito: auth.PropositoRegistro, Celular: celular, Origen: origen})
 	if err != nil {
-		t.Fatalf("CrearDesafio de registro sin parte: %v", err)
+		t.Fatalf("CrearDesafio de registro con parte y credencial: %v", err)
 	}
-	if fila := leerFilaDeRecuperacion(t, pool, real.ID); fila.parteID.Valid {
-		t.Fatalf("el desafio real de registro trae parte: %+v", fila)
+	if fila := leerFilaDeRecuperacion(t, pool, real.ID); !fila.parteID.Valid || !fila.credencialID.Valid {
+		t.Fatalf("el desafio real de registro no trae parte y credencial: %+v", fila)
 	}
 	canal.ultimoCelular, canal.ultimoTexto = "", ""
 	envejecerUltimoEnvio(t, pool, real.ID)

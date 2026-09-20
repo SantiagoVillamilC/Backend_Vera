@@ -57,7 +57,7 @@ func TestHayEnfriamiento(t *testing.T) {
 	}
 }
 
-func TestEsRellenoLeeLaMarcaExplicita(t *testing.T) {
+func TestEsRellenoLeeLaMarcaExplicitaOElCentinela(t *testing.T) {
 	t.Parallel()
 
 	parte := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
@@ -74,21 +74,21 @@ func TestEsRellenoLeeLaMarcaExplicita(t *testing.T) {
 			fila: repositorio.AuthDesafio{Proposito: string(PropositoRegistro), CelularDestino: celularDeRelleno},
 			want: true,
 		},
-		"registro real sin parte y con celular real no es relleno": {
+		"relleno de registro con celular real y sin parte ni credencial": {
 			fila: repositorio.AuthDesafio{Proposito: string(PropositoRegistro), CelularDestino: "+573001234567"},
-			want: false,
+			want: true,
 		},
 		"desafio real con parte y celular raro no es relleno": {
 			fila: repositorio.AuthDesafio{Proposito: string(PropositoLogin), ParteID: parte, CelularDestino: "raro"},
 			want: false,
 		},
-		"el centinela con parte presente no es relleno": {
+		"el centinela con parte presente sigue siendo relleno por el lado seguro": {
 			fila: repositorio.AuthDesafio{Proposito: string(PropositoRecuperacion), ParteID: parte, CelularDestino: celularDeRelleno},
-			want: false,
+			want: true,
 		},
-		"el centinela con credencial presente no es relleno": {
+		"el centinela con credencial presente sigue siendo relleno por el lado seguro": {
 			fila: repositorio.AuthDesafio{Proposito: string(PropositoRecuperacion), CredencialID: credencial, CelularDestino: celularDeRelleno},
-			want: false,
+			want: true,
 		},
 		"recuperacion real con parte y credencial no es relleno": {
 			fila: repositorio.AuthDesafio{Proposito: string(PropositoRecuperacion), ParteID: parte, CredencialID: credencial, CelularDestino: "+573001234567"},

@@ -33,6 +33,14 @@ SELECT id
 FROM auth.credenciales
 WHERE celular = sqlc.arg('celular') AND estado <> 'cerrado' AND id <> sqlc.arg('id');
 
+-- name: CredencialVivaPorDocumento :one
+SELECT c.id, c.parte_id, c.correo, c.celular_verificado_en
+FROM auth.credenciales c
+JOIN auth.personas p ON p.parte_id = c.parte_id
+WHERE p.tipo_documento = sqlc.arg('tipo_documento')
+  AND p.documento = sqlc.arg('documento')
+  AND c.estado <> 'cerrado';
+
 -- name: InsertarCredencialDePrueba :exec
 INSERT INTO auth.credenciales (id, parte_id, correo, celular, valor_derivado, estado)
 VALUES ($1, $2, $3, $4, NULL, 'sin_login')

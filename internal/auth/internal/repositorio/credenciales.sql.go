@@ -180,6 +180,42 @@ func (q *Queries) CredencialPorID(ctx context.Context, id pgtype.UUID) (Credenci
 	return i, err
 }
 
+const credencialVivaPorDocumento = `-- name: CredencialVivaPorDocumento :one
+SELECT c.id, c.parte_id, c.correo, c.celular_verificado_en
+FROM auth.credenciales c
+JOIN auth.personas p ON p.parte_id = c.parte_id
+WHERE p.tipo_documento = $1
+  AND p.documento = $2
+  AND c.estado <> 'cerrado'
+`
+
+type CredencialVivaPorDocumentoParams struct {
+	TipoDocumento string `json:"tipo_documento"`
+	Documento     string `json:"documento"`
+}
+
+type CredencialVivaPorDocumentoRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	ParteID             pgtype.UUID        `json:"parte_id"`
+	Correo              string             `json:"correo"`
+	CelularVerificadoEn pgtype.Timestamptz `json:"celular_verificado_en"`
+}
+
+func (q *Queries) CredencialVivaPorDocumento(ctx context.Context, arg CredencialVivaPorDocumentoParams) (CredencialVivaPorDocumentoRow, error) {
+	row := q.db.QueryRow(ctx, credencialVivaPorDocumento, arg.TipoDocumento, arg.Documento)
+	var i CredencialVivaPorDocumentoRow
+	err := row.Scan(
+		&i.ID,
+		&i.ParteID,
+		&i.Correo,
+		&i.CelularVerificadoEn,
+	)
+	if err != nil {
+		err = fmt.Errorf("query CredencialVivaPorDocumento: %w", err)
+	}
+	return i, err
+}
+
 const insertarCredencialDePrueba = `-- name: InsertarCredencialDePrueba :exec
 INSERT INTO auth.credenciales (id, parte_id, correo, celular, valor_derivado, estado)
 VALUES ($1, $2, $3, $4, NULL, 'sin_login')

@@ -30,7 +30,7 @@ const (
 	resultadoEntregaFallida = "entrega_fallida"
 	// resultadoDesafioReenviado marca el código regenerado que reemplazó al anterior.
 	resultadoDesafioReenviado = "reenviado"
-	// celularDeRelleno es la marca explícita de la fila de relleno: la escribe la recuperación y la lee el reenvío.
+	// celularDeRelleno es el destino centinela del relleno de recuperación; el de registro lleva el celular real y lo marcan parte y credencial nulas.
 	celularDeRelleno = "sin-destino"
 )
 
