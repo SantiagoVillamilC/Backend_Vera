@@ -79,9 +79,22 @@ func (e estadoDesafio) solicitud(origen string) Solicitud {
 	}
 }
 
-// esRelleno exige el centinela sin parte ni credencial, sin mirar el propósito porque P-07 rellena también registro.
+// esRelleno dice si la fila es de relleno, sin mirar el propósito porque P-07 rellena también registro.
 func esRelleno(fila repositorio.AuthDesafio) bool {
-	return fila.CelularDestino == celularDeRelleno && !fila.ParteID.Valid && !fila.CredencialID.Valid
+	return esFilaDeRelleno(fila.CelularDestino, fila.ParteID, fila.CredencialID)
+}
+
+// esFilaDeRelleno falla hacia el lado seguro: parte y credencial nulas, o el centinela, bastan para no enviar nunca un OTP real.
+func esFilaDeRelleno(celularDestino string, parteID, credencialID pgtype.UUID) bool {
+	return (!parteID.Valid && !credencialID.Valid) || celularDestino == celularDeRelleno
+}
+
+// hmacDelReenvio deriva el HMAC del código nuevo, o uno aleatorio si la fila es de relleno para que ningún código lo satisfaga.
+func hmacDelReenvio(pepper []byte, fila repositorio.DesafioPendientePorIDRow, codigo string) ([]byte, error) {
+	if esFilaDeRelleno(fila.CelularDestino, fila.ParteID, fila.CredencialID) {
+		return hmacDeRelleno(pepper)
+	}
+	return hmacDeCodigo(pepper, codigo), nil
 }
 
 // leerDesafioAReenviar lee el desafío pendiente y el correo de su credencial para el tope de cuenta.
@@ -148,10 +161,14 @@ func (g *GestorDesafios) invalidarDesafio(ctx context.Context, id uuid.UUID) err
 // persistirReenvio reemplaza el HMAC, sube reenvíos y renueva la vigencia sin tocar los intentos.
 func (g *GestorDesafios) persistirReenvio(ctx context.Context, id uuid.UUID, origen string, estado estadoDesafio, codigo string, ahora time.Time) (repositorio.AuthDesafio, error) {
 	var fila repositorio.AuthDesafio
-	_, err := enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
+	codigoHmac, err := hmacDelReenvio(g.pepper, estado.fila, codigo)
+	if err != nil {
+		return repositorio.AuthDesafio{}, err
+	}
+	_, err = enTransaccion(ctx, g.pool, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
 		actualizada, err := q.ActualizarReenvioDesafio(ctx, repositorio.ActualizarReenvioDesafioParams{
 			ID:         pgtype.UUID{Bytes: id, Valid: true},
-			CodigoHmac: hmacDeCodigo(g.pepper, codigo),
+			CodigoHmac: codigoHmac,
 			Ahora:      pgtype.Timestamptz{Time: ahora, Valid: true},
 			ExpiraEn:   pgtype.Timestamptz{Time: ahora.Add(vigenciaDesafio), Valid: true},
 			Umbral:     pgtype.Timestamptz{Time: ahora.Add(-enfriamientoReenvio), Valid: true},

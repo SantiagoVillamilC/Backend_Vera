@@ -54,3 +54,17 @@ func (q *Queries) EmpresaDeParte(ctx context.Context, parteID pgtype.UUID) (Empr
 	}
 	return i, err
 }
+
+const empresaExistePorNit = `-- name: EmpresaExistePorNit :one
+SELECT EXISTS (SELECT 1 FROM auth.empresas WHERE nit = $1)
+`
+
+func (q *Queries) EmpresaExistePorNit(ctx context.Context, nit string) (bool, error) {
+	row := q.db.QueryRow(ctx, empresaExistePorNit, nit)
+	var exists bool
+	err := row.Scan(&exists)
+	if err != nil {
+		err = fmt.Errorf("query EmpresaExistePorNit: %w", err)
+	}
+	return exists, err
+}

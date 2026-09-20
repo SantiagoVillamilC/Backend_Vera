@@ -82,7 +82,7 @@ type rellenoDeRecuperacion struct {
 	eventos  *eventosDeRecuperacion
 }
 
-func (r *rellenoDeRecuperacion) InsertarRelleno(context.Context, string, string) (Desafio, error) {
+func (r *rellenoDeRecuperacion) InsertarRelleno(context.Context, Proposito, string, string, string, ...EfectoDeRelleno) (Desafio, error) {
 	r.llamadas++
 	if r.eventos != nil {
 		r.eventos.registrados = append(r.eventos.registrados, Evento{Tipo: TipoEventoRecuperacion, Resultado: resultadoRecuperacionRelleno})

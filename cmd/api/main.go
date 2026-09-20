@@ -176,7 +176,11 @@ func run() error {
 		Denylist:     denylistAuth,
 		Subcuentas:   servicio,
 	}
-	registrador, err := auth.NuevoRegistradorDePersonas(pool, derivador, auth.NuevoRegistradorEventos(pool), gestorDesafios, deps.Subcuentas)
+	rellenoRegistro, err := auth.NuevoRellenoDeRegistro(pool, auth.NuevoRegistradorEventos(pool), contadoresAuth, clavesContadores, cfg.Auth.OTPPepper)
+	if err != nil {
+		return fmt.Errorf("relleno del registro: %w", err)
+	}
+	registrador, err := auth.NuevoRegistradorDePersonas(pool, derivador, auth.NuevoRegistradorEventos(pool), gestorDesafios, deps.Subcuentas, auth.ConRellenoDeRegistro(rellenoRegistro))
 	if err != nil {
 		return fmt.Errorf("registrador de personas: %w", err)
 	}

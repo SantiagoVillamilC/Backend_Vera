@@ -101,6 +101,9 @@ func (s *RegistradorDePersonas) RegistrarEmpresa(ctx context.Context, solicitud 
 		return RegistroEmpresa{}, err
 	}
 	datos, err := s.persistirEmpresa(ctx, entrada, phc)
+	if s.rellenaDocumentoRepetido(err) {
+		return s.registroDeEmpresaDeRelleno(ctx, entrada)
+	}
 	if err != nil {
 		return RegistroEmpresa{}, MapearErrorDeConsulta(err)
 	}
@@ -143,8 +146,29 @@ func (s *RegistradorDePersonas) persistirEmpresa(ctx context.Context, entrada en
 		})
 }
 
+// verificarNitLibre falla con ErrIdentificadorEnUso si el NIT ya existe, sin mirar estado porque empresas_nit_uk es total.
+func verificarNitLibre(ctx context.Context, q *repositorio.Queries, nit string) error {
+	existe, err := q.EmpresaExistePorNit(ctx, nit)
+	if err != nil {
+		return fmt.Errorf("auth: comprobar el NIT del alta: %w", err)
+	}
+	if existe {
+		return ErrIdentificadorEnUso
+	}
+	return nil
+}
+
 // escribirCuentaDeEmpresa inserta representante, credencial, empresa y rol, y devuelve sus ids.
 func (s *RegistradorDePersonas) escribirCuentaDeEmpresa(ctx context.Context, q *repositorio.Queries, entrada entradaDeRegistroEmpresa, phc string) (datosEmpresaPersistidos, error) {
+	if err := verificarCatalogoDeConsentimientos(ctx, q, entrada.consentimientos); err != nil {
+		return datosEmpresaPersistidos{}, err
+	}
+	if err := verificarIdentificadoresLibres(ctx, q, entrada.correo, entrada.celular); err != nil {
+		return datosEmpresaPersistidos{}, err
+	}
+	if err := verificarNitLibre(ctx, q, entrada.nit); err != nil {
+		return datosEmpresaPersistidos{}, err
+	}
 	ahora := time.Now().UTC()
 	representanteParteID, credencialID, empresaParteID := uuid.New(), uuid.New(), uuid.New()
 	if _, err := q.CrearParte(ctx, repositorio.CrearParteParams{ID: uuidOPgtype(representanteParteID), Tipo: tipoPartePersona}); err != nil {
@@ -324,7 +348,7 @@ func normalizarSolicitudDeRegistroEmpresa(solicitud SolicitudDeRegistroEmpresa) 
 // normalizarRazonSocial valida que la razon social no este vacia ni pase el tope de runas.
 func normalizarRazonSocial(razon string) (string, error) {
 	normalizada := norm.NFC.String(strings.TrimSpace(razon))
-	if normalizada == "" || utf8.RuneCountInString(normalizada) > maxRunasRazonSocial {
+	if normalizada == "" || utf8.RuneCountInString(normalizada) > maxRunasRazonSocial || strings.ContainsRune(normalizada, 0) {
 		return "", ErrRazonSocialInvalida
 	}
 	return normalizada, nil

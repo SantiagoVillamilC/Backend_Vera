@@ -15,6 +15,7 @@ const (
 	TipoAvisoCambioNumero           = "cambio_numero"
 	TipoAvisoRecuperacionSolicitada = "recuperacion_solicitada"
 	TipoAvisoAbrirSubcuentas        = "abrir_subcuentas"
+	TipoAvisoRegistroDuplicado      = "registro_duplicado"
 )
 
 // Destinos que cubre el puerto Notificador: correo y whatsapp.
@@ -141,16 +142,24 @@ func (a Aviso) valido() error {
 
 // asuntoDeAviso arma el asunto del correo; el texto definitivo está pendiente de fijar.
 func asuntoDeAviso(aviso Aviso) string {
-	if aviso.Tipo == TipoAvisoCambioNumero {
+	switch aviso.Tipo {
+	case TipoAvisoCambioNumero:
 		return "[PLANTILLA PENDIENTE] Aviso de cambio de numero"
+	case TipoAvisoRegistroDuplicado:
+		return "[PLANTILLA PENDIENTE] Intento de registro con tu documento"
+	default:
+		return fmt.Sprintf("[PLANTILLA PENDIENTE] Aviso %s", aviso.Tipo)
 	}
-	return fmt.Sprintf("[PLANTILLA PENDIENTE] Aviso %s", aviso.Tipo)
 }
 
-// cuerpoDeAviso arma el cuerpo sin secretos; el aviso del cambio lleva el numero enmascarado y el contacto de soporte.
+// cuerpoDeAviso arma el cuerpo sin secretos; el del cambio lleva el numero enmascarado y el contacto de soporte.
 func cuerpoDeAviso(aviso Aviso) string {
-	if aviso.Tipo == TipoAvisoCambioNumero {
+	switch aviso.Tipo {
+	case TipoAvisoCambioNumero:
 		return fmt.Sprintf("[PLANTILLA PENDIENTE] Tu número cambió a %s el %s. Si no fuiste tú, escribe a %s.", aviso.NuevoEnmascarado, aviso.Fecha, aviso.ContactoSoporte)
+	case TipoAvisoRegistroDuplicado:
+		return "[PLANTILLA PENDIENTE] Alguien intentó registrar una cuenta con tu documento y no se creó nada. Si fuiste tú, ya tienes una cuenta: inicia sesión. Si no fuiste tú, escribe a soporte."
+	default:
+		return fmt.Sprintf("[PLANTILLA PENDIENTE] Plantilla %q: hubo un cambio. Si no fuiste tú, escribe a soporte.", aviso.Plantilla)
 	}
-	return fmt.Sprintf("[PLANTILLA PENDIENTE] Plantilla %q: hubo un cambio. Si no fuiste tú, escribe a soporte.", aviso.Plantilla)
 }

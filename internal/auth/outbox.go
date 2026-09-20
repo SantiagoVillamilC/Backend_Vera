@@ -164,10 +164,10 @@ type DespachadorDeAvisos struct {
 	manejadores map[string]ManejadorDeAviso
 }
 
-// nuevoDespachadorDeAvisos liga los tres avisos de notificación al notificador.
+// nuevoDespachadorDeAvisos liga los cuatro avisos de notificación al notificador.
 func nuevoDespachadorDeAvisos(almacen almacenDeAvisos, notificador Notificador) *DespachadorDeAvisos {
 	d := &DespachadorDeAvisos{almacen: almacen, manejadores: map[string]ManejadorDeAviso{}}
-	for _, tipo := range []string{TipoAvisoContrasenaCambiada, TipoAvisoCambioNumero, TipoAvisoRecuperacionSolicitada} {
+	for _, tipo := range []string{TipoAvisoContrasenaCambiada, TipoAvisoCambioNumero, TipoAvisoRecuperacionSolicitada, TipoAvisoRegistroDuplicado} {
 		d.manejadores[tipo] = manejadorDeNotificacion(notificador)
 	}
 	return d

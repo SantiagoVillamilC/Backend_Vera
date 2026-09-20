@@ -84,6 +84,14 @@ func TestNormalizarSolicitudDeRegistroEmpresa(t *testing.T) {
 		}
 	})
 
+	t.Run("razon social con byte nulo", func(t *testing.T) {
+		solicitud := base()
+		solicitud.RazonSocial = "Centinela\x00 SAS"
+		if _, err := normalizarSolicitudDeRegistroEmpresa(solicitud); !errors.Is(err, ErrRazonSocialInvalida) {
+			t.Fatalf("err = %v, quiero ErrRazonSocialInvalida: un byte nulo fallaria en Postgres despues de insertar la persona", err)
+		}
+	})
+
 	t.Run("nombre del representante invalido", func(t *testing.T) {
 		solicitud := base()
 		solicitud.RepresentanteNombre = "9"

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 )
 
@@ -17,6 +18,10 @@ const (
 	ventanaEnvios = time.Hour
 	// ventanaFallos es la ventana del acumulado de fallos.
 	ventanaFallos = 24 * time.Hour
+	// maxAvisosDuplicadoPorDueno es el tope de avisos de registro repetido que recibe un dueño por día.
+	maxAvisosDuplicadoPorDueno = 3
+	// ventanaAvisosDuplicado es la ventana del tope de avisos por dueño.
+	ventanaAvisosDuplicado = 24 * time.Hour
 	// esperaBase es el primer bloqueo de la espera creciente.
 	esperaBase = time.Minute
 	// esperaTope es el tope del bloqueo para no convertir la espera en denegación al titular.
@@ -70,6 +75,16 @@ func (r *RacionadorOTP) RegistrarFallo(ctx context.Context, correoNormalizado st
 		return nil
 	}
 	return r.exigirTope(ctx, PrefijoFallosCuenta+r.claves.ClaveDeCorreo(correoNormalizado), maxFallosPorCuenta, ventanaFallos)
+}
+
+// PermitirAvisoDeDuplicado cuenta el aviso del dueño y dice si aún cabe; si Redis falla no avisa y la respuesta no cambia.
+func (r *RacionadorOTP) PermitirAvisoDeDuplicado(ctx context.Context, parteID string) bool {
+	valor, err := r.contadores.Incrementar(ctx, PrefijoAvisoDuplicado+r.claves.ClaveDeParte(parteID), ventanaAvisosDuplicado)
+	if err != nil {
+		slog.WarnContext(ctx, "no se pudo contar el aviso de registro repetido, no se envía", "err", err)
+		return false
+	}
+	return valor <= maxAvisosDuplicadoPorDueno
 }
 
 // exigirSinIncrementar rechaza la clave ya bloqueada sin consumir un intento nuevo.

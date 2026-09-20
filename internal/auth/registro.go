@@ -74,6 +74,7 @@ type RegistradorDePersonas struct {
 	desafios    CreadorDeDesafioDeRegistro
 	subcuentas  AbridorDeSubcuentas
 	compensador CompensadorDeAlta
+	relleno     RellenadorDeRegistro
 }
 
 // NuevoRegistradorDePersonas exige pool, derivador, desafios y subcuentas, y rellena los eventos con el nulo.
@@ -105,6 +106,9 @@ func (s *RegistradorDePersonas) RegistrarPersona(ctx context.Context, solicitud 
 		return Registro{}, err
 	}
 	datos, err := s.persistir(ctx, entrada, phc)
+	if s.rellenaDocumentoRepetido(err) {
+		return s.registroDeRelleno(ctx, entrada)
+	}
 	if err != nil {
 		return Registro{}, MapearErrorDeConsulta(err)
 	}
@@ -125,8 +129,49 @@ func (s *RegistradorDePersonas) persistir(ctx context.Context, entrada entradaDe
 		})
 }
 
+// verificarCatalogoDeConsentimientos falla con ErrConsentimientoRequerido si algún texto no existe, antes de insertar la persona.
+func verificarCatalogoDeConsentimientos(ctx context.Context, q *repositorio.Queries, consentimientos []consentimientoResuelto) error {
+	for _, consentimiento := range consentimientos {
+		_, err := q.TextoDeConsentimiento(ctx, repositorio.TextoDeConsentimientoParams{Tipo: consentimiento.tipo, Version: consentimiento.versionTexto})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrConsentimientoRequerido
+		}
+		if err != nil {
+			return fmt.Errorf("auth: leer el texto del consentimiento %q: %w", consentimiento.tipo, err)
+		}
+	}
+	return nil
+}
+
+// verificarIdentificadoresLibres falla con ErrIdentificadorEnUso si el correo o el celular ya tienen una credencial no cerrada, antes de insertar la persona.
+func verificarIdentificadoresLibres(ctx context.Context, q *repositorio.Queries, correo, celular string) error {
+	_, err := q.CredencialPorCorreo(ctx, correo)
+	if err := identificadorTomado(err, "el correo"); err != nil {
+		return err
+	}
+	_, err = q.CredencialPorCelular(ctx, celular)
+	return identificadorTomado(err, "el celular")
+}
+
+// identificadorTomado traduce la lectura previa de un identificador: con fila es conflicto, sin fila está libre.
+func identificadorTomado(err error, dato string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("auth: comprobar %s del alta: %w", dato, err)
+	}
+	return ErrIdentificadorEnUso
+}
+
 // escribirCuenta inserta las filas del alta y devuelve sus identificadores.
 func (s *RegistradorDePersonas) escribirCuenta(ctx context.Context, q *repositorio.Queries, entrada entradaDeRegistro, phc string) (datosPersistidos, error) {
+	if err := verificarCatalogoDeConsentimientos(ctx, q, entrada.consentimientos); err != nil {
+		return datosPersistidos{}, err
+	}
+	if err := verificarIdentificadoresLibres(ctx, q, entrada.correo, entrada.celular); err != nil {
+		return datosPersistidos{}, err
+	}
 	ahora := time.Now().UTC()
 	parteID, credencialID := uuid.New(), uuid.New()
 	if _, err := q.CrearParte(ctx, repositorio.CrearParteParams{ID: uuidOPgtype(parteID), Tipo: "persona"}); err != nil {

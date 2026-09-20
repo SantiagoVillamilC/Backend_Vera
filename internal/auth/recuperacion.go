@@ -27,9 +27,12 @@ type RecuperadorDeDesafios interface {
 	CrearDesafio(ctx context.Context, solicitud Solicitud) (Desafio, error)
 }
 
-// InsertadorDeRelleno persiste la fila de relleno y su evento sin enviar nada.
+// EfectoDeRelleno corre en la transacción del relleno para que lo adicional confirme junto con la fila.
+type EfectoDeRelleno func(ctx context.Context, q *repositorio.Queries) error
+
+// InsertadorDeRelleno persiste la fila de relleno del propósito que imita, con su destino, y su evento sin enviar nada.
 type InsertadorDeRelleno interface {
-	InsertarRelleno(ctx context.Context, correoNormalizado, origen string) (Desafio, error)
+	InsertarRelleno(ctx context.Context, proposito Proposito, celularDestino, correoNormalizado, origen string, adicionales ...EfectoDeRelleno) (Desafio, error)
 }
 
 // ServicioDeRecuperacion raciona, busca la cuenta y responde igual exista o no.
@@ -86,11 +89,11 @@ func (s *ServicioDeRecuperacion) SolicitarRecuperacion(ctx context.Context, corr
 		return Desafio{}, fmt.Errorf("auth: buscar la credencial de la recuperación: %w", err)
 	}
 	if !existe || !elegibleParaRecuperacion(credencial) {
-		return s.relleno.InsertarRelleno(ctx, correoNormalizado, origen)
+		return s.relleno.InsertarRelleno(ctx, PropositoRecuperacion, celularDeRelleno, correoNormalizado, origen)
 	}
 	desafio, err := s.crearDesafioReal(ctx, credencial, correoNormalizado, origen)
 	if errors.Is(err, ErrConsentimientoRequerido) {
-		return s.relleno.InsertarRelleno(ctx, correoNormalizado, origen)
+		return s.relleno.InsertarRelleno(ctx, PropositoRecuperacion, celularDeRelleno, correoNormalizado, origen)
 	}
 	if errors.Is(err, ErrEntregaFallida) {
 		if fallo := s.registrarRecuperacion(ctx, credencial, correoNormalizado, origen, resultadoRecuperacionEntregaFallida); fallo != nil {
@@ -149,41 +152,68 @@ type rellenoPostgres struct {
 	pepper  []byte
 }
 
-// InsertarRelleno persiste la fila y el evento en una sola transacción, sin tocar el canal.
-func (r *rellenoPostgres) InsertarRelleno(ctx context.Context, correoNormalizado, origen string) (Desafio, error) {
+// InsertarRelleno persiste la fila, el evento y los efectos adicionales en una sola transacción, sin tocar el canal.
+func (r *rellenoPostgres) InsertarRelleno(ctx context.Context, proposito Proposito, celularDestino, correoNormalizado, origen string, adicionales ...EfectoDeRelleno) (Desafio, error) {
+	tipoEvento, resultado, err := eventoDeRelleno(proposito)
+	if err != nil {
+		return Desafio{}, err
+	}
 	ahora := time.Now().UTC()
 	var fila repositorio.AuthDesafio
-	_, err := enTransaccion(ctx, r.abridor, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
-		hmac, err := hmacDeRelleno(r.pepper)
-		if err != nil {
+	_, err = enTransaccion(ctx, r.abridor, func(ctx context.Context, _ transaccionDeAuth, q *repositorio.Queries) (struct{}, error) {
+		var err error
+		if fila, err = r.insertarFila(ctx, q, proposito, celularDestino, ahora); err != nil {
 			return struct{}{}, err
 		}
-		fila, err = q.InsertarDesafio(ctx, repositorio.InsertarDesafioParams{
-			ID:                 pgtype.UUID{Bytes: uuid.New(), Valid: true},
-			Proposito:          string(PropositoRecuperacion),
-			CelularDestino:     celularDeRelleno,
-			CodigoHmac:         hmac,
-			CreadoEn:           pgtype.Timestamptz{Time: ahora, Valid: true},
-			ExpiraEn:           pgtype.Timestamptz{Time: ahora.Add(vigenciaDesafio), Valid: true},
-			UltimoEnvioEn:      pgtype.Timestamptz{Time: ahora, Valid: true},
-			ContextoSolicitado: pgtype.Text{},
-		})
-		if err != nil {
-			return struct{}{}, fmt.Errorf("auth: insertar el relleno del desafío: %w", err)
+		evento := Evento{Tipo: tipoEvento, Resultado: resultado, Fecha: ahora, Origen: origen, Contexto: r.claves.ClaveDeCorreo(correoNormalizado)}
+		if err := registrarEvento(ctx, r.eventos, q, evento); err != nil {
+			return struct{}{}, err
 		}
-		evento := Evento{
-			Tipo:      TipoEventoRecuperacion,
-			Resultado: resultadoRecuperacionRelleno,
-			Fecha:     ahora,
-			Origen:    origen,
-			Contexto:  r.claves.ClaveDeCorreo(correoNormalizado),
+		for _, adicional := range adicionales {
+			if err := adicional(ctx, q); err != nil {
+				return struct{}{}, err
+			}
 		}
-		return struct{}{}, registrarEvento(ctx, r.eventos, q, evento)
+		return struct{}{}, nil
 	})
 	if err != nil {
 		return Desafio{}, err
 	}
-	return Desafio{ID: uuidDePgtype(fila.ID), ExpiraEnSegundos: int(vigenciaDesafio.Seconds()), Proposito: PropositoRecuperacion}, nil
+	return Desafio{ID: uuidDePgtype(fila.ID), ExpiraEnSegundos: int(vigenciaDesafio.Seconds()), Proposito: proposito}, nil
+}
+
+// insertarFila escribe el desafío de relleno con parte y credencial nulas, el destino recibido y un HMAC aleatorio.
+func (r *rellenoPostgres) insertarFila(ctx context.Context, q *repositorio.Queries, proposito Proposito, celularDestino string, ahora time.Time) (repositorio.AuthDesafio, error) {
+	hmac, err := hmacDeRelleno(r.pepper)
+	if err != nil {
+		return repositorio.AuthDesafio{}, err
+	}
+	fila, err := q.InsertarDesafio(ctx, repositorio.InsertarDesafioParams{
+		ID:                 pgtype.UUID{Bytes: uuid.New(), Valid: true},
+		Proposito:          string(proposito),
+		CelularDestino:     celularDestino,
+		CodigoHmac:         hmac,
+		CreadoEn:           pgtype.Timestamptz{Time: ahora, Valid: true},
+		ExpiraEn:           pgtype.Timestamptz{Time: ahora.Add(vigenciaDesafio), Valid: true},
+		UltimoEnvioEn:      pgtype.Timestamptz{Time: ahora, Valid: true},
+		ContextoSolicitado: pgtype.Text{},
+	})
+	if err != nil {
+		return repositorio.AuthDesafio{}, fmt.Errorf("auth: insertar el relleno del desafío: %w", err)
+	}
+	return fila, nil
+}
+
+// eventoDeRelleno elige el tipo y el resultado del evento según el propósito que el relleno imita.
+func eventoDeRelleno(proposito Proposito) (tipo, resultado string, err error) {
+	switch proposito {
+	case PropositoRecuperacion:
+		return TipoEventoRecuperacion, resultadoRecuperacionRelleno, nil
+	case PropositoRegistro:
+		return TipoEventoRegistro, resultadoRegistroRelleno, nil
+	default:
+		return "", "", fmt.Errorf("auth: el relleno no imita el propósito %q", proposito)
+	}
 }
 
 // hmacDeRelleno deriva 32 bytes de crypto/rand: ningún código de seis dígitos lo satisface.

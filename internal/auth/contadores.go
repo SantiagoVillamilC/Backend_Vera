@@ -25,6 +25,8 @@ const (
 	PrefijoLoginCuenta  = "login:cuenta:"
 	PrefijoLoginOrigen  = "login:origen:"
 	PrefijoFallosCuenta = "fallos:cuenta:"
+	// PrefijoAvisoDuplicado cuenta los avisos de registro repetido por parte dueña del documento.
+	PrefijoAvisoDuplicado = "aviso:duplicado:"
 )
 
 // Claves deriva las claves de los contadores desde CONTADORES_PEPPER.
@@ -51,6 +53,13 @@ func (c *Claves) ClaveDeCorreo(correoNormalizado string) string {
 func (c *Claves) ClaveDeCelular(celular string) string {
 	mac := hmac.New(sha256.New, c.pepper)
 	mac.Write([]byte(celular))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// ClaveDeParte devuelve el HMAC-SHA256 en hex del id de la parte, para que Redis no guarde el UUID en claro.
+func (c *Claves) ClaveDeParte(parteID string) string {
+	mac := hmac.New(sha256.New, c.pepper)
+	mac.Write([]byte(parteID))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
