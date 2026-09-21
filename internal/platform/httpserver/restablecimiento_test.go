@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -55,7 +54,7 @@ func routerConRestablecimiento(verificador *verificadorRecuperacionFalso, restab
 		handler := NuevoRestablecimientoHandler(verificador, restablecedor)
 		verify, reset = handler, handler
 	}
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	return NewRouter(nil, DependenciasAuth{
 		Identidad:    auth.UsuarioDePrueba{},
 		Recuperar2FA: verify,
 		ResetClave:   reset,
@@ -66,7 +65,7 @@ func routerConRestablecimiento(verificador *verificadorRecuperacionFalso, restab
 func peticionDeVerify(t *testing.T, cuerpo string) *http.Request {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/recovery/verify", strings.NewReader(cuerpo))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/recovery/verify", strings.NewReader(cuerpo))
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
@@ -79,7 +78,7 @@ func peticionDeReset(t *testing.T, resetToken, contrasena string) *http.Request 
 	if err != nil {
 		t.Fatalf("serializar el cuerpo: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/recovery/reset", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/recovery/reset", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }

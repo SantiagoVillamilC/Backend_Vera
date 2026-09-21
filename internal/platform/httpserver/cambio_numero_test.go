@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -51,7 +50,7 @@ func routerConCambioDeNumero(falso *cambioDeNumeroFalso) http.Handler {
 	if falso != nil {
 		handler = NuevoCambioDeNumeroHandler(falso)
 	}
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	return NewRouter(nil, DependenciasAuth{
 		Identidad:   auth.UsuarioDePrueba{},
 		PhoneChange: handler,
 	})
@@ -61,7 +60,7 @@ func routerConCambioDeNumero(falso *cambioDeNumeroFalso) http.Handler {
 func peticionDeCambio(t *testing.T, ruta, cuerpo string, autenticada bool) *http.Request {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, ruta, strings.NewReader(cuerpo))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, ruta, strings.NewReader(cuerpo))
 	req.Header.Set("Content-Type", "application/json")
 	if autenticada {
 		req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")

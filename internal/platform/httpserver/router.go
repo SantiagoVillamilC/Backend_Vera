@@ -28,10 +28,7 @@ var RutasDeDinero = []string{
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
-func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth) http.Handler {
-	if autenticadorCustodio == nil {
-		panic(ErrCustodioNulo)
-	}
+func NewRouter(pool *pgxpool.Pool, authDeps DependenciasAuth) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
@@ -50,7 +47,6 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
-	nucleoHandler := nucleo.NewHandler(nucleoServicio)
 	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
@@ -71,13 +67,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	// Grupo autenticado: RequireAuth deja la identidad completa y solo acá corre.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
-		r.Use(RequireAuth(authDeps.Identidad, RutasDeDinero))
-		r.Get("/saldo", nucleoHandler.Saldo)
-		r.Get("/movimientos", nucleoHandler.Movimientos)
-		r.Get("/transferencias/maximo", nucleoHandler.MontoMaximo)
-		r.Post("/transferencias", nucleoHandler.Transferir)
-		r.Post("/depositos", nucleoHandler.CrearDeposito)
-		r.Get("/depositos/{id}", nucleoHandler.Deposito)
+		r.Use(RequireAuth(authDeps.Identidad, nil))
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
 		api.HandlerWithOptions(srv, api.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: api.ParamError})

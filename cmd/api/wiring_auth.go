@@ -13,7 +13,6 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/kyc"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/correosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
@@ -111,9 +110,13 @@ func denylistDeSesiones(cliente *redis.Client) (auth.RevocadorDeSesiones, error)
 	return denylist.NuevoRedis(cliente)
 }
 
-// lectorKYC construye el lector real del nivel de KYC que el núcleo consulta.
-func lectorKYC(pool *pgxpool.Pool) nucleo.LectorNivelKYC {
-	return kyc.NuevoLectorNivelKYC(pool)
+// abridorDeSubcuentasNoDisponible es el relleno de auth: el ledger y la apertura real de
+// subcuentas llegan con el módulo del núcleo financiero, que implementará este puerto.
+type abridorDeSubcuentasNoDisponible struct{}
+
+// AbrirSubcuentasDeUsuario satisface el puerto de auth y de KYC sin tocar el ledger todavía.
+func (abridorDeSubcuentasNoDisponible) AbrirSubcuentasDeUsuario(context.Context, string) (int64, error) {
+	return 0, nil
 }
 
 // proveedorKYC elige el proveedor por KYC_PROVEEDOR; sin default, un valor ajeno falla al arrancar.

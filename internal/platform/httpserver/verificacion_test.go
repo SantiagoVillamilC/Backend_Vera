@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 )
@@ -36,7 +35,7 @@ func (f *activadorDePrueba) ActivarCuenta(_ context.Context, celular, codigo str
 
 // routerConVerificacion arma el router completo con el handler de activacion inyectado.
 func routerConVerificacion(handler VerificacionHandler) http.Handler {
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	return NewRouter(nil, DependenciasAuth{
 		Identidad:    auth.UsuarioDePrueba{},
 		Verificacion: handler,
 	})
@@ -50,7 +49,7 @@ func peticionDeVerificacion(t *testing.T, celular, codigo string) *http.Request 
 	if err != nil {
 		t.Fatalf("serializar el cuerpo: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register/verify-phone", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/register/verify-phone", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
@@ -166,7 +165,7 @@ func TestVerificarCelularMalformadoResponde422ConReglaE164(t *testing.T) {
 func TestVerificarCelularSinCelularResponde422(t *testing.T) {
 	falso := &activadorDePrueba{}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register/verify-phone", strings.NewReader(`{"codigo":"123456"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/register/verify-phone", strings.NewReader(`{"codigo":"123456"}`))
 	req.Header.Set("Content-Type", "application/json")
 
 	routerConVerificacion(NuevoVerificacionHandler(falso)).ServeHTTP(rec, req)

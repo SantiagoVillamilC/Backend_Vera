@@ -91,7 +91,7 @@ func TestRacionadorOTPTopesComunes(t *testing.T) {
 	casos := map[string]func(t *testing.T, m montajeRacionador){
 		"cinco envios de la cuenta pasan y el sexto bloquea": func(t *testing.T, m montajeRacionador) {
 			t.Helper()
-			for i := 0; i < 5; i++ {
+			for i := range 5 {
 				if err := m.Racionador.Exigir(t.Context(), "persona@correo.com", "10.0.0.1"); err != nil {
 					t.Fatalf("envío %d: %v", i+1, err)
 				}
@@ -102,7 +102,7 @@ func TestRacionadorOTPTopesComunes(t *testing.T) {
 		},
 		"veinte envios del origen pasan y el vigesimo primero bloquea": func(t *testing.T, m montajeRacionador) {
 			t.Helper()
-			for i := 0; i < 20; i++ {
+			for i := range 20 {
 				if err := m.Racionador.ExigirOrigen(t.Context(), "10.0.0.2"); err != nil {
 					t.Fatalf("envío %d: %v", i+1, err)
 				}
@@ -113,7 +113,7 @@ func TestRacionadorOTPTopesComunes(t *testing.T) {
 		},
 		"otra cuenta no hereda el bloqueo": func(t *testing.T, m montajeRacionador) {
 			t.Helper()
-			for i := 0; i < 6; i++ {
+			for range 6 {
 				_ = m.Racionador.ExigirCuenta(t.Context(), "bloqueada@correo.com")
 			}
 			if err := m.Racionador.ExigirCuenta(t.Context(), "nueva@correo.com"); err != nil {
@@ -122,7 +122,7 @@ func TestRacionadorOTPTopesComunes(t *testing.T) {
 		},
 		"el bloqueo de la cuenta vence con la ventana": func(t *testing.T, m montajeRacionador) {
 			t.Helper()
-			for i := 0; i < 6; i++ {
+			for range 6 {
 				_ = m.Racionador.ExigirCuenta(t.Context(), "vence@correo.com")
 			}
 			m.Avanzar(2 * time.Hour)
@@ -132,7 +132,7 @@ func TestRacionadorOTPTopesComunes(t *testing.T) {
 		},
 		"diez fallos pasan y el undecimo bloquea el envio": func(t *testing.T, m montajeRacionador) {
 			t.Helper()
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				if err := m.Racionador.RegistrarFallo(t.Context(), "fallona@correo.com"); err != nil {
 					t.Fatalf("fallo %d: %v", i+1, err)
 				}

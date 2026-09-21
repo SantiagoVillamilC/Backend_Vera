@@ -98,7 +98,7 @@ func (t *TokensDeAcceso) Verificar(token string) (ClaimsAccess, error) {
 		jwt.WithAudience(t.audiencia),
 		jwt.WithExpirationRequired(),
 	); err != nil {
-		return ClaimsAccess{}, fmt.Errorf("%w: %v", ErrAccessInvalido, err)
+		return ClaimsAccess{}, fmt.Errorf("%w: %v", ErrAccessInvalido, err) //nolint:errorlint // el centinela va con %w; el detalle de JWT se deja como texto para no exponerlo
 	}
 	return claims.accessDeDominio()
 }

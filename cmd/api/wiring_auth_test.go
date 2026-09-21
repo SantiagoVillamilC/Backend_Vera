@@ -195,7 +195,7 @@ func TestIdentidadJWTTraduceElContextoYLaDenylist(t *testing.T) {
 			if err != nil {
 				t.Fatalf("identidadJWT: %v", err)
 			}
-			req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/saldo", nil)
 			req.Header.Set("Authorization", "Bearer "+firmarDePrueba(t, cfg, caso.claims))
 
 			id, err := adaptador.Identidad(req)
@@ -233,7 +233,7 @@ func TestIdentidadJWTRechazaBearerAusenteOMalFormado(t *testing.T) {
 	}
 	for nombre, encabezado := range encabezados {
 		t.Run(nombre, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/saldo", nil)
 			if encabezado != "" {
 				req.Header.Set("Authorization", encabezado)
 			}
@@ -291,7 +291,7 @@ func TestRequireAuthCierraLasRutasDeDineroCuandoLaDenylistFalla(t *testing.T) {
 				{http.MethodPost, "/depositos", caso.statusDinero, caso.codeDinero},
 				{http.MethodGet, "/saldo", caso.statusSaldo, ""},
 			} {
-				req := httptest.NewRequest(ruta.metodo, ruta.path, nil)
+				req := httptest.NewRequestWithContext(t.Context(), ruta.metodo, ruta.path, nil)
 				req.Header.Set("Authorization", "Bearer "+access)
 				rec := httptest.NewRecorder()
 				r.ServeHTTP(rec, req)
@@ -352,7 +352,7 @@ func TestRequireAuthRechazaAccessVencidoAlteradoOAjeno(t *testing.T) {
 			r.Use(httpserver.RequireAuth(adaptador, httpserver.RutasDeDinero))
 			r.Get("/saldo", responderOk)
 
-			req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/saldo", nil)
 			req.Header.Set("Authorization", "Bearer "+token)
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)

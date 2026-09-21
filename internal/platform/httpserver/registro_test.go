@@ -186,7 +186,7 @@ func TestRegistroHandlerCasosDeCriterio(t *testing.T) {
 			if err != nil {
 				t.Fatalf("serializar el cuerpo: %v", err)
 			}
-			req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(cuerpo))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/register", bytes.NewReader(cuerpo))
 			rec := httptest.NewRecorder()
 
 			routerDeRegistro(NuevoRegistroHandler(fake)).ServeHTTP(rec, req)
@@ -216,7 +216,7 @@ func datosDeRespuesta(t *testing.T, rec *httptest.ResponseRecorder) map[string]a
 }
 
 // exigirDetail comprueba el primer detalle de validación con su campo y regla.
-func exigirDetail(t *testing.T, campo, regla string) func(*testing.T, *registradorDePrueba, *httptest.ResponseRecorder) {
+func exigirDetail(_ *testing.T, campo, regla string) func(*testing.T, *registradorDePrueba, *httptest.ResponseRecorder) {
 	return func(t *testing.T, _ *registradorDePrueba, rec *httptest.ResponseRecorder) {
 		t.Helper()
 		env := decodeEnvelope(t, rec)
@@ -254,7 +254,7 @@ func cuerpoDeRegistroEmpresa() map[string]any {
 }
 
 // exigirDetailAnidado comprueba que details incluye el campo pedido con su regla.
-func exigirDetailAnidado(t *testing.T, campo, regla string) func(*testing.T, *registradorDePrueba, *httptest.ResponseRecorder) {
+func exigirDetailAnidado(_ *testing.T, campo, regla string) func(*testing.T, *registradorDePrueba, *httptest.ResponseRecorder) {
 	return func(t *testing.T, _ *registradorDePrueba, rec *httptest.ResponseRecorder) {
 		t.Helper()
 		env := decodeEnvelope(t, rec)
@@ -336,7 +336,7 @@ func TestRegistroHandlerEmpresaCasosDeCriterio(t *testing.T) {
 			if err != nil {
 				t.Fatalf("serializar el cuerpo: %v", err)
 			}
-			req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(cuerpo))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/register", bytes.NewReader(cuerpo))
 			rec := httptest.NewRecorder()
 
 			routerDeRegistro(NuevoRegistroHandler(fake)).ServeHTTP(rec, req)

@@ -56,7 +56,7 @@ func (s *ActivadorDeCuenta) ActivarCuenta(ctx context.Context, celular, codigo s
 			resultado, err := s.desafios.VerificarDesafioEn(ctx, q, uuidDePgtype(fila.ID), codigo, PropositoRegistro)
 			if err != nil {
 				dominio = err
-				return struct{}{}, nil
+				return struct{}{}, nil //nolint:nilerr // el nil confirma la transacción y el error de dominio se devuelve tras el commit
 			}
 			return s.activarConCodigos(ctx, q, resultado, &activacion)
 		}); err != nil {

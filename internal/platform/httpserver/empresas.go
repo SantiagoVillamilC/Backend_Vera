@@ -9,7 +9,6 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // CreadorDeEmpresasParaParte crea la parte juridica de una persona ya existente.
@@ -41,7 +40,7 @@ func (h *HandlerDeEmpresas) CreateCompany(w http.ResponseWriter, r *http.Request
 		return
 	}
 	api.WriteData(w, http.StatusCreated, api.EmpresaCreada{
-		EmpresaId:   openapi_types.UUID(empresaID),
+		EmpresaId:   empresaID,
 		Nit:         entrada.Nit,
 		RazonSocial: entrada.RazonSocial,
 	}, nil)
@@ -49,7 +48,7 @@ func (h *HandlerDeEmpresas) CreateCompany(w http.ResponseWriter, r *http.Request
 
 // partePersonaDeContexto exige identidad con contexto personal y devuelve el uuid de la persona.
 func partePersonaDeContexto(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, ok := identidad.IdentidadDeContexto(r.Context())
+	id, ok := identidad.DeContexto(r.Context())
 	if !ok {
 		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 		return uuid.Nil, false

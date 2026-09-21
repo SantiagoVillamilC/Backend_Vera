@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -43,7 +42,7 @@ func (contadoresCaidos) Bloqueada(context.Context, string) (bool, error) {
 
 // routerConReenvio arma el router con el handler de reenvío inyectado.
 func routerConReenvio(handler DesafiosHandler) http.Handler {
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	return NewRouter(nil, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		Desafios:  handler,
 	})
@@ -57,7 +56,7 @@ func peticionDeReenvio(t *testing.T, challengeID uuid.UUID) *http.Request {
 	if err != nil {
 		t.Fatalf("serializar el cuerpo: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/otp/resend", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/otp/resend", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
@@ -132,7 +131,7 @@ func TestResendOtpCuadradoConContadoresCaidosResponde503(t *testing.T) {
 func TestResendOtpSinChallengeIdResponde422(t *testing.T) {
 	falso := &reenviadorFalso{desafio: auth.Desafio{ExpiraEnSegundos: 300, Proposito: auth.PropositoLogin}}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/otp/resend", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/otp/resend", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 
 	routerConReenvio(NuevoOTPHandler(falso)).ServeHTTP(rec, req)

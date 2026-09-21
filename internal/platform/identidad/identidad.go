@@ -20,8 +20,8 @@ func ConIdentidad(ctx context.Context, id Identidad) context.Context {
 	return context.WithValue(ctx, clave{}, id)
 }
 
-// IdentidadDeContexto devuelve la identidad del contexto, con un segundo valor false si no hay ninguna.
-func IdentidadDeContexto(ctx context.Context) (Identidad, bool) {
+// DeContexto devuelve la identidad del contexto, con un segundo valor false si no hay ninguna.
+func DeContexto(ctx context.Context) (Identidad, bool) {
 	id, ok := ctx.Value(clave{}).(Identidad)
 	return id, ok
 }
@@ -33,6 +33,6 @@ func ConUsuarioID(ctx context.Context, usuarioID string) context.Context {
 
 // UsuarioIDDeContexto es un wrapper del accesor nuevo para no tocar a los handlers del núcleo.
 func UsuarioIDDeContexto(ctx context.Context) (string, bool) {
-	id, ok := IdentidadDeContexto(ctx)
+	id, ok := DeContexto(ctx)
 	return id.UsuarioID, ok
 }

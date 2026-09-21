@@ -255,46 +255,6 @@ func TestBajoMontoDeEmpresaNoAplica(t *testing.T) {
 	}
 }
 
-// P-26: la materialización asegura subcuentas y repetirla no duplica ni filas ni subcuentas.
-func TestMaterializacionDeEmpresaEsIdempotente(t *testing.T) {
-	pool := abrirPoolDeKYC(t)
-	abridor := nucleo.NewServicio(pool, nucleo.LectorNivelKYCFijo{}, nil, nil, nil)
-	servicio := NuevoServicio(pool, nil, "simulador", abridor)
-	empresa := sembrarParteKYC(t, pool, TipoEmpresa)
-
-	for i := 0; i < 2; i++ {
-		if _, err := servicio.Estado(t.Context(), empresa); err != nil {
-			t.Fatalf("Estado intento %d: %v", i, err)
-		}
-	}
-	filas := contarFilasKYC(t, pool, "SELECT count(*) FROM auth.kyc_estados WHERE parte_id = $1", empresa)
-	cuentas := contarCuentasDeNucleo(t, pool, empresa)
-	if filas != 1 {
-		t.Fatalf("filas de kyc_estados = %d, quiero 1", filas)
-	}
-	if cuentas != 2 {
-		t.Fatalf("subcuentas = %d, quiero 2 sin duplicar", cuentas)
-	}
-}
-
-// contarCuentasDeNucleo cuenta las subcuentas del ledger con el rol de las tablas del núcleo.
-func contarCuentasDeNucleo(t *testing.T, pool *pgxpool.Pool, titularID string) int {
-	t.Helper()
-	var n int
-	tx, err := pool.Begin(t.Context())
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	defer func() { _ = tx.Rollback(t.Context()) }()
-	if _, err := tx.Exec(t.Context(), "SET LOCAL ROLE "+nucleo.RolNucleo); err != nil {
-		t.Fatalf("set role: %v", err)
-	}
-	if err := tx.QueryRow(t.Context(), "SELECT count(*) FROM nucleo.cuenta WHERE titular_id = $1", titularID).Scan(&n); err != nil {
-		t.Fatalf("contar subcuentas: %v", err)
-	}
-	return n
-}
-
 // La evidencia es append-only: UPDATE y DELETE como rol_auth fallan por permiso y por el trigger.
 func TestEvidenciaKYCInmutable(t *testing.T) {
 	pool := abrirPoolDeKYC(t)

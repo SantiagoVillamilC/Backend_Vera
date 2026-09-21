@@ -16,7 +16,6 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -130,7 +129,7 @@ func TestCambioDeNumeroPorHTTPDejaElAccessViejoEn401(t *testing.T) {
 	acceso := iniciarSesionHTTP(t, login, celular)
 	nuevo := celularHTTPDePrueba()
 
-	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	r := NewRouter(pool, DependenciasAuth{
 		Identidad:   adaptadorJWTDePrueba{tokens: tokens, denylist: denylistRedis},
 		PhoneChange: NuevoCambioDeNumeroHandler(cambio),
 	})
@@ -163,7 +162,7 @@ func TestCambioDeNumeroPorHTTPDejaElAccessViejoEn401(t *testing.T) {
 	}
 
 	viejo := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sessions", nil)
 	req.Header.Set("Authorization", "Bearer "+acceso)
 	r.ServeHTTP(viejo, req)
 	assertErrorEnvelope(t, viejo, http.StatusUnauthorized, "Unauthorized")

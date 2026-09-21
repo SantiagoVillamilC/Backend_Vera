@@ -14,6 +14,7 @@ import (
 // EstadoCredencial es el estado de negocio de una credencial de auth.
 type EstadoCredencial string
 
+// Estados de negocio posibles de una credencial de auth.
 const (
 	EstadoPendienteVerificacion EstadoCredencial = "pendiente_verificacion"
 	EstadoActivo                EstadoCredencial = "activo"

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
 )
@@ -47,7 +46,7 @@ func routerConEmpresas(identidadPeticion IdentidadDeLaPeticion, creador CreadorD
 	if creador != nil {
 		handler = NuevoEmpresasHandler(creador)
 	}
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	return NewRouter(nil, DependenciasAuth{
 		Identidad: identidadPeticion,
 		Companies: handler,
 	})
@@ -143,7 +142,7 @@ func TestCreateCompanyDesenlaces(t *testing.T) {
 		t.Run(nombre, func(t *testing.T) {
 			empresaID := uuid.New()
 			creador := &creadorDeEmpresasFalso{empresaID: empresaID, err: caso.err}
-			req := httptest.NewRequest(http.MethodPost, "/v1/auth/companies", strings.NewReader(caso.cuerpo))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/companies", strings.NewReader(caso.cuerpo))
 			if caso.identidad != nil {
 				req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 			}
@@ -178,7 +177,7 @@ func TestCreateCompanySinServicioResponde501(t *testing.T) {
 	identidadPersona := identidadDeContextoFijo{id: identidad.Identidad{
 		UsuarioID: parte.String(), ParteID: parte.String(), Contexto: auth.ContextoUsuario,
 	}}
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/companies", strings.NewReader(`{"razon_social":"Centinela SAS","nit":"9001234568"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/companies", strings.NewReader(`{"razon_social":"Centinela SAS","nit":"9001234568"}`))
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 

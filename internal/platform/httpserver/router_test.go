@@ -25,7 +25,7 @@ import (
 // que main inyecta. Ninguna de las rutas que ejercitan estos tests toca la base, así que el
 // pool no se usa.
 func newTestRouter() http.Handler {
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
+	return NewRouter(nil, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 }
 
 func decodeEnvelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
@@ -61,7 +61,7 @@ func assertErrorEnvelope(t *testing.T, rec *httptest.ResponseRecorder, wantStatu
 func TestLoginWithoutTokenIsPublic(t *testing.T) {
 	r := newTestRouter()
 	body := `{"correo":"user@example.com","contrasena":"secret"}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/login", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -87,7 +87,7 @@ func TestPublicRoutesAreStubsInEnvelope(t *testing.T) {
 	r := newTestRouter()
 	for _, ruta := range rutas {
 		t.Run(ruta, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, ruta, strings.NewReader(`{}`))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, ruta, strings.NewReader(`{}`))
 			rec := httptest.NewRecorder()
 
 			r.ServeHTTP(rec, req)
@@ -99,7 +99,7 @@ func TestPublicRoutesAreStubsInEnvelope(t *testing.T) {
 
 func TestSessionsWithoutCredentialReturnsEnvelope401(t *testing.T) {
 	r := newTestRouter()
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/sessions", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/auth/sessions", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -109,7 +109,7 @@ func TestSessionsWithoutCredentialReturnsEnvelope401(t *testing.T) {
 
 func TestDeleteSessionWithMalformedUUIDReturnsEnvelope400(t *testing.T) {
 	r := newTestRouter()
-	req := httptest.NewRequest(http.MethodDelete, "/v1/auth/sessions/no-es-uuid", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/v1/auth/sessions/no-es-uuid", nil)
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 
@@ -197,7 +197,7 @@ func TestAuthenticatedRouteSeesTestUserID(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(RequireAuth(auth.UsuarioDePrueba{}, RutasDeDinero))
 	r.Get("/quien-soy", func(w http.ResponseWriter, req *http.Request) {
-		id, ok := identidad.IdentidadDeContexto(req.Context())
+		id, ok := identidad.DeContexto(req.Context())
 		if !ok {
 			api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Sin usuario en el contexto.", nil)
 			return
@@ -323,7 +323,7 @@ func TestProbesAreExemptFromRateLimit(t *testing.T) {
 
 func TestMethodNotAllowedKeepsAllowHeader(t *testing.T) {
 	r := newTestRouter()
-	req := httptest.NewRequest(http.MethodGet, "/v1/auth/login", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/auth/login", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -421,7 +421,7 @@ func TestRutasPublicasCoincidenConElContrato(t *testing.T) {
 			}
 
 			camino := strings.ReplaceAll(ruta, "{session_id}", "00000000-0000-4000-8000-000000000000")
-			req := httptest.NewRequest(strings.ToUpper(metodo), camino, nil)
+			req := httptest.NewRequestWithContext(t.Context(), strings.ToUpper(metodo), camino, nil)
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
 

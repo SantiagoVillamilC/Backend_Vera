@@ -73,7 +73,7 @@ func (d *DerivadorArgon2) Verificar(_ context.Context, contrasena, phc string) (
 	if err != nil {
 		return false, err
 	}
-	derivado := argon2.IDKey([]byte(contrasena), sal, parametros.Iteraciones, parametros.MemoriaKiB, parametros.Paralelismo, uint32(len(esperado)))
+	derivado := argon2.IDKey([]byte(contrasena), sal, parametros.Iteraciones, parametros.MemoriaKiB, parametros.Paralelismo, uint32(len(esperado))) //nolint:gosec // la longitud del hash Argon2 está acotada por el PHC, cabe en uint32
 	return subtle.ConstantTimeCompare(derivado, esperado) == 1, nil
 }
 

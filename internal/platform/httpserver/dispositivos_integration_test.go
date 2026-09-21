@@ -12,7 +12,6 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -104,7 +103,7 @@ func TestEndpointsDeDispositivosYContextoDePuntaAPunta(t *testing.T) {
 	}
 	access2 := firmarAccessDeIntegracion(t, tokens, parteID, sesion2.FamiliaID, auth.ContextoUsuario, "")
 
-	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	r := NewRouter(pool, DependenciasAuth{
 		Identidad: adaptadorJWTDePrueba{tokens: tokens, denylist: d},
 		Auth:      NuevoDispositivosHandler(servicio),
 		Refresh:   NuevoSesionHandler(servicio),
@@ -214,7 +213,7 @@ func TestLogoutConRefreshRevocaLaFamiliaDePuntaAPunta(t *testing.T) {
 	access1 := firmarAccessDeIntegracion(t, tokens, parteID, sesion1.FamiliaID, auth.ContextoUsuario, "")
 	access2 := firmarAccessDeIntegracion(t, tokens, parteID, sesion2.FamiliaID, auth.ContextoUsuario, "")
 
-	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	r := NewRouter(pool, DependenciasAuth{
 		Identidad: adaptadorJWTDePrueba{tokens: tokens, denylist: d},
 		Auth:      NuevoDispositivosHandler(servicio),
 		Refresh:   NuevoSesionHandler(servicio),

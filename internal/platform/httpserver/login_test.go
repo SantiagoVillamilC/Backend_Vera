@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 )
@@ -32,7 +31,7 @@ func routerConLogin(iniciador IniciadorDeSesion) http.Handler {
 	if iniciador != nil {
 		handler = NuevoLoginHandler(iniciador)
 	}
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	return NewRouter(nil, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		Login:     handler,
 	})
@@ -102,7 +101,7 @@ func TestLoginHandlerDesenlacesDelLoginDirecto(t *testing.T) {
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {
 			iniciador := &iniciadorFalso{resultado: caso.resultado, err: caso.err}
-			req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(caso.cuerpo))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/login", strings.NewReader(caso.cuerpo))
 			rec := httptest.NewRecorder()
 
 			routerConLogin(iniciador).ServeHTTP(rec, req)
@@ -160,7 +159,7 @@ func assertSesionDelLogin(t *testing.T, rec *httptest.ResponseRecorder, esperado
 }
 
 func TestLoginConServicioNuloResponde501(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"celular":"+573001112233","contrasena":"secreta123"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/login", strings.NewReader(`{"celular":"+573001112233","contrasena":"secreta123"}`))
 	rec := httptest.NewRecorder()
 
 	routerConLogin(nil).ServeHTTP(rec, req)

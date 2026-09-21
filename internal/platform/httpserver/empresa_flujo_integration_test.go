@@ -16,7 +16,6 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
 	"github.com/google/uuid"
@@ -51,12 +50,6 @@ type datosDeAltaEmpresa struct {
 	nit             string
 	razonSocial     string
 	contrasena      string
-}
-
-// respuestaSaldoDeIntegracion es el data de GET /saldo que afirma el contexto de empresa.
-type respuestaSaldoDeIntegracion struct {
-	Monto  string `json:"monto"`
-	Moneda string `json:"moneda"`
 }
 
 // exigirSinError falla la prueba si el constructor devolvió error.
@@ -117,11 +110,10 @@ func construirPilaDeAuthDeEmpresa(t *testing.T, pool *pgxpool.Pool, cliente *red
 func montajeDeEmpresaDeIntegracion(t *testing.T, pool *pgxpool.Pool) montajeDeEmpresa {
 	t.Helper()
 	pila := construirPilaDeAuthDeEmpresa(t, pool, clienteRedisDeIntegracion(t))
-	servicioNucleo := nucleo.NewServicio(pool, nil, nil, nil, nil)
-	registrador, err := auth.NuevoRegistradorDePersonas(pool, pila.derivador, pila.eventos, pila.gestor, servicioNucleo)
+	registrador, err := auth.NuevoRegistradorDePersonas(pool, pila.derivador, pila.eventos, pila.gestor, subcuentasSinNucleo{})
 	exigirSinError(t, err, "registrador")
 	identidad := adaptadorJWTDePrueba{tokens: pila.tokens, denylist: pila.denylist}
-	router := NewRouter(pool, servicioNucleo, custodioDePrueba, DependenciasAuth{
+	router := NewRouter(pool, DependenciasAuth{
 		Identidad:    identidad,
 		Auth:         NuevoDispositivosHandler(pila.servicioSesion),
 		Registro:     NuevoRegistroHandler(registrador),
@@ -285,7 +277,7 @@ func sesionDeEmpresaCriterio7(t *testing.T, m montajeDeEmpresa, datos datosDeAlt
 }
 
 // contextosYCambioDeContextoCriterio7 lista los contextos y alterna a usuario y de vuelta a empresa.
-func contextosYCambioDeContextoCriterio7(t *testing.T, m montajeDeEmpresa, sesion api.Sesion, datos datosDeAltaEmpresa) (string, string) {
+func contextosYCambioDeContextoCriterio7(t *testing.T, m montajeDeEmpresa, sesion api.Sesion, datos datosDeAltaEmpresa) {
 	t.Helper()
 	rec := pedirDeDispositivos(m.router, http.MethodGet, "/v1/auth/contextos", sesion.AccessToken, "")
 	if rec.Code != http.StatusOK {
@@ -318,30 +310,6 @@ func contextosYCambioDeContextoCriterio7(t *testing.T, m montajeDeEmpresa, sesio
 	claimsEmpresa, err := m.tokens.Verificar(activoEmpresa.AccessToken)
 	if err != nil || claimsEmpresa.Contexto != empresa.ContextoId || claimsEmpresa.Rol != "representante_legal" {
 		t.Fatalf("claims al volver a empresa = %+v (err %v), quiero el contexto de empresa", claimsEmpresa, err)
-	}
-	return strings.TrimPrefix(empresa.ContextoId, "empresa:"), activoEmpresa.AccessToken
-}
-
-// saldoYIdentidadCriterio7 afirma que el núcleo ve el uuid de la empresa bajo el access de empresa.
-func saldoYIdentidadCriterio7(t *testing.T, m montajeDeEmpresa, access, empresaID string) {
-	t.Helper()
-	rec := pedirDeDispositivos(m.router, http.MethodGet, "/saldo", access, "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /saldo bajo empresa = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
-	}
-	saldo := decodificarData[respuestaSaldoDeIntegracion](t, rec)
-	if saldo.Moneda != "COP" || saldo.Monto != "0" {
-		t.Fatalf("saldo = %+v, quiero 0 COP de la empresa recién registrada", saldo)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
-	req.Header.Set("Authorization", "Bearer "+access)
-	sonda, err := m.identidad.Identidad(req)
-	if err != nil {
-		t.Fatalf("identidad del access de empresa: %v", err)
-	}
-	if sonda.UsuarioID != empresaID || sonda.Contexto != "empresa" || sonda.Rol != "representante_legal" {
-		t.Fatalf("el núcleo recibió %+v, quiero el uuid de la empresa %s", sonda, empresaID)
 	}
 }
 
@@ -399,6 +367,5 @@ func TestHUAUT06FlujoDeEmpresaDePuntaAPunta(t *testing.T) {
 
 	datos := altaDeEmpresaCriterio6Y8(t, m, pool)
 	sesion := sesionDeEmpresaCriterio7(t, m, datos)
-	empresaID, accessEmpresa := contextosYCambioDeContextoCriterio7(t, m, sesion, datos)
-	saldoYIdentidadCriterio7(t, m, accessEmpresa, empresaID)
+	contextosYCambioDeContextoCriterio7(t, m, sesion, datos)
 }

@@ -81,7 +81,7 @@ func (s *ServicioDeRestablecimiento) VerificarSegundoFactor(ctx context.Context,
 		resultado, err := s.desafios.VerificarDesafioEn(ctx, q, id, codigo, PropositoRecuperacion)
 		if err != nil {
 			dominio = err
-			return struct{}{}, nil
+			return struct{}{}, nil //nolint:nilerr // el nil confirma la transacción y el error de dominio se devuelve tras el commit
 		}
 		errConsumo := ConsumirCodigoRespaldo(ctx, q, s.pepper, resultado.CredencialID, codigoRespaldo)
 		if errConsumo != nil && !errors.Is(errConsumo, ErrSegundoFactorRequerido) {
@@ -89,7 +89,7 @@ func (s *ServicioDeRestablecimiento) VerificarSegundoFactor(ctx context.Context,
 		}
 		if errConsumo != nil {
 			dominio = s.registrarSegundoFactorInvalido(ctx, q, id, resultado, origen)
-			return struct{}{}, nil
+			return struct{}{}, nil //nolint:nilerr // el nil confirma la transacción y el error de dominio se devuelve tras el commit
 		}
 		resetToken, err = s.emitirTokenEn(ctx, q, resultado, origen)
 		return struct{}{}, err

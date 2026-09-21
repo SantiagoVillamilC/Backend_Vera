@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -36,7 +35,7 @@ func (s *servicioConsentimientosDePrueba) Registrar(_ context.Context, solicitud
 
 // routerConsentimientosDePrueba monta el router real con el handler sobre el servicio falso.
 func routerConsentimientosDePrueba(servicio ServicioDeConsentimientos) http.Handler {
-	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
+	return NewRouter(nil, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		Consent:   NuevoConsentimientosHandler(servicio),
 	})
@@ -49,7 +48,7 @@ func pedirConsentimientos(t *testing.T, r http.Handler, metodo, ruta, cuerpo str
 	if cuerpo != "" {
 		body = strings.NewReader(cuerpo)
 	}
-	req := httptest.NewRequest(metodo, ruta, body)
+	req := httptest.NewRequestWithContext(t.Context(), metodo, ruta, body)
 	if conCredencial {
 		req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	}

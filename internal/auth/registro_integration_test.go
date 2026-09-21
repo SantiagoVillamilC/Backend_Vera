@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	platformerrors "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/errors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -188,24 +187,6 @@ func contarCredencialesPorCorreo(tb testing.TB, pool *pgxpool.Pool, correo strin
 	return total
 }
 
-// contarSubcuentasDeUsuario lee nucleo.cuenta como rol_nucleo, solo lectura.
-func contarSubcuentasDeUsuario(tb testing.TB, pool *pgxpool.Pool, usuarioID uuid.UUID) int {
-	tb.Helper()
-	tx, err := pool.Begin(tb.Context())
-	if err != nil {
-		tb.Fatalf("begin: %v", err)
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-	if _, err := tx.Exec(tb.Context(), "SET LOCAL ROLE rol_nucleo"); err != nil {
-		tb.Fatalf("SET LOCAL ROLE rol_nucleo: %v", err)
-	}
-	var total int
-	if err := tx.QueryRow(tb.Context(), `SELECT count(*) FROM nucleo.cuenta WHERE titular_id = $1`, usuarioID.String()).Scan(&total); err != nil {
-		tb.Fatalf("contar subcuentas: %v", err)
-	}
-	return total
-}
-
 // exigirConsentimientosCopiados comprueba que el texto persistido salio del catalogo del servidor.
 func exigirConsentimientosCopiados(t *testing.T, pool *pgxpool.Pool, parteID uuid.UUID) {
 	t.Helper()
@@ -235,8 +216,7 @@ func exigirConsentimientosCopiados(t *testing.T, pool *pgxpool.Pool, parteID uui
 func TestRegistroValidoCreaLaCuentaPendiente(t *testing.T) {
 	pool := abrirPoolDeAuth(t)
 	canal := &canalConFijo{codigo: "123456"}
-	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
-	registrador, err := NuevoRegistradorDePersonas(pool, derivadorDeRegistro(t), NuevoRegistradorEventos(pool), gestorDeRegistro(t, pool, canal), servicio)
+	registrador, err := NuevoRegistradorDePersonas(pool, derivadorDeRegistro(t), NuevoRegistradorEventos(pool), gestorDeRegistro(t, pool, canal), &abridorDeSubcuentasFalso{})
 	if err != nil {
 		t.Fatalf("NuevoRegistradorDePersonas: %v", err)
 	}
@@ -268,9 +248,6 @@ func TestRegistroValidoCreaLaCuentaPendiente(t *testing.T) {
 		t.Error("no quedo el evento registro/creado")
 	}
 	exigirConsentimientosCopiados(t, pool, registro.ParteID)
-	if total := contarSubcuentasDeUsuario(t, pool, registro.ParteID); total != 2 {
-		t.Errorf("subcuentas en nucleo.cuenta = %d, quiero 2", total)
-	}
 }
 
 func TestRegistroConCorreoRepetidoEsGenerico(t *testing.T) {

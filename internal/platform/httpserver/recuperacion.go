@@ -6,7 +6,6 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // RecuperadorDeCuenta pide el desafío de recuperación sin revelar si la cuenta existe.
@@ -48,7 +47,7 @@ func (h *HandlerDeRecuperacion) SolicitarRecuperacion(w http.ResponseWriter, r *
 		return
 	}
 	api.WriteData(w, http.StatusAccepted, api.Desafio{
-		ChallengeId:      openapi_types.UUID(desafio.ID),
+		ChallengeId:      desafio.ID,
 		ExpiraEnSegundos: desafio.ExpiraEnSegundos,
 		Proposito:        api.DesafioProposito(desafio.Proposito),
 	}, nil)

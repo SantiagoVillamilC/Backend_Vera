@@ -10,7 +10,6 @@ import (
 	platformerrors "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/errors"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // ServicioDeCambioDeNumero es lo que el handler autenticado necesita del cambio de número.
@@ -44,7 +43,7 @@ func (h *HandlerDeCambioDeNumero) PhoneChangeRequest(w http.ResponseWriter, r *h
 		return
 	}
 	api.WriteData(w, http.StatusOK, api.Desafio{
-		ChallengeId:      openapi_types.UUID(desafio.ID),
+		ChallengeId:      desafio.ID,
 		ExpiraEnSegundos: desafio.ExpiraEnSegundos,
 		Proposito:        api.DesafioProposito(desafio.Proposito),
 	}, nil)
@@ -61,7 +60,7 @@ func (h *HandlerDeCambioDeNumero) PhoneChangeConfirm(w http.ResponseWriter, r *h
 		return
 	}
 	origen, _ := clientIPKey(r)
-	resultado, err := h.servicio.ConfirmarCambioDeNumero(r.Context(), sesionID, uuid.UUID(entrada.ChallengeId), entrada.Codigo, origen)
+	resultado, err := h.servicio.ConfirmarCambioDeNumero(r.Context(), sesionID, entrada.ChallengeId, entrada.Codigo, origen)
 	if err != nil {
 		escribirErrorDelCambio(w, r, err)
 		return
@@ -75,7 +74,7 @@ func (h *HandlerDeCambioDeNumero) PhoneChangeConfirm(w http.ResponseWriter, r *h
 
 // sesionDelCambio resuelve la familia de sesión de la identidad autenticada.
 func sesionDelCambio(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, ok := identidad.IdentidadDeContexto(r.Context())
+	id, ok := identidad.DeContexto(r.Context())
 	if !ok {
 		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 		return uuid.Nil, false

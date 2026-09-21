@@ -25,10 +25,10 @@ func TestRespuestaDeRegistroEmpresaLlenaEmpresaIdSinTocarElId(t *testing.T) {
 		Desafio:              auth.Desafio{ID: uuid.New(), ExpiraEnSegundos: 300, Proposito: auth.PropositoRegistro},
 	})
 
-	if uuid.UUID(respuesta.Id) != representanteID {
+	if respuesta.Id != representanteID {
 		t.Errorf("id = %s, quiero el parte_id del representante %s", respuesta.Id, representanteID)
 	}
-	if respuesta.EmpresaId == nil || uuid.UUID(*respuesta.EmpresaId) != empresaID {
+	if respuesta.EmpresaId == nil || *respuesta.EmpresaId != empresaID {
 		t.Fatalf("empresa_id = %v, quiero el parte_id de la empresa %s", respuesta.EmpresaId, empresaID)
 	}
 }

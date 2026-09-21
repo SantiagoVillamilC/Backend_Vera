@@ -8,11 +8,9 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
@@ -89,46 +87,6 @@ func tokensDeIntegracion(t *testing.T) *auth.TokensDeAcceso {
 	return tokens
 }
 
-func TestSaldoConAccessJWTYFamiliaRevocadaResponde401(t *testing.T) {
-	pool := abrirPoolDeIntegracion(t)
-	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
-	usuarioID := auth.SembrarParteDePruebaConID(t, pool, uuid.NewString())
-	if _, err := servicio.AbrirSubcuentasDeUsuario(t.Context(), usuarioID); err != nil {
-		t.Fatalf("abrir subcuentas: %v", err)
-	}
-	parteID, err := uuid.Parse(usuarioID)
-	if err != nil {
-		t.Fatalf("uuid del usuario: %v", err)
-	}
-
-	tokens := tokensDeIntegracion(t)
-	d, err := denylist.NuevoRedis(clienteRedisDeIntegracion(t))
-	if err != nil {
-		t.Fatalf("denylist: %v", err)
-	}
-	sesionID := uuid.New()
-	access, err := tokens.Firmar(auth.ClaimsAccess{ParteID: parteID, SesionID: sesionID, Contexto: auth.ContextoUsuario})
-	if err != nil {
-		t.Fatalf("firmar access: %v", err)
-	}
-	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: adaptadorJWTDePrueba{tokens: tokens, denylist: d}})
-
-	pedir := func() *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
-		req.Header.Set("Authorization", "Bearer "+access)
-		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, req)
-		return rec
-	}
-	if rec := pedir(); rec.Code != http.StatusOK {
-		t.Fatalf("GET /saldo con el access = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
-	}
-	if err := d.Revocar(t.Context(), sesionID, 5*time.Minute); err != nil {
-		t.Fatalf("revocar el sid: %v", err)
-	}
-	assertErrorEnvelope(t, pedir(), http.StatusUnauthorized, "Unauthorized")
-}
-
 func TestAccessDeEmpresaLlegaAlNucleoConElUuidDeLaEmpresa(t *testing.T) {
 	tokens := tokensDeIntegracion(t)
 	d, err := denylist.NuevoRedis(clienteRedisDeIntegracion(t))
@@ -150,7 +108,7 @@ func TestAccessDeEmpresaLlegaAlNucleoConElUuidDeLaEmpresa(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(RequireAuth(adaptador, RutasDeDinero))
 	r.Get("/quien-soy", func(w http.ResponseWriter, req *http.Request) {
-		id, ok := identidad.IdentidadDeContexto(req.Context())
+		id, ok := identidad.DeContexto(req.Context())
 		if !ok {
 			api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Sin identidad.", nil)
 			return
