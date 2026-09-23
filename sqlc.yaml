@@ -50,3 +50,32 @@ sql:
           nucleo_outbox: Outbox
           nucleo_descuadre: Descuadre
           nucleo_conciliacion_corrida: ConciliacionCorrida
+  # Repositorio de auth (fase0-2): su propio esquema y su propio rol, sin el ledger del núcleo.
+  - engine: postgresql
+    schema:
+      - bd/migraciones-auth
+    queries: bd/consultas-auth
+    gen:
+      go:
+        package: repositorio
+        out: internal/auth/internal/repositorio
+        sql_package: pgx/v5
+        sql_driver: github.com/jackc/pgx/v5
+        emit_interface: true
+        emit_json_tags: true
+        emit_empty_slices: true
+        wrap_errors: true
+        rename:
+          auth_parte: Parte
+          auth_persona: Persona
+          auth_empresa: Empresa
+          auth_roles_de_parte: RolDeParte
+          auth_credenciale: Credencial
+          auth_transiciones_credencial: TransicionCredencial
+          auth_eventos_autenticacion: EventoAutenticacion
+          auth_sesione: Sesion
+          auth_outbox: AvisoOutbox
+          auth_consentimiento: Consentimiento
+          auth_textos_consentimiento: TextoConsentimiento
+          auth_kyc_estado: EstadoKYC
+          auth_kyc_verificacione: VerificacionKYC

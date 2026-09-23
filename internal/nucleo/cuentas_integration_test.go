@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
@@ -115,11 +116,7 @@ func TestUsuarioDePruebaDeFase0TieneSusSubcuentas(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	ctx := t.Context()
 
-	if _, err := pool.Exec(ctx,
-		"INSERT INTO users (id, email) VALUES ($1::uuid, $2) ON CONFLICT (id) DO NOTHING",
-		"00000000-0000-4000-8000-000000000001", "usuario-prueba@centinela.test"); err != nil {
-		t.Fatalf("sembrar el usuario de prueba: %v", err)
-	}
+	auth.SembrarParteDePrueba(t, pool)
 
 	s := NewServicio(pool, nil, nil, nil, nil)
 	if _, err := s.AbrirSubcuentasDeUsuario(ctx, "00000000-0000-4000-8000-000000000001"); err != nil {

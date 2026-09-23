@@ -149,7 +149,7 @@ func TestHU_NF_05_Criterio1y2_HistorialPropioYRechazoDeAjeno(t *testing.T) {
 	ajeno := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
 	sembrarDeposito(t, pool, propio, 100000)
 	sembrarDeposito(t, pool, ajeno, 200000)
-	r := NewRouter(pool, identidadFija{propio}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{propio}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -183,7 +183,7 @@ func TestHU_NF_05_Criterio3_CuentaSinMovimientosListaVacia(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -210,7 +210,7 @@ func TestHU_NF_05_Criterio4_1_DepositoSeClasificaConElTipoCanonico(t *testing.T)
 		{cuenta: nucleo.CuentaCustodiaBanco, monto: 100000},
 		{cuenta: nucleo.NombreCuentaDisponible(usuarioID), monto: -100000},
 	})
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -242,7 +242,7 @@ func TestHU_NF_05_Criterio4_3_EnvioSinGmfUnaSolaLinea(t *testing.T) {
 		{cuenta: nucleo.NombreCuentaRetenido(emisor), monto: 500000},
 		{cuenta: nucleo.NombreCuentaDisponible(receptor), monto: -500000},
 	})
-	r := NewRouter(pool, identidadFija{emisor}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{emisor}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -271,7 +271,7 @@ func TestHU_NF_05_Criterio4_4_EnvioConGmfDosLineas(t *testing.T) {
 		{cuenta: nucleo.NombreCuentaRetenido(emisor), monto: -500000},
 		{cuenta: nucleo.CuentaGMFPorPagar, monto: -2000},
 	})
-	r := NewRouter(pool, identidadFija{emisor}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{emisor}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -310,7 +310,7 @@ func TestHU_NF_05_Criterio4_5_CompensacionMuestraSalidaDevolucionYGravamen(t *te
 		{cuenta: nucleo.CuentaLiquidacionPendienteRiel, monto: 500000},
 		{cuenta: nucleo.CuentaGMFPorPagar, monto: 2000},
 	})
-	r := NewRouter(pool, identidadFija{emisor}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{emisor}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -355,7 +355,7 @@ func TestHU_NF_05_Criterio8_OrdenRecienteYEstable(t *testing.T) {
 		{cuenta: nucleo.CuentaCustodiaBanco, monto: 300000},
 		{cuenta: nucleo.NombreCuentaDisponible(usuarioID), monto: -300000},
 	})
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -377,7 +377,7 @@ func TestHU_NF_05_Criterio10_2_InsercionDuranteLaPaginacion(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
 	_, esperados := sembrarHistorialDePaginacion(t, pool, usuarioID)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	pagina1, meta1 := consumirPaginaDeHistorial(t, r, "página 1", "?limit=2", 2, true, esperados)
 	cursor := int64(meta1["next_cursor"].(float64))
@@ -411,7 +411,7 @@ func TestHU_NF_05_Criterio5y6y7_SignosCentavosYCOP(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
 	sembrarDeposito(t, pool, usuarioID, 9007199254740993)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -441,7 +441,7 @@ func TestHU_NF_05_Criterio12_DosMarcasDeTiempo(t *testing.T) {
 		{cuenta: nucleo.CuentaCustodiaBanco, monto: 100000},
 		{cuenta: nucleo.NombreCuentaDisponible(usuarioID), monto: -100000},
 	})
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirMovimientos(t, r, "")
 	if rec.Code != http.StatusOK {
@@ -470,7 +470,7 @@ func TestHU_NF_05_Criterio10_PaginacionSinRepetirNiPerderNiPartir(t *testing.T) 
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
 	retencion, esperados := sembrarHistorialDePaginacion(t, pool, usuarioID)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	pagina1, meta1 := consumirPaginaDeHistorial(t, r, "página 1", "?limit=2", 2, true, esperados)
 	cursor := int64(meta1["next_cursor"].(float64))
@@ -547,7 +547,7 @@ func TestHU_NF_05_Criterio11_LaConsultaNoEscribeEnElDiario(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
 	sembrarDeposito(t, pool, usuarioID, 100000)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	asientosAntes, lineasAntes := contarDiario(t, pool)
 	rec := pedirMovimientos(t, r, "")

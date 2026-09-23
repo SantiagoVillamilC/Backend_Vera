@@ -23,7 +23,7 @@ func (a autenticadorDePrueba) TokenValido(presentado string) bool { return prese
 var custodioDePrueba = autenticadorDePrueba{token: tokenCustodioDePrueba}
 
 func routerDeConfirmacion() http.Handler {
-	return NewRouter(nil, auth.UsuarioDePrueba{}, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba)
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 }
 
 func pedirConfirmacion(t *testing.T, r http.Handler, cuerpo, cabecera string) *httptest.ResponseRecorder {
@@ -65,7 +65,7 @@ func TestNewRouterSinAutenticadorDelCustodioFalla(t *testing.T) {
 		}
 	}()
 
-	NewRouter(nil, auth.UsuarioDePrueba{}, nucleo.NewServicio(nil, nil, nil, nil, nil), nil)
+	NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), nil, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 }
 
 // HU-NF-07 Criterio 5: solo el custodio simulado confirma; cualquier otra procedencia da 401.
@@ -97,10 +97,10 @@ func TestHU_NF_07_Criterio1_ReferenciaYMontoObligatorios(t *testing.T) {
 		cuerpo string
 		campo  string
 	}{
-		"sin referencia": {cuerpo: `{"estado":"aprobado","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "Referencia"},
-		"sin monto":      {cuerpo: `{"referencia":"dep-x","estado":"aprobado","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "Monto"},
-		"monto cero":     {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"0","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "Monto"},
-		"monto negativo": {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"-5","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "Monto"},
+		"sin referencia": {cuerpo: `{"estado":"aprobado","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "referencia"},
+		"sin monto":      {cuerpo: `{"referencia":"dep-x","estado":"aprobado","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "monto"},
+		"monto cero":     {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"0","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "monto"},
+		"monto negativo": {cuerpo: `{"referencia":"dep-x","estado":"aprobado","monto":"-5","ocurrido_en":"2026-09-16T10:00:00Z"}`, campo: "monto"},
 	}
 
 	r := routerDeConfirmacion()
@@ -130,8 +130,8 @@ func TestHU_NF_07_Criterio17_EstadoObligatorioYValido(t *testing.T) {
 			rec := pedirConfirmacion(t, r, cuerpo, "Bearer "+tokenCustodioDePrueba)
 
 			assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
-			if !detalleSenalaCampo(t, rec, "Estado") {
-				t.Errorf("details no señala Estado: %s", rec.Body.String())
+			if !detalleSenalaCampo(t, rec, "estado") {
+				t.Errorf("details no señala estado: %s", rec.Body.String())
 			}
 		})
 	}
@@ -145,8 +145,8 @@ func TestHU_NF_07_Criterio11_OcurridoEnObligatorio(t *testing.T) {
 		"Bearer "+tokenCustodioDePrueba)
 
 	assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
-	if !detalleSenalaCampo(t, rec, "OcurridoEn") {
-		t.Errorf("details no señala OcurridoEn: %s", rec.Body.String())
+	if !detalleSenalaCampo(t, rec, "ocurrido_en") {
+		t.Errorf("details no señala ocurrido_en: %s", rec.Body.String())
 	}
 }
 

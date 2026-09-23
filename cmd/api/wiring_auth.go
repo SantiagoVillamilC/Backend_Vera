@@ -1,0 +1,201 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/contadores"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/kyc"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/correosim"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/httpserver"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/jobs"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/kycsim"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/otpsim"
+	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/whatsapp"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+)
+
+// clienteRedis construye el cliente de auth y avisa si no responde, sin detener el arranque.
+func clienteRedis(cfg *Config) *redis.Client {
+	cliente, err := platformredis.NuevoCliente(cfg.Auth.RedisURL)
+	if err != nil {
+		slog.Error("no se pudo construir el cliente Redis", "err", err)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := cliente.Ping(ctx).Err(); err != nil {
+		slog.Warn("Redis no responde al arrancar, auth fallará cerrado", "err", err)
+	}
+	return cliente
+}
+
+// contadoresDeAuth construye el adaptador Redis del puerto de contadores.
+func contadoresDeAuth(cliente *redis.Client) (auth.Contadores, error) {
+	return contadores.NuevoRedis(cliente)
+}
+
+// opcionLimpiezaDeAuth registra el cierre de pendientes vencidas en la cola auth de River.
+func opcionLimpiezaDeAuth(pool *pgxpool.Pool, cfg *Config) jobs.OpcionDeAuth {
+	gestor := auth.NuevoGestorDeEstados(auth.NuevoRegistradorEventos(pool))
+	return jobs.ConTrabajoDeAuth(
+		auth.NuevoCerrarPendientesWorker(pool, gestor, cfg.Auth.VentanaPendiente),
+		auth.TrabajoPeriodicoDeLimpieza(cfg.Auth.LimpiezaInterval),
+	)
+}
+
+// opcionOutboxDeAuth registra el barrido del outbox y devuelve el despachador para registrarle efectos.
+func opcionOutboxDeAuth(pool *pgxpool.Pool, canal auth.CanalOTP, cfg *Config) (jobs.OpcionDeAuth, *auth.DespachadorDeAvisos) {
+	notificador := auth.NuevoNotificadorDeAvisos(correosim.Nuevo(), canal)
+	despachador := auth.NuevoDespachadorDeAvisos(pool, notificador, auth.PoliticaReintento{
+		Base:   cfg.Auth.OutboxBackoffBase,
+		Factor: cfg.Auth.OutboxBackoffFactor,
+		Tope:   cfg.Auth.OutboxBackoffMax,
+	})
+	opcion := jobs.ConTrabajoDeAuth(
+		auth.NuevoDespacharAvisosWorker(despachador),
+		auth.TrabajoPeriodicoDeOutbox(cfg.Auth.OutboxInterval),
+	)
+	return opcion, despachador
+}
+
+// derivadorDeContrasenas arma Argon2id de producción con el tope de concurrencia del semáforo.
+func derivadorDeContrasenas(cfg *Config) (auth.Derivador, error) {
+	argon2, err := auth.NuevoDerivadorArgon2(auth.ParametrosArgon2Produccion())
+	if err != nil {
+		return nil, fmt.Errorf("derivador Argon2id: %w", err)
+	}
+	derivador, err := auth.NuevoDerivadorSemaforizado(argon2, cfg.Auth.Argon2Concurrencia)
+	if err != nil {
+		return nil, fmt.Errorf("semáforo de Argon2id: %w", err)
+	}
+	return derivador, nil
+}
+
+// canalOTP elige el canal de OTP por OTP_CANAL; el adaptador de demo queda fuera del harness.
+func canalOTP(cfg *Config) (auth.CanalOTP, error) {
+	switch cfg.Auth.OTPCanal {
+	case "simulador":
+		simulador, err := otpsim.Nuevo(cfg.Auth.OTPSimuladorCodigoFijo)
+		if err != nil {
+			return nil, err
+		}
+		return simulador, nil
+	case "cloudapi":
+		return whatsapp.Nuevo(whatsapp.BaseGraphAPI, cfg.Auth.WhatsAppToken, cfg.Auth.WhatsAppPhoneID, cfg.Auth.WhatsAppTemplate, nil), nil
+	case "demo":
+		return nil, errors.New("OTP_CANAL=demo: el adaptador de WhatsApp de demostracion no esta implementado")
+	default:
+		return nil, fmt.Errorf("OTP_CANAL desconocido %q", cfg.Auth.OTPCanal)
+	}
+}
+
+// tokensDeAcceso construye el firmador desde JWT_SECRET, JWT_ISSUER y JWT_AUDIENCE.
+func tokensDeAcceso(cfg *Config) (*auth.TokensDeAcceso, error) {
+	return auth.NuevoTokensDeAcceso([]byte(cfg.JWTSecret), cfg.Auth.JWTIssuer, cfg.Auth.JWTAudience)
+}
+
+// denylistDeSesiones construye la denylist sobre el cliente Redis compartido.
+func denylistDeSesiones(cliente *redis.Client) (auth.RevocadorDeSesiones, error) {
+	return denylist.NuevoRedis(cliente)
+}
+
+// lectorKYC construye el lector real del nivel de KYC que el núcleo consulta.
+func lectorKYC(pool *pgxpool.Pool) nucleo.LectorNivelKYC {
+	return kyc.NuevoLectorNivelKYC(pool)
+}
+
+// proveedorKYC elige el proveedor por KYC_PROVEEDOR; sin default, un valor ajeno falla al arrancar.
+func proveedorKYC(cfg *Config) (kyc.ProveedorKYC, error) {
+	switch cfg.Auth.KYCProveedor {
+	case "simulador":
+		return kycsim.Nuevo(cfg.Auth.KYCResultado)
+	default:
+		return nil, fmt.Errorf("KYC_PROVEEDOR desconocido %q", cfg.Auth.KYCProveedor)
+	}
+}
+
+// nuevoKYCHandler arma el módulo de KYC y su handler autenticado sobre el servicio del núcleo.
+func nuevoKYCHandler(pool *pgxpool.Pool, cfg *Config, subcuentas kyc.AbridorDeSubcuentas) (httpserver.KYCHandler, error) {
+	proveedor, err := proveedorKYC(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return httpserver.NuevoKYC(kyc.NuevoServicio(pool, proveedor, cfg.Auth.KYCProveedor, subcuentas)), nil
+}
+
+// identidadJWT arma el adaptador de la petición que valida el access y consulta la denylist del sid.
+func identidadJWT(cfg *Config, denylist auth.RevocadorDeSesiones) (httpserver.IdentidadDeLaPeticion, error) {
+	tokens, err := tokensDeAcceso(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &adaptadorJWT{tokens: tokens, denylist: denylist}, nil
+}
+
+// adaptadorJWT implementa httpserver.IdentidadDeLaPeticion sobre el access firmado.
+type adaptadorJWT struct {
+	tokens   *auth.TokensDeAcceso
+	denylist auth.RevocadorDeSesiones
+}
+
+// Identidad valida el bearer, consulta la denylist y traduce el ctx a la identidad de dominio.
+func (a *adaptadorJWT) Identidad(r *http.Request) (identidad.Identidad, error) {
+	token, err := bearerDe(r)
+	if err != nil {
+		return identidad.Identidad{}, err
+	}
+	claims, err := a.tokens.Verificar(token)
+	if err != nil {
+		return identidad.Identidad{}, err
+	}
+	id := identidad.Identidad{
+		UsuarioID: claims.ParteID.String(),
+		SesionID:  claims.SesionID.String(),
+		ParteID:   claims.ParteID.String(),
+		Contexto:  auth.ContextoUsuario,
+		Rol:       claims.Rol,
+	}
+	if empresaID, esEmpresa := auth.EmpresaDeContexto(claims.Contexto); esEmpresa {
+		id.UsuarioID = empresaID.String()
+		id.Contexto = auth.ContextoEmpresa
+	}
+	if a.denylist == nil {
+		return id, nil
+	}
+	revocado, err := a.denylist.Revocado(r.Context(), claims.SesionID)
+	if err != nil {
+		return id, auth.ConFailClosed(err)
+	}
+	if revocado {
+		return id, auth.ErrSesionRevocada
+	}
+	return id, nil
+}
+
+// bearerDe extrae el token del encabezado Authorization Bearer.
+func bearerDe(r *http.Request) (string, error) {
+	const prefijo = "Bearer "
+	encabezado := r.Header.Get("Authorization")
+	if len(encabezado) <= len(prefijo) || !strings.EqualFold(encabezado[:len(prefijo)], prefijo) {
+		return "", auth.ErrSinIdentidad
+	}
+	token := strings.TrimSpace(encabezado[len(prefijo):])
+	if token == "" {
+		return "", auth.ErrSinIdentidad
+	}
+	return token, nil
+}
+
+var _ httpserver.IdentidadDeLaPeticion = (*adaptadorJWT)(nil)

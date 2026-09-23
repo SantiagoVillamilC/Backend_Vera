@@ -123,3 +123,63 @@ func tieneTrabajo(trabajos []trabajoPeriodico, id string) bool {
 	}
 	return false
 }
+
+// argsAuthFalso es un trabajo de auth vacío: la prueba solo ejercita el plan del cliente.
+type argsAuthFalso struct{}
+
+// Kind es el nombre estable de la fila encolada.
+func (argsAuthFalso) Kind() string { return "prueba_auth" }
+
+type workerAuthFalso struct {
+	river.WorkerDefaults[argsAuthFalso]
+}
+
+func (w *workerAuthFalso) Work(context.Context, *river.Job[argsAuthFalso]) error { return nil }
+
+// AUT-A1-03: la opción de auth agrega la cola auth y su periódico sin alterar los del núcleo.
+func TestConTrabajoDeAuthAgregaLaColaYNoTocaLosPeriodicosDelNucleo(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{OutboxInterval: 5 * time.Second, ConciliationInterval: time.Minute, ExpirationInterval: time.Minute, ExpirationTTL: time.Minute}
+	periodicosNucleo := trabajosPeriodicos(cfg)
+
+	sinAuth, err := planificar()
+	if err != nil {
+		t.Fatalf("planificar sin auth: %v", err)
+	}
+	if sinAuth.usarColaAuth || len(sinAuth.periodicos) != 0 {
+		t.Errorf("plan sin auth = %+v, quiero sin cola auth ni periódicos", sinAuth)
+	}
+
+	conAuth, err := planificar(ConTrabajoDeAuth(&workerAuthFalso{}, TrabajoPeriodicoDeAuth{
+		ID:      "auth_prueba",
+		Periodo: time.Minute,
+		Args:    func() (river.JobArgs, *river.InsertOpts) { return argsAuthFalso{}, &river.InsertOpts{Queue: ColaAuth} },
+	}))
+	if err != nil {
+		t.Fatalf("planificar con auth: %v", err)
+	}
+	if !conAuth.usarColaAuth {
+		t.Error("la opción de auth no marca la cola auth")
+	}
+	if len(conAuth.periodicos) != 1 || conAuth.periodicos[0].ID != "auth_prueba" {
+		t.Errorf("periódicos de auth = %+v, quiero uno con id auth_prueba", conAuth.periodicos)
+	}
+	if len(periodicosNucleo) != 3 {
+		t.Errorf("periódicos del núcleo = %d, quiero 3", len(periodicosNucleo))
+	}
+	for _, id := range []string{"despachar_outbox", "conciliar", "expirar_intenciones"} {
+		if !tieneTrabajo(periodicosNucleo, id) {
+			t.Errorf("falta el trabajo del núcleo %q", id)
+		}
+	}
+}
+
+func TestConTrabajoDeAuthRechazaElTrabajoIncompleto(t *testing.T) {
+	t.Parallel()
+
+	_, err := planificar(ConTrabajoDeAuth(&workerAuthFalso{}, TrabajoPeriodicoDeAuth{ID: "sin_periodo"}))
+	if err == nil {
+		t.Fatal("planificar aceptó un trabajo periódico sin periodo ni args")
+	}
+}

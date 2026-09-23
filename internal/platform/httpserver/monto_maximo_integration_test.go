@@ -28,7 +28,7 @@ func TestHU_NF_06_Criterio14_MontoMaximoDevuelveElSaldoExento(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nucleo.LectorNivelKYCFijo{}, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 100000000, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirMontoMaximo(t, r, "")
 
@@ -59,7 +59,7 @@ func TestHU_NF_06_Criterio14_MontoMaximoDevuelveElSaldoExento(t *testing.T) {
 func TestHU_NF_06_Criterio14_MontoMaximoSinCredencialDa401(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nucleo.LectorNivelKYCFijo{}, nil, nil, nil)
-	r := NewRouter(pool, auth.UsuarioDePrueba{}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 
 	req := httptest.NewRequest(http.MethodGet, "/transferencias/maximo", nil)
 	rec := httptest.NewRecorder()
@@ -73,7 +73,7 @@ func TestHU_NF_06_Criterio14_MontoMaximoDeOtroUsuarioSeRechaza(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	servicio := nucleo.NewServicio(pool, nucleo.LectorNivelKYCFijo{}, nil, nil, nil)
 	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 100000000, 0)
-	r := NewRouter(pool, identidadFija{usuarioID}, servicio, custodioDePrueba)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}})
 
 	rec := pedirMontoMaximo(t, r, "?usuario_id=00000000-0000-4000-8000-000000000002")
 

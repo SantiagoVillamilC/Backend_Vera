@@ -1,0 +1,165 @@
+package auth
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
+)
+
+// Tipos de aviso que viajan por el outbox de auth.
+const (
+	TipoAvisoContrasenaCambiada     = "contrasena_cambiada"
+	TipoAvisoCambioNumero           = "cambio_numero"
+	TipoAvisoRecuperacionSolicitada = "recuperacion_solicitada"
+	TipoAvisoAbrirSubcuentas        = "abrir_subcuentas"
+	TipoAvisoRegistroDuplicado      = "registro_duplicado"
+)
+
+// Destinos que cubre el puerto Notificador: correo y whatsapp.
+const (
+	DestinoCorreo   = "correo"
+	DestinoWhatsApp = "whatsapp"
+)
+
+// Aviso es una notificación a encolar en el outbox; su payload nunca lleva un secreto.
+type Aviso struct {
+	Tipo             string
+	Destino          string
+	Correo           string
+	Celular          string
+	Plantilla        string
+	ParteID          string
+	NuevoEnmascarado string
+	Fecha            string
+	ContactoSoporte  string
+}
+
+// payloadAviso es la forma persistida del aviso: destino, dirección, plantilla, referencia y el cambio enmascarado.
+type payloadAviso struct {
+	Destino          string `json:"destino"`
+	Correo           string `json:"correo,omitempty"`
+	Celular          string `json:"celular,omitempty"`
+	Plantilla        string `json:"plantilla"`
+	ParteID          string `json:"parte_id,omitempty"`
+	NuevoEnmascarado string `json:"numero_nuevo_enmascarado,omitempty"`
+	Fecha            string `json:"fecha,omitempty"`
+	ContactoSoporte  string `json:"contacto_soporte,omitempty"`
+}
+
+// Notificador entrega un aviso por el canal que su destino indique.
+type Notificador interface {
+	Enviar(ctx context.Context, aviso Aviso) (IDMensaje string, err error)
+}
+
+// NotificadorDeAvisos entrega los avisos por correo o por WhatsApp según su destino.
+type NotificadorDeAvisos struct {
+	correo   CanalCorreo
+	whatsapp CanalOTP
+}
+
+// NuevoNotificadorDeAvisos construye el notificador con sus dos canales.
+func NuevoNotificadorDeAvisos(correo CanalCorreo, whatsapp CanalOTP) *NotificadorDeAvisos {
+	return &NotificadorDeAvisos{correo: correo, whatsapp: whatsapp}
+}
+
+// Enviar escoge el canal por el destino del aviso y devuelve el id del proveedor.
+func (n *NotificadorDeAvisos) Enviar(ctx context.Context, aviso Aviso) (string, error) {
+	var (
+		id  string
+		err error
+	)
+	switch aviso.Destino {
+	case DestinoCorreo:
+		id, err = n.correo.Enviar(ctx, aviso.Correo, asuntoDeAviso(aviso), cuerpoDeAviso(aviso))
+	case DestinoWhatsApp:
+		id, err = n.whatsapp.Enviar(ctx, aviso.Celular, cuerpoDeAviso(aviso))
+	default:
+		return "", fmt.Errorf("auth: destino de aviso desconocido %q", aviso.Destino)
+	}
+	if err != nil {
+		return "", fmt.Errorf("auth: entregar el aviso %q por %s: %w", aviso.Tipo, aviso.Destino, err)
+	}
+	return id, nil
+}
+
+// EncolarAviso inserta el aviso en auth.outbox dentro de la transacción del caso de uso.
+func EncolarAviso(ctx context.Context, q *repositorio.Queries, aviso Aviso) error {
+	payload, err := payloadDeAviso(aviso)
+	if err != nil {
+		return err
+	}
+	if _, err := q.InsertarAviso(ctx, repositorio.InsertarAvisoParams{Tipo: aviso.Tipo, Payload: payload}); err != nil {
+		return fmt.Errorf("auth: encolar el aviso %q: %w", aviso.Tipo, err)
+	}
+	return nil
+}
+
+// payloadDeAviso valida el aviso y devuelve su forma persistida, sin ningún secreto.
+func payloadDeAviso(aviso Aviso) ([]byte, error) {
+	if err := aviso.valido(); err != nil {
+		return nil, err
+	}
+	payload, err := json.Marshal(payloadAviso{
+		Destino:          aviso.Destino,
+		Correo:           aviso.Correo,
+		Celular:          aviso.Celular,
+		Plantilla:        aviso.Plantilla,
+		ParteID:          aviso.ParteID,
+		NuevoEnmascarado: aviso.NuevoEnmascarado,
+		Fecha:            aviso.Fecha,
+		ContactoSoporte:  aviso.ContactoSoporte,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("auth: serializar el payload del aviso %q: %w", aviso.Tipo, err)
+	}
+	return payload, nil
+}
+
+// valido exige tipo y, cuando el aviso notifica, la dirección de su destino y la plantilla.
+func (a Aviso) valido() error {
+	if a.Tipo == "" {
+		return errors.New("auth: el aviso necesita tipo")
+	}
+	switch a.Destino {
+	case "":
+		return nil
+	case DestinoCorreo:
+		if a.Correo == "" || a.Plantilla == "" {
+			return errors.New("auth: el aviso por correo necesita correo y plantilla")
+		}
+	case DestinoWhatsApp:
+		if a.Celular == "" || a.Plantilla == "" {
+			return errors.New("auth: el aviso por whatsapp necesita celular y plantilla")
+		}
+	default:
+		return fmt.Errorf("auth: destino de aviso desconocido %q", a.Destino)
+	}
+	return nil
+}
+
+// asuntoDeAviso arma el asunto del correo; el texto definitivo está pendiente de fijar.
+func asuntoDeAviso(aviso Aviso) string {
+	switch aviso.Tipo {
+	case TipoAvisoCambioNumero:
+		return "[PLANTILLA PENDIENTE] Aviso de cambio de numero"
+	case TipoAvisoRegistroDuplicado:
+		return "[PLANTILLA PENDIENTE] Intento de registro con tu documento"
+	default:
+		return fmt.Sprintf("[PLANTILLA PENDIENTE] Aviso %s", aviso.Tipo)
+	}
+}
+
+// cuerpoDeAviso arma el cuerpo sin secretos; el del cambio lleva el numero enmascarado y el contacto de soporte.
+func cuerpoDeAviso(aviso Aviso) string {
+	switch aviso.Tipo {
+	case TipoAvisoCambioNumero:
+		return fmt.Sprintf("[PLANTILLA PENDIENTE] Tu número cambió a %s el %s. Si no fuiste tú, escribe a %s.", aviso.NuevoEnmascarado, aviso.Fecha, aviso.ContactoSoporte)
+	case TipoAvisoRegistroDuplicado:
+		return "[PLANTILLA PENDIENTE] Alguien intentó registrar una cuenta con tu documento y no se creó nada. Si fuiste tú, ya tienes una cuenta: inicia sesión. Si no fuiste tú, escribe a soporte."
+	default:
+		return fmt.Sprintf("[PLANTILLA PENDIENTE] Plantilla %q: hubo un cambio. Si no fuiste tú, escribe a soporte.", aviso.Plantilla)
+	}
+}
