@@ -40,6 +40,9 @@ func (s *Servicio) ejecutarEnvioPorLlave(ctx context.Context, solicitud Solicitu
 	if solicitud.Monto <= 0 {
 		return Transferencia{}, ErrMontoInvalido
 	}
+	if solicitud.Moneda != "" && solicitud.Moneda != MonedaCOP {
+		return Transferencia{}, ErrMonedaInvalida
+	}
 	resolucion, err := s.ResolverLlave(ctx, solicitud.TipoLlave, solicitud.Llave)
 	if err != nil {
 		return Transferencia{}, err

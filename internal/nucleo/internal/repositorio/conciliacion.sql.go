@@ -129,6 +129,65 @@ func (q *Queries) InsertarDescuadre(ctx context.Context, arg InsertarDescuadrePa
 	return i, err
 }
 
+const insertarDescuadreSiNoHayAbierto = `-- name: InsertarDescuadreSiNoHayAbierto :one
+INSERT INTO nucleo.descuadre (
+    tipo, transferencia_id, referencia_externa,
+    monto_interno, monto_externo,
+    ventana_desde, ventana_hasta
+) VALUES (
+    $1, $2, $3,
+    $4, $5,
+    $6, $7
+)
+ON CONFLICT (tipo, (COALESCE(transferencia_id::text, referencia_externa))) WHERE resuelto_en IS NULL
+    DO NOTHING
+RETURNING id, tipo, transferencia_id, referencia_externa, monto_interno, monto_externo,
+          ventana_desde, ventana_hasta, detectado_en, resuelto_en, resolucion
+`
+
+type InsertarDescuadreSiNoHayAbiertoParams struct {
+	Tipo              string             `json:"tipo"`
+	TransferenciaID   pgtype.UUID        `json:"transferencia_id"`
+	ReferenciaExterna pgtype.Text        `json:"referencia_externa"`
+	MontoInterno      pgtype.Int8        `json:"monto_interno"`
+	MontoExterno      pgtype.Int8        `json:"monto_externo"`
+	VentanaDesde      pgtype.Timestamptz `json:"ventana_desde"`
+	VentanaHasta      pgtype.Timestamptz `json:"ventana_hasta"`
+}
+
+// Sin CAS posible (no hay fila de la contraparte que condicionar), así que el índice parcial
+// descuadre_identidad_unico decide: si otra corrida ya ganó la carrera, no filas, sin abortar la
+// transacción (HU-NF-08, criterio 10.3).
+func (q *Queries) InsertarDescuadreSiNoHayAbierto(ctx context.Context, arg InsertarDescuadreSiNoHayAbiertoParams) (Descuadre, error) {
+	row := q.db.QueryRow(ctx, insertarDescuadreSiNoHayAbierto,
+		arg.Tipo,
+		arg.TransferenciaID,
+		arg.ReferenciaExterna,
+		arg.MontoInterno,
+		arg.MontoExterno,
+		arg.VentanaDesde,
+		arg.VentanaHasta,
+	)
+	var i Descuadre
+	err := row.Scan(
+		&i.ID,
+		&i.Tipo,
+		&i.TransferenciaID,
+		&i.ReferenciaExterna,
+		&i.MontoInterno,
+		&i.MontoExterno,
+		&i.VentanaDesde,
+		&i.VentanaHasta,
+		&i.DetectadoEn,
+		&i.ResueltoEn,
+		&i.Resolucion,
+	)
+	if err != nil {
+		err = fmt.Errorf("query InsertarDescuadreSiNoHayAbierto: %w", err)
+	}
+	return i, err
+}
+
 const leerAsientosDeTransferencia = `-- name: LeerAsientosDeTransferencia :many
 SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
   FROM nucleo.journal_entry

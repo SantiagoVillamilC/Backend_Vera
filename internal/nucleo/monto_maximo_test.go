@@ -190,3 +190,39 @@ func TestHU_NF_06_Criterio14_MontoMaximoSinKYCFallaCerrado(t *testing.T) {
 		t.Fatalf("error = %v, quiero ErrKYCNoDisponible", err)
 	}
 }
+
+// TestHU_NF_06_Criterio14_MontoMaximoSinRespuestaDeKYCFallaCerrado cubre que un lector de KYC que
+// falla, por timeout o por tipo de parte desconocido, rechaza sin abrir la transacción ni devolver
+// un tope silencioso (HU-NF-06, criterio 14, mismo patrón que el criterio 10 en transferencia_test.go).
+func TestHU_NF_06_Criterio14_MontoMaximoSinRespuestaDeKYCFallaCerrado(t *testing.T) {
+	t.Parallel()
+
+	usuarioID := uuid.NewString()
+	casos := map[string]error{
+		"timeout del lector":               context.DeadlineExceeded,
+		"tipo de parte desconocido en kyc": errTipoDeParteDesconocidoSimulado,
+	}
+	for nombre, causa := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+
+			var eventos []string
+			kyc := lectorNivelKYCFalso{fn: func(context.Context, string) (string, error) {
+				return "", causa
+			}}
+			servicio := NewServicio(nil, kyc, nil, nil, nil)
+			servicio.pool = fakeAbridor{tx: &fakeTransaccion{eventos: &eventos}}
+
+			monto, err := servicio.MontoMaximoEnviable(context.Background(), usuarioID, momentoDeMontoMaximo)
+			if !errors.Is(err, causa) {
+				t.Fatalf("err = %v, quiero que envuelva %v: el fallo del lector de KYC no puede dejar pasar el cálculo", err, causa)
+			}
+			if monto != 0 {
+				t.Fatalf("monto = %d, quiero 0: ningún tope silencioso ante un lector de KYC que falla", monto)
+			}
+			if len(eventos) != 0 {
+				t.Fatalf("eventos de la transacción = %v, quiero ninguno: el fallo del lector no debe abrir la transacción", eventos)
+			}
+		})
+	}
+}

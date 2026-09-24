@@ -331,6 +331,8 @@ func escribirErrorDeTransferencia(w http.ResponseWriter, r *http.Request, err er
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The destination is required.", nil)
 	case errors.Is(err, ErrMontoInvalido):
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The amount is not a positive integer of minor units.", nil)
+	case errors.Is(err, ErrMonedaInvalida):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The currency must be COP.", nil)
 	case errors.Is(err, ErrDestinoNoExiste):
 		api.WriteError(w, http.StatusNotFound, "RecipientNotFound", "The destination does not exist.", nil)
 	case errors.Is(err, ErrDestinoPropio):
@@ -421,6 +423,8 @@ func escribirErrorDeEnvioPorLlave(w http.ResponseWriter, r *http.Request, err er
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The destination key is not valid.", nil)
 	case errors.Is(err, ErrMontoInvalido):
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The amount is not a positive integer of minor units.", nil)
+	case errors.Is(err, ErrMonedaInvalida):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "The currency must be COP.", nil)
 	case errors.Is(err, ErrLlaveNoEncontrada):
 		api.WriteError(w, http.StatusNotFound, "RecipientNotFound", "The destination key does not exist.", nil)
 	case errors.Is(err, ErrDirectorioSinRespuesta), errors.Is(err, ErrDirectorioNoDisponible):

@@ -84,3 +84,16 @@ func TestHU_NF_06_Criterio2_EnvioConMontoNoPositivo(t *testing.T) {
 		})
 	}
 }
+
+// HU-NF-06 comparte con HU-NF-10 (criterio 3 de esa historia) el rechazo de una moneda distinta de COP.
+func TestHU_NF_06_MonedaDistintaDeCOPSeRechaza(t *testing.T) {
+	const destino = "00000000-0000-4000-8000-000000000002"
+	cuerpo := `{"destino":"` + destino + `","monto":"1000","moneda":"USD","idempotency_key":"k-1"}`
+
+	req, rec := peticionDeTransferencia(cuerpo)
+	rutaDeTransferencia().ServeHTTP(rec, req)
+	assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
+	if campo := campoDelPrimerDetalle(t, rec); campo != "moneda" {
+		t.Errorf("campo inválido = %q, quiero %q", campo, "moneda")
+	}
+}

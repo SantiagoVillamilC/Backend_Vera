@@ -11,6 +11,24 @@ INSERT INTO nucleo.descuadre (
 RETURNING id, tipo, transferencia_id, referencia_externa, monto_interno, monto_externo,
           ventana_desde, ventana_hasta, detectado_en, resuelto_en, resolucion;
 
+-- name: InsertarDescuadreSiNoHayAbierto :one
+-- Sin CAS posible (no hay fila de la contraparte que condicionar), así que el índice parcial
+-- descuadre_identidad_unico decide: si otra corrida ya ganó la carrera, no filas, sin abortar la
+-- transacción (HU-NF-08, criterio 10.3).
+INSERT INTO nucleo.descuadre (
+    tipo, transferencia_id, referencia_externa,
+    monto_interno, monto_externo,
+    ventana_desde, ventana_hasta
+) VALUES (
+    @tipo, @transferencia_id, @referencia_externa,
+    @monto_interno, @monto_externo,
+    @ventana_desde, @ventana_hasta
+)
+ON CONFLICT (tipo, (COALESCE(transferencia_id::text, referencia_externa))) WHERE resuelto_en IS NULL
+    DO NOTHING
+RETURNING id, tipo, transferencia_id, referencia_externa, monto_interno, monto_externo,
+          ventana_desde, ventana_hasta, detectado_en, resuelto_en, resolucion;
+
 -- name: BuscarDescuadresAbiertos :many
 SELECT id, tipo, transferencia_id, referencia_externa, monto_interno, monto_externo,
        ventana_desde, ventana_hasta, detectado_en, resuelto_en, resolucion

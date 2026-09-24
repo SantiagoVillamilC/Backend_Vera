@@ -744,3 +744,56 @@ func TestHU_NF_06_Criterios4y5_DestinoInexistenteYPropio(t *testing.T) {
 		t.Errorf("transferencias del emisor = %d, quiero 0", filas)
 	}
 }
+
+// TestHU_NF_06_Criterio10_TransferirSinRespuestaDeKYCNoDejaReserva cubre los tres fallos del lector de KYC: timeout,
+// tipo de parte desconocido, y un nivel sin regla vigente que evaluarLimite ya rechaza. Ninguno deja fila de
+// transferencia ni retiene dinero (HU-NF-06, criterio 10).
+func TestHU_NF_06_Criterio10_TransferirSinRespuestaDeKYCNoDejaReserva(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil)
+	emisor := uuid.NewString()
+	cuentaEmisor := subcuentaDisponibleDePrueba(t, ctx, base, emisor)
+	fondearDisponibleDePrueba(t, pool, cuentaEmisor, 1000000)
+	receptor := uuid.NewString()
+	subcuentaDisponibleDePrueba(t, ctx, base, receptor)
+
+	casos := map[string]struct {
+		nivel    string
+		causa    error
+		esperado error
+	}{
+		"timeout del lector":               {causa: context.DeadlineExceeded, esperado: context.DeadlineExceeded},
+		"tipo de parte desconocido en kyc": {causa: errTipoDeParteDesconocidoSimulado, esperado: errTipoDeParteDesconocidoSimulado},
+		"nivel sin regla vigente":          {nivel: "nivel_inventado_sin_regla", esperado: ErrReglaLimiteNoVigente},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			kyc := lectorNivelKYCFalso{fn: func(context.Context, string) (string, error) {
+				return caso.nivel, caso.causa
+			}}
+			s := NewServicio(pool, kyc, nil, nil, nil, ConResolutorDestino(resolutorDePrueba{"receptor": receptor}))
+
+			_, _, err := s.Transferir(ctx, SolicitudTransferencia{
+				UsuarioID:      emisor,
+				CuentaOrigen:   cuentaEmisor,
+				LlaveDestino:   "receptor",
+				Monto:          Centavos(1000),
+				Moneda:         "COP",
+				IdempotencyKey: "k-" + uuid.NewString(),
+			})
+			if !errors.Is(err, caso.esperado) {
+				t.Fatalf("err = %v, quiero %v", err, caso.esperado)
+			}
+		})
+	}
+	if filas := contarTransferenciasDeUsuario(t, pool, emisor); filas != 0 {
+		t.Errorf("transferencias del emisor = %d, quiero 0", filas)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, cuentaEmisor); got != 1000000 {
+		t.Errorf("disponible del emisor = %d, quiero 1000000 intacto", got)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, NombreCuentaRetenido(emisor)); got != 0 {
+		t.Errorf("retenido del emisor = %d, quiero 0", got)
+	}
+}

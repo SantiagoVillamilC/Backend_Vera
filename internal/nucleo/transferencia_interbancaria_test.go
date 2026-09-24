@@ -60,6 +60,7 @@ func TestEscribirErrorDeEnvioPorLlaveMapeaCadaRechazo(t *testing.T) {
 	}{
 		"llave invalida":            {err: ErrLlaveInvalida, status: http.StatusUnprocessableEntity, code: "ValidationError"},
 		"monto invalido":            {err: ErrMontoInvalido, status: http.StatusUnprocessableEntity, code: "ValidationError"},
+		"moneda invalida":           {err: ErrMonedaInvalida, status: http.StatusUnprocessableEntity, code: "ValidationError"},
 		"llave no encontrada":       {err: ErrLlaveNoEncontrada, status: http.StatusNotFound, code: "RecipientNotFound"},
 		"directorio sin respuesta":  {err: ErrDirectorioSinRespuesta, status: http.StatusServiceUnavailable, code: "DirectoryUnavailable"},
 		"directorio no disponible":  {err: ErrDirectorioNoDisponible, status: http.StatusServiceUnavailable, code: "DirectoryUnavailable"},
@@ -120,6 +121,11 @@ func TestEjecutarEnvioPorLlaveValidaAntesDeLaTransaccion(t *testing.T) {
 			solicitud: func() SolicitudEnvioPorLlave { s := base; s.TipoLlave = "nip"; return s }(),
 			esperado:  ErrLlaveInvalida,
 		},
+		"moneda distinta de COP": {
+			servicio:  NewServicio(nil, nil, nil, nil, nil, ConDirectorio(directorio)),
+			solicitud: func() SolicitudEnvioPorLlave { s := base; s.Moneda = "USD"; return s }(),
+			esperado:  ErrMonedaInvalida,
+		},
 		"sin directorio": {
 			servicio:  NewServicio(nil, LectorNivelKYCFijo{}, nil, nil, nil),
 			solicitud: base,
@@ -138,6 +144,47 @@ func TestEjecutarEnvioPorLlaveValidaAntesDeLaTransaccion(t *testing.T) {
 			_, err := caso.servicio.ejecutarEnvioPorLlave(t.Context(), caso.solicitud)
 			if !errors.Is(err, caso.esperado) {
 				t.Fatalf("err = %v, quiero %v", err, caso.esperado)
+			}
+		})
+	}
+}
+
+// TestHU_NF_10_Criterio8_EjecutarEnvioPorLlaveSinRespuestaDeKYCFallaCerrado cubre que un lector de KYC que falla, por timeout o por tipo de parte desconocido, rechaza sin abrir la transacción (HU-NF-10, criterio 8).
+func TestHU_NF_10_Criterio8_EjecutarEnvioPorLlaveSinRespuestaDeKYCFallaCerrado(t *testing.T) {
+	t.Parallel()
+
+	directorio := &directorioFalso{fn: func(context.Context, Llave) (ResolucionDirectorio, error) {
+		return ResolucionDirectorio{Entidad: "Banco Vecino", Producto: "Cuenta de ahorros"}, nil
+	}}
+	base := SolicitudEnvioPorLlave{
+		UsuarioID:      uuid.NewString(),
+		CuentaOrigen:   "pasivo:usuario:x:disponible",
+		TipoLlave:      TipoLlaveCelular,
+		Llave:          "3001234567",
+		Monto:          Centavos(1000),
+		Moneda:         MonedaCOP,
+		IdempotencyKey: "k-1",
+	}
+
+	casos := map[string]error{
+		"timeout del lector":               context.DeadlineExceeded,
+		"tipo de parte desconocido en kyc": errTipoDeParteDesconocidoSimulado,
+	}
+	for nombre, causa := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+
+			kyc := lectorNivelKYCFalso{fn: func(context.Context, string) (string, error) {
+				return "", causa
+			}}
+			servicio := NewServicio(nil, kyc, nil, nil, nil, ConDirectorio(directorio))
+
+			transferencia, err := servicio.ejecutarEnvioPorLlave(t.Context(), base)
+			if !errors.Is(err, causa) {
+				t.Fatalf("err = %v, quiero que envuelva %v: el fallo del lector de KYC no puede dejar pasar el envío", err, causa)
+			}
+			if transferencia != (Transferencia{}) {
+				t.Fatalf("transferencia = %+v, quiero la vacía: ningún éxito silencioso con tope infinito", transferencia)
 			}
 		})
 	}

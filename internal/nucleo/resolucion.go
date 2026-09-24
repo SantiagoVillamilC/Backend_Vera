@@ -229,44 +229,52 @@ func (d *detectorDiferencias) escalarExtractoSinLibro(operacion OperacionDeExtra
 	if err != nil || abierto {
 		return err
 	}
-	fila, err := d.insertarDescuadre(TipoDescuadreExtractoSinLibro, uuid.Nil, pgtype.Text{String: referencia, Valid: true},
+	fila, err := d.insertarDescuadreSiNoHayAbierto(TipoDescuadreExtractoSinLibro, uuid.Nil, pgtype.Text{String: referencia, Valid: true},
 		pgtype.Int8{}, pgtype.Int8{Int64: operacion.Monto.Int64(), Valid: true})
 	if err != nil {
 		return err
 	}
-	d.escalar(fila, fmt.Errorf("nucleo: defecto grave: el extracto trae la transferencia %s sin registro en el libro", referencia))
+	if fila == nil {
+		return nil
+	}
+	d.escalar(*fila, fmt.Errorf("nucleo: defecto grave: el extracto trae la transferencia %s sin registro en el libro", referencia))
 	return nil
 }
 
-// escalarMontoDistinto registra ambos montos y escala sin automatizar (criterio 7).
+// escalarMontoDistinto registra ambos montos y escala sin automatizar (criterio 7). Esta ruta nunca
+// llama a aplicarCierre, así que no hay ningún CAS que la proteja: usa el mismo INSERT ...
+// ON CONFLICT DO NOTHING que escalarExtractoSinLibro, porque dos Conciliar() concurrentes pueden
+// encontrar el mismo par a la vez.
 func (d *detectorDiferencias) escalarMontoDistinto(transferencia repositorio.Transferencia, operacion OperacionDeExtractoRiel) error {
 	id := uuid.UUID(transferencia.ID.Bytes)
 	abierto, err := d.hayDescuadreAbierto(TipoDescuadreMontoDistinto, id.String())
 	if err != nil || abierto {
 		return err
 	}
-	fila, err := d.insertarDescuadre(TipoDescuadreMontoDistinto, id, pgtype.Text{},
+	fila, err := d.insertarDescuadreSiNoHayAbierto(TipoDescuadreMontoDistinto, id, pgtype.Text{},
 		pgtype.Int8{Int64: transferencia.Monto, Valid: true}, pgtype.Int8{Int64: operacion.Monto.Int64(), Valid: true})
-	if err != nil {
+	if err != nil || fila == nil {
 		return err
 	}
-	d.escalar(fila, fmt.Errorf("nucleo: montos distintos en %s: interno %d, externo %d", id, transferencia.Monto, operacion.Monto.Int64()))
+	d.escalar(*fila, fmt.Errorf("nucleo: montos distintos en %s: interno %d, externo %d", id, transferencia.Monto, operacion.Monto.Int64()))
 	return nil
 }
 
 // escalarEstadoFinalContradicho registra y escala sin revertir el asiento de cierre ya escrito (criterio 22).
+// Mismo motivo que escalarMontoDistinto: la transferencia ya quedó en un estado final, no hay
+// aplicarCierre que la proteja con CAS, así que el insert usa ON CONFLICT DO NOTHING.
 func (d *detectorDiferencias) escalarEstadoFinalContradicho(transferencia repositorio.Transferencia, operacion OperacionDeExtractoRiel) error {
 	id := uuid.UUID(transferencia.ID.Bytes)
 	abierto, err := d.hayDescuadreAbierto(TipoDescuadreEstadoFinalContradicho, id.String())
 	if err != nil || abierto {
 		return err
 	}
-	fila, err := d.insertarDescuadre(TipoDescuadreEstadoFinalContradicho, id, pgtype.Text{},
+	fila, err := d.insertarDescuadreSiNoHayAbierto(TipoDescuadreEstadoFinalContradicho, id, pgtype.Text{},
 		pgtype.Int8{Int64: transferencia.Monto, Valid: true}, pgtype.Int8{Int64: operacion.Monto.Int64(), Valid: true})
-	if err != nil {
+	if err != nil || fila == nil {
 		return err
 	}
-	d.escalar(fila, fmt.Errorf("nucleo: estado final contradicho en %s: libro %s, extracto %s", id, transferencia.Estado, operacion.Estado))
+	d.escalar(*fila, fmt.Errorf("nucleo: estado final contradicho en %s: libro %s, extracto %s", id, transferencia.Estado, operacion.Estado))
 	return nil
 }
 
@@ -290,12 +298,14 @@ func (d *detectorDiferencias) revisarLaCustodia() error {
 	if err != nil || abierto {
 		return err
 	}
-	fila, err := d.insertarDescuadre(TipoDescuadreCustodiaSaldoDistinto, uuid.Nil, pgtype.Text{String: referenciaCustodia, Valid: true},
+	// referenciaCustodia es una identidad fija, la misma para cualquier corte: sin CAS posible, dos
+	// Conciliar() concurrentes sobre cortes distintos pueden escalar la misma diferencia a la vez.
+	fila, err := d.insertarDescuadreSiNoHayAbierto(TipoDescuadreCustodiaSaldoDistinto, uuid.Nil, pgtype.Text{String: referenciaCustodia, Valid: true},
 		pgtype.Int8{Int64: resultado.MontoInterno.Int64(), Valid: true}, pgtype.Int8{Int64: resultado.MontoExterno.Int64(), Valid: true})
-	if err != nil {
+	if err != nil || fila == nil {
 		return err
 	}
-	d.escalar(fila, fmt.Errorf("nucleo: la custodia interna %d no coincide con el extracto %d al corte %s",
+	d.escalar(*fila, fmt.Errorf("nucleo: la custodia interna %d no coincide con el extracto %d al corte %s",
 		resultado.MontoInterno.Int64(), resultado.MontoExterno.Int64(), corte.Format(time.RFC3339Nano)))
 	return nil
 }
@@ -361,6 +371,29 @@ func (d *detectorDiferencias) insertarDescuadre(tipo string, transferenciaID uui
 	}
 	d.diferencias++
 	return fila, nil
+}
+
+// insertarDescuadreSiNoHayAbierto inserta la diferencia sin CAS posible y no falla si otra corrida
+// concurrente ya ganó la carrera del índice único: el ON CONFLICT DO NOTHING la vuelve un no-op
+// silencioso, sin abortar la transacción de esta corrida (HU-NF-08, criterio 10.3).
+func (d *detectorDiferencias) insertarDescuadreSiNoHayAbierto(tipo string, transferenciaID uuid.UUID, referencia pgtype.Text, montoInterno, montoExterno pgtype.Int8) (*repositorio.Descuadre, error) {
+	fila, err := d.q.InsertarDescuadreSiNoHayAbierto(d.ctx, repositorio.InsertarDescuadreSiNoHayAbiertoParams{
+		Tipo:              tipo,
+		TransferenciaID:   pgtype.UUID{Bytes: transferenciaID, Valid: transferenciaID != uuid.Nil},
+		ReferenciaExterna: referencia,
+		MontoInterno:      montoInterno,
+		MontoExterno:      montoExterno,
+		VentanaDesde:      pgtype.Timestamptz{Time: d.ventana.desde, Valid: true},
+		VentanaHasta:      pgtype.Timestamptz{Time: d.ventana.hasta, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("nucleo: registrar el descuadre %q: %w", tipo, err)
+	}
+	d.diferencias++
+	return &fila, nil
 }
 
 // registrarResuelto inserta la fila ya resuelta por la regla del tipo.

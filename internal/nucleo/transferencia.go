@@ -54,6 +54,9 @@ var ErrSaldoInsuficiente = errors.New("nucleo: el saldo del emisor es insuficien
 // ErrResolutorDestinoNoDisponible reporta que falta el resolutor de la llave de destino.
 var ErrResolutorDestinoNoDisponible = errors.New("nucleo: no hay resolutor de destino configurado")
 
+// ErrMonedaInvalida reporta una moneda distinta de COP, la única que admite la billetera.
+var ErrMonedaInvalida = errors.New("nucleo: la moneda debe ser COP")
+
 // ResolutorDestino traduce la llave de destino a un usuario de la billetera; existe en false cuando no la encuentra.
 type ResolutorDestino interface {
 	UsuarioIDDeDestino(ctx context.Context, llave string) (usuarioID string, existe bool, err error)
@@ -137,6 +140,9 @@ func (s *Servicio) reintentoDeTransferencia(ctx context.Context, solicitud Solic
 func (s *Servicio) ejecutarTransferencia(ctx context.Context, solicitud SolicitudTransferencia) (Transferencia, error) {
 	if solicitud.Monto <= 0 {
 		return Transferencia{}, ErrMontoInvalido
+	}
+	if solicitud.Moneda != "" && solicitud.Moneda != MonedaCOP {
+		return Transferencia{}, ErrMonedaInvalida
 	}
 	if strings.TrimSpace(solicitud.LlaveDestino) == "" {
 		return Transferencia{}, ErrDestinoObligatorio

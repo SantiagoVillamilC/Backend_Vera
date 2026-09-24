@@ -162,6 +162,45 @@ func TestHU_NF_06_Criterio14_TopeDeOperacionMenorQueElMensual(t *testing.T) {
 	t.Logf("con el tope por operación %d, el máximo fue %d; un centavo más dio %v", topeOperacion, maximo, ErrTopeOperacionExcedido)
 }
 
+// TestHU_NF_06_Criterio14_MontoMaximoSinRespuestaDeKYCNoDaTopeSilencioso cubre los tres fallos del lector de KYC contra
+// Postgres real: timeout, tipo de parte desconocido, y un nivel sin regla vigente que el filtro SQL deja sin filas.
+// Ninguno deja pasar un tope silencioso (HU-NF-06, criterio 14, mismo patrón que el criterio 10 en transferencia_integration_test.go).
+func TestHU_NF_06_Criterio14_MontoMaximoSinRespuestaDeKYCNoDaTopeSilencioso(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	momento := time.Now().UTC()
+	base := NewServicio(pool, LectorNivelKYCFijo{}, nil, nil, nil)
+	emisor := uuid.NewString()
+	cuentaEmisor := subcuentaDisponibleDePrueba(t, ctx, base, emisor)
+	fondearDisponibleDePrueba(t, pool, cuentaEmisor, 100000000)
+
+	casos := map[string]struct {
+		nivel    string
+		causa    error
+		esperado error
+	}{
+		"timeout del lector":               {causa: context.DeadlineExceeded, esperado: context.DeadlineExceeded},
+		"tipo de parte desconocido en kyc": {causa: errTipoDeParteDesconocidoSimulado, esperado: errTipoDeParteDesconocidoSimulado},
+		"nivel sin regla vigente":          {nivel: "nivel_inventado_sin_regla", esperado: ErrReglaLimiteNoVigente},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			kyc := lectorNivelKYCFalso{fn: func(context.Context, string) (string, error) {
+				return caso.nivel, caso.causa
+			}}
+			s := NewServicio(pool, kyc, nil, nil, nil)
+
+			maximo, err := s.MontoMaximoEnviable(ctx, emisor, momento)
+			if !errors.Is(err, caso.esperado) {
+				t.Fatalf("err = %v, quiero %v", err, caso.esperado)
+			}
+			if maximo != 0 {
+				t.Fatalf("máximo = %d, quiero 0: ningún tope silencioso ante un lector de KYC que falla", maximo)
+			}
+		})
+	}
+}
+
 // solicitudDeMontoMaximo arma un envío al receptor de prueba con una llave nueva en cada intento (HU-NF-06, criterio 14).
 func solicitudDeMontoMaximo(usuarioID, cuentaOrigen string, monto Centavos) SolicitudTransferencia {
 	return SolicitudTransferencia{

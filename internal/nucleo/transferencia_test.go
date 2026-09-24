@@ -1,6 +1,7 @@
 package nucleo
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -16,6 +17,67 @@ type filaSinResultado struct {
 }
 
 func (f filaSinResultado) Scan(...any) error { return f.err }
+
+// lectorNivelKYCFalso delega en fn, para simular un lector de KYC que falla por timeout o por un tipo de parte desconocido.
+type lectorNivelKYCFalso struct {
+	fn func(ctx context.Context, usuarioID string) (string, error)
+}
+
+func (l lectorNivelKYCFalso) NivelKYC(ctx context.Context, usuarioID string) (string, error) {
+	return l.fn(ctx, usuarioID)
+}
+
+// resolutorDestinoFalso resuelve siempre al mismo destino, sin abrir ninguna conexión real.
+type resolutorDestinoFalso struct {
+	destinoID string
+}
+
+func (r resolutorDestinoFalso) UsuarioIDDeDestino(context.Context, string) (string, bool, error) {
+	return r.destinoID, true, nil
+}
+
+// errTipoDeParteDesconocidoSimulado imita, sin depender de internal/auth/kyc (evita el ciclo de import),
+// el error que nivelDeTipo devuelve hoy para un tipo de parte fuera del modelo.
+var errTipoDeParteDesconocidoSimulado = errors.New("kyc: tipo de parte desconocido: \"fantasma\"")
+
+// TestHU_NF_06_Criterio10_EjecutarTransferenciaSinRespuestaDeKYCFallaCerrado cubre que un lector de KYC que falla, por timeout o por tipo de parte desconocido, rechaza sin abrir la transacción (HU-NF-06, criterio 10).
+func TestHU_NF_06_Criterio10_EjecutarTransferenciaSinRespuestaDeKYCFallaCerrado(t *testing.T) {
+	t.Parallel()
+
+	usuarioID := uuid.NewString()
+	destinos := resolutorDestinoFalso{destinoID: uuid.NewString()}
+
+	casos := map[string]error{
+		"timeout del lector":               context.DeadlineExceeded,
+		"tipo de parte desconocido en kyc": errTipoDeParteDesconocidoSimulado,
+	}
+	for nombre, causa := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+
+			kyc := lectorNivelKYCFalso{fn: func(context.Context, string) (string, error) {
+				return "", causa
+			}}
+			servicio := NewServicio(nil, kyc, nil, nil, nil, ConResolutorDestino(destinos))
+
+			solicitud := SolicitudTransferencia{
+				UsuarioID:      usuarioID,
+				CuentaOrigen:   "pasivo:usuario:" + usuarioID + ":disponible",
+				LlaveDestino:   "llave-beto",
+				Monto:          Centavos(1000),
+				Moneda:         MonedaCOP,
+				IdempotencyKey: "k-1",
+			}
+			transferencia, err := servicio.ejecutarTransferencia(t.Context(), solicitud)
+			if !errors.Is(err, causa) {
+				t.Fatalf("err = %v, quiero que envuelva %v: el fallo del lector de KYC no puede dejar pasar la transferencia", err, causa)
+			}
+			if transferencia != (Transferencia{}) {
+				t.Fatalf("transferencia = %+v, quiero la vacía: ningún éxito silencioso con tope infinito", transferencia)
+			}
+		})
+	}
+}
 
 // La fila cruda se envuelve con el monto en Centavos y las dos fechas en UTC.
 func TestTransferenciaDeFilaEnvuelveLaFilaCruda(t *testing.T) {
@@ -56,6 +118,42 @@ func TestTransferenciaDeFilaEnvuelveLaFilaCruda(t *testing.T) {
 	}
 	if !transferencia.ActualizadaEn.Equal(actualizada) || transferencia.ActualizadaEn.Location() != time.UTC {
 		t.Errorf("ActualizadaEn = %s (%s), quiero el mismo instante en UTC", transferencia.ActualizadaEn, transferencia.ActualizadaEn.Location())
+	}
+}
+
+// HU-NF-06, criterio 3 de HU-NF-10 que esta historia comparte sin numeral propio: la moneda
+// distinta de COP se rechaza antes de resolver el destino, y la vacía pasa igual que COP explícita.
+func TestEjecutarTransferenciaValidaLaMonedaAntesDeLaTransaccion(t *testing.T) {
+	t.Parallel()
+
+	base := SolicitudTransferencia{
+		UsuarioID:      "u-1",
+		CuentaOrigen:   "pasivo:usuario:u-1:disponible",
+		LlaveDestino:   "llave-beto",
+		Monto:          Centavos(1000),
+		IdempotencyKey: "k-1",
+	}
+	servicio := &Servicio{}
+
+	casos := map[string]struct {
+		moneda   string
+		esperado error
+	}{
+		"COP explicita pasa la validación de moneda": {moneda: "COP", esperado: ErrResolutorDestinoNoDisponible},
+		"moneda vacía pasa la validación de moneda":  {moneda: "", esperado: ErrResolutorDestinoNoDisponible},
+		"moneda distinta de COP se rechaza":          {moneda: "USD", esperado: ErrMonedaInvalida},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+
+			solicitud := base
+			solicitud.Moneda = caso.moneda
+			_, err := servicio.ejecutarTransferencia(t.Context(), solicitud)
+			if !errors.Is(err, caso.esperado) {
+				t.Fatalf("err = %v, quiero %v", err, caso.esperado)
+			}
+		})
 	}
 }
 

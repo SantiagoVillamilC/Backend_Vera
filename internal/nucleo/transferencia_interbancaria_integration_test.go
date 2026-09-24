@@ -447,6 +447,50 @@ func TestHU_NF_10_Criterio6_SaldoInsuficienteNoRegistra(t *testing.T) {
 	}
 }
 
+// TestHU_NF_10_Criterio8_EnvioPorLlaveSinRespuestaDeKYCNoDejaReserva cubre los tres fallos del lector de KYC:
+// timeout, tipo de parte desconocido, y un nivel sin regla vigente que evaluarLimite ya rechaza. Ninguno deja fila
+// de transferencia ni retiene dinero (HU-NF-10, criterio 8).
+func TestHU_NF_10_Criterio8_EnvioPorLlaveSinRespuestaDeKYCNoDejaReserva(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	base := NewServicio(pool, nil, nil, nil, nil)
+	usuario := uuid.NewString()
+	cuenta := subcuentaDisponibleDePrueba(t, ctx, base, usuario)
+	fondearDisponibleDePrueba(t, pool, cuenta, 1000000)
+
+	casos := map[string]struct {
+		nivel    string
+		causa    error
+		esperado error
+	}{
+		"timeout del lector":               {causa: context.DeadlineExceeded, esperado: context.DeadlineExceeded},
+		"tipo de parte desconocido en kyc": {causa: errTipoDeParteDesconocidoSimulado, esperado: errTipoDeParteDesconocidoSimulado},
+		"nivel sin regla vigente":          {nivel: "nivel_inventado_sin_regla", esperado: ErrReglaLimiteNoVigente},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			kyc := lectorNivelKYCFalso{fn: func(context.Context, string) (string, error) {
+				return caso.nivel, caso.causa
+			}}
+			s := NewServicio(pool, kyc, nil, nil, nil, ConDirectorio(directorioEstatico{}))
+
+			_, _, err := s.TransferirPorLlave(ctx, solicitudDeLlave(usuario, cuenta, "3001234567", 250000))
+			if !errors.Is(err, caso.esperado) {
+				t.Fatalf("err = %v, quiero %v", err, caso.esperado)
+			}
+		})
+	}
+	if filas := contarTransferenciasDeUsuario(t, pool, usuario); filas != 0 {
+		t.Errorf("transferencias del emisor = %d, quiero 0", filas)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, cuenta); got != 1000000 {
+		t.Errorf("disponible del emisor = %d, quiero 1000000 intacto", got)
+	}
+	if got := saldoDeCuentaDePrueba(t, base, NombreCuentaRetenido(usuario)); got != 0 {
+		t.Errorf("retenido del emisor = %d, quiero 0", got)
+	}
+}
+
 // HU-NF-10, criterio 11: el handler responde 201 con el envío en proceso y 200 con el ya guardado para la misma clave.
 func TestHU_NF_10_Criterio11_HandlerRespondeElEnvioEnProceso(t *testing.T) {
 	pool := abrirPoolDePrueba(t)

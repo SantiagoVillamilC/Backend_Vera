@@ -24,6 +24,10 @@ type Querier interface {
 	InsertarCorridaConciliacion(ctx context.Context, ventanaHasta pgtype.Timestamptz) (ConciliacionCorrida, error)
 	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)
 	InsertarDescuadre(ctx context.Context, arg InsertarDescuadreParams) (Descuadre, error)
+	// Sin CAS posible (no hay fila de la contraparte que condicionar), así que el índice parcial
+	// descuadre_identidad_unico decide: si otra corrida ya ganó la carrera, no filas, sin abortar la
+	// transacción (HU-NF-08, criterio 10.3).
+	InsertarDescuadreSiNoHayAbierto(ctx context.Context, arg InsertarDescuadreSiNoHayAbiertoParams) (Descuadre, error)
 	InsertarExtractoCustodio(ctx context.Context, arg InsertarExtractoCustodioParams) error
 	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error)
 	InsertarOutbox(ctx context.Context, arg InsertarOutboxParams) (Outbox, error)
