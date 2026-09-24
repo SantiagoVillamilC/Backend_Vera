@@ -1,0 +1,81 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+
+	platformerrors "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/errors"
+)
+
+// Envelope es la forma única de toda respuesta, exitosa o fallida. Las cuatro claves
+// siempre se serializan: data, error y meta quedan en null cuando no aplican.
+type Envelope[T any] struct {
+	Success bool      `json:"success"`
+	Data    T         `json:"data"`
+	Error   *APIError `json:"error"`
+	Meta    *Meta     `json:"meta"`
+}
+
+// WriteData responde con un envelope exitoso. meta se deja en nil salvo en listados.
+func WriteData[T any](w http.ResponseWriter, status int, data T, meta *Meta) {
+	writeJSON(w, status, Envelope[T]{Success: true, Data: data, Meta: meta})
+}
+
+// WriteError responde con un envelope de error a partir de sus piezas.
+func WriteError(w http.ResponseWriter, status int, code, msg string, details []FieldError) {
+	errObj := &APIError{Code: code, Message: msg}
+	if len(details) > 0 {
+		errObj.Details = &details
+	}
+	writeJSON(w, status, Envelope[any]{Success: false, Error: errObj})
+}
+
+// WriteAPIError convierte un error de dominio en respuesta. Un *errors.APIError con
+// status 4xx conserva su código y mensaje, cualquier otro error se registra y sale como
+// 500 genérico para no filtrar detalles internos al cliente.
+func WriteAPIError(w http.ResponseWriter, r *http.Request, err error) {
+	var apiErr *platformerrors.APIError
+	if errors.As(err, &apiErr) && apiErr.Status >= http.StatusBadRequest && apiErr.Status < http.StatusInternalServerError {
+		WriteError(w, apiErr.Status, apiErr.Code, apiErr.Message, nil)
+		return
+	}
+	slog.ErrorContext(r.Context(), "unhandled request error",
+		"err", err, "method", r.Method, "path", r.URL.Path)
+	WriteError(w, http.StatusInternalServerError, "InternalError", "Something went wrong.", nil)
+}
+
+// ParamError traduce los errores de binding del wrapper generado al envelope, nunca a texto plano.
+func ParamError(w http.ResponseWriter, _ *http.Request, err error) {
+	var (
+		requerido *RequiredParamError
+		formato   *InvalidParamFormatError
+	)
+	switch {
+	case errors.As(err, &requerido):
+		WriteError(w, http.StatusBadRequest, "BadRequest", "A required parameter is missing.",
+			[]FieldError{{Field: requerido.ParamName, Rule: "required"}})
+	case errors.As(err, &formato):
+		WriteError(w, http.StatusBadRequest, "BadRequest", "A parameter has an invalid format.",
+			[]FieldError{{Field: formato.ParamName, Rule: "format"}})
+	default:
+		WriteError(w, http.StatusBadRequest, "BadRequest", "Malformed request parameters.", nil)
+	}
+}
+
+// writeJSON serializa el envelope en un buffer antes de tocar el ResponseWriter, para no dejar un 200 truncado.
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	buf := new(bytes.Buffer)
+	if err := json.NewEncoder(buf).Encode(payload); err != nil {
+		slog.Error("envelope encode failed", "err", err)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"success":false,"data":null,"error":{"code":"InternalError","message":"Something went wrong."},"meta":null}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(buf.Bytes())
+}
