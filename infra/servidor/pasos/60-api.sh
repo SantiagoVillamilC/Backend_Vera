@@ -15,7 +15,13 @@ paso "${NOMBRE_PASO} (${TARJETA})"
 # Tag flotante: staging y main comparten esta misma VM y el mismo comando SSH
 # forzado (no hay segundo ambiente), un push a staging también redespliega
 # esta imagen. Ver bitácora técnica 2026-09-24.
-IMAGEN_API="ghcr.io/santiagovillamilc/backend_centinela:main"
+#
+# El nombre de la imagen sigue a github.repository (cd.yml: env.IMAGE), que
+# GitHub actualiza solo tras un rename de repo. Este valor NO se actualiza
+# solo: el repo pasó de Backend_Centinela a Backend_Vera el 24 de sep y este
+# hardcode se quedó apuntando al nombre viejo, "manifest unknown" en el
+# primer deploy real aunque la imagen sí existía (bitácora técnica del mismo día).
+IMAGEN_API="ghcr.io/santiagovillamilc/backend_vera:main"
 
 DIRECTORIO_API="/opt/centinela/api"
 ARCHIVO_COMPOSE_API="${DIRECTORIO_SCRIPT}/compose.api.yaml"
