@@ -185,6 +185,9 @@ en `.gitignore`).
 | `30-nginx.sh` | Instalar y configurar nginx como proxy inverso | SCRUM-32 | Implementado |
 | `40-postgres.sh` | Instalar y configurar Postgres en contenedor | SCRUM-33 | Implementado |
 | `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Implementado |
+| `45-redis.sh` | Instalar y configurar Redis en contenedor | SCRUM-100 | Implementado |
+| `60-api.sh` | Instalar y configurar el contenedor de la API | SCRUM-100 | Implementado |
+| `70-ci-deploy-key.sh` | Actualizar el command= forzado de la llave de deploy de CI | SCRUM-100 | Implementado |
 
 ### `imagen-fijada.sh`
 
@@ -528,3 +531,16 @@ El razonamiento completo de estas decisiones (por qué se descartó que
 propiedad frente a `30-nginx.sh`, y la verificación en vivo contra Let's
 Encrypt real y contra Azure, incluido el cutover de staging a producción)
 queda documentado en la bitácora técnica del proyecto.
+
+### `45-redis.sh`, `60-api.sh`, `70-ci-deploy-key.sh` (SCRUM-100)
+
+Dueños de `compose.redis.yaml`, `compose.api.yaml`, y del `command=`
+forzado de `authorized_keys` respectivamente. Cierran el hueco que
+`30-nginx.sh` ya documentaba: no existía ningún service `api`, así que el
+CD de SCRUM-50 fallaba con "no such service: api" (bitácora 2026-09-24).
+`60-api.sh` también fija la contraseña de `rol_api` (migración 0004 la
+crea `LOGIN` sin una), usa el tag flotante `:main` (`staging` y `main`
+comparten la misma VM, no hay segundo ambiente), y requiere `cmd/migrate
+up` ya corrido. `70-ci-deploy-key.sh` reemplaza la lista fija de `-f
+compose*.yaml` del `command=` por el mismo glob dinámico de
+`asegurar_servicio_compose`, y se omite si la llave no existe todavía.

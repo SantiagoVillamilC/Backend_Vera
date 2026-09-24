@@ -1,3 +1,7 @@
 # Estado local de Vagrant: identificadores de la VM, llaves SSH generadas y
 # metadatos del proveedor. Es de cada máquina, no se versiona.
 .vagrant/
+
+# Variables de entorno locales con secretos. .env.example sí se versiona como plantilla.
+.env
+.env.local

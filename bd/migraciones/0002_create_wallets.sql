@@ -1,0 +1,5 @@
+-- +goose Up
+CREATE TABLE wallets (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id), name TEXT NOT NULL, balance NUMERIC(14,2) NOT NULL DEFAULT 0);
+
+-- +goose Down
+DROP TABLE wallets;

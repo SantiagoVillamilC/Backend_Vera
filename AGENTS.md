@@ -110,19 +110,27 @@ hueco y dejarlo sin decir nada.
 Esto es importante para no asumir de más: varias de estas skills documentan hacia dónde va el
 diseño del backend, no necesariamente lo que el código ya implementa hoy.
 
-- `go.mod` sigue declarando `go 1.22`. Varias skills (`sqlc-patterns`, `golang-bootstrap`,
-  `golang-websocket`) asumen una versión de toolchain más nueva para las librerías que documentan
-  (pgx v5.10.0, por ejemplo, exige Go 1.25+).
-- `internal/wallets` y `internal/transactions` representan dinero con `float64` en Go
-  (`internal/wallets/domain.go`, `internal/transactions/domain.go`) y con `NUMERIC(14,2)` en las
-  migraciones SQL (`migrations/0002_create_wallets.sql`, `migrations/0003_create_transactions.sql`).
-  Eso es exactamente lo que `golang-money` dice que no se debe hacer. No existe todavía un paquete
-  `internal/nucleo` ni el tipo `nucleo.Centavos` en ninguna parte del código.
-- El backend hoy usa `net/http` estándar con un router propio (`internal/platform/httpserver`), no
-  chi. `go.sum` está vacío: no hay ninguna dependencia externa instalada todavía, así que ni chi ni
-  sqlc ni pgx ni goose están wireados en el proyecto real, aunque la mayoría de las skills de este
-  set (`chi-patterns`, `sqlc-patterns`, `golang-bootstrap`, `golang-websocket`, `golang-docs`,
-  `golang-money`, `golang-logging`, y las versiones que fija `version-standards`) asuman ese stack.
+- `go.mod` declara `go 1.27` con `toolchain go1.27.0`, y el stack que las skills asumen ya está
+  wireado: chi v5, pgx v5.10.0, goose v3, river v0.44.1, validator v10 y uuid. `go.sum` está
+  poblado.
+- `internal/wallets` e `internal/transactions` ya no existen: sus paquetes se borraron y la
+  migración `0006_drop_wallets_transactions.sql` dropea sus tablas. El dinero vive en
+  `internal/nucleo` con el tipo `nucleo.Centavos` (entero de centavos, `int64`), lo que
+  `golang-money` exige.
+- El router es chi (`internal/platform/httpserver/router.go`), con el envelope
+  `{success, data, error, meta}` y los grupos público y autenticado de SCRUM-51. La autenticación
+  sigue siendo un usuario de prueba inyectado detrás de una interfaz, no JWT real.
+- El contrato OpenAPI vive en `api/openapi.yaml` (20 rutas, propiedades JSON en `snake_case`, igual
+  que el resto de la API implementada). El código se genera con oapi-codegen v2.8.0 a
+  `internal/platform/api/openapi.gen.go`, con el generador fijado por la directiva `tool` de
+  `go.mod` y la directiva `//go:generate` en `internal/platform/api/doc.go`. Se regenera con
+  `go generate ./...`. El archivo generado no se edita a mano y aporta los tipos del envelope
+  (`Meta`, `APIError`, `FieldError`) que antes se escribían a mano. Las operaciones con la
+  etiqueta `public` se registran a mano en el grupo público del router, así que no se generan.
+- El esquema se migra con goose desde `bd/migraciones`. El ledger vive en el esquema Postgres
+  `nucleo` y River en el suyo. Hay dos paquetes sqlc: `internal/repositorio` (auth) y
+  `internal/nucleo/internal/repositorio` (núcleo). Toda consulta del núcleo corre dentro del helper
+  de transacción que hace `SET LOCAL ROLE rol_nucleo`.
 - El diseño que `golang-money` documenta viene de dos borradores de arquitectura de la tesis,
   citados por ruta relativa dentro de la skill: `../nucleo-financiero-ledger.md` (cómo se
   representa el dinero, capítulo 6) y `../frontera-modulos-nucleo-financiero.md` (en qué paquete Go
@@ -136,6 +144,23 @@ diseño del backend, no necesariamente lo que el código ya implementa hoy.
   contradecirse en cómo se maneja el dinero, trata el contenido de la skill como el diseño
   propuesto (no confirmado como definitivo) hasta que esos documentos se versionen en algún lado.
 
-En resumen: las skills son la línea base para código nuevo y para la migración que se viene, no una
-descripción de lo que ya existe. No asumas que un módulo ya sigue el patrón de una skill solo porque
-la skill existe, verifícalo en el archivo real primero.
+En resumen: las skills son la línea base para código nuevo, no una descripción de lo que ya existe.
+No asumas que un módulo ya sigue el patrón de una skill solo porque la skill existe, verifícalo en el
+archivo real primero.
+
+## Autenticacion
+
+- `code` del envelope va en PascalCase (`InvalidCredentials`, `RefreshReused`, `AuthUnavailable`, y
+  el resto del catálogo). El catálogo completo está en la descripción de `APIError.code` en
+  `api/openapi.yaml` y su mapeo en `internal/auth/errores.go`. El cliente nunca compara `message`.
+- Ningún DTO de request o response se escribe a mano si ya existe en `openapi.gen.go`. Los tipos
+  generados son la forma del contrato y los tags `validate` inyectados con
+  `x-oapi-codegen-extra-tags` son la única validación de entrada, aplicada por
+  `api.DecodeAndValidate` y `api.DecodeDiscriminated`.
+- A `WriteData` solo van los tipos de `data` (por ejemplo `api.Sesion` o `api.Contexto`), nunca un
+  `api.*Response`: el envelope lo arma el helper de `internal/platform/api`.
+- Todo handler que devuelva un array inicializa con `make([]T, 0, n)` para que el JSON lleve `[]` y
+  no `null`.
+- El gate de `go generate ./...` es local, no hay CI en el repo: el evaluador hace `git add` de las
+  rutas, corre `go generate ./...` y exige `git diff --exit-code` sobre
+  `internal/platform/api/openapi.gen.go`.

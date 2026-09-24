@@ -279,3 +279,42 @@ asegurar_archivo_con_secreto() {
   chmod 600 "$ruta"
   registrar_cambio
 }
+
+# Genera 32 bytes en hexadecimal (64 caracteres [0-9a-f]) para un pepper: a
+# diferencia de generar_secreto (alfanumérico), esto es lo que
+# pepperRequerido (cmd/api/config_auth.go) exige decodificar con
+# hex.DecodeString.
+generar_secreto_hex() {
+  local crudo
+
+  crudo="$(openssl rand -hex 32)"
+
+  if [[ "${#crudo}" -ne 64 ]]; then
+    error_fatal "openssl rand -hex 32 no devolvió 64 caracteres hexadecimales."
+  fi
+
+  printf '%s' "${crudo}"
+}
+
+# Mismo contrato que asegurar_archivo_con_secreto, pero con
+# generar_secreto_hex: no reescribe si "$ruta" ya existe.
+asegurar_archivo_con_secreto_hex() {
+  local ruta="$1"
+  local nombre_variable="$2"
+  local secreto
+
+  if [[ -f "$ruta" ]]; then
+    info "El archivo ${ruta} ya existe: no se regenera ${nombre_variable}."
+    return 0
+  fi
+
+  secreto="$(generar_secreto_hex)"
+  if [[ "${#secreto}" -ne 64 ]]; then
+    error_fatal "generar_secreto_hex no devolvió una cadena de 64 caracteres para ${ruta}."
+  fi
+
+  asegurar_directorio "$(dirname "$ruta")" "700"
+  printf '%s=%s\n' "$nombre_variable" "$secreto" > "$ruta"
+  chmod 600 "$ruta"
+  registrar_cambio
+}
