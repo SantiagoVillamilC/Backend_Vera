@@ -12,27 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, email)
-VALUES ($1, $2)
-RETURNING id, email, created_at
-`
-
-type CreateUserParams struct {
-	ID    pgtype.UUID `json:"id"`
-	Email string      `json:"email"`
-}
-
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.ID, arg.Email)
-	var i User
-	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
-	if err != nil {
-		err = fmt.Errorf("query CreateUser: %w", err)
-	}
-	return i, err
-}
-
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, created_at
 FROM users
@@ -45,6 +24,22 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
 	if err != nil {
 		err = fmt.Errorf("query GetUserByEmail: %w", err)
+	}
+	return i, err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, email, created_at
+FROM users
+WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	if err != nil {
+		err = fmt.Errorf("query GetUserByID: %w", err)
 	}
 	return i, err
 }

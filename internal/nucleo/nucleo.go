@@ -121,6 +121,10 @@ type LectorNivelKYC interface {
 	NivelKYC(ctx context.Context, usuarioID string) (string, error)
 }
 
+// NivelKYCDepositoBajoMonto es el único nivel de KYC del alcance de la tesis. Lo devuelve el
+// lector de auth que implementa LectorNivelKYC.
+const NivelKYCDepositoBajoMonto = "deposito_bajo_monto"
+
 // OrdenRiel es lo que el núcleo le manda al riel. Sus campos los agrega NF-A2-06 junto con
 // la implementación real; en la fase 0 solo existe para dar forma a la interfaz.
 type OrdenRiel struct{}

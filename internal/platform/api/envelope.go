@@ -1,8 +1,3 @@
-// Package api define el envelope de respuesta compartido por todos los handlers HTTP.
-//
-// Vive en un paquete aparte de internal/platform/httpserver porque los propios handlers
-// (auth, copilot, receipts) escriben su respuesta y httpserver los importa, así que el
-// envelope no puede vivir dentro de httpserver sin crear un ciclo de imports.
 package api
 
 import (
@@ -24,28 +19,6 @@ type Envelope[T any] struct {
 	Meta    *Meta     `json:"meta"`
 }
 
-// APIError es el objeto de error que viaja dentro del envelope. Code es estable y legible
-// por una máquina, Message es legible por una persona y nunca es un err.Error() en crudo.
-type APIError struct {
-	Code    string       `json:"code"`
-	Message string       `json:"message"`
-	Details []FieldError `json:"details,omitempty"`
-}
-
-// FieldError describe un campo que no pasó la validación del cuerpo de la petición.
-type FieldError struct {
-	Field string `json:"field"`
-	Rule  string `json:"rule"`
-	Param string `json:"param,omitempty"`
-}
-
-// Meta transporta la paginación. Solo se llena en endpoints de listado.
-type Meta struct {
-	Total int `json:"total"`
-	Page  int `json:"page"`
-	Limit int `json:"limit"`
-}
-
 // WriteData responde con un envelope exitoso. meta se deja en nil salvo en listados.
 func WriteData[T any](w http.ResponseWriter, status int, data T, meta *Meta) {
 	writeJSON(w, status, Envelope[T]{Success: true, Data: data, Meta: meta})
@@ -53,7 +26,11 @@ func WriteData[T any](w http.ResponseWriter, status int, data T, meta *Meta) {
 
 // WriteError responde con un envelope de error a partir de sus piezas.
 func WriteError(w http.ResponseWriter, status int, code, msg string, details []FieldError) {
-	writeJSON(w, status, Envelope[any]{Success: false, Error: &APIError{Code: code, Message: msg, Details: details}})
+	errObj := &APIError{Code: code, Message: msg}
+	if len(details) > 0 {
+		errObj.Details = &details
+	}
+	writeJSON(w, status, Envelope[any]{Success: false, Error: errObj})
 }
 
 // WriteAPIError convierte un error de dominio en respuesta. Un *errors.APIError con
@@ -70,9 +47,25 @@ func WriteAPIError(w http.ResponseWriter, r *http.Request, err error) {
 	WriteError(w, http.StatusInternalServerError, "InternalError", "Something went wrong.", nil)
 }
 
-// writeJSON serializa el envelope completo en un buffer antes de tocar el ResponseWriter.
-// Un fallo de serialización no puede llegar después de WriteHeader, porque dejaría un 200
-// truncado en el cliente.
+// ParamError traduce los errores de binding del wrapper generado al envelope, nunca a texto plano.
+func ParamError(w http.ResponseWriter, _ *http.Request, err error) {
+	var (
+		requerido *RequiredParamError
+		formato   *InvalidParamFormatError
+	)
+	switch {
+	case errors.As(err, &requerido):
+		WriteError(w, http.StatusBadRequest, "BadRequest", "A required parameter is missing.",
+			[]FieldError{{Field: requerido.ParamName, Rule: "required"}})
+	case errors.As(err, &formato):
+		WriteError(w, http.StatusBadRequest, "BadRequest", "A parameter has an invalid format.",
+			[]FieldError{{Field: formato.ParamName, Rule: "format"}})
+	default:
+		WriteError(w, http.StatusBadRequest, "BadRequest", "Malformed request parameters.", nil)
+	}
+}
+
+// writeJSON serializa el envelope en un buffer antes de tocar el ResponseWriter, para no dejar un 200 truncado.
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	buf := new(bytes.Buffer)
 	if err := json.NewEncoder(buf).Encode(payload); err != nil {

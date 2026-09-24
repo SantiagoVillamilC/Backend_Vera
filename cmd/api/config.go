@@ -18,6 +18,7 @@ type Config struct {
 	OCRWorkerURL   string
 	LogLevel       string
 	LogFormat      string
+	Auth           ConfigAuth
 }
 
 // LoadConfig lee el entorno, valida la forma de cada variable y reporta todos los errores
@@ -35,6 +36,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var errs []error
+	var errsAuth []error
+	cfg.Auth, errsAuth = cargarConfigAuth()
+	errs = append(errs, errsAuth...)
 	required := []struct{ name, value string }{
 		{"APP_DATABASE_URL", cfg.AppDatabaseURL},
 		{"JWT_SECRET", cfg.JWTSecret},
@@ -70,6 +74,25 @@ func (c Config) LogValue() slog.Value {
 		slog.String("port", c.Port),
 		slog.Bool("app_database_url_set", c.AppDatabaseURL != ""),
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
+		slog.Bool("redis_url_set", c.Auth.RedisURL != ""),
+		slog.Bool("contadores_pepper_set", len(c.Auth.ContadoresPepper) > 0),
+		slog.Bool("otp_pepper_set", len(c.Auth.OTPPepper) > 0),
+		slog.String("jwt_issuer", c.Auth.JWTIssuer),
+		slog.String("jwt_audience", c.Auth.JWTAudience),
+		slog.String("otp_canal", c.Auth.OTPCanal),
+		slog.String("auth_reset_token_ttl", c.Auth.ResetTokenTTL.String()),
+		slog.String("auth_enfriamiento_cambio_numero", c.Auth.EnfriamientoCambioNumero.String()),
+		slog.Bool("auth_contacto_soporte_set", c.Auth.ContactoSoporte != ""),
+		slog.String("auth_ventana_pendiente", c.Auth.VentanaPendiente.String()),
+		slog.String("auth_limpieza_interval", c.Auth.LimpiezaInterval.String()),
+		slog.String("auth_outbox_interval", c.Auth.OutboxInterval.String()),
+		slog.String("auth_outbox_backoff_base", c.Auth.OutboxBackoffBase.String()),
+		slog.String("auth_outbox_backoff_factor", strconv.FormatFloat(c.Auth.OutboxBackoffFactor, 'g', -1, 64)),
+		slog.String("auth_outbox_backoff_max", c.Auth.OutboxBackoffMax.String()),
+		slog.Int("auth_argon2_concurrencia", c.Auth.Argon2Concurrencia),
+		slog.String("kyc_proveedor", c.Auth.KYCProveedor),
+		slog.String("kyc_simulador_resultado", c.Auth.KYCResultado),
+		slog.Bool("whatsapp_token_set", c.Auth.WhatsAppToken != ""),
 		slog.Bool("groq_api_key_set", c.GroqAPIKey != ""),
 		slog.Bool("openai_api_key_set", c.OpenAIAPIKey != ""),
 		slog.Bool("ocr_worker_url_set", c.OCRWorkerURL != ""),

@@ -1,0 +1,8 @@
+package: api
+output: openapi.gen.go
+generate:
+  models: true
+  chi-server: true
+output-options:
+  exclude-tags: [public]
+  skip-prune: true

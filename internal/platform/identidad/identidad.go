@@ -1,29 +1,38 @@
-// Package identidad lleva el usuario autenticado de una petición en el contexto.
-//
-// Vive en un paquete hoja, aparte de internal/platform/httpserver, porque httpserver importa
-// los handlers (auth, copilot, receipts) y esos handlers leen el usuario_id desde el contexto:
-// si el accesor viviera en httpserver, el import handler -> httpserver cerraría el ciclo
-// httpserver -> handler -> httpserver. Es la misma razón por la que el envelope vive en
-// internal/platform/api.
+// Package identidad lleva el usuario autenticado de una petición en el contexto, en un paquete hoja para evitar el ciclo httpserver, handler, httpserver.
 package identidad
 
 import "context"
 
-// clave es el tipo de la clave del contexto. Es un tipo propio no exportado, nunca un string,
-// para que ningún otro paquete pueda colisionar con la clave ni leer el usuario_id por otra
-// vía (staticcheck SA1029).
+// clave es el tipo propio no exportado de la clave del contexto, nunca un string, para evitar colisiones y lecturas ajenas (staticcheck SA1029).
 type clave struct{}
 
-// ConUsuarioID devuelve un contexto con el usuario autenticado de la petición. Lo llama
-// RequireAuth al resolver la identidad; ningún otro lugar debería escribirlo.
-func ConUsuarioID(ctx context.Context, usuarioID string) context.Context {
-	return context.WithValue(ctx, clave{}, usuarioID)
+// Identidad es quién es la petición autenticada y con qué contexto y rol opera.
+type Identidad struct {
+	UsuarioID string
+	SesionID  string
+	ParteID   string
+	Contexto  string
+	Rol       string
 }
 
-// UsuarioIDDeContexto devuelve el usuario autenticado que RequireAuth dejó en el contexto. El
-// segundo valor es false cuando no hay ninguno, por ejemplo en una ruta que no pasó por el
-// grupo autenticado.
+// ConIdentidad devuelve un contexto con la identidad completa, lo llama RequireAuth al resolverla.
+func ConIdentidad(ctx context.Context, id Identidad) context.Context {
+	return context.WithValue(ctx, clave{}, id)
+}
+
+// DeContexto devuelve la identidad del contexto, con un segundo valor false si no hay ninguna.
+func DeContexto(ctx context.Context) (Identidad, bool) {
+	id, ok := ctx.Value(clave{}).(Identidad)
+	return id, ok
+}
+
+// ConUsuarioID conserva el seam viejo como wrapper sobre ConIdentidad.
+func ConUsuarioID(ctx context.Context, usuarioID string) context.Context {
+	return ConIdentidad(ctx, Identidad{UsuarioID: usuarioID})
+}
+
+// UsuarioIDDeContexto es un wrapper del accesor nuevo para no tocar a los handlers del núcleo.
 func UsuarioIDDeContexto(ctx context.Context) (string, bool) {
-	usuarioID, ok := ctx.Value(clave{}).(string)
-	return usuarioID, ok
+	id, ok := DeContexto(ctx)
+	return id.UsuarioID, ok
 }
