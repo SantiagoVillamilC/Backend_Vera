@@ -18,9 +18,9 @@ require (
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/redis/go-redis/v9 v9.22.0
-	github.com/riverqueue/river v0.44.1
-	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.44.1
-	go.yaml.in/yaml/v3 v3.0.4
+	github.com/riverqueue/river v0.47.0
+	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.47.0
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.54.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/text v0.41.0
@@ -45,9 +45,9 @@ require (
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
-	github.com/riverqueue/river/riverdriver v0.44.1 // indirect
-	github.com/riverqueue/river/rivershared v0.44.1 // indirect
-	github.com/riverqueue/river/rivertype v0.44.1 // indirect
+	github.com/riverqueue/river/riverdriver v0.47.0 // indirect
+	github.com/riverqueue/river/rivershared v0.47.0 // indirect
+	github.com/riverqueue/river/rivertype v0.47.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
