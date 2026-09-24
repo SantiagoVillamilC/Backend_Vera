@@ -1,0 +1,30 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - bodyclose
+    - noctx
+    - copyloopvar
+    - intrange
+    - nilerr
+    - gosec
+    - revive
+    - gocritic
+    - unconvert
+    - usetesting
+  settings:
+    staticcheck:
+      checks: ["all"]
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck]
+
+formatters:
+  enable: [goimports]
