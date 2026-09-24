@@ -57,10 +57,16 @@ linea_nueva="command=\"${comando_forzado}\",${sufijo}"
 if [[ "${linea_actual}" == "${linea_nueva}" ]]; then
   info "El command= forzado de la llave de deploy ya incluye todos los compose*.yaml actuales."
 else
+  # sshd exige que authorized_keys sea dueño del usuario (StrictModes): este paso corre
+  # como root vía aprovisionar.sh, así que mktemp/mv heredarían root:root sin este chown
+  # explícito, y sshd rechazaría la llave con "Permission denied (publickey)" aunque el
+  # contenido quedara correcto (bloqueó el CD real el 24 de sep, ver bitácora técnica).
+  dueno_original="$(stat -c '%U:%G' "${ARCHIVO_AUTHORIZED_KEYS}")"
   archivo_temporal="$(mktemp "${ARCHIVO_AUTHORIZED_KEYS}.XXXXXX")"
   # -F: MARCADOR_LLAVE no es un patrón regex, es el texto literal del marcador.
   grep -vF "${MARCADOR_LLAVE}" "${ARCHIVO_AUTHORIZED_KEYS}" > "${archivo_temporal}"
   printf '%s\n' "${linea_nueva}" >> "${archivo_temporal}"
+  chown "${dueno_original}" "${archivo_temporal}"
   chmod 600 "${archivo_temporal}"
   mv "${archivo_temporal}" "${ARCHIVO_AUTHORIZED_KEYS}"
   info "Se actualizó el command= forzado para incluir: ${banderas_texto}"
