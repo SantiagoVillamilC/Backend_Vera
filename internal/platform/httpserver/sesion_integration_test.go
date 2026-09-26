@@ -114,14 +114,14 @@ func TestSaldoConAccessJWTYFamiliaRevocadaResponde401(t *testing.T) {
 	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: adaptadorJWTDePrueba{tokens: tokens, denylist: d}})
 
 	pedir := func() *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/saldo", nil)
 		req.Header.Set("Authorization", "Bearer "+access)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		return rec
 	}
 	if rec := pedir(); rec.Code != http.StatusOK {
-		t.Fatalf("GET /saldo con el access = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+		t.Fatalf("GET /v1/saldo con el access = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
 	}
 	if err := d.Revocar(t.Context(), sesionID, 5*time.Minute); err != nil {
 		t.Fatalf("revocar el sid: %v", err)
@@ -192,18 +192,20 @@ func TestRequireAuthCierraLasRutasDeDineroConRedisCaidoYDejaLasLecturas(t *testi
 
 	r := chi.NewRouter()
 	r.Use(RequireAuth(adaptador, RutasDeDinero))
-	r.Get("/saldo", sondaOk)
-	r.Post("/transferencias", sondaOk)
-	r.Post("/depositos", sondaOk)
+	r.Get("/v1/saldo", sondaOk)
+	r.Post("/v1/transferencias", sondaOk)
+	r.Post("/v1/depositos", sondaOk)
+	r.Post("/v1/transferencias/interbancarias", sondaOk)
 
 	for _, caso := range []struct {
 		metodo string
 		path   string
 		want   int
 	}{
-		{http.MethodPost, "/transferencias", http.StatusServiceUnavailable},
-		{http.MethodPost, "/depositos", http.StatusServiceUnavailable},
-		{http.MethodGet, "/saldo", http.StatusOK},
+		{http.MethodPost, "/v1/transferencias", http.StatusServiceUnavailable},
+		{http.MethodPost, "/v1/depositos", http.StatusServiceUnavailable},
+		{http.MethodPost, "/v1/transferencias/interbancarias", http.StatusServiceUnavailable},
+		{http.MethodGet, "/v1/saldo", http.StatusOK},
 	} {
 		req := httptest.NewRequest(caso.metodo, caso.path, nil)
 		req.Header.Set("Authorization", "Bearer "+access)

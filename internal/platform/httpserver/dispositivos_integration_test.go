@@ -165,7 +165,7 @@ func TestEndpointsDeDispositivosYContextoDePuntaAPunta(t *testing.T) {
 	if claims.Contexto != empresaID || claims.Rol != "representante_legal" {
 		t.Fatalf("claims del access nuevo = %+v, quiero la empresa con rol", claims)
 	}
-	reqSonda := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+	reqSonda := httptest.NewRequest(http.MethodGet, "/v1/saldo", nil)
 	reqSonda.Header.Set("Authorization", "Bearer "+activo.Data.AccessToken)
 	sonda, err := (adaptadorJWTDePrueba{tokens: tokens, denylist: d}).Identidad(reqSonda)
 	if err != nil {

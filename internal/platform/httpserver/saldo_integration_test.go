@@ -44,7 +44,7 @@ func (i identidadFija) Identidad(*http.Request) (identidad.Identidad, error) {
 func pedirSaldo(t *testing.T, r http.Handler, query string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, "/saldo"+query, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/saldo"+query, nil)
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -184,7 +184,7 @@ func TestHU_NF_04_Criterio1_SaldoSinCredencialDa401(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
 	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 
-	req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/saldo", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

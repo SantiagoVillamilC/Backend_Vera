@@ -173,7 +173,7 @@ func TestAuthedRouteRejectsWellFormedBearerWithoutTestHeader(t *testing.T) {
 // La consulta del monto máximo del Criterio 14 vive en el grupo autenticado (HU-NF-06).
 func TestMontoMaximoRouteRequiresAuth(t *testing.T) {
 	r := newTestRouter()
-	req := httptest.NewRequest(http.MethodGet, "/transferencias/maximo", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/transferencias/maximo", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -446,7 +446,7 @@ func TestRutasPublicasCoincidenConElContrato(t *testing.T) {
 	if publicas != 8 {
 		t.Fatalf("operaciones publicas = %d, quiero 8", publicas)
 	}
-	if privadas != 13 {
-		t.Fatalf("operaciones no publicas = %d, quiero 13", privadas)
+	if privadas != 21 {
+		t.Fatalf("operaciones no publicas = %d, quiero 21", privadas)
 	}
 }

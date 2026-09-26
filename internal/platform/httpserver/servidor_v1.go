@@ -67,6 +67,19 @@ type CompaniesHandler interface {
 	CreateCompany(http.ResponseWriter, *http.Request)
 }
 
+// NucleoHandler agrupa las siete operaciones del núcleo que van al server generado. *nucleo.Handler
+// ya las implementa con esta misma firma, así que el adaptador es un pass-through delgado.
+// ConfirmarDeposito queda fuera a propósito: cuelga a mano bajo RequireCustodio en router.go.
+type NucleoHandler interface {
+	Saldo(http.ResponseWriter, *http.Request)
+	MontoMaximo(http.ResponseWriter, *http.Request)
+	Movimientos(http.ResponseWriter, *http.Request)
+	CrearDeposito(http.ResponseWriter, *http.Request)
+	Deposito(http.ResponseWriter, *http.Request)
+	Transferir(http.ResponseWriter, *http.Request)
+	TransferirInterbancaria(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
 	Identidad    IdentidadDeLaPeticion
@@ -98,6 +111,7 @@ type servidorV1 struct {
 	consent     ConsentHandler
 	phoneChange PhoneChangeHandler
 	companies   CompaniesHandler
+	nucleo      NucleoHandler
 }
 
 var _ api.ServerInterface = servidorV1{}
@@ -209,4 +223,62 @@ func (s servidorV1) KycVerificacion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.kyc.KycVerificacion(w, r)
+}
+
+func (s servidorV1) Saldo(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Saldo(w, r)
+}
+
+func (s servidorV1) MontoMaximo(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.MontoMaximo(w, r)
+}
+
+// Movimientos descarta params: el handler ya lee limit y cursor directo de r.URL.Query().
+func (s servidorV1) Movimientos(w http.ResponseWriter, r *http.Request, _ api.MovimientosParams) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Movimientos(w, r)
+}
+
+func (s servidorV1) CrearDeposito(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.CrearDeposito(w, r)
+}
+
+// Deposito descarta id: el handler ya lo lee de chi.URLParam(r, "id").
+func (s servidorV1) Deposito(w http.ResponseWriter, r *http.Request, _ string) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Deposito(w, r)
+}
+
+func (s servidorV1) Transferir(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Transferir(w, r)
+}
+
+func (s servidorV1) TransferirInterbancaria(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.TransferirInterbancaria(w, r)
 }

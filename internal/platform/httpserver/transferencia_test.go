@@ -37,7 +37,7 @@ func campoDelPrimerDetalle(t *testing.T, rec *httptest.ResponseRecorder) string 
 }
 
 func peticionDeTransferencia(cuerpo string) (*http.Request, *httptest.ResponseRecorder) {
-	req := httptest.NewRequest(http.MethodPost, "/transferencias", strings.NewReader(cuerpo))
+	req := httptest.NewRequest(http.MethodPost, "/v1/transferencias", strings.NewReader(cuerpo))
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	return req, httptest.NewRecorder()
 }

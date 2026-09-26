@@ -19,7 +19,7 @@ import (
 func crearDeposito(t *testing.T, r http.Handler, body string, conSesion bool) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, "/depositos", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/depositos", strings.NewReader(body))
 	if conSesion {
 		req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	}
@@ -31,7 +31,7 @@ func crearDeposito(t *testing.T, r http.Handler, body string, conSesion bool) *h
 func consultarDeposito(t *testing.T, r http.Handler, id string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, "/depositos/"+id, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/depositos/"+id, nil)
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -275,7 +275,7 @@ func TestHU_NF_07_Criterio20_DobleToqueConcurrenteEsUnaSolaIntencion(t *testing.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			req := httptest.NewRequest(http.MethodPost, "/depositos", strings.NewReader(cuerpo))
+			req := httptest.NewRequest(http.MethodPost, "/v1/depositos", strings.NewReader(cuerpo))
 			req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
