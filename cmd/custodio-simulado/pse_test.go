@@ -11,8 +11,8 @@ import (
 )
 
 // peticionPSE arma una petición de formulario contra una ruta del PSE simulado.
-func peticionPSE(metodo, ruta string, form url.Values) *http.Request {
-	req := httptest.NewRequest(metodo, ruta, strings.NewReader(form.Encode()))
+func peticionPSE(t *testing.T, metodo, ruta string, form url.Values) *http.Request {
+	req := httptest.NewRequestWithContext(t.Context(), metodo, ruta, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return req
 }
@@ -23,7 +23,7 @@ func TestHU_NF_07_Criterio15Y16_1_RedireccionPSELlevaLaReferenciaYElMonto(t *tes
 	pagina := NewPaginaPSE(NuevoDespachador(almacen, &enviadorFalso{}, &enviadorFalso{}))
 
 	rec := httptest.NewRecorder()
-	pagina.Rutas().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/pse?referencia=dep-abc&monto=150000", nil))
+	pagina.Rutas().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/pse?referencia=dep-abc&monto=150000", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, quiero 200", rec.Code)
@@ -55,7 +55,7 @@ func TestHU_NF_07_Criterio2_FormularioPSEInvalidoDa400(t *testing.T) {
 	for nombre, ruta := range rutas {
 		t.Run(nombre, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			pagina.Rutas().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, ruta, nil))
+			pagina.Rutas().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, ruta, nil))
 			if rec.Code != http.StatusBadRequest {
 				t.Errorf("status = %d, quiero 400", rec.Code)
 			}
@@ -90,7 +90,7 @@ func TestHU_NF_07_Criterio15_AutorizarDisparaLaConfirmacionAlNucleo(t *testing.T
 
 	rec := httptest.NewRecorder()
 	pagina := NewPaginaPSE(despachador)
-	pagina.Rutas().ServeHTTP(rec, peticionPSE(http.MethodPost, "/pse/autorizar",
+	pagina.Rutas().ServeHTTP(rec, peticionPSE(t, http.MethodPost, "/pse/autorizar",
 		url.Values{"referencia": {"dep-abc"}, "monto": {"150000"}}))
 
 	if rec.Code != http.StatusOK {
@@ -126,7 +126,7 @@ func TestHU_NF_07_Criterio17_CancelarDisparaElRechazo(t *testing.T) {
 	pagina := NewPaginaPSE(despachador)
 
 	rec := httptest.NewRecorder()
-	pagina.Rutas().ServeHTTP(rec, peticionPSE(http.MethodPost, "/pse/cancelar",
+	pagina.Rutas().ServeHTTP(rec, peticionPSE(t, http.MethodPost, "/pse/cancelar",
 		url.Values{"referencia": {"dep-abc"}, "monto": {"150000"}}))
 
 	if rec.Code != http.StatusOK {
@@ -150,7 +150,7 @@ func TestHU_NF_09_OrigenDeOtroHostDa403SinRegistrar(t *testing.T) {
 	almacen := almacenDePrueba(t)
 	pagina := NewPaginaPSE(NuevoDespachador(almacen, &enviadorFalso{}, &enviadorFalso{}))
 
-	req := peticionPSE(http.MethodPost, "/pse/autorizar",
+	req := peticionPSE(t, http.MethodPost, "/pse/autorizar",
 		url.Values{"referencia": {"dep-abc"}, "monto": {"150000"}})
 	req.Header.Set("Origin", "http://otro-host.example")
 	rec := httptest.NewRecorder()
@@ -160,7 +160,7 @@ func TestHU_NF_09_OrigenDeOtroHostDa403SinRegistrar(t *testing.T) {
 		t.Fatalf("status = %d, quiero 403", rec.Code)
 	}
 	var total int
-	if err := almacen.db.QueryRow("SELECT count(*) FROM envio").Scan(&total); err != nil {
+	if err := almacen.db.QueryRowContext(t.Context(), "SELECT count(*) FROM envio").Scan(&total); err != nil {
 		t.Fatalf("contar envíos: %v", err)
 	}
 	if total != 0 {
@@ -174,7 +174,7 @@ func TestHU_NF_09_SinOriginElPOSTDelPSESeAcepta(t *testing.T) {
 	pagina := NewPaginaPSE(NuevoDespachador(almacen, &enviadorFalso{}, &enviadorFalso{}))
 
 	rec := httptest.NewRecorder()
-	pagina.Rutas().ServeHTTP(rec, peticionPSE(http.MethodPost, "/pse/cancelar",
+	pagina.Rutas().ServeHTTP(rec, peticionPSE(t, http.MethodPost, "/pse/cancelar",
 		url.Values{"referencia": {"dep-abc"}, "monto": {"150000"}}))
 
 	if rec.Code != http.StatusOK {
@@ -187,7 +187,7 @@ func TestHU_NF_09_CuerpoGrandeDelPSEDa413SinRegistrar(t *testing.T) {
 	almacen := almacenDePrueba(t)
 	pagina := NewPaginaPSE(NuevoDespachador(almacen, &enviadorFalso{}, &enviadorFalso{}))
 
-	req := httptest.NewRequest(http.MethodPost, "/pse/autorizar",
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/pse/autorizar",
 		strings.NewReader("referencia="+strings.Repeat("a", maximoCuerpoPSE+1)))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -197,7 +197,7 @@ func TestHU_NF_09_CuerpoGrandeDelPSEDa413SinRegistrar(t *testing.T) {
 		t.Fatalf("status = %d, quiero 413", rec.Code)
 	}
 	var total int
-	if err := almacen.db.QueryRow("SELECT count(*) FROM envio").Scan(&total); err != nil {
+	if err := almacen.db.QueryRowContext(t.Context(), "SELECT count(*) FROM envio").Scan(&total); err != nil {
 		t.Fatalf("contar envíos: %v", err)
 	}
 	if total != 0 {
@@ -214,7 +214,7 @@ func TestHU_NF_07_RateLimitDelPSE(t *testing.T) {
 	var ultimo int
 	for range topePeticionesPSE + 1 {
 		rec := httptest.NewRecorder()
-		rutas.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/pse?referencia=dep-abc&monto=150000", nil))
+		rutas.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/pse?referencia=dep-abc&monto=150000", nil))
 		ultimo = rec.Code
 	}
 	if ultimo != http.StatusTooManyRequests {

@@ -83,7 +83,11 @@ func TestEnvioConfirmadoSeRegistraYSeConsulta(t *testing.T) {
 		t.Fatalf("desenlace = %+v, quiero confirmada de %s", d, id)
 	}
 
-	consulta, err := servidor.Client().Get(servidor.URL + "/transferencias/" + id)
+	peticionConsulta, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+"/transferencias/"+id, nil)
+	if err != nil {
+		t.Fatalf("armar la consulta de estado: %v", err)
+	}
+	consulta, err := servidor.Client().Do(peticionConsulta)
 	if err != nil {
 		t.Fatalf("consultar estado: %v", err)
 	}
@@ -240,7 +244,11 @@ func TestControlCambiaLasPerillasEnCaliente(t *testing.T) {
 		t.Errorf("perillas = %+v, quiero las recién fijadas", actuales)
 	}
 
-	lectura, err := servidor.Client().Get(servidor.URL + "/control")
+	peticionLectura, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+"/control", nil)
+	if err != nil {
+		t.Fatalf("armar la lectura del control: %v", err)
+	}
+	lectura, err := servidor.Client().Do(peticionLectura)
 	if err != nil {
 		t.Fatalf("leer el control: %v", err)
 	}
@@ -361,7 +369,11 @@ func TestConsultaDesconocidaDa404(t *testing.T) {
 	t.Parallel()
 
 	servidor, _ := servidorDePrueba(t, Perillas{ModoCaida: ModoCaidaNinguna})
-	respuesta, err := servidor.Client().Get(servidor.URL + "/transferencias/" + uuid.NewString())
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+"/transferencias/"+uuid.NewString(), nil)
+	if err != nil {
+		t.Fatalf("armar la consulta de estado: %v", err)
+	}
+	respuesta, err := servidor.Client().Do(peticion)
 	if err != nil {
 		t.Fatalf("consultar estado: %v", err)
 	}

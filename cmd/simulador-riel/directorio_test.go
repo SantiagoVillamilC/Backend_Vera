@@ -26,7 +26,11 @@ func TestHU_NF_10_Criterio4_DirectorioDevuelveEntidadYProducto(t *testing.T) {
 	servidor := servidorConDirectorio(t, map[string]EntradaDirectorio{
 		"celular:3001234567": {Entidad: "Banco Vecino", Producto: "Cuenta de ahorros"},
 	})
-	respuesta, err := http.Get(servidor.URL + "/resolver?tipo=celular&valor=3001234567")
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+"/resolver?tipo=celular&valor=3001234567", nil)
+	if err != nil {
+		t.Fatalf("armar la petición: %v", err)
+	}
+	respuesta, err := servidor.Client().Do(peticion)
 	if err != nil {
 		t.Fatalf("pedir la resolución: %v", err)
 	}
@@ -60,7 +64,11 @@ func TestHU_NF_10_Criterio5_1_DirectorioLlaveInexistenteEsCuatroCeroCuatro(t *te
 	servidor := servidorConDirectorio(t, map[string]EntradaDirectorio{
 		"celular:3001234567": {Entidad: "Banco Vecino", Producto: "Cuenta de ahorros"},
 	})
-	respuesta, err := http.Get(servidor.URL + "/resolver?tipo=celular&valor=3009999999")
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+"/resolver?tipo=celular&valor=3009999999", nil)
+	if err != nil {
+		t.Fatalf("armar la petición: %v", err)
+	}
+	respuesta, err := servidor.Client().Do(peticion)
 	if err != nil {
 		t.Fatalf("pedir la resolución: %v", err)
 	}
@@ -76,7 +84,11 @@ func TestHU_NF_10_Criterio2_DirectorioSinParametrosEsCuatroCientos(t *testing.T)
 
 	servidor := servidorConDirectorio(t, nil)
 	for _, ruta := range []string{"/resolver", "/resolver?tipo=celular", "/resolver?valor=3001234567"} {
-		respuesta, err := http.Get(servidor.URL + ruta)
+		peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+ruta, nil)
+		if err != nil {
+			t.Fatalf("armar la petición %q: %v", ruta, err)
+		}
+		respuesta, err := servidor.Client().Do(peticion)
 		if err != nil {
 			t.Fatalf("pedir %q: %v", ruta, err)
 		}

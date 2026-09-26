@@ -8,7 +8,7 @@ import (
 
 // El binario del simulador no puede arrastrar el repositorio del núcleo ni su base de datos.
 func TestElBinarioNoDependeDelNucleo(t *testing.T) {
-	salida, err := exec.Command("go", "list", "-deps", ".").Output()
+	salida, err := exec.CommandContext(t.Context(), "go", "list", "-deps", ".").Output()
 	if err != nil {
 		t.Skipf("sin toolchain de Go para inspeccionar dependencias: %v", err)
 	}

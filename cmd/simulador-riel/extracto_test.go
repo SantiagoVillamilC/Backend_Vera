@@ -69,7 +69,11 @@ func pedirExtracto(t *testing.T, servidor *httptest.Server, desde, hasta string)
 	t.Helper()
 
 	destino := servidor.URL + "/extracto?desde=" + url.QueryEscape(desde) + "&hasta=" + url.QueryEscape(hasta)
-	respuesta, err := servidor.Client().Get(destino)
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, destino, nil)
+	if err != nil {
+		t.Fatalf("armar la petición del extracto: %v", err)
+	}
+	respuesta, err := servidor.Client().Do(peticion)
 	if err != nil {
 		t.Fatalf("pedir el extracto: %v", err)
 	}

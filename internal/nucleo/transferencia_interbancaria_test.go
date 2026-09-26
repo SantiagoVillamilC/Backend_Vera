@@ -74,7 +74,7 @@ func TestEscribirErrorDeEnvioPorLlaveMapeaCadaRechazo(t *testing.T) {
 			t.Parallel()
 
 			rec := httptest.NewRecorder()
-			escribirErrorDeEnvioPorLlave(rec, httptest.NewRequest(http.MethodPost, "/transferencias/interbancarias", nil), caso.err)
+			escribirErrorDeEnvioPorLlave(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/transferencias/interbancarias", nil), caso.err)
 			if rec.Code != caso.status {
 				t.Errorf("status = %d, quiero %d", rec.Code, caso.status)
 			}

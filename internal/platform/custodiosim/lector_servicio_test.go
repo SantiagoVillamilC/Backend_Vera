@@ -25,7 +25,7 @@ func TestLectorExtractoContraElSimuladorReal(t *testing.T) {
 	puerto := puertoLibre(t)
 	base := "http://127.0.0.1:" + puerto
 
-	cmd := exec.Command(bin)
+	cmd := exec.CommandContext(t.Context(), bin)
 	cmd.Env = append(os.Environ(),
 		"SIMULADOR_CUSTODIA_ADDR=127.0.0.1",
 		"SIMULADOR_CUSTODIA_PORT="+puerto,
@@ -61,13 +61,13 @@ func TestLectorExtractoContraElSimuladorReal(t *testing.T) {
 func construirSimulador(t *testing.T) string {
 	t.Helper()
 
-	salida, err := exec.Command("go", "env", "GOMOD").Output()
+	salida, err := exec.CommandContext(t.Context(), "go", "env", "GOMOD").Output()
 	if err != nil {
 		t.Skipf("sin toolchain de Go para construir el simulador: %v", err)
 	}
 	raiz := filepath.Dir(strings.TrimSpace(string(salida)))
 	bin := filepath.Join(t.TempDir(), "simulador-custodia")
-	construir := exec.Command("go", "build", "-o", bin, filepath.Join(raiz, "cmd", "simulador-custodia"))
+	construir := exec.CommandContext(t.Context(), "go", "build", "-o", bin, filepath.Join(raiz, "cmd", "simulador-custodia"))
 	if compilado, err := construir.CombinedOutput(); err != nil {
 		t.Fatalf("construir el simulador: %v\n%s", err, compilado)
 	}
@@ -78,7 +78,7 @@ func construirSimulador(t *testing.T) string {
 func puertoLibre(t *testing.T) string {
 	t.Helper()
 
-	escucha, err := net.Listen("tcp", "127.0.0.1:0")
+	escucha, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("buscar puerto libre: %v", err)
 	}
@@ -96,11 +96,14 @@ func esperarExtracto(t *testing.T, base string) {
 
 	limite := time.Now().Add(10 * time.Second)
 	for time.Now().Before(limite) {
-		respuesta, err := http.Get(base + "/extracto?corte_en=" + time.Now().UTC().Format(time.RFC3339Nano))
+		peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, base+"/extracto?corte_en="+time.Now().UTC().Format(time.RFC3339Nano), nil)
 		if err == nil {
-			_ = respuesta.Body.Close()
-			if respuesta.StatusCode == http.StatusOK {
-				return
+			respuesta, errPeticion := http.DefaultClient.Do(peticion)
+			if errPeticion == nil {
+				_ = respuesta.Body.Close()
+				if respuesta.StatusCode == http.StatusOK {
+					return
+				}
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -113,7 +116,12 @@ func notificarDeposito(t *testing.T, base, referencia, monto, ocurrido string) {
 	t.Helper()
 
 	cuerpo := fmt.Sprintf(`{"referencia":%q,"monto_centavos":%q,"ocurrido_en":%q}`, referencia, monto, ocurrido)
-	respuesta, err := http.Post(base+"/notificaciones/depositos", "application/json", strings.NewReader(cuerpo))
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/notificaciones/depositos", strings.NewReader(cuerpo))
+	if err != nil {
+		t.Fatalf("armar la notificación: %v", err)
+	}
+	peticion.Header.Set("Content-Type", "application/json")
+	respuesta, err := http.DefaultClient.Do(peticion)
 	if err != nil {
 		t.Fatalf("notificar: %v", err)
 	}
