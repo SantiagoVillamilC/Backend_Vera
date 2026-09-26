@@ -13,11 +13,11 @@ type RastreadorSlog struct{}
 
 // Capturar emite la captura por slog a nivel error.
 func (RastreadorSlog) Capturar(ctx context.Context, err error, contexto nucleo.ContextoError) {
-	capturar(slog.Default(), ctx, err, contexto)
+	capturar(ctx, slog.Default(), err, contexto)
 }
 
 // capturar separa la emisión para poder probarla sin el logger global.
-func capturar(logger *slog.Logger, ctx context.Context, err error, contexto nucleo.ContextoError) {
+func capturar(ctx context.Context, logger *slog.Logger, err error, contexto nucleo.ContextoError) {
 	campos := make([]slog.Attr, 0, len(contexto.Campos))
 	for _, c := range contexto.Campos {
 		campos = append(campos, slog.String(c.Clave, c.Valor))

@@ -15,7 +15,7 @@ func TestRastreadorSlogEmiteErrorConOperacionCanalYCampos(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	capturar(slog.New(slog.NewJSONHandler(&buf, nil)), t.Context(),
+	capturar(t.Context(), slog.New(slog.NewJSONHandler(&buf, nil)),
 		errors.New("descuadre sin resolver"),
 		nucleo.ContextoError{
 			Operacion: "conciliar",

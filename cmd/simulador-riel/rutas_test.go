@@ -29,8 +29,9 @@ func ordenJSON(id string) string {
 	return `{"transferencia_id":"` + id + `","idempotency_key":"k-` + id + `","llave":"3001234567","monto_centavos":"1000000","moneda":"COP"}`
 }
 
-// enviar hace el POST de una orden y devuelve la respuesta y el cuerpo, fallando si no hay respuesta.
-func enviar(t *testing.T, cliente *http.Client, base, cuerpo string) (*http.Response, string) {
+// enviar hace el POST de una orden y devuelve el status y el cuerpo, fallando si no hay respuesta.
+// Cierra el body acá mismo (no lo expone) para que quien llama nunca tenga que cerrarlo.
+func enviar(t *testing.T, cliente *http.Client, base, cuerpo string) (int, string) {
 	t.Helper()
 
 	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/transferencias", strings.NewReader(cuerpo))
@@ -42,12 +43,12 @@ func enviar(t *testing.T, cliente *http.Client, base, cuerpo string) (*http.Resp
 	if err != nil {
 		t.Fatalf("enviar la orden: %v", err)
 	}
-	t.Cleanup(func() { _ = respuesta.Body.Close() })
+	defer func() { _ = respuesta.Body.Close() }()
 	datos, err := io.ReadAll(respuesta.Body)
 	if err != nil {
 		t.Fatalf("leer la respuesta: %v", err)
 	}
-	return respuesta, string(datos)
+	return respuesta.StatusCode, string(datos)
 }
 
 // desenlace es la parte del cuerpo que las pruebas examinan.
@@ -74,9 +75,9 @@ func TestEnvioConfirmadoSeRegistraYSeConsulta(t *testing.T) {
 
 	servidor, _ := servidorDePrueba(t, Perillas{ModoCaida: ModoCaidaNinguna})
 	id := uuid.NewString()
-	respuesta, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenJSON(id))
-	if respuesta.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, quiero 200 (%s)", respuesta.StatusCode, cuerpo)
+	status, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenJSON(id))
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, quiero 200 (%s)", status, cuerpo)
 	}
 	if d := leerDesenlace(t, cuerpo); d.Resultado != estadoConfirmada || d.TransferenciaID != id {
 		t.Fatalf("desenlace = %+v, quiero confirmada de %s", d, id)
@@ -109,9 +110,9 @@ func TestPRechazoEsDeterministaEnLosExtremos(t *testing.T) {
 
 			servidor, _ := servidorDePrueba(t, Perillas{PRechazo: tc.p, ModoCaida: ModoCaidaNinguna})
 			for range 20 {
-				respuesta, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenJSON(uuid.NewString()))
-				if respuesta.StatusCode != http.StatusOK {
-					t.Fatalf("status = %d, quiero 200", respuesta.StatusCode)
+				status, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenJSON(uuid.NewString()))
+				if status != http.StatusOK {
+					t.Fatalf("status = %d, quiero 200", status)
 				}
 				d := leerDesenlace(t, cuerpo)
 				if d.Resultado != tc.quiero {
@@ -130,10 +131,10 @@ func TestLaLatenciaSeRespeta(t *testing.T) {
 
 	servidor, _ := servidorDePrueba(t, Perillas{Latencia: 100 * time.Millisecond, ModoCaida: ModoCaidaNinguna})
 	inicio := time.Now()
-	respuesta, _ := enviar(t, servidor.Client(), servidor.URL, ordenJSON(uuid.NewString()))
+	status, _ := enviar(t, servidor.Client(), servidor.URL, ordenJSON(uuid.NewString()))
 	transcurrido := time.Since(inicio)
-	if respuesta.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, quiero 200", respuesta.StatusCode)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, quiero 200", status)
 	}
 	if transcurrido < 100*time.Millisecond {
 		t.Errorf("transcurrido = %v, quiero al menos la latencia de 100ms", transcurrido)
@@ -149,7 +150,8 @@ func TestModoConexionRechazadaDaErrorDeTransporteSinRegistrar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("armar el envío: %v", err)
 	}
-	if _, err := servidor.Client().Do(peticion); err == nil {
+	if respuesta, err := servidor.Client().Do(peticion); err == nil {
+		_ = respuesta.Body.Close()
 		t.Fatal("la conexión rechazada devolvió respuesta, quiero error de transporte")
 	}
 	operaciones, err := simulador.almacen.Operaciones(t.Context())
@@ -172,7 +174,8 @@ func TestModoSilencioNoRespondeHastaVencerElPlazo(t *testing.T) {
 		t.Fatalf("armar el envío: %v", err)
 	}
 	inicio := time.Now()
-	if _, err := cliente.Do(peticion); err == nil {
+	if respuesta, err := cliente.Do(peticion); err == nil {
+		_ = respuesta.Body.Close()
 		t.Fatal("el silencio devolvió respuesta, quiero que el cliente venza su plazo")
 	}
 	if transcurrido := time.Since(inicio); transcurrido < 180*time.Millisecond {
@@ -198,7 +201,8 @@ func TestRespuestaPerdidaProcesaSinResponder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("armar el envío: %v", err)
 	}
-	if _, err := cliente.Do(peticion); err == nil {
+	if respuesta, err := cliente.Do(peticion); err == nil {
+		_ = respuesta.Body.Close()
 		t.Fatal("la respuesta perdida llegó al cliente, quiero que no llegue")
 	}
 	operacion, err := simulador.almacen.PorTransferencia(t.Context(), id)
@@ -322,13 +326,13 @@ func TestReenvioConOtrosDatosDa409(t *testing.T) {
 
 	servidor, _ := servidorDePrueba(t, Perillas{ModoCaida: ModoCaidaNinguna})
 	id := uuid.NewString()
-	if respuesta, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenJSON(id)); respuesta.StatusCode != http.StatusOK {
-		t.Fatalf("primer envío = %d, quiero 200 (%s)", respuesta.StatusCode, cuerpo)
+	if status, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenJSON(id)); status != http.StatusOK {
+		t.Fatalf("primer envío = %d, quiero 200 (%s)", status, cuerpo)
 	}
 	otra := `{"transferencia_id":"` + id + `","idempotency_key":"otra-clave","llave":"3001234567","monto_centavos":"1000000","moneda":"COP"}`
-	respuesta, cuerpo := enviar(t, servidor.Client(), servidor.URL, otra)
-	if respuesta.StatusCode != http.StatusConflict {
-		t.Fatalf("status = %d, quiero 409 (%s)", respuesta.StatusCode, cuerpo)
+	status, cuerpo := enviar(t, servidor.Client(), servidor.URL, otra)
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, quiero 409 (%s)", status, cuerpo)
 	}
 }
 
@@ -345,9 +349,9 @@ func TestOrdenInvalidaSeRechaza(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			respuesta, salida := enviar(t, servidor.Client(), servidor.URL, cuerpo)
-			if respuesta.StatusCode != http.StatusBadRequest {
-				t.Errorf("status = %d, quiero 400 (%s)", respuesta.StatusCode, salida)
+			status, salida := enviar(t, servidor.Client(), servidor.URL, cuerpo)
+			if status != http.StatusBadRequest {
+				t.Errorf("status = %d, quiero 400 (%s)", status, salida)
 			}
 		})
 	}

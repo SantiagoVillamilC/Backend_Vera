@@ -36,7 +36,7 @@ func NewPaginaPSE(despachador *Despachador) *PaginaPSE {
 	return &PaginaPSE{
 		despachador: despachador,
 		ahora:       time.Now,
-		nuevaRef:    func() string { return uuid.NewString() },
+		nuevaRef:    uuid.NewString,
 	}
 }
 

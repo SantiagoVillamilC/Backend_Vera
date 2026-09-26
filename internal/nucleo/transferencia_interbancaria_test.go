@@ -41,7 +41,7 @@ func TestCrearTransferenciaInterbancariaRequestValidaLosCampos(t *testing.T) {
 
 			var req crearTransferenciaInterbancariaRequest
 			rec := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodPost, "/transferencias/interbancarias", strings.NewReader(caso.cuerpo))
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/transferencias/interbancarias", strings.NewReader(caso.cuerpo))
 			if got := api.DecodeAndValidate(rec, r, &req); got != caso.valido {
 				t.Fatalf("valido = %v (status %d, cuerpo %q), quiero %v", got, rec.Code, rec.Body.String(), caso.valido)
 			}
@@ -153,9 +153,6 @@ func TestEjecutarEnvioPorLlaveValidaAntesDeLaTransaccion(t *testing.T) {
 func TestHU_NF_10_Criterio8_EjecutarEnvioPorLlaveSinRespuestaDeKYCFallaCerrado(t *testing.T) {
 	t.Parallel()
 
-	directorio := &directorioFalso{fn: func(context.Context, Llave) (ResolucionDirectorio, error) {
-		return ResolucionDirectorio{Entidad: "Banco Vecino", Producto: "Cuenta de ahorros"}, nil
-	}}
 	base := SolicitudEnvioPorLlave{
 		UsuarioID:      uuid.NewString(),
 		CuentaOrigen:   "pasivo:usuario:x:disponible",
@@ -174,6 +171,12 @@ func TestHU_NF_10_Criterio8_EjecutarEnvioPorLlaveSinRespuestaDeKYCFallaCerrado(t
 		t.Run(nombre, func(t *testing.T) {
 			t.Parallel()
 
+			// Instancia propia por subprueba: las dos corren con t.Parallel() y
+			// compartir un *directorioFalso mutaba d.calls desde dos goroutines
+			// a la vez (detectado por go test -race).
+			directorio := &directorioFalso{fn: func(context.Context, Llave) (ResolucionDirectorio, error) {
+				return ResolucionDirectorio{Entidad: "Banco Vecino", Producto: "Cuenta de ahorros"}, nil
+			}}
 			kyc := lectorNivelKYCFalso{fn: func(context.Context, string) (string, error) {
 				return "", causa
 			}}

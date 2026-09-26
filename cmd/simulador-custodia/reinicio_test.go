@@ -145,7 +145,11 @@ func saldoEnProceso(t *testing.T, puerto string) string {
 		t.Fatalf("el extracto no trae saldo_centavos: %s", cuerpo)
 	}
 	resto := cuerpo[inicio+len(`"saldo_centavos":"`):]
-	return resto[:strings.Index(resto, `"`)]
+	fin := strings.Index(resto, `"`)
+	if fin < 0 {
+		t.Fatalf("saldo_centavos sin comilla de cierre: %s", cuerpo)
+	}
+	return resto[:fin]
 }
 
 // pedirExtracto consulta el extracto al instante actual.

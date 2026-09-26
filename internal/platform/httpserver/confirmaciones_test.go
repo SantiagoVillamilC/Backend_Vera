@@ -29,7 +29,7 @@ func routerDeConfirmacion() http.Handler {
 func pedirConfirmacion(t *testing.T, r http.Handler, cuerpo, cabecera string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/depositos/confirmaciones", strings.NewReader(cuerpo))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/depositos/confirmaciones", strings.NewReader(cuerpo))
 	if cabecera != "" {
 		req.Header.Set("Authorization", cabecera)
 	}

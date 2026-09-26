@@ -266,7 +266,7 @@ func TestHU_NF_09_Criterio6_CopiasSimultaneasDejanUnaFila(t *testing.T) {
 	cuerpo := `{"referencia":"dep-simultanea","monto_centavos":"1000","ocurrido_en":"2026-09-17T12:00:00Z"}`
 	var wg sync.WaitGroup
 	fallos := make(chan string, copias)
-	for i := 0; i < copias; i++ {
+	for range copias {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

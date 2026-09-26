@@ -30,11 +30,15 @@ ARCHIVO_CONTADORES_PEPPER="${DIRECTORIO_API}/contadores-pepper.env"
 ARCHIVO_OTP_PEPPER="${DIRECTORIO_API}/otp-pepper.env"
 ARCHIVO_ROL_API_PASSWORD="${DIRECTORIO_API}/rol-api-password.env"
 ARCHIVO_APP_DATABASE_URL="${DIRECTORIO_API}/app-database-url.env"
+# El núcleo financiero exige CUSTODIO_TOKEN de al menos 32 bytes y distinto de JWT_SECRET
+# (cmd/api/config.go), lo firma el custodio simulado como bearer estático.
+ARCHIVO_CUSTODIO_TOKEN="${DIRECTORIO_API}/custodio-token.env"
 
 asegurar_archivo_con_secreto "${ARCHIVO_JWT_SECRET}" "JWT_SECRET"
 asegurar_archivo_con_secreto_hex "${ARCHIVO_CONTADORES_PEPPER}" "CONTADORES_PEPPER"
 asegurar_archivo_con_secreto_hex "${ARCHIVO_OTP_PEPPER}" "OTP_PEPPER"
 asegurar_archivo_con_secreto "${ARCHIVO_ROL_API_PASSWORD}" "ROL_API_PASSWORD"
+asegurar_archivo_con_secreto "${ARCHIVO_CUSTODIO_TOKEN}" "CUSTODIO_TOKEN"
 
 # APP_DATABASE_URL se deriva de ROL_API_PASSWORD (no es un secreto aparte).
 # shellcheck source=/dev/null
@@ -44,7 +48,7 @@ printf 'APP_DATABASE_URL=postgres://rol_api:%s@postgres:5432/centinela?sslmode=d
   "${ROL_API_PASSWORD}" > "${ARCHIVO_APP_DATABASE_URL}"
 chmod 600 "${ARCHIVO_APP_DATABASE_URL}"
 
-# Delimitador sin comillas: interpola IMAGEN_API. Los cuatro archivos
+# Delimitador sin comillas: interpola IMAGEN_API. Los cinco archivos
 # generados arriba entran por env_file (secretos, 600); todo lo que sigue en
 # "environment:" es config fija, no sensible.
 contenido_compose_api="$(cat <<EOF
@@ -60,6 +64,7 @@ services:
       - ${ARCHIVO_CONTADORES_PEPPER}
       - ${ARCHIVO_OTP_PEPPER}
       - ${ARCHIVO_APP_DATABASE_URL}
+      - ${ARCHIVO_CUSTODIO_TOKEN}
     environment:
       PORT: "8080"
       LOG_LEVEL: info

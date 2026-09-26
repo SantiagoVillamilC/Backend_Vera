@@ -24,7 +24,7 @@ func TestRequestIDDeChiLlegaAlLog(t *testing.T) {
 	}))
 
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
 
 	id := rec.Header().Get("X-Request-Id")
 	if id == "" {

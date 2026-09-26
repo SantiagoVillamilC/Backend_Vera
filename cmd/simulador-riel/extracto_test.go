@@ -105,11 +105,20 @@ func TestExtractoSoloDevuelveLoOcurridoEnLaVentana(t *testing.T) {
 
 	antes, dentro, despues := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	reloj.Fijar(base.Add(-60 * time.Second))
-	enviar(t, servidor.Client(), servidor.URL, ordenExtracto(antes, "k-antes", "100"))
+	statusAntes, _ := enviar(t, servidor.Client(), servidor.URL, ordenExtracto(antes, "k-antes", "100"))
+	if statusAntes != http.StatusOK {
+		t.Fatalf("depositar antes de la ventana: status = %d", statusAntes)
+	}
 	reloj.Fijar(base.Add(10 * time.Second))
-	enviar(t, servidor.Client(), servidor.URL, ordenExtracto(dentro, "k-dentro", "200"))
+	statusDentro, _ := enviar(t, servidor.Client(), servidor.URL, ordenExtracto(dentro, "k-dentro", "200"))
+	if statusDentro != http.StatusOK {
+		t.Fatalf("depositar dentro de la ventana: status = %d", statusDentro)
+	}
 	reloj.Fijar(base.Add(120 * time.Second))
-	enviar(t, servidor.Client(), servidor.URL, ordenExtracto(despues, "k-despues", "300"))
+	statusDespues, _ := enviar(t, servidor.Client(), servidor.URL, ordenExtracto(despues, "k-despues", "300"))
+	if statusDespues != http.StatusOK {
+		t.Fatalf("depositar despues de la ventana: status = %d", statusDespues)
+	}
 	reloj.Fijar(base.Add(300 * time.Second))
 
 	status, cuerpo, extracto := pedirExtracto(t, servidor,
@@ -137,9 +146,9 @@ func TestExtractoIncluyeLaOrdenRechazada(t *testing.T) {
 
 	id := uuid.NewString()
 	reloj.Fijar(base.Add(10 * time.Second))
-	respuesta, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenExtracto(id, "k-rechazo", "1000000"))
-	if respuesta.StatusCode != http.StatusOK || leerDesenlace(t, cuerpo).Resultado != estadoRechazada {
-		t.Fatalf("envío = %d %s, quiero 200 rechazada", respuesta.StatusCode, cuerpo)
+	status, cuerpo := enviar(t, servidor.Client(), servidor.URL, ordenExtracto(id, "k-rechazo", "1000000"))
+	if status != http.StatusOK || leerDesenlace(t, cuerpo).Resultado != estadoRechazada {
+		t.Fatalf("envío = %d %s, quiero 200 rechazada", status, cuerpo)
 	}
 	reloj.Fijar(base.Add(60 * time.Second))
 

@@ -1,3 +1,5 @@
+// Package main es el simulador del banco custodio: recibe notificaciones de depósito, expone
+// el extracto y las perillas de control para chaos testing, sin tocar un banco real.
 package main
 
 import (

@@ -109,7 +109,7 @@ func esperarMovimientos(t *testing.T, sim *Simulador, quiero int) {
 func TestHU_NF_09_Criterio17_ProbabilidadCeroNuncaFalla(t *testing.T) {
 	servidor, sim := simuladorConPerillas(t, perillasFieles(), func() float64 { return 0.999999 })
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		referencia := fmt.Sprintf("dep-%d", i)
 		status, movimiento := notificar(t, servidor, "/notificaciones/depositos", referencia, "1000", "2026-09-17T12:00:00Z")
 		if status != http.StatusOK {
@@ -134,7 +134,7 @@ func TestHU_NF_09_Criterio17_RechazoUnoRechazaSiempre(t *testing.T) {
 	servidor, _ := simuladorConPerillas(t, p, func() float64 { return 0.999999 })
 
 	cuerpo := `{"referencia":"dep-1","monto_centavos":"1000","ocurrido_en":"2026-09-17T12:00:00Z"}`
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		status, datos := pedir(t, servidor, http.MethodPost, "/notificaciones/depositos", cuerpo)
 		if status != http.StatusServiceUnavailable {
 			t.Fatalf("intento %d: status = %d, quiero 503 (%s)", i, status, datos)
@@ -716,7 +716,7 @@ func TestHU_NF_09_Criterio17_CambiosConcurrentesNoSePierden(t *testing.T) {
 	servidor, _ := simuladorConPerillas(t, perillasFieles(), func() float64 { return 0.5 })
 
 	const rondas = 40
-	for i := 0; i < rondas; i++ {
+	for i := range rondas {
 		if status, datos := pedir(t, servidor, http.MethodPut, "/control/perillas", `{"p_rechazo":0,"modo_caida":"ninguno"}`); status != http.StatusOK {
 			t.Fatalf("ronda %d: no se pudo reiniciar: status = %d (%s)", i, status, datos)
 		}

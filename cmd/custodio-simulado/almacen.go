@@ -1,3 +1,5 @@
+// Package main es el custodio simulado: expone el checkout PSE de un depósito y notifica
+// la confirmación al núcleo financiero, sin tocar un banco real.
 package main
 
 import (

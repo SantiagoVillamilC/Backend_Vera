@@ -54,7 +54,7 @@ func TestHU_NF_05_Criterio10_PaginacionDeMovimientosValidaLosParametros(t *testi
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/movimientos"+tc.query, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/movimientos"+tc.query, nil)
 			cursor, limite, mensaje := paginacionDeMovimientos(req)
 			if mensaje != tc.wantMensaje {
 				t.Fatalf("mensaje = %q, quiero %q", mensaje, tc.wantMensaje)
@@ -112,7 +112,7 @@ func TestConfirmacionValidaMontoYFuenteCondicionales(t *testing.T) {
 		t.Run(nombre, func(t *testing.T) {
 			var req confirmarDepositoRequest
 			rec := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodPost, "/depositos/confirmaciones", strings.NewReader(tc.cuerpo))
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/depositos/confirmaciones", strings.NewReader(tc.cuerpo))
 			if got := api.DecodeAndValidate(rec, r, &req); got != tc.valido {
 				t.Fatalf("valido = %v (status %d, cuerpo %q), quiero %v", got, rec.Code, rec.Body.String(), tc.valido)
 			}
@@ -136,7 +136,7 @@ func TestConfirmacionConCUSExcesivoNoPersiste(t *testing.T) {
 	cuerpo := `{"referencia":"dep-x","estado":"aprobado","monto":"1000","ocurrido_en":"2026-09-16T10:00:00Z","cus":"` +
 		strings.Repeat("a", 129) + `"}`
 	rec := httptest.NewRecorder()
-	handler.ConfirmarDeposito(rec, httptest.NewRequest(http.MethodPost, "/depositos/confirmaciones", strings.NewReader(cuerpo)))
+	handler.ConfirmarDeposito(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/depositos/confirmaciones", strings.NewReader(cuerpo)))
 
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, quiero 422 (cuerpo %q)", rec.Code, rec.Body.String())

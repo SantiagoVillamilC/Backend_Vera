@@ -1,3 +1,5 @@
+// Package main es el simulador del riel de transferencias (Bre-B): resuelve llaves contra un
+// directorio y despacha transferencias interbancarias, sin tocar la red real.
 package main
 
 import (

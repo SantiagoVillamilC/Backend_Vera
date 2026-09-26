@@ -36,8 +36,10 @@ func campoDelPrimerDetalle(t *testing.T, rec *httptest.ResponseRecorder) string 
 	return campo
 }
 
-func peticionDeTransferencia(cuerpo string) (*http.Request, *httptest.ResponseRecorder) {
-	req := httptest.NewRequest(http.MethodPost, "/v1/transferencias", strings.NewReader(cuerpo))
+func peticionDeTransferencia(t *testing.T, cuerpo string) (*http.Request, *httptest.ResponseRecorder) {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/transferencias", strings.NewReader(cuerpo))
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	return req, httptest.NewRecorder()
 }
@@ -55,7 +57,7 @@ func TestHU_NF_06_Criterio1_EnvioSinDestinoOSinMonto(t *testing.T) {
 
 	for nombre, tc := range casos {
 		t.Run(nombre, func(t *testing.T) {
-			req, rec := peticionDeTransferencia(tc.cuerpo)
+			req, rec := peticionDeTransferencia(t, tc.cuerpo)
 			rutaDeTransferencia().ServeHTTP(rec, req)
 			assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
 			if campo := campoDelPrimerDetalle(t, rec); campo != tc.campo {
@@ -75,7 +77,7 @@ func TestHU_NF_06_Criterio2_EnvioConMontoNoPositivo(t *testing.T) {
 
 	for nombre, cuerpo := range casos {
 		t.Run(nombre, func(t *testing.T) {
-			req, rec := peticionDeTransferencia(cuerpo)
+			req, rec := peticionDeTransferencia(t, cuerpo)
 			rutaDeTransferencia().ServeHTTP(rec, req)
 			assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
 			if campo := campoDelPrimerDetalle(t, rec); campo != "monto" {
@@ -90,7 +92,7 @@ func TestHU_NF_06_MonedaDistintaDeCOPSeRechaza(t *testing.T) {
 	const destino = "00000000-0000-4000-8000-000000000002"
 	cuerpo := `{"destino":"` + destino + `","monto":"1000","moneda":"USD","idempotency_key":"k-1"}`
 
-	req, rec := peticionDeTransferencia(cuerpo)
+	req, rec := peticionDeTransferencia(t, cuerpo)
 	rutaDeTransferencia().ServeHTTP(rec, req)
 	assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
 	if campo := campoDelPrimerDetalle(t, rec); campo != "moneda" {

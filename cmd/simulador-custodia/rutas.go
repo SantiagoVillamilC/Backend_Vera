@@ -133,7 +133,7 @@ func (s *Simulador) esperarAlCliente(w http.ResponseWriter, r *http.Request) {
 }
 
 // VerPerillas responde las seis perillas vigentes.
-func (s *Simulador) VerPerillas(w http.ResponseWriter, r *http.Request) {
+func (s *Simulador) VerPerillas(w http.ResponseWriter, _ *http.Request) {
 	escribirJSON(w, http.StatusOK, s.perillas.Vigentes())
 }
 

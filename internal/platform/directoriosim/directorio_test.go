@@ -92,7 +92,7 @@ func TestHU_NF_10_Criterio5_2_DirectorioSinRespuestaEsTemporal(t *testing.T) {
 	t.Run("timeout", func(t *testing.T) {
 		t.Parallel()
 
-		servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		servidor := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 			<-r.Context().Done()
 		}))
 		t.Cleanup(servidor.Close)
