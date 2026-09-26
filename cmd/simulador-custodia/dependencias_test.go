@@ -8,7 +8,7 @@ import (
 
 // HU-NF-09 Criterio 1: el binario no arrastra el repositorio del núcleo ni el driver de Postgres.
 func TestHU_NF_09_Criterio1_ElBinarioNoDependeDelNucleo(t *testing.T) {
-	salida, err := exec.Command("go", "list", "-deps", ".").Output()
+	salida, err := exec.CommandContext(t.Context(), "go", "list", "-deps", ".").Output()
 	if err != nil {
 		t.Skipf("sin toolchain de Go para inspeccionar dependencias: %v", err)
 	}

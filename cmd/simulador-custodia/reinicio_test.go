@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -54,7 +55,7 @@ func TestHU_NF_09_Criterio10_ElSaldoSobreviveAlReinicio(t *testing.T) {
 func puertoLibre(t *testing.T) string {
 	t.Helper()
 
-	escucha, err := net.Listen("tcp", "127.0.0.1:0")
+	escucha, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("buscar puerto libre: %v", err)
 	}
@@ -70,7 +71,9 @@ func puertoLibre(t *testing.T) string {
 func arrancarSimulador(t *testing.T, puerto, ruta string) *exec.Cmd {
 	t.Helper()
 
-	cmd := exec.Command(os.Args[0])
+	// t.Context() cubre la vida completa del subproceso: solo se cancela después de que el
+	// cuerpo del test retorna (y con él, matarSimulador vía defer/Cleanup ya lo mató).
+	cmd := exec.CommandContext(t.Context(), os.Args[0])
 	cmd.Env = append(os.Environ(),
 		envServidorDePrueba+"=1",
 		"SIMULADOR_CUSTODIA_ADDR=127.0.0.1",
@@ -92,7 +95,7 @@ func esperarServidor(t *testing.T, cmd *exec.Cmd, puerto string) {
 
 	limite := time.Now().Add(10 * time.Second)
 	for time.Now().Before(limite) {
-		if _, status, err := pedirExtracto(puerto); err == nil && status == http.StatusOK {
+		if _, status, err := pedirExtracto(t.Context(), puerto); err == nil && status == http.StatusOK {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -118,8 +121,13 @@ func notificarEnProceso(t *testing.T, puerto, referencia, monto string) {
 
 	cuerpo := fmt.Sprintf(`{"referencia":%q,"monto_centavos":%q,"ocurrido_en":%q}`,
 		referencia, monto, time.Now().UTC().Format(time.RFC3339Nano))
-	respuesta, err := http.Post("http://127.0.0.1:"+puerto+"/notificaciones/depositos",
-		"application/json", strings.NewReader(cuerpo))
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://127.0.0.1:"+puerto+"/notificaciones/depositos",
+		strings.NewReader(cuerpo))
+	if err != nil {
+		t.Fatalf("armar petición: %v", err)
+	}
+	peticion.Header.Set("Content-Type", "application/json")
+	respuesta, err := http.DefaultClient.Do(peticion)
 	if err != nil {
 		t.Fatalf("notificar: %v", err)
 	}
@@ -133,7 +141,7 @@ func notificarEnProceso(t *testing.T, puerto, referencia, monto string) {
 func saldoEnProceso(t *testing.T, puerto string) string {
 	t.Helper()
 
-	cuerpo, status, err := pedirExtracto(puerto)
+	cuerpo, status, err := pedirExtracto(t.Context(), puerto)
 	if err != nil {
 		t.Fatalf("pedir extracto: %v", err)
 	}
@@ -153,9 +161,13 @@ func saldoEnProceso(t *testing.T, puerto string) string {
 }
 
 // pedirExtracto consulta el extracto al instante actual.
-func pedirExtracto(puerto string) (string, int, error) {
+func pedirExtracto(ctx context.Context, puerto string) (string, int, error) {
 	corte := time.Now().UTC().Format(time.RFC3339Nano)
-	respuesta, err := http.Get("http://127.0.0.1:" + puerto + "/extracto?corte_en=" + corte)
+	peticion, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+puerto+"/extracto?corte_en="+corte, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	respuesta, err := http.DefaultClient.Do(peticion)
 	if err != nil {
 		return "", 0, err
 	}

@@ -270,7 +270,13 @@ func TestHU_NF_09_Criterio6_CopiasSimultaneasDejanUnaFila(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			respuesta, err := http.Post(servidor.URL+"/notificaciones/depositos", "application/json", strings.NewReader(cuerpo))
+			peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPost, servidor.URL+"/notificaciones/depositos", strings.NewReader(cuerpo))
+			if err != nil {
+				fallos <- err.Error()
+				return
+			}
+			peticion.Header.Set("Content-Type", "application/json")
+			respuesta, err := http.DefaultClient.Do(peticion)
 			if err != nil {
 				fallos <- err.Error()
 				return

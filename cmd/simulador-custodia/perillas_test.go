@@ -66,7 +66,7 @@ func simuladorConReadTimeout(t *testing.T, p Perillas, readTimeout time.Duration
 func notificarPorTramos(t *testing.T, servidor *httptest.Server, referencia, monto string, espera time.Duration) string {
 	t.Helper()
 
-	conexion, err := net.Dial("tcp", strings.TrimPrefix(servidor.URL, "http://"))
+	conexion, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", strings.TrimPrefix(servidor.URL, "http://"))
 	if err != nil {
 		t.Fatalf("abrir conexión: %v", err)
 	}
@@ -156,7 +156,12 @@ func TestHU_NF_09_Criterio17_RespuestaPerdidaRegistraYNoResponde(t *testing.T) {
 
 	cliente := &http.Client{Timeout: 200 * time.Millisecond}
 	cuerpo := `{"referencia":"dep-perdida","monto_centavos":"250000","ocurrido_en":"2026-09-17T12:00:00Z"}`
-	respuesta, err := cliente.Post(servidor.URL+"/notificaciones/depositos", "application/json", strings.NewReader(cuerpo))
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPost, servidor.URL+"/notificaciones/depositos", strings.NewReader(cuerpo))
+	if err != nil {
+		t.Fatalf("armar petición: %v", err)
+	}
+	peticion.Header.Set("Content-Type", "application/json")
+	respuesta, err := cliente.Do(peticion)
 	if err == nil {
 		_ = respuesta.Body.Close()
 		t.Fatal("el cliente debía vencer por timeout y el simulador respondió")
@@ -209,7 +214,11 @@ func TestHU_NF_09_Criterio17_ModoCaidaDejaSinAtenderYVuelve(t *testing.T) {
 			servidor, _ := simuladorConPerillas(t, p, func() float64 { return 0.5 })
 
 			cliente := &http.Client{Timeout: 200 * time.Millisecond}
-			respuesta, err := cliente.Get(servidor.URL + "/extracto?corte_en=2026-09-17T12:00:01Z")
+			peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+"/extracto?corte_en=2026-09-17T12:00:01Z", nil)
+			if err != nil {
+				t.Fatalf("armar petición: %v", err)
+			}
+			respuesta, err := cliente.Do(peticion)
 			if err == nil {
 				_ = respuesta.Body.Close()
 				t.Fatal("con el modo de caída activo el cliente no debía recibir respuesta")
@@ -418,7 +427,9 @@ func (s *bufferSeguro) String() string {
 func arrancarSimuladorConLog(t *testing.T, puerto, ruta string, perillas map[string]string) (*exec.Cmd, *bufferSeguro) {
 	t.Helper()
 
-	cmd := exec.Command(os.Args[0])
+	// t.Context() cubre la vida completa del subproceso: solo se cancela después de que el
+	// cuerpo del test retorna (y con él, matarSimulador vía defer/Cleanup ya lo mató).
+	cmd := exec.CommandContext(t.Context(), os.Args[0])
 	cmd.Env = append(os.Environ(),
 		envServidorDePrueba+"=1",
 		"SIMULADOR_CUSTODIA_ADDR=127.0.0.1",
@@ -444,7 +455,11 @@ func esperarControl(t *testing.T, cmd *exec.Cmd, puerto string) {
 	cliente := &http.Client{Timeout: 500 * time.Millisecond}
 	limite := time.Now().Add(10 * time.Second)
 	for time.Now().Before(limite) {
-		respuesta, err := cliente.Get("http://127.0.0.1:" + puerto + "/control/perillas")
+		peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:"+puerto+"/control/perillas", nil)
+		if err != nil {
+			t.Fatalf("armar petición: %v", err)
+		}
+		respuesta, err := cliente.Do(peticion)
 		if err == nil {
 			_ = respuesta.Body.Close()
 			if respuesta.StatusCode == http.StatusOK {
@@ -488,7 +503,7 @@ func TestHU_NF_09_Criterio17_3_LasPerillasQuedanEnElLog(t *testing.T) {
 	esperarEnLog(t, registro, "perillas.latencia_ms=30")
 	esperarEnLog(t, registro, "perillas.p_notificacion_perdida=0.5")
 
-	peticion, err := http.NewRequest(http.MethodPut, "http://127.0.0.1:"+puerto+"/control/perillas",
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPut, "http://127.0.0.1:"+puerto+"/control/perillas",
 		strings.NewReader(`{"modo_caida":"rechaza","p_rechazo":1}`))
 	if err != nil {
 		t.Fatalf("armar petición: %v", err)
@@ -561,7 +576,12 @@ func TestHU_NF_09_Criterio17_RespuestaPerdidaNoDejaUn200Vacio(t *testing.T) {
 
 	cliente := &http.Client{Timeout: topeDePrueba + 2*time.Second}
 	cuerpo := `{"referencia":"dep-tope","monto_centavos":"250000","ocurrido_en":"2026-09-17T12:00:00Z"}`
-	respuesta, err := cliente.Post(servidor.URL+"/notificaciones/depositos", "application/json", strings.NewReader(cuerpo))
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPost, servidor.URL+"/notificaciones/depositos", strings.NewReader(cuerpo))
+	if err != nil {
+		t.Fatalf("armar petición: %v", err)
+	}
+	peticion.Header.Set("Content-Type", "application/json")
+	respuesta, err := cliente.Do(peticion)
 	if err == nil {
 		defer func() { _ = respuesta.Body.Close() }()
 		datos, _ := io.ReadAll(respuesta.Body)
@@ -582,7 +602,11 @@ func TestHU_NF_09_Criterio17_SilencioNoDejaUn200Vacio(t *testing.T) {
 	servidor, _ := simuladorConPerillas(t, p, func() float64 { return 0.5 })
 
 	cliente := &http.Client{Timeout: topeDePrueba + 2*time.Second}
-	respuesta, err := cliente.Get(servidor.URL + "/extracto?corte_en=2026-09-17T12:00:01Z")
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodGet, servidor.URL+"/extracto?corte_en=2026-09-17T12:00:01Z", nil)
+	if err != nil {
+		t.Fatalf("armar petición: %v", err)
+	}
+	respuesta, err := cliente.Do(peticion)
 	if err == nil {
 		defer func() { _ = respuesta.Body.Close() }()
 		datos, _ := io.ReadAll(respuesta.Body)
@@ -604,7 +628,12 @@ func TestHU_NF_09_Criterio17_ClienteConPlazoMenorVencePrimero(t *testing.T) {
 
 	cliente := &http.Client{Timeout: 200 * time.Millisecond}
 	cuerpo := `{"referencia":"dep-plazo","monto_centavos":"1000","ocurrido_en":"2026-09-17T12:00:00Z"}`
-	respuesta, err := cliente.Post(servidor.URL+"/notificaciones/depositos", "application/json", strings.NewReader(cuerpo))
+	peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPost, servidor.URL+"/notificaciones/depositos", strings.NewReader(cuerpo))
+	if err != nil {
+		t.Fatalf("armar petición: %v", err)
+	}
+	peticion.Header.Set("Content-Type", "application/json")
+	respuesta, err := cliente.Do(peticion)
 	if err == nil {
 		_ = respuesta.Body.Close()
 		t.Fatal("el simulador respondió antes del plazo del cliente")
@@ -648,7 +677,7 @@ func TestHU_NF_09_Criterio17_SilencioNoRetieneMasAllaDelTope(t *testing.T) {
 	p.ModoCaida = modoSilencio
 	servidor, sim := simuladorConPerillas(t, p, func() float64 { return 0.5 })
 
-	conexion, err := net.Dial("tcp", strings.TrimPrefix(servidor.URL, "http://"))
+	conexion, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", strings.TrimPrefix(servidor.URL, "http://"))
 	if err != nil {
 		t.Fatalf("abrir conexión: %v", err)
 	}
@@ -680,7 +709,7 @@ func TestHU_NF_09_Criterio17_ApagadoOrdenadoNoEsperaAlSilencio(t *testing.T) {
 	ruta := filepath.Join(t.TempDir(), "movimiento.db")
 	cmd, _ := arrancarSimuladorConLog(t, puerto, ruta, map[string]string{"SIMULADOR_CUSTODIA_MODO_CAIDA": "silencio"})
 
-	conexion, err := net.Dial("tcp", "127.0.0.1:"+puerto)
+	conexion, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:"+puerto)
 	if err != nil {
 		matarSimulador(t, cmd)
 		t.Fatalf("abrir conexión: %v", err)
@@ -729,7 +758,7 @@ func TestHU_NF_09_Criterio17_CambiosConcurrentesNoSePierden(t *testing.T) {
 			go func(cuerpo string) {
 				defer wg.Done()
 				<-inicio
-				peticion, err := http.NewRequest(http.MethodPut, servidor.URL+"/control/perillas", strings.NewReader(cuerpo))
+				peticion, err := http.NewRequestWithContext(t.Context(), http.MethodPut, servidor.URL+"/control/perillas", strings.NewReader(cuerpo))
 				if err != nil {
 					fallos <- err
 					return
