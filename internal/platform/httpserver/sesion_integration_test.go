@@ -150,7 +150,7 @@ func TestAccessDeEmpresaLlegaAlNucleoConElUuidDeLaEmpresa(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(RequireAuth(adaptador, RutasDeDinero))
 	r.Get("/quien-soy", func(w http.ResponseWriter, req *http.Request) {
-		id, ok := identidad.IdentidadDeContexto(req.Context())
+		id, ok := identidad.DeContexto(req.Context())
 		if !ok {
 			api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Sin identidad.", nil)
 			return

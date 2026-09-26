@@ -1,4 +1,5 @@
-// Package jobs arma el planificador de River con los trabajos periódicos del núcleo.
+// Package jobs arma el planificador de River con los trabajos periódicos del núcleo y del
+// módulo de auth.
 package jobs
 
 import (
@@ -14,7 +15,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 )
 
-// EsquemaRiver es el esquema propio de las tablas de River, aparte de public y de nucleo.
+// EsquemaRiver es el esquema propio de las tablas de River, aparte de public, nucleo y auth.
 const EsquemaRiver = "river"
 
 // ColaAuth es la cola de River reservada a los trabajos del módulo de auth.

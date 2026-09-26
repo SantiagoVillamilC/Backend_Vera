@@ -76,7 +76,7 @@ func nitValido(nit string) bool {
 	}
 	pesos := []int{3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71}
 	suma := 0
-	for i := 0; i < len(cuerpo); i++ {
+	for i := range len(cuerpo) {
 		d := cuerpo[len(cuerpo)-1-i]
 		if d < '0' || d > '9' || i >= len(pesos) {
 			return false

@@ -1,3 +1,4 @@
+// Package auth implementa el registro, la activación, las sesiones y la verificación de identidad de la billetera.
 package auth
 
 import "github.com/SantiagoVillamilC/Backend_Centinela/internal/repositorio"

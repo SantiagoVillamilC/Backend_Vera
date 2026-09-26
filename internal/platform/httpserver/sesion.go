@@ -7,7 +7,6 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // ServicioDeSesion rota el refresh de la sesión.
@@ -57,7 +56,7 @@ func dispositivoDeLaPeticion(r *http.Request) string {
 // respuestaDeSesion traduce la sesión de dominio al contrato con el rol nulo en contexto usuario.
 func respuestaDeSesion(sesion auth.SesionEmitida) api.Sesion {
 	usuario := api.Usuario{
-		Id:             openapi_types.UUID(sesion.Usuario.ID),
+		Id:             sesion.Usuario.ID,
 		TipoCuenta:     api.UsuarioTipoCuenta(sesion.Usuario.TipoCuenta),
 		Correo:         sesion.Usuario.Correo,
 		ContextoActivo: sesion.Usuario.ContextoActivo,

@@ -1,11 +1,18 @@
 FROM golang:1.27-alpine AS build
 WORKDIR /app
-COPY go.mod ./
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o api ./cmd/api
+# -o /app/bin/api, no -o api: el repo ya tiene una carpeta api/ (el contrato OpenAPI) en la
+# raíz, y "go build -o api" con ese nombre existente como directorio deja el binario adentro
+# (/app/api/api) en vez de como archivo. Primer deploy real, nunca se había corrido esta imagen.
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api ./cmd/api
 
 FROM alpine:3.20
 WORKDIR /app
-COPY --from=build /app/api ./api
+# wget: lo único que necesita el healthcheck de compose.api.yaml (infra/servidor/pasos/60-api.sh)
+# contra /healthz, sin arrastrar curl completo.
+RUN apk add --no-cache wget
+COPY --from=build /app/bin/api ./api
 EXPOSE 8080
 CMD ["./api"]

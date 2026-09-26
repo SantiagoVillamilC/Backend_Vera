@@ -14,7 +14,6 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // servicioDeDispositivosFalso devuelve respuestas prefabricadas para los seis handlers.
@@ -69,12 +68,13 @@ func routerDeDispositivos(servicio ControlDeSesiones) http.Handler {
 }
 
 // pedirConCredencial lanza la petición con la cabecera de la identidad de prueba.
-func pedirConCredencial(r http.Handler, metodo, ruta, cuerpo string) *httptest.ResponseRecorder {
+func pedirConCredencial(t *testing.T, r http.Handler, metodo, ruta, cuerpo string) *httptest.ResponseRecorder {
+	t.Helper()
 	var req *http.Request
 	if cuerpo == "" {
-		req = httptest.NewRequest(metodo, ruta, nil)
+		req = httptest.NewRequestWithContext(t.Context(), metodo, ruta, nil)
 	} else {
-		req = httptest.NewRequest(metodo, ruta, strings.NewReader(cuerpo))
+		req = httptest.NewRequestWithContext(t.Context(), metodo, ruta, strings.NewReader(cuerpo))
 	}
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
@@ -94,7 +94,7 @@ func TestDispositivosSinCredencialResponde401(t *testing.T) {
 	}
 	for _, ruta := range rutas {
 		t.Run(ruta.metodo+" "+ruta.ruta, func(t *testing.T) {
-			req := httptest.NewRequest(ruta.metodo, ruta.ruta, nil)
+			req := httptest.NewRequestWithContext(t.Context(), ruta.metodo, ruta.ruta, nil)
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
 			assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
@@ -105,7 +105,7 @@ func TestDispositivosSinCredencialResponde401(t *testing.T) {
 func TestSessionsListaVaciaRespondeArregloVacio(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{sesiones: []auth.Sesion{}})
 
-	rec := pedirConCredencial(r, http.MethodGet, "/v1/auth/sessions", "")
+	rec := pedirConCredencial(t, r, http.MethodGet, "/v1/auth/sessions", "")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
@@ -128,7 +128,7 @@ func TestSessionsMapeaElDispositivoYSuFamilia(t *testing.T) {
 	}}}
 	r := routerDeDispositivos(servicio)
 
-	rec := pedirConCredencial(r, http.MethodGet, "/v1/auth/sessions", "")
+	rec := pedirConCredencial(t, r, http.MethodGet, "/v1/auth/sessions", "")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
@@ -139,7 +139,7 @@ func TestSessionsMapeaElDispositivoYSuFamilia(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("respuesta no JSON: %v", err)
 	}
-	if len(env.Data) != 1 || env.Data[0].Id != openapi_types.UUID(familia) || env.Data[0].Dispositivo != "Navegador" {
+	if len(env.Data) != 1 || env.Data[0].Id != familia || env.Data[0].Dispositivo != "Navegador" {
 		t.Fatalf("dispositivos = %+v, quiero la familia %s", env.Data, familia)
 	}
 }
@@ -147,7 +147,7 @@ func TestSessionsMapeaElDispositivoYSuFamilia(t *testing.T) {
 func TestDeleteSessionMalformadoResponde400ConDetails(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{})
 
-	rec := pedirConCredencial(r, http.MethodDelete, "/v1/auth/sessions/no-es-uuid", "")
+	rec := pedirConCredencial(t, r, http.MethodDelete, "/v1/auth/sessions/no-es-uuid", "")
 
 	assertErrorEnvelope(t, rec, http.StatusBadRequest, "BadRequest")
 	env := decodeEnvelope(t, rec)
@@ -165,7 +165,7 @@ func TestDeleteSessionMalformadoResponde400ConDetails(t *testing.T) {
 func TestDeleteSessionAjenaResponde404(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{revocarErr: auth.ErrSesionNoEncontrada})
 
-	rec := pedirConCredencial(r, http.MethodDelete, "/v1/auth/sessions/"+uuid.NewString(), "")
+	rec := pedirConCredencial(t, r, http.MethodDelete, "/v1/auth/sessions/"+uuid.NewString(), "")
 
 	assertErrorEnvelope(t, rec, http.StatusNotFound, "SessionNotFound")
 }
@@ -173,7 +173,7 @@ func TestDeleteSessionAjenaResponde404(t *testing.T) {
 func TestDeleteSessionResponde204(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{})
 
-	rec := pedirConCredencial(r, http.MethodDelete, "/v1/auth/sessions/"+uuid.NewString(), "")
+	rec := pedirConCredencial(t, r, http.MethodDelete, "/v1/auth/sessions/"+uuid.NewString(), "")
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, quiero 204 (cuerpo %q)", rec.Code, rec.Body.String())
@@ -183,7 +183,7 @@ func TestDeleteSessionResponde204(t *testing.T) {
 func TestSetContextoInvalidoResponde400(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{activoErr: auth.ErrContextoInvalido})
 
-	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/contexto", `{"contexto_id":"empresa:no-existe"}`)
+	rec := pedirConCredencial(t, r, http.MethodPost, "/v1/auth/contexto", `{"contexto_id":"empresa:no-existe"}`)
 
 	assertErrorEnvelope(t, rec, http.StatusBadRequest, "ContextInvalid")
 }
@@ -196,7 +196,7 @@ func TestSetContextoRespondeAccessYContexto(t *testing.T) {
 	}}
 	r := routerDeDispositivos(servicio)
 
-	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/contexto", `{"contexto_id":"`+auth.ContextoDeEmpresa(empresa)+`"}`)
+	rec := pedirConCredencial(t, r, http.MethodPost, "/v1/auth/contexto", `{"contexto_id":"`+auth.ContextoDeEmpresa(empresa)+`"}`)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
@@ -221,7 +221,7 @@ func TestListContextosUsaRolNuloEnElPersonal(t *testing.T) {
 	}}
 	r := routerDeDispositivos(servicio)
 
-	rec := pedirConCredencial(r, http.MethodGet, "/v1/auth/contextos", "")
+	rec := pedirConCredencial(t, r, http.MethodGet, "/v1/auth/contextos", "")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
@@ -235,7 +235,7 @@ func TestLogoutConDenylistQueFallaResponde503(t *testing.T) {
 	servicio := &servicioDeDispositivosFalso{cerrarErr: auth.ConFailClosed(errors.New("redis caido"))}
 	r := routerDeDispositivos(servicio)
 
-	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout", `{"refresh_token":"vigente"}`)
+	rec := pedirConCredencial(t, r, http.MethodPost, "/v1/auth/logout", `{"refresh_token":"vigente"}`)
 
 	assertErrorEnvelope(t, rec, http.StatusServiceUnavailable, "AuthUnavailable")
 }
@@ -243,7 +243,7 @@ func TestLogoutConDenylistQueFallaResponde503(t *testing.T) {
 func TestLogoutSinRefreshTokenResponde422(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{})
 
-	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout", `{}`)
+	rec := pedirConCredencial(t, r, http.MethodPost, "/v1/auth/logout", `{}`)
 
 	assertErrorEnvelope(t, rec, http.StatusUnprocessableEntity, "ValidationError")
 }
@@ -251,7 +251,7 @@ func TestLogoutSinRefreshTokenResponde422(t *testing.T) {
 func TestLogoutConRefreshInvalidoResponde401(t *testing.T) {
 	r := routerDeDispositivos(&servicioDeDispositivosFalso{cerrarErr: auth.ErrRefreshInvalido})
 
-	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout", `{"refresh_token":"ajeno"}`)
+	rec := pedirConCredencial(t, r, http.MethodPost, "/v1/auth/logout", `{"refresh_token":"ajeno"}`)
 
 	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "RefreshInvalid")
 }
@@ -260,7 +260,7 @@ func TestLogoutAllConDenylistQueFallaResponde503(t *testing.T) {
 	servicio := &servicioDeDispositivosFalso{cerrarTodasErr: auth.ConFailClosed(errors.New("redis caido"))}
 	r := routerDeDispositivos(servicio)
 
-	rec := pedirConCredencial(r, http.MethodPost, "/v1/auth/logout-all", "")
+	rec := pedirConCredencial(t, r, http.MethodPost, "/v1/auth/logout-all", "")
 
 	assertErrorEnvelope(t, rec, http.StatusServiceUnavailable, "AuthUnavailable")
 }
@@ -273,7 +273,7 @@ func TestLogoutYLogoutAllResponden204(t *testing.T) {
 	}
 	for ruta, cuerpo := range casos {
 		t.Run(ruta, func(t *testing.T) {
-			rec := pedirConCredencial(r, http.MethodPost, ruta, cuerpo)
+			rec := pedirConCredencial(t, r, http.MethodPost, ruta, cuerpo)
 			if rec.Code != http.StatusNoContent {
 				t.Fatalf("status = %d, quiero 204 (cuerpo %q)", rec.Code, rec.Body.String())
 			}

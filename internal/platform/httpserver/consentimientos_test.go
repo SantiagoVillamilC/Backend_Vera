@@ -49,7 +49,7 @@ func pedirConsentimientos(t *testing.T, r http.Handler, metodo, ruta, cuerpo str
 	if cuerpo != "" {
 		body = strings.NewReader(cuerpo)
 	}
-	req := httptest.NewRequest(metodo, ruta, body)
+	req := httptest.NewRequestWithContext(t.Context(), metodo, ruta, body)
 	if conCredencial {
 		req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	}

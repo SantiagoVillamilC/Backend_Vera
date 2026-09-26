@@ -96,7 +96,7 @@ func accionCoherente(w http.ResponseWriter, entrada api.ConsentRequest) bool {
 
 // personaDeConsentimiento resuelve la persona duena de la sesion por su parte, nunca por el usuario del contexto.
 func personaDeConsentimiento(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, ok := identidad.IdentidadDeContexto(r.Context())
+	id, ok := identidad.DeContexto(r.Context())
 	if !ok {
 		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 		return uuid.Nil, false

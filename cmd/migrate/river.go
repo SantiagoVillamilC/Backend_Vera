@@ -74,6 +74,6 @@ func estadoRiver(ctx context.Context, dsn string) error {
 	if err != nil {
 		return fmt.Errorf("river: versiones aplicadas: %w", err)
 	}
-	log.Printf("river: %d migraciones aplicadas en el esquema %q", len(versiones), jobs.EsquemaRiver)
+	log.Printf("river: %d migraciones aplicadas en el esquema %q", len(versiones), jobs.EsquemaRiver) //nolint:gosec // solo se loguean un contador y una constante, no hay entrada externa
 	return nil
 }

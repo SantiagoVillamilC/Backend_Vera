@@ -57,7 +57,7 @@ func peticionDeReenvio(t *testing.T, challengeID uuid.UUID) *http.Request {
 	if err != nil {
 		t.Fatalf("serializar el cuerpo: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/otp/resend", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/otp/resend", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
@@ -132,7 +132,7 @@ func TestResendOtpCuadradoConContadoresCaidosResponde503(t *testing.T) {
 func TestResendOtpSinChallengeIdResponde422(t *testing.T) {
 	falso := &reenviadorFalso{desafio: auth.Desafio{ExpiraEnSegundos: 300, Proposito: auth.PropositoLogin}}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/otp/resend", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/otp/resend", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 
 	routerConReenvio(NuevoOTPHandler(falso)).ServeHTTP(rec, req)

@@ -65,7 +65,7 @@ func (h *HandlerDeKYC) KycVerificacion(w http.ResponseWriter, r *http.Request) {
 
 // parteDeContextoKYC exige la identidad autenticada y devuelve la parte que opera.
 func parteDeContextoKYC(w http.ResponseWriter, r *http.Request) (string, bool) {
-	id, ok := identidad.IdentidadDeContexto(r.Context())
+	id, ok := identidad.DeContexto(r.Context())
 	if !ok || id.UsuarioID == "" {
 		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 		return "", false

@@ -1,3 +1,5 @@
+// Package httpserver monta la capa HTTP de autenticación sobre chi: el router, sus middleware y los
+// handlers que implementan el contrato OpenAPI.
 package httpserver
 
 import (
@@ -201,12 +203,12 @@ func (s servidorV1) ListSessions(w http.ResponseWriter, r *http.Request) {
 	s.auth.ListSessions(w, r)
 }
 
-func (s servidorV1) DeleteSession(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID) {
+func (s servidorV1) DeleteSession(w http.ResponseWriter, r *http.Request, sessionID openapi_types.UUID) {
 	if s.auth == nil {
 		sinImplementar(w, r)
 		return
 	}
-	s.auth.DeleteSession(w, r, sessionId)
+	s.auth.DeleteSession(w, r, sessionID)
 }
 
 func (s servidorV1) KycEstado(w http.ResponseWriter, r *http.Request) {

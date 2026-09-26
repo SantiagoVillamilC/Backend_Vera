@@ -168,7 +168,7 @@ func TestHmacDelReenvioDelRellenoNoLoSatisfaceUnCodigo(t *testing.T) {
 
 	pepper := bytes.Repeat([]byte{0x22}, 32)
 	relleno := repositorio.DesafioPendientePorIDRow{CelularDestino: celularDeRelleno}
-	real := repositorio.DesafioPendientePorIDRow{
+	realPersistido := repositorio.DesafioPendientePorIDRow{
 		CelularDestino: "+573001112233",
 		ParteID:        pgtype.UUID{Bytes: uuid.New(), Valid: true},
 		CredencialID:   pgtype.UUID{Bytes: uuid.New(), Valid: true},
@@ -178,7 +178,7 @@ func TestHmacDelReenvioDelRellenoNoLoSatisfaceUnCodigo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hmacDelReenvio del relleno: %v", err)
 	}
-	hmacReal, err := hmacDelReenvio(pepper, real, "123456")
+	hmacReal, err := hmacDelReenvio(pepper, realPersistido, "123456")
 	if err != nil {
 		t.Fatalf("hmacDelReenvio real: %v", err)
 	}
@@ -281,10 +281,10 @@ func (r rellenadorDeRegistroFalso) RellenarRegistro(context.Context, DocumentoDe
 }
 
 // exigirMismosCamposPoblados exige que ningún campo del relleno esté vacío donde el alta real lo llena, y al revés.
-func exigirMismosCamposPoblados(t *testing.T, real, relleno any) {
+func exigirMismosCamposPoblados(t *testing.T, realPersistido, relleno any) {
 	t.Helper()
 
-	vReal, vRelleno := reflect.ValueOf(real), reflect.ValueOf(relleno)
+	vReal, vRelleno := reflect.ValueOf(realPersistido), reflect.ValueOf(relleno)
 	for i := range vReal.NumField() {
 		nombre := vReal.Type().Field(i).Name
 		if vReal.Field(i).IsZero() != vRelleno.Field(i).IsZero() {
@@ -305,9 +305,9 @@ func TestRegistroDeRellenoPueblaLosMismosCamposQueElAltaReal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registroDeRelleno: %v", err)
 	}
-	real := datosPersistidos{parteID: uuid.New(), credencialID: uuid.New(), correo: entrada.correo, celular: entrada.celular, nombreCompleto: entrada.nombreCompleto, creadaEn: ahora}.resultado(desafio)
-	exigirMismosCamposPoblados(t, real, relleno)
-	if relleno.ParteID == real.ParteID || relleno.Desafio != desafio {
+	realPersistido := datosPersistidos{parteID: uuid.New(), credencialID: uuid.New(), correo: entrada.correo, celular: entrada.celular, nombreCompleto: entrada.nombreCompleto, creadaEn: ahora}.resultado(desafio)
+	exigirMismosCamposPoblados(t, realPersistido, relleno)
+	if relleno.ParteID == realPersistido.ParteID || relleno.Desafio != desafio {
 		t.Errorf("relleno = %+v, quiero ids propios y el desafío del relleno", relleno)
 	}
 

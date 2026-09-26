@@ -47,7 +47,7 @@ func peticionDeRecuperacion(t *testing.T, correo string) *http.Request {
 	if err != nil {
 		t.Fatalf("serializar el cuerpo: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/recovery/request", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/recovery/request", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }

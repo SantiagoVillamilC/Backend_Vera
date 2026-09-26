@@ -17,8 +17,9 @@ const empresaValida = `{"tipo_cuenta":"empresa","razon_social":"ACME","nit":"900
 	`"representante_legal":{"nombre_completo":"Ana","tipo_documento":"CC","numero_documento":"1"},` +
 	`"consentimientos":[{"tipo":"tratamiento_datos","version_texto":"v1","aceptado":true}]}`
 
-func peticion(cuerpo string) (*httptest.ResponseRecorder, *http.Request) {
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", strings.NewReader(cuerpo))
+func peticion(t *testing.T, cuerpo string) (*httptest.ResponseRecorder, *http.Request) {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/register", strings.NewReader(cuerpo))
 	return httptest.NewRecorder(), req
 }
 
@@ -37,7 +38,7 @@ func detallesDe(t *testing.T, rec *httptest.ResponseRecorder) []map[string]any {
 
 func TestDecodeAndValidateNombraCamposAnidadosEnSnakeCase(t *testing.T) {
 	cuerpo := strings.Replace(empresaValida, `"nombre_completo":"Ana"`, `"nombre_completo":""`, 1)
-	rec, req := peticion(cuerpo)
+	rec, req := peticion(t, cuerpo)
 	var dst RegisterEmpresaRequest
 
 	if DecodeAndValidate(rec, req, &dst) {
@@ -57,7 +58,7 @@ func TestDecodeAndValidateNombraCamposAnidadosEnSnakeCase(t *testing.T) {
 
 func TestDecodeAndValidateNombraCamposRaizEnSnakeCase(t *testing.T) {
 	cuerpo := strings.Replace(empresaValida, `"nit":"9001234568"`, `"nit":""`, 1)
-	rec, req := peticion(cuerpo)
+	rec, req := peticion(t, cuerpo)
 	var dst RegisterEmpresaRequest
 
 	if DecodeAndValidate(rec, req, &dst) {
@@ -110,7 +111,7 @@ func TestDecodeDiscriminated(t *testing.T) {
 
 	t.Run("campo extra invalida el cuerpo", func(t *testing.T) {
 		cuerpo := strings.Replace(personaValida, `"tipo_documento"`, `"campo_extra":true,"tipo_documento"`, 1)
-		rec, req := peticion(cuerpo)
+		rec, req := peticion(t, cuerpo)
 
 		if _, ok := DecodeDiscriminated(rec, req, "tipo_cuenta", destinos()); ok {
 			t.Fatal("quiero false cuando el cuerpo trae un campo desconocido")
@@ -122,7 +123,7 @@ func TestDecodeDiscriminated(t *testing.T) {
 
 	t.Run("sin discriminador responde 422", func(t *testing.T) {
 		cuerpo := strings.Replace(personaValida, `"tipo_cuenta":"persona",`, "", 1)
-		rec, req := peticion(cuerpo)
+		rec, req := peticion(t, cuerpo)
 
 		if _, ok := DecodeDiscriminated(rec, req, "tipo_cuenta", destinos()); ok {
 			t.Fatal("quiero false cuando falta el discriminador")
@@ -140,7 +141,7 @@ func TestDecodeDiscriminated(t *testing.T) {
 	})
 
 	t.Run("discriminador válido decodifica", func(t *testing.T) {
-		rec, req := peticion(personaValida)
+		rec, req := peticion(t, personaValida)
 
 		got, ok := DecodeDiscriminated(rec, req, "tipo_cuenta", destinos())
 		if !ok {

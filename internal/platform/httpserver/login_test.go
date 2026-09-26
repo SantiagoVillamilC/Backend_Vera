@@ -102,7 +102,7 @@ func TestLoginHandlerDesenlacesDelLoginDirecto(t *testing.T) {
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {
 			iniciador := &iniciadorFalso{resultado: caso.resultado, err: caso.err}
-			req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(caso.cuerpo))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/login", strings.NewReader(caso.cuerpo))
 			rec := httptest.NewRecorder()
 
 			routerConLogin(iniciador).ServeHTTP(rec, req)
@@ -160,7 +160,7 @@ func assertSesionDelLogin(t *testing.T, rec *httptest.ResponseRecorder, esperado
 }
 
 func TestLoginConServicioNuloResponde501(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"celular":"+573001112233","contrasena":"secreta123"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/login", strings.NewReader(`{"celular":"+573001112233","contrasena":"secreta123"}`))
 	rec := httptest.NewRecorder()
 
 	routerConLogin(nil).ServeHTTP(rec, req)

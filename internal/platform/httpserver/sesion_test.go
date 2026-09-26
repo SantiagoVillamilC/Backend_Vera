@@ -35,7 +35,7 @@ func sesionRouter(servicio ServicioDeSesion) http.Handler {
 func TestRefreshRespondeElParRotado(t *testing.T) {
 	r := sesionRouter(&servicioDeSesionFalso{rotados: auth.TokensRotados{AccessToken: "nuevo-access", RefreshToken: "nuevo-refresh"}})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", strings.NewReader(`{"refresh_token":"viejo"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/refresh", strings.NewReader(`{"refresh_token":"viejo"}`))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -66,7 +66,7 @@ func TestRefreshMapeaReusoYFallaCerrado(t *testing.T) {
 	for nombre, caso := range casos {
 		t.Run(nombre, func(t *testing.T) {
 			r := sesionRouter(&servicioDeSesionFalso{rotErr: caso.err})
-			req := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", strings.NewReader(`{"refresh_token":"viejo"}`))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/auth/refresh", strings.NewReader(`{"refresh_token":"viejo"}`))
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
 			assertErrorEnvelope(t, rec, caso.status, caso.code)

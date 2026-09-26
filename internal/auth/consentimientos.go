@@ -160,7 +160,7 @@ func (s *ServicioDeConsentimientos) Registrar(ctx context.Context, solicitud Sol
 }
 
 // exigirRevocacionPermitida corta la revocacion de whatsapp_optin mientras sea el unico canal del OTP (P-13).
-func (s *ServicioDeConsentimientos) exigirRevocacionPermitida(ctx context.Context, solicitud SolicitudDeConsentimientoNuevo) error {
+func (s *ServicioDeConsentimientos) exigirRevocacionPermitida(_ context.Context, solicitud SolicitudDeConsentimientoNuevo) error {
 	if solicitud.Tipo != TipoConsentimientoWhatsApp || solicitud.Aceptado {
 		return nil
 	}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // RegistradorDePersonas es el servicio de alta de persona y empresa que el handler consume.
@@ -112,7 +111,7 @@ func convertirConsentimientos(entrantes []api.Consentimiento) []auth.SolicitudDe
 func respuestaDeRegistro(registro auth.Registro) api.Registro {
 	nombre := registro.NombreCompleto
 	return api.Registro{
-		Id:             openapi_types.UUID(registro.ParteID),
+		Id:             registro.ParteID,
 		TipoCuenta:     api.RegistroTipoCuentaPersona,
 		Correo:         registro.Correo,
 		Celular:        registro.Celular,
@@ -120,7 +119,7 @@ func respuestaDeRegistro(registro auth.Registro) api.Registro {
 		FechaCreacion:  registro.FechaCreacion,
 		NombreCompleto: &nombre,
 		Desafio: api.Desafio{
-			ChallengeId:      openapi_types.UUID(registro.Desafio.ID),
+			ChallengeId:      registro.Desafio.ID,
 			ExpiraEnSegundos: registro.Desafio.ExpiraEnSegundos,
 			Proposito:        api.DesafioProposito(registro.Desafio.Proposito),
 		},
@@ -130,9 +129,9 @@ func respuestaDeRegistro(registro auth.Registro) api.Registro {
 // respuestaDeRegistroEmpresa arma la respuesta 201 con la razón social, el NIT y el empresa_id, sin secretos.
 func respuestaDeRegistroEmpresa(registro auth.RegistroEmpresa) api.Registro {
 	razonSocial, nit := registro.RazonSocial, registro.NIT
-	empresaID := openapi_types.UUID(registro.EmpresaParteID)
+	empresaID := registro.EmpresaParteID
 	return api.Registro{
-		Id:            openapi_types.UUID(registro.RepresentanteParteID),
+		Id:            registro.RepresentanteParteID,
 		EmpresaId:     &empresaID,
 		TipoCuenta:    api.RegistroTipoCuentaEmpresa,
 		Correo:        registro.Correo,
@@ -142,7 +141,7 @@ func respuestaDeRegistroEmpresa(registro auth.RegistroEmpresa) api.Registro {
 		RazonSocial:   &razonSocial,
 		Nit:           &nit,
 		Desafio: api.Desafio{
-			ChallengeId:      openapi_types.UUID(registro.Desafio.ID),
+			ChallengeId:      registro.Desafio.ID,
 			ExpiraEnSegundos: registro.Desafio.ExpiraEnSegundos,
 			Proposito:        api.DesafioProposito(registro.Desafio.Proposito),
 		},

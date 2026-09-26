@@ -5,7 +5,6 @@ package httpserver
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -15,24 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-func abrirPoolDeIntegracion(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-
-	dsn := os.Getenv("APP_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("APP_DATABASE_URL no definida: la prueba de integración necesita un Postgres real")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("abrir pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := pool.Ping(t.Context()); err != nil {
-		t.Fatalf("ping: %v", err)
-	}
-	return pool
-}
 
 // identidadFija le da a cada prueba su propio usuario, en vez del usuario de prueba compartido.
 type identidadFija struct{ usuarioID string }

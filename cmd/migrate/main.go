@@ -1,3 +1,5 @@
+// Package main es el binario de migraciones: aplica en orden el esquema del núcleo, las
+// migraciones de River y el esquema de auth, y los revierte en orden inverso.
 package main
 
 import (

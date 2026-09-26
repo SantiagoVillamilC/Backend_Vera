@@ -73,7 +73,7 @@ func (h *HandlerDeDispositivos) ListSessions(w http.ResponseWriter, r *http.Requ
 	dispositivos := make([]api.Dispositivo, 0, len(sesiones))
 	for _, sesion := range sesiones {
 		dispositivos = append(dispositivos, api.Dispositivo{
-			Id:          openapi_types.UUID(sesion.FamiliaID),
+			Id:          sesion.FamiliaID,
 			Dispositivo: sesion.Dispositivo,
 			CreadaEn:    sesion.CreadaEn,
 			UltimoUsoEn: sesion.UltimoUsoEn,
@@ -84,12 +84,12 @@ func (h *HandlerDeDispositivos) ListSessions(w http.ResponseWriter, r *http.Requ
 }
 
 // DeleteSession revoca la sesión indicada si es de la parte.
-func (h *HandlerDeDispositivos) DeleteSession(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID) {
+func (h *HandlerDeDispositivos) DeleteSession(w http.ResponseWriter, r *http.Request, sessionID openapi_types.UUID) {
 	parteID, _, ok := idsDeDispositivo(w, r)
 	if !ok {
 		return
 	}
-	if err := h.servicio.RevocarDispositivo(r.Context(), parteID, uuid.UUID(sessionId)); err != nil {
+	if err := h.servicio.RevocarDispositivo(r.Context(), parteID, sessionID); err != nil {
 		escribirErrorDeAuth(w, r, err)
 		return
 	}
@@ -137,7 +137,7 @@ func (h *HandlerDeDispositivos) SetContexto(w http.ResponseWriter, r *http.Reque
 
 // idsDeDispositivo traduce la identidad de la petición a los dos uuid que usan estos handlers.
 func idsDeDispositivo(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {
-	id, ok := identidad.IdentidadDeContexto(r.Context())
+	id, ok := identidad.DeContexto(r.Context())
 	if !ok {
 		api.WriteError(w, http.StatusUnauthorized, "Unauthorized", "Missing or invalid token.", nil)
 		return uuid.Nil, uuid.Nil, false
