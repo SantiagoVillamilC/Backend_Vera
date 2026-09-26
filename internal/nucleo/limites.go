@@ -76,7 +76,7 @@ type contextoDeLimite struct {
 func leerContextoDeLimite(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, momento time.Time) (contextoDeLimite, error) {
 	anio, desde, hasta := ventanaMensualColombia(momento)
 
-	valorUVT, err := q.ValorUVTDelAnio(ctx, int32(anio))
+	valorUVT, err := q.ValorUVTDelAnio(ctx, int32(anio)) //nolint:gosec // anio sale de ventanaMensualColombia(momento), y momento siempre es el reloj del servidor (time.Now), nunca entrada del cliente: el año calendario nunca desborda int32
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return contextoDeLimite{}, ErrValorUVTNoVigente

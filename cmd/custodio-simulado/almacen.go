@@ -84,20 +84,20 @@ func AbrirAlmacen(ruta string) (*Almacen, error) {
 
 // crearArchivo deja la base en 0600 antes de que SQLite la abra, de donde hereda el modo de sus sidecars.
 func crearArchivo(ruta string) error {
-	f, err := os.OpenFile(ruta, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(ruta, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // ruta viene de la variable de entorno CUSTODIO_DB, config local del proceso, no de entrada de red
 	if err != nil {
 		return err
 	}
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Chmod(ruta, 0o600)
+	return os.Chmod(ruta, 0o600) //nolint:gosec // ruta viene de CUSTODIO_DB, ver AbrirAlmacen
 }
 
 // restringirArchivo deja en 0600 la base y los sidecars que ya existan, sin fallar si el sistema no lo permite.
 func restringirArchivo(ruta string) {
 	for _, sufijo := range []string{"", "-journal", "-wal", "-shm"} {
-		_ = os.Chmod(ruta+sufijo, 0o600)
+		_ = os.Chmod(ruta+sufijo, 0o600) //nolint:gosec // ruta viene de CUSTODIO_DB, ver AbrirAlmacen
 	}
 }
 

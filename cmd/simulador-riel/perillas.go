@@ -68,7 +68,7 @@ func (p Perillas) Demora() time.Duration {
 	if p.Variacion <= 0 {
 		return p.Latencia
 	}
-	desvio := time.Duration((rand.Float64()*2 - 1) * float64(p.Variacion))
+	desvio := time.Duration((rand.Float64()*2 - 1) * float64(p.Variacion)) //nolint:gosec // jitter de simulación, no criptografía
 	if demora := p.Latencia + desvio; demora > 0 {
 		return demora
 	}
@@ -83,7 +83,7 @@ func ocurre(probabilidad float64) bool {
 	if probabilidad >= 1 {
 		return true
 	}
-	return rand.Float64() < probabilidad
+	return rand.Float64() < probabilidad //nolint:gosec // jitter de simulación, no criptografía
 }
 
 // Control guarda las perillas vigentes y las cambia en caliente bajo un candado.

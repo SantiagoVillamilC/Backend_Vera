@@ -2,7 +2,9 @@ package nucleo
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -10,6 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// ErrLimiteDePaginaInvalido rechaza una página cuyo límite es negativo o no cabe en el int32 que espera la consulta.
+var ErrLimiteDePaginaInvalido = errors.New("nucleo: el límite de la página no es válido")
 
 // MotivoMovimiento es el motivo legible de una línea del historial: un conjunto cerrado.
 type MotivoMovimiento string
@@ -61,6 +66,9 @@ func (s *Servicio) Historial(ctx context.Context, usuarioID string, cursor *int6
 
 // consultarPagina pagina las anclas, trae las líneas del grupo y las arma como movimientos.
 func consultarPagina(ctx context.Context, q *repositorio.Queries, usuarioID string, cuentas []string, cursor *int64, limite int) (PaginaDeMovimientos, error) {
+	if limite < 0 || limite > math.MaxInt32-1 {
+		return PaginaDeMovimientos{}, fmt.Errorf("nucleo: límite de página %d fuera de rango: %w", limite, ErrLimiteDePaginaInvalido)
+	}
 	anclas, err := q.PaginaDeAnclas(ctx, repositorio.PaginaDeAnclasParams{
 		Cursor:  cursorDePG(cursor),
 		Limite:  int32(limite + 1),

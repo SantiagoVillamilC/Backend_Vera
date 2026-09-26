@@ -62,7 +62,7 @@ func AbrirAlmacen(ruta string) (*Almacen, error) {
 
 // crearArchivo deja la base en 0600 antes de que SQLite la abra, de donde hereda el modo de sus sidecars.
 func crearArchivo(ruta string) error {
-	f, err := os.OpenFile(ruta, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(ruta, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // ruta viene de la variable de entorno SIMULADOR_CUSTODIA_DB, config local del proceso, no de entrada de red
 	if err != nil {
 		return err
 	}

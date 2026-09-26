@@ -1,7 +1,10 @@
 package nucleo
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"math"
 	"slices"
 	"testing"
 
@@ -209,6 +212,22 @@ func TestLineaMovimientoSerializaElMontoComoCadena(t *testing.T) {
 	}
 	if got, want := string(b), `{"monto":"9007199254740993","motivo":"envio"}`; got != want {
 		t.Errorf("json = %s, quiero %s", got, want)
+	}
+}
+
+// HU-NF-05: un límite de página negativo o que desborda el int32 de la consulta se rechaza explícito, nunca se convierte en silencio.
+func TestConsultarPaginaRechazaLimiteInvalido(t *testing.T) {
+	tests := map[string]int{
+		"limite negativo":           -1,
+		"limite que desborda int32": math.MaxInt32,
+	}
+	for name, limite := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := consultarPagina(context.Background(), nil, usuarioDelHistorial, nil, nil, limite)
+			if !errors.Is(err, ErrLimiteDePaginaInvalido) {
+				t.Fatalf("consultarPagina(%d) error = %v, quiero ErrLimiteDePaginaInvalido", limite, err)
+			}
+		})
 	}
 }
 
