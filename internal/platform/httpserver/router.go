@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
@@ -23,12 +24,16 @@ const (
 
 // RutasDeDinero son los endpoints que mueven dinero y por eso cierran si la denylist no responde.
 var RutasDeDinero = []string{
-	http.MethodPost + " /transferencias",
-	http.MethodPost + " /depositos",
+	http.MethodPost + " /v1/transferencias",
+	http.MethodPost + " /v1/depositos",
+	http.MethodPost + " /v1/transferencias/interbancarias",
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
-func NewRouter(pool *pgxpool.Pool, authDeps DependenciasAuth) http.Handler {
+func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth) http.Handler {
+	if autenticadorCustodio == nil {
+		panic(ErrCustodioNulo)
+	}
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
@@ -47,7 +52,8 @@ func NewRouter(pool *pgxpool.Pool, authDeps DependenciasAuth) http.Handler {
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
-	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies}
+	nucleoHandler := nucleo.NewHandler(nucleoServicio)
+	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
@@ -67,14 +73,20 @@ func NewRouter(pool *pgxpool.Pool, authDeps DependenciasAuth) http.Handler {
 	// Grupo autenticado: RequireAuth deja la identidad completa y solo acá corre.
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
-		r.Use(RequireAuth(authDeps.Identidad, nil))
+		r.Use(RequireAuth(authDeps.Identidad, RutasDeDinero))
 		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
 		api.HandlerWithOptions(srv, api.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: api.ParamError})
 	})
 
-	// Los handlers por defecto de chi responden texto plano, que rompería el envelope. El
-	// 405 se envuelve con MethodNotAllowedEnvelope (arriba) para conservar el header Allow.
+	// Grupo del custodio simulado: token estático, sin identidad de usuario.
+	r.Group(func(r chi.Router) {
+		r.Use(Timeout(authedTimeout))
+		r.Use(RequireCustodio(autenticadorCustodio))
+		r.Post("/v1/depositos/confirmaciones", nucleoHandler.ConfirmarDeposito)
+	})
+
+	// Los handlers por defecto de chi responden texto plano, así que el 404 va dentro del envelope.
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		api.WriteError(w, http.StatusNotFound, "NotFound", "Resource not found.", nil)
 	})

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -32,7 +33,7 @@ func (r *recuperadorFalso) SolicitarRecuperacion(_ context.Context, correo, _ st
 
 // routerConRecuperacion arma el router con el handler de recuperación inyectado.
 func routerConRecuperacion(handler RecuperacionHandler) http.Handler {
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad:    auth.UsuarioDePrueba{},
 		Recuperacion: handler,
 	})

@@ -108,7 +108,8 @@ hueco y dejarlo sin decir nada.
 ## Estado real del código hoy vs. lo que las skills documentan
 
 Esto es importante para no asumir de más: varias de estas skills documentan hacia dónde va el
-diseño del backend, no necesariamente lo que el código ya implementa hoy.
+diseño del backend, no necesariamente lo que el código ya implementa hoy. Esta sección se actualiza
+a medida que el código avanza.
 
 - `go.mod` declara `go 1.27` con `toolchain go1.27.0`, y el stack que las skills asumen ya está
   wireado: chi v5, pgx v5.10.0, goose v3, river v0.44.1, validator v10 y uuid. `go.sum` está

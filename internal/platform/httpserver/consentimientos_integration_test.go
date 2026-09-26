@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -41,7 +42,7 @@ func sembrarParteDeConsentimiento(t *testing.T, pool *pgxpool.Pool, tipo string)
 
 // routerDeConsentimientoReal monta el handler real de consentimientos con la identidad de la parte.
 func routerDeConsentimientoReal(pool *pgxpool.Pool, parteID uuid.UUID, contexto string) http.Handler {
-	return NewRouter(pool, DependenciasAuth{
+	return NewRouter(pool, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: identidadDeContextoFijo{id: identidad.Identidad{
 			UsuarioID: parteID.String(),
 			SesionID:  uuid.NewString(),

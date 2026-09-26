@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	platformredis "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/redis"
 )
 
@@ -20,7 +21,7 @@ func TestReadyzNoDependeDeRedis(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = cliente.Close() })
 
-	r := NewRouter(pool, DependenciasAuth{
+	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		Redis:     cliente,
 	})

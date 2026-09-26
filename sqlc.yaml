@@ -1,8 +1,9 @@
 version: "2"
 sql:
-  # Repositorio de auth (SCRUM-52). No se toca.
+  # Repositorio de auth (SCRUM-52): solo sus archivos, para que el ledger no se cuele en sus modelos.
   - engine: postgresql
-    schema: bd/migraciones
+    schema:
+      - bd/migraciones/0001_create_users.sql
     queries: bd/consultas
     gen:
       go:
@@ -14,6 +15,41 @@ sql:
         emit_json_tags: true
         emit_empty_slices: true
         wrap_errors: true
+  # Repositorio del núcleo: vive en el segundo internal y su schema es la lista de archivos del ledger.
+  - engine: postgresql
+    schema:
+      - bd/migraciones/0004_create_nucleo_schema_and_role.sql
+      - bd/migraciones/0007_create_ledger.sql
+      - bd/migraciones/0010_create_deposito.sql
+      - bd/migraciones/0013_create_transferencia.sql
+      - bd/migraciones/0014_create_regla_limite_y_valor_uvt.sql
+      - bd/migraciones/0015_create_extracto_custodio.sql
+      - bd/migraciones/0016_create_gmf_rule.sql
+      - bd/migraciones/0018_create_outbox.sql
+      - bd/migraciones/0019_create_descuadre_y_cursor.sql
+    queries: bd/consultas-nucleo
+    gen:
+      go:
+        package: repositorio
+        out: internal/nucleo/internal/repositorio
+        sql_package: pgx/v5
+        sql_driver: github.com/jackc/pgx/v5
+        emit_interface: true
+        emit_json_tags: true
+        emit_empty_slices: true
+        wrap_errors: true
+        rename:
+          nucleo_cuentum: Cuenta
+          nucleo_journal_entry: JournalEntry
+          nucleo_posting: Posting
+          nucleo_deposito: Deposito
+          nucleo_extracto_custodio: ExtractoCustodio
+          nucleo_transferencium: Transferencia
+          nucleo_regla_limite: ReglaLimite
+          nucleo_valor_uvt: ValorUvt
+          nucleo_outbox: Outbox
+          nucleo_descuadre: Descuadre
+          nucleo_conciliacion_corrida: ConciliacionCorrida
   # Repositorio de auth (fase0-2): su propio esquema y su propio rol, sin el ledger del núcleo.
   - engine: postgresql
     schema:

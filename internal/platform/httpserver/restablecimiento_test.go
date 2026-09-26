@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -54,7 +55,7 @@ func routerConRestablecimiento(verificador *verificadorRecuperacionFalso, restab
 		handler := NuevoRestablecimientoHandler(verificador, restablecedor)
 		verify, reset = handler, handler
 	}
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad:    auth.UsuarioDePrueba{},
 		Recuperar2FA: verify,
 		ResetClave:   reset,

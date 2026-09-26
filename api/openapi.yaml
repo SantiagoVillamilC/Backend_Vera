@@ -35,6 +35,12 @@ tags:
     description: Niveles de producto y verificacion.
   - name: consentimiento
     description: Autorizacion de datos y opt-in.
+  - name: nucleo
+    description: Saldo, movimientos, depositos y transferencias del nucleo financiero.
+  - name: custodio
+    description: >
+      Confirmacion del custodio simulado. Se excluye de la generacion (ver exclude-tags en
+      oapi-codegen.yaml) porque usa un token estatico, no el bearerAuth de un usuario.
 
 paths:
   /v1/auth/register:
@@ -579,12 +585,269 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/saldo:
+    get:
+      operationId: saldo
+      summary: Consulta el saldo disponible del usuario autenticado.
+      tags: [nucleo]
+      responses:
+        "200":
+          description: Monto disponible, la moneda y el instante del calculo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaldoResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/transferencias/maximo:
+    get:
+      operationId: montoMaximo
+      summary: Consulta el monto maximo que el usuario puede enviar sin quedarse sin saldo por el GMF.
+      tags: [nucleo]
+      responses:
+        "200":
+          description: Monto maximo enviable, la moneda y el instante del calculo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MontoMaximoResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/movimientos:
+    get:
+      operationId: movimientos
+      summary: Lista una pagina del historial del usuario autenticado, del movimiento mas nuevo al mas viejo.
+      tags: [nucleo]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: >
+            Tamano de pagina, de 1 a 100. Por defecto 50. El handler recorta a 100 un valor
+            mayor, no lo rechaza. Se tipa x-go-type string para que un valor no numerico
+            llegue al handler y salga como ValidationError, en vez de fallar antes en el
+            binding generado como BadRequest.
+          schema:
+            type: integer
+            x-go-type: string
+        - name: cursor
+          in: query
+          required: false
+          description: >
+            Ancla del ultimo movimiento de la pagina anterior. Mismo motivo de x-go-type
+            string que limit.
+          schema:
+            type: integer
+            format: int64
+            x-go-type: string
+      responses:
+        "200":
+          description: Pagina de movimientos, del mas nuevo al mas viejo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovimientosResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/depositos:
+    post:
+      operationId: crearDeposito
+      summary: Crea una intencion de deposito o devuelve la ya guardada para la misma clave de idempotencia.
+      tags: [nucleo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearDepositoRequest"
+      responses:
+        "200":
+          description: Intencion ya existente para la misma clave de idempotencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoResponse"
+        "201":
+          description: Intencion de deposito creada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/depositos/{id}:
+    get:
+      operationId: deposito
+      summary: Consulta el estado actual de una intencion de deposito del usuario autenticado.
+      tags: [nucleo]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: >
+            Se declara como texto simple, no como uuid con formato: un id malformado debe
+            seguir cayendo en el 404 NotFound que ya escribe el handler, no fallar antes en
+            el binding generado.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Intencion de deposito.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/transferencias:
+    post:
+      operationId: transferir
+      summary: Envia dinero a otro usuario o devuelve el envio ya guardado para la misma clave de idempotencia.
+      tags: [nucleo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearTransferenciaRequest"
+      responses:
+        "200":
+          description: Envio ya existente para la misma clave de idempotencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferenciaResponse"
+        "201":
+          description: Envio creado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferenciaResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/transferencias/interbancarias:
+    post:
+      operationId: transferirInterbancaria
+      summary: Envia dinero por llave a otra entidad o devuelve el envio ya guardado para la misma clave de idempotencia.
+      tags: [nucleo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearTransferenciaInterbancariaRequest"
+      responses:
+        "200":
+          description: Envio ya existente para la misma clave de idempotencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvioPorLlaveResponse"
+        "201":
+          description: Envio creado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvioPorLlaveResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/depositos/confirmaciones:
+    post:
+      operationId: confirmarDeposito
+      summary: Recibe la senal del custodio simulado sobre una intencion pendiente y la confirma o la rechaza.
+      description: >
+        Se cuelga a mano bajo RequireCustodio en el router, nunca bajo RequireAuth: usa el
+        token estatico del custodio simulado, no un JWT de usuario. El tag custodio esta
+        excluido de la generacion para que este metodo no aparezca en el ServerInterface ni
+        herede bearerAuth por estar dentro de servidorV1.
+      tags: [custodio]
+      security:
+        - custodioAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmarDepositoRequest"
+      responses:
+        "200":
+          description: Intencion confirmada o rechazada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    custodioAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Token estatico del custodio simulado (RequireCustodio), no un JWT de usuario. Distinto
+        de bearerAuth.
 
   responses:
     Error:
@@ -1429,3 +1692,357 @@ components:
           nullable: true
         meta:
           $ref: "#/components/schemas/Meta"
+
+    MontoCalculado:
+      type: object
+      required: [monto, moneda, calculado_en]
+      description: >
+        Forma compartida de saldo y del monto maximo enviable: los dos son un monto en
+        centavos, la moneda y el instante en que se calcularon.
+      properties:
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          description: Monto en centavos. Viaja como texto porque Centavos se serializa como cadena JSON, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        calculado_en:
+          type: string
+          format: date-time
+
+    SaldoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/MontoCalculado"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    MontoMaximoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/MontoCalculado"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    LineaMovimiento:
+      type: object
+      required: [monto, motivo]
+      properties:
+        monto:
+          type: string
+          pattern: "^-?[0-9]+$"
+          description: >
+            Monto en centavos con el signo de la linea (a favor o en contra de la subcuenta
+            disponible). Viaja como texto por la misma razon que el resto de los montos.
+        motivo:
+          type: string
+          enum:
+            [
+              deposito,
+              transferencia_recibida,
+              envio,
+              gravamen,
+              devolucion,
+              devolucion_gravamen,
+            ]
+
+    Movimiento:
+      type: object
+      required: [entry_id, ocurrido_en, registrado_en, moneda, lineas]
+      properties:
+        entry_id:
+          type: integer
+          format: int64
+        ocurrido_en:
+          type: string
+          format: date-time
+        registrado_en:
+          type: string
+          format: date-time
+        moneda:
+          type: string
+          enum: [COP]
+        lineas:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineaMovimiento"
+
+    MovimientosResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Movimiento"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    CrearDepositoRequest:
+      type: object
+      required: [monto, idempotency_key]
+      properties:
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,gt=0"
+          description: Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        idempotency_key:
+          type: string
+          maxLength: 128
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=128"
+
+    Deposito:
+      type: object
+      required: [id, referencia, monto, moneda, estado, creada_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        referencia:
+          type: string
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+        moneda:
+          type: string
+          enum: [COP]
+        estado:
+          type: string
+          enum: [pendiente, confirmada, rechazada, expirada]
+        creada_en:
+          type: string
+          format: date-time
+
+    DepositoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Deposito"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    ConfirmarDepositoRequest:
+      type: object
+      required: [referencia, estado]
+      description: >
+        Senal del custodio simulado. monto, ocurrido_en y cus solo son obligatorios cuando
+        estado es aprobado (validacion required_if que vive en el handler, no expresable en
+        JSON Schema puro).
+      properties:
+        referencia:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        estado:
+          type: string
+          enum: [aprobado, rechazado]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=aprobado rechazado"
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          description: Requerido y >= 0 si estado es aprobado.
+        moneda:
+          type: string
+          enum: [COP]
+        ocurrido_en:
+          type: string
+          format: date-time
+        cus:
+          type: string
+          maxLength: 128
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=128"
+
+    CrearTransferenciaRequest:
+      type: object
+      required: [destino, monto, idempotency_key]
+      properties:
+        destino:
+          type: string
+          maxLength: 320
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=320"
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,gt=0"
+          description: Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        idempotency_key:
+          type: string
+          maxLength: 128
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=128"
+
+    Transferencia:
+      type: object
+      required: [id, destino, monto, moneda, estado, creada_en, actualizada_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        destino:
+          type: string
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+        moneda:
+          type: string
+          enum: [COP]
+        estado:
+          type: string
+          enum:
+            [
+              creada,
+              reservada,
+              despachada,
+              confirmada,
+              fallida,
+              indeterminada,
+              compensada,
+            ]
+        creada_en:
+          type: string
+          format: date-time
+        actualizada_en:
+          type: string
+          format: date-time
+
+    TransferenciaResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Transferencia"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    CrearTransferenciaInterbancariaRequest:
+      type: object
+      required: [tipo_llave, llave, monto, idempotency_key]
+      properties:
+        tipo_llave:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        llave:
+          type: string
+          maxLength: 320
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=320"
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,gt=0"
+          description: Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        idempotency_key:
+          type: string
+          maxLength: 128
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=128"
+
+    EnvioPorLlave:
+      type: object
+      required: [id, tipo_llave, llave, monto, moneda, estado, creada_en, actualizada_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo_llave:
+          type: string
+        llave:
+          type: string
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+        moneda:
+          type: string
+          enum: [COP]
+        estado:
+          type: string
+          enum:
+            [
+              creada,
+              reservada,
+              despachada,
+              confirmada,
+              fallida,
+              indeterminada,
+              compensada,
+            ]
+        creada_en:
+          type: string
+          format: date-time
+        actualizada_en:
+          type: string
+          format: date-time
+
+    EnvioPorLlaveResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/EnvioPorLlave"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true

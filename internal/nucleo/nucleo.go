@@ -1,14 +1,4 @@
-// Package nucleo es el núcleo financiero de Centinela: un solo módulo Go que es dueño
-// exclusivo de las tablas del ledger y de la frontera transaccional que las escribe.
-//
-// Lo que el núcleo necesita de afuera lo declara acá y main le inyecta la implementación
-// (el patrón de LectorNivelKYC del capítulo 5 de frontera-modulos-nucleo-financiero.md).
-// El acceso a las tablas vive en internal/repositorio, un paquete dentro del segundo
-// internal de Go, de modo que ningún paquete de fuera del núcleo puede importarlo.
-//
-// Este archivo es el esqueleto de la fase 0: el tipo del dinero, las interfaces hacia
-// afuera y el Servicio con sus dependencias. Los métodos de negocio (Transferir, Saldo,
-// Conciliar, DespacharOutbox) los agrega cada unidad posterior.
+// Package nucleo es el núcleo financiero: dueño exclusivo de las tablas del ledger.
 package nucleo
 
 import (
@@ -21,13 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Centavos es un monto en la unidad mínima de la única moneda del ledger: $10.000 es
-// Centavos(1000000). Positivo es un débito, negativo un crédito, igual que lo almacena
-// posting.monto. Es un int64 con nombre, nunca un flotante ni un decimal, así que el
-// compilador rechaza un int64 suelto (un id, un conteo) donde se espera dinero.
+// Centavos es un monto en unidades menores; positivo es débito.
 type Centavos int64
 
 // ErrDesbordamiento reporta un Sumar o un Restar cuyo resultado exacto no cabe en int64.
@@ -36,29 +24,23 @@ var ErrDesbordamiento = errors.New("nucleo: desbordamiento de int64")
 // ErrMontoInvalido reporta texto que no es un número entero de unidades menores.
 var ErrMontoInvalido = errors.New("nucleo: el monto debe ser un número entero de unidades menores")
 
-// Int64 devuelve las unidades menores crudas: el valor de toda regla, comparación,
-// parámetro de consulta y asiento. El ledger nunca ve otra cosa.
+// Int64 devuelve las unidades menores crudas.
 func (c Centavos) Int64() int64 { return int64(c) }
 
-// PresentarUnidadesMayores rinde el monto en unidades mayores ("10000.00", "-0.05") para
-// que lo lea una persona: una notificación, un recibo, una exportación. Devuelve texto,
-// nunca un float64, y es el único lugar de este lado donde se convierte la unidad menor.
-// Nada vuelve a parsear esta cadena.
+// PresentarUnidadesMayores rinde el monto en unidades mayores para una persona.
 func (c Centavos) PresentarUnidadesMayores() string {
-	s := strconv.FormatInt(int64(c), 10) // sin negar: -math.MinInt64 desbordaría
+	s := strconv.FormatInt(int64(c), 10)
 	sign := ""
 	if strings.HasPrefix(s, "-") {
 		sign, s = "-", s[1:]
 	}
-	for len(s) < 3 { // "5" se vuelve "005" para que el corte de abajo rinda "0.05"
+	for len(s) < 3 {
 		s = "0" + s
 	}
 	return sign + s[:len(s)-2] + "." + s[len(s)-2:]
 }
 
-// ParsearCentavos es el único parser de un monto que llega como texto: una cadena JSON, un
-// parámetro de consulta, una celda de CSV. Acepta un signo opcional y dígitos enteros, nada
-// más: "12.50", "1e3", " 5" y cualquier valor que no quepa en int64 son ErrMontoInvalido.
+// ParsearCentavos es el único parser de un monto que llega como texto.
 func ParsearCentavos(s string) (Centavos, error) {
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
@@ -67,9 +49,7 @@ func ParsearCentavos(s string) (Centavos, error) {
 	return Centavos(v), nil
 }
 
-// Sumar devuelve c + o, o ErrDesbordamiento cuando la suma exacta no cabe. Go envuelve
-// int64 en silencio (go.dev/ref/spec, "Integer overflow") y math/bits solo cubre uint64,
-// así que el chequeo se escribe a mano, antes de la suma.
+// Sumar devuelve c + o, o ErrDesbordamiento si la suma exacta no cabe.
 func (c Centavos) Sumar(o Centavos) (Centavos, error) {
 	if (o > 0 && c > math.MaxInt64-o) || (o < 0 && c < math.MinInt64-o) {
 		return 0, fmt.Errorf("sumar %d + %d: %w", c, o, ErrDesbordamiento)
@@ -77,9 +57,7 @@ func (c Centavos) Sumar(o Centavos) (Centavos, error) {
 	return c + o, nil
 }
 
-// Restar devuelve c - o con la misma garantía. No es c.Sumar(-o): negar math.MinInt64
-// desborda antes de que Sumar pueda verlo, que es también por lo que una negación se
-// escribe Centavos(0).Restar(c).
+// Restar devuelve c - o, o ErrDesbordamiento si la resta exacta no cabe.
 func (c Centavos) Restar(o Centavos) (Centavos, error) {
 	if (o < 0 && c > math.MaxInt64+o) || (o > 0 && c < math.MinInt64+o) {
 		return 0, fmt.Errorf("restar %d - %d: %w", c, o, ErrDesbordamiento)
@@ -87,26 +65,20 @@ func (c Centavos) Restar(o Centavos) (Centavos, error) {
 	return c - o, nil
 }
 
-// MarshalJSON emite el monto como cadena JSON ("1000000"), nunca como número: un int64
-// completo no cabe en el rango de 2^53 que RFC 8259 y JavaScript comparten, así que los
-// montos viajan como texto.
+// MarshalJSON emite el monto como cadena JSON, nunca como número.
 func (c Centavos) MarshalJSON() ([]byte, error) {
-	b := make([]byte, 0, 22) // comilla + signo + 19 dígitos + comilla
+	b := make([]byte, 0, 22)
 	b = append(b, '"')
 	b = strconv.AppendInt(b, int64(c), 10)
 	return append(b, '"'), nil
 }
 
-// UnmarshalJSON acepta una sola forma: una cadena JSON de unidades menores enteras. Un
-// número JSON se rechaza aunque quepa, porque un cliente que manda un número tiene el monto
-// como número. Un monto opcional se declara *Centavos, donde el decoder nunca llama a este
-// método y null se vuelve nil.
+// UnmarshalJSON acepta solo una cadena JSON de unidades menores enteras.
 func (c *Centavos) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
-		return ErrMontoInvalido // un número, bool, objeto o arreglo JSON
+		return ErrMontoInvalido
 	}
-	// json.Unmarshal trata null como no-op y deja s vacía, así que null también se rechaza.
 	v, err := ParsearCentavos(s)
 	if err != nil {
 		return err
@@ -115,80 +87,148 @@ func (c *Centavos) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// LectorNivelKYC es lo que el núcleo necesita de auth para evaluar regla_limite. Lo declara
-// el núcleo, lo implementa el módulo dueño de la identidad y main lo inyecta.
+// LectorNivelKYC es lo que el núcleo necesita de auth para regla_limite.
 type LectorNivelKYC interface {
 	NivelKYC(ctx context.Context, usuarioID string) (string, error)
 }
 
-// NivelKYCDepositoBajoMonto es el único nivel de KYC del alcance de la tesis. Lo devuelve el
-// lector de auth que implementa LectorNivelKYC.
-const NivelKYCDepositoBajoMonto = "deposito_bajo_monto"
-
-// OrdenRiel es lo que el núcleo le manda al riel. Sus campos los agrega NF-A2-06 junto con
-// la implementación real; en la fase 0 solo existe para dar forma a la interfaz.
-type OrdenRiel struct{}
-
-// RespuestaRiel es lo que el riel devuelve al aceptar o rechazar una orden. Sus campos los
-// agrega NF-A2-06 por la misma razón.
-type RespuestaRiel struct{}
-
-// Riel es la red externa por donde viaja el dinero. Nace solo con Enviar: la consulta de
-// estado se agrega como segundo método en NF-A2-06.
-type Riel interface {
-	Enviar(ctx context.Context, orden OrdenRiel) (RespuestaRiel, error)
+// OrdenRiel es la instrucción de transferencia que el núcleo le entrega al riel.
+type OrdenRiel struct {
+	TransferenciaID uuid.UUID `json:"transferencia_id"`
+	IdempotencyKey  string    `json:"idempotency_key"`
+	Llave           string    `json:"llave"`
+	Entidad         string    `json:"entidad"`
+	Producto        string    `json:"producto"`
+	Monto           Centavos  `json:"monto_centavos"`
+	Moneda          string    `json:"moneda"`
 }
 
-// ExtractoCustodio es el corte que reporta el banco custodio. La cifra no sale de leer el
-// ledger: si saliera, la conciliación compararía un número contra sí mismo.
+// ResultadoRiel es el desenlace definitivo que el riel reporta para una orden.
+type ResultadoRiel string
+
+// Los dos desenlaces definitivos que el riel reporta.
+const (
+	ResultadoConfirmado ResultadoRiel = "confirmada"
+	ResultadoRechazado  ResultadoRiel = "rechazada"
+)
+
+// RespuestaRiel es lo que el riel devuelve al recibir una orden o al consultarle su estado.
+type RespuestaRiel struct {
+	TransferenciaID uuid.UUID     `json:"transferencia_id"`
+	Resultado       ResultadoRiel `json:"resultado"`
+	Motivo          string        `json:"motivo,omitempty"`
+	OcurridoEn      time.Time     `json:"ocurrido_en"`
+}
+
+// ErrRielSinRegistro reporta que el riel no reconoce la transferencia consultada.
+var ErrRielSinRegistro = errors.New("nucleo: el riel no tiene registro de la transferencia")
+
+// Riel es la red externa por donde viaja el dinero.
+type Riel interface {
+	Enviar(ctx context.Context, orden OrdenRiel) (RespuestaRiel, error)
+	ConsultarEstado(ctx context.Context, transferenciaID uuid.UUID) (RespuestaRiel, error)
+}
+
+// ExtractoCustodio es el corte del banco custodio, no del ledger.
 type ExtractoCustodio struct {
 	CorteEn time.Time
 	Saldo   Centavos
 	Origen  string
 }
 
-// LectorExtractoCustodio es lo que el núcleo necesita del simulador de custodia para
-// conciliar. Lo declara el núcleo, lo implementa el cliente HTTP del simulador y main lo
-// inyecta (capítulo 10 de la frontera).
+// LectorExtractoCustodio es lo que el núcleo necesita del simulador de custodia; el corte lo pide quien llama.
 type LectorExtractoCustodio interface {
-	Extracto(ctx context.Context) (ExtractoCustodio, error)
+	Extracto(ctx context.Context, corteEn time.Time) (ExtractoCustodio, error)
 }
 
-// Servicio es el núcleo financiero completo: la única puerta a sus tablas y a su frontera
-// transaccional. Guarda el pool (por la interfaz estrecha de enTransaccion) y las dependencias
-// hacia afuera. No guarda un Querier ligado al pool a propósito: eso abriría un camino para
-// consultar sin haber cambiado a rol_nucleo, y el helper de transacción es el único cuello de
-// botella del cambio de rol.
+// ExtractoRiel es la ventana de operaciones que el riel reporta como ocurridas de su lado.
+type ExtractoRiel struct {
+	Corte       time.Time
+	Operaciones []OperacionDeExtractoRiel
+}
+
+// OperacionDeExtractoRiel es una fila del extracto, emparejable solo por el identificador global.
+type OperacionDeExtractoRiel struct {
+	TransferenciaID uuid.UUID
+	Estado          string
+	Monto           Centavos
+	OcurridoEn      time.Time
+}
+
+// LectorExtractoRiel es lo que el núcleo necesita del extracto del riel; el rango lo pide quien llama.
+type LectorExtractoRiel interface {
+	Extracto(ctx context.Context, desde, hasta time.Time) (ExtractoRiel, error)
+}
+
+// Servicio es la única puerta a las tablas del núcleo y a su frontera transaccional.
 type Servicio struct {
-	pool     abridorDeTransacciones
-	kyc      LectorNivelKYC
-	riel     Riel
-	custodio LectorExtractoCustodio
+	pool                      abridorDeTransacciones
+	kyc                       LectorNivelKYC
+	destinos                  ResolutorDestino
+	directorio                DirectorioLlaves
+	riel                      Riel
+	custodio                  LectorExtractoCustodio
+	lectorRiel                LectorExtractoRiel
+	detectar                  detectorDeVentana
+	ahora                     func() time.Time
+	rastreador                RastreadorErrores
+	politicaReintento         PoliticaReintentoOutbox
+	presupuestoIndeterminadas time.Duration
 }
 
-// NewServicio arma el Servicio con sus dependencias. main no puede nombrar
-// internal/nucleo/internal/repositorio porque el segundo internal de Go se lo prohíbe, y esa es
-// justamente la pared que protege las tablas del núcleo: el Querier se construye por transacción
-// dentro de enTransaccion.
+// OpcionServicio ajusta el Servicio en su construcción.
+type OpcionServicio func(*Servicio)
+
+// ConLectorExtractoRiel fija el lector del extracto del riel; sin él, la conciliación falla cerrada.
+func ConLectorExtractoRiel(lector LectorExtractoRiel) OpcionServicio {
+	return func(s *Servicio) { s.lectorRiel = lector }
+}
+
+// ConPoliticaReintentoOutbox fija la espera creciente del barrido de la bandeja de salida.
+func ConPoliticaReintentoOutbox(politica PoliticaReintentoOutbox) OpcionServicio {
+	return func(s *Servicio) { s.politicaReintento = politica }
+}
+
+// ConResolutorDestino fija el resolutor de la llave de destino; sin él, Transferir falla cerrado.
+func ConResolutorDestino(resolutor ResolutorDestino) OpcionServicio {
+	return func(s *Servicio) { s.destinos = resolutor }
+}
+
+// ConDirectorio fija el directorio de llaves de Bre-B; sin él, ResolverLlave falla cerrado.
+func ConDirectorio(directorio DirectorioLlaves) OpcionServicio {
+	return func(s *Servicio) { s.directorio = directorio }
+}
+
+// NewServicio arma el Servicio; el Querier se construye por transacción adentro.
 func NewServicio(
 	pool *pgxpool.Pool,
 	kyc LectorNivelKYC,
 	riel Riel,
 	custodio LectorExtractoCustodio,
+	rastreador RastreadorErrores,
+	opciones ...OpcionServicio,
 ) *Servicio {
-	return &Servicio{
-		pool:     poolDeNucleo{pool: pool},
-		kyc:      kyc,
-		riel:     riel,
-		custodio: custodio,
+	servicio := &Servicio{
+		pool:                      poolDeNucleo{pool: pool},
+		kyc:                       kyc,
+		riel:                      riel,
+		custodio:                  custodio,
+		lectorRiel:                RielNoDisponible{},
+		ahora:                     time.Now,
+		rastreador:                rastreador,
+		politicaReintento:         PoliticaReintentoOutboxPorDefecto(),
+		presupuestoIndeterminadas: presupuestoConsultaIndeterminadasDefecto,
 	}
+	servicio.detectar = servicio.detectarDiferenciasDeVentana
+	for _, opcion := range opciones {
+		opcion(servicio)
+	}
+	return servicio
 }
 
-// Las implementaciones de relleno existen para que main arranque antes de que lleguen las
-// piezas reales. Cada unidad que implementa una cambia una línea en el wiring.
+// Rellenos para que main arranque antes de que lleguen las piezas reales.
 
-// KYCNoDisponible reemplaza al lector de nivel de KYC hasta que exista el adaptador real
-// (la tabla users todavía no tiene columna de nivel de KYC).
+// KYCNoDisponible reemplaza al lector de nivel de KYC hasta que exista.
 type KYCNoDisponible struct{}
 
 // NivelKYC siempre devuelve ErrKYCNoDisponible.
@@ -196,8 +236,15 @@ func (KYCNoDisponible) NivelKYC(context.Context, string) (string, error) {
 	return "", ErrKYCNoDisponible
 }
 
-// RielNoDisponible reemplaza al riel hasta que NF-A2-06 inyecte el adaptador HTTP contra el
-// simulador.
+// LectorNivelKYCFijo devuelve el único nivel de KYC del alcance de la tesis.
+type LectorNivelKYCFijo struct{}
+
+// NivelKYC devuelve siempre el nivel del depósito de bajo monto.
+func (LectorNivelKYCFijo) NivelKYC(context.Context, string) (string, error) {
+	return NivelKYCDepositoBajoMonto, nil
+}
+
+// RielNoDisponible es el riel que se usa cuando no hay URL configurada.
 type RielNoDisponible struct{}
 
 // Enviar siempre devuelve ErrRielNoDisponible.
@@ -205,28 +252,38 @@ func (RielNoDisponible) Enviar(context.Context, OrdenRiel) (RespuestaRiel, error
 	return RespuestaRiel{}, ErrRielNoDisponible
 }
 
-// CustodioNoDisponible reemplaza al lector de extracto hasta que NF-A5-01 inyecte el
-// cliente HTTP contra el simulador de custodia.
+// ConsultarEstado siempre devuelve ErrRielNoDisponible.
+func (RielNoDisponible) ConsultarEstado(context.Context, uuid.UUID) (RespuestaRiel, error) {
+	return RespuestaRiel{}, ErrRielNoDisponible
+}
+
+// Extracto siempre devuelve ErrRielNoDisponible.
+func (RielNoDisponible) Extracto(context.Context, time.Time, time.Time) (ExtractoRiel, error) {
+	return ExtractoRiel{}, ErrRielNoDisponible
+}
+
+// CustodioNoDisponible es el relleno del extracto para las pruebas que no levantan el simulador.
 type CustodioNoDisponible struct{}
 
 // Extracto siempre devuelve ErrCustodioNoDisponible.
-func (CustodioNoDisponible) Extracto(context.Context) (ExtractoCustodio, error) {
+func (CustodioNoDisponible) Extracto(context.Context, time.Time) (ExtractoCustodio, error) {
 	return ExtractoCustodio{}, ErrCustodioNoDisponible
 }
 
-// Errores de las implementaciones de relleno. Cada uno nombra la unidad que lo reemplaza.
+// Errores de los rellenos.
 var (
-	// ErrKYCNoDisponible lo devuelve KYCNoDisponible. No hay unidad del YAML dueña del
-	// adaptador real de nivel de KYC.
+	// ErrKYCNoDisponible no tiene adaptador real en el YAML.
 	ErrKYCNoDisponible = errors.New("nucleo: pendiente: lector de nivel de KYC real")
-	// ErrRielNoDisponible lo devuelve RielNoDisponible hasta NF-A2-06.
-	ErrRielNoDisponible = errors.New("nucleo: pendiente: NF-A2-06")
-	// ErrCustodioNoDisponible lo devuelve CustodioNoDisponible hasta NF-A5-01.
-	ErrCustodioNoDisponible = errors.New("nucleo: pendiente: NF-A5-01")
+	// ErrRielNoDisponible reporta que no hay riel configurado.
+	ErrRielNoDisponible = errors.New("nucleo: no hay riel configurado")
+	// ErrCustodioNoDisponible reporta que no hay lector de extracto inyectado.
+	ErrCustodioNoDisponible = errors.New("nucleo: extracto del custodio no disponible")
 )
 
 var (
 	_ LectorNivelKYC         = KYCNoDisponible{}
+	_ LectorNivelKYC         = LectorNivelKYCFijo{}
 	_ Riel                   = RielNoDisponible{}
 	_ LectorExtractoCustodio = CustodioNoDisponible{}
+	_ LectorExtractoRiel     = RielNoDisponible{}
 )

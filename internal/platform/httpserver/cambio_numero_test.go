@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -50,7 +51,7 @@ func routerConCambioDeNumero(falso *cambioDeNumeroFalso) http.Handler {
 	if falso != nil {
 		handler = NuevoCambioDeNumeroHandler(falso)
 	}
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad:   auth.UsuarioDePrueba{},
 		PhoneChange: handler,
 	})

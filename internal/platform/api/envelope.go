@@ -10,8 +10,7 @@ import (
 	platformerrors "github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/errors"
 )
 
-// Envelope es la forma única de toda respuesta, exitosa o fallida. Las cuatro claves
-// siempre se serializan: data, error y meta quedan en null cuando no aplican.
+// Envelope es la forma única de toda respuesta; las cuatro claves siempre se serializan.
 type Envelope[T any] struct {
 	Success bool      `json:"success"`
 	Data    T         `json:"data"`
@@ -33,9 +32,7 @@ func WriteError(w http.ResponseWriter, status int, code, msg string, details []F
 	writeJSON(w, status, Envelope[any]{Success: false, Error: errObj})
 }
 
-// WriteAPIError convierte un error de dominio en respuesta. Un *errors.APIError con
-// status 4xx conserva su código y mensaje, cualquier otro error se registra y sale como
-// 500 genérico para no filtrar detalles internos al cliente.
+// WriteAPIError convierte un error de dominio: un 4xx conserva su código y el resto sale como 500 genérico.
 func WriteAPIError(w http.ResponseWriter, r *http.Request, err error) {
 	var apiErr *platformerrors.APIError
 	if errors.As(err, &apiErr) && apiErr.Status >= http.StatusBadRequest && apiErr.Status < http.StatusInternalServerError {

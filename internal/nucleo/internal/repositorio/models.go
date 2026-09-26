@@ -3,3 +3,115 @@
 //   sqlc v1.31.1
 
 package repositorio
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type ConciliacionCorrida struct {
+	ID           int64              `json:"id"`
+	VentanaHasta pgtype.Timestamptz `json:"ventana_hasta"`
+	CorridaEn    pgtype.Timestamptz `json:"corrida_en"`
+}
+
+type Cuenta struct {
+	ID         string             `json:"id"`
+	Naturaleza string             `json:"naturaleza"`
+	Clase      string             `json:"clase"`
+	TitularID  pgtype.Text        `json:"titular_id"`
+	Moneda     string             `json:"moneda"`
+	CreadaEn   pgtype.Timestamptz `json:"creada_en"`
+}
+
+type Deposito struct {
+	ID             pgtype.UUID        `json:"id"`
+	UsuarioID      string             `json:"usuario_id"`
+	Monto          int64              `json:"monto"`
+	Moneda         string             `json:"moneda"`
+	Referencia     string             `json:"referencia"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Cus            pgtype.Text        `json:"cus"`
+	Estado         string             `json:"estado"`
+	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
+	ActualizadaEn  pgtype.Timestamptz `json:"actualizada_en"`
+}
+
+type Descuadre struct {
+	ID                int64              `json:"id"`
+	Tipo              string             `json:"tipo"`
+	TransferenciaID   pgtype.UUID        `json:"transferencia_id"`
+	ReferenciaExterna pgtype.Text        `json:"referencia_externa"`
+	MontoInterno      pgtype.Int8        `json:"monto_interno"`
+	MontoExterno      pgtype.Int8        `json:"monto_externo"`
+	VentanaDesde      pgtype.Timestamptz `json:"ventana_desde"`
+	VentanaHasta      pgtype.Timestamptz `json:"ventana_hasta"`
+	DetectadoEn       pgtype.Timestamptz `json:"detectado_en"`
+	ResueltoEn        pgtype.Timestamptz `json:"resuelto_en"`
+	Resolucion        pgtype.Text        `json:"resolucion"`
+}
+
+type ExtractoCustodio struct {
+	CorteEn pgtype.Timestamptz `json:"corte_en"`
+	Saldo   int64              `json:"saldo"`
+	Origen  string             `json:"origen"`
+}
+
+type JournalEntry struct {
+	ID              int64              `json:"id"`
+	Tipo            string             `json:"tipo"`
+	TransferenciaID pgtype.UUID        `json:"transferencia_id"`
+	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
+	RegistradoEn    pgtype.Timestamptz `json:"registrado_en"`
+	Descripcion     pgtype.Text        `json:"descripcion"`
+	DepositoID      pgtype.UUID        `json:"deposito_id"`
+}
+
+type Outbox struct {
+	ID           int64              `json:"id"`
+	Tipo         string             `json:"tipo"`
+	Payload      []byte             `json:"payload"`
+	DisponibleEn pgtype.Timestamptz `json:"disponible_en"`
+	Intentos     int32              `json:"intentos"`
+	UltimoError  pgtype.Text        `json:"ultimo_error"`
+	DespachadoEn pgtype.Timestamptz `json:"despachado_en"`
+}
+
+type Posting struct {
+	ID       int64  `json:"id"`
+	EntryID  int64  `json:"entry_id"`
+	CuentaID string `json:"cuenta_id"`
+	Monto    int64  `json:"monto"`
+	Moneda   string `json:"moneda"`
+}
+
+type ReglaLimite struct {
+	ID                string      `json:"id"`
+	NivelKyc          string      `json:"nivel_kyc"`
+	Ventana           string      `json:"ventana"`
+	TopeUvtCentesimas int64       `json:"tope_uvt_centesimas"`
+	ConteoMaximo      pgtype.Int4 `json:"conteo_maximo"`
+	VigenteDesde      pgtype.Date `json:"vigente_desde"`
+	VigenteHasta      pgtype.Date `json:"vigente_hasta"`
+	Fuente            string      `json:"fuente"`
+	Tipo              string      `json:"tipo"`
+	TarifaPpm         int64       `json:"tarifa_ppm"`
+}
+
+type Transferencia struct {
+	ID             pgtype.UUID        `json:"id"`
+	UsuarioID      string             `json:"usuario_id"`
+	CuentaOrigen   string             `json:"cuenta_origen"`
+	LlaveDestino   string             `json:"llave_destino"`
+	Monto          int64              `json:"monto"`
+	Moneda         string             `json:"moneda"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Estado         string             `json:"estado"`
+	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
+	ActualizadaEn  pgtype.Timestamptz `json:"actualizada_en"`
+}
+
+type ValorUvt struct {
+	Anio          int32  `json:"anio"`
+	ValorCentavos int64  `json:"valor_centavos"`
+	Fuente        string `json:"fuente"`
+}

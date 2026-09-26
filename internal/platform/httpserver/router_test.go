@@ -14,6 +14,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
@@ -21,11 +22,9 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
-// newTestRouter arma el router con un pool nil y el adaptador de usuario de prueba, el mismo
-// que main inyecta. Ninguna de las rutas que ejercitan estos tests toca la base, así que el
-// pool no se usa.
+// newTestRouter arma el router con el adaptador de usuario de prueba y un servicio de saldo real.
 func newTestRouter() http.Handler {
-	return NewRouter(nil, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 }
 
 func decodeEnvelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
@@ -159,8 +158,7 @@ func TestAuthedRouteRejectsMissingTestCredential(t *testing.T) {
 	}
 }
 
-// Un bearer bien formado no basta en la fase 0: la credencial de prueba es la cabecera
-// X-Test-User. Si no se exige, quedaría abierto un bypass silencioso a la espera del JWT real.
+// Un bearer bien formado no basta en la fase 0: la credencial de prueba es la cabecera X-Test-User.
 func TestAuthedRouteRejectsWellFormedBearerWithoutTestHeader(t *testing.T) {
 	r := newTestRouter()
 	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
@@ -172,8 +170,18 @@ func TestAuthedRouteRejectsWellFormedBearerWithoutTestHeader(t *testing.T) {
 	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
 }
 
-// Con la credencial de prueba, el grupo autenticado deja pasar la petición: el handler de
-// /copilot responde 400 por el cuerpo vacío, nunca 401.
+// La consulta del monto máximo del Criterio 14 vive en el grupo autenticado (HU-NF-06).
+func TestMontoMaximoRouteRequiresAuth(t *testing.T) {
+	r := newTestRouter()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/transferencias/maximo", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
+}
+
+// Con la credencial de prueba, el handler de /copilot responde 400 por el cuerpo vacío, nunca 401.
 func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 	r := newTestRouter()
 	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
@@ -190,9 +198,7 @@ func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 	}
 }
 
-// Una ruta del grupo autenticado ve el usuario_id que dejó RequireAuth, resuelto por el
-// adaptador de prueba. Se arma con el mismo middleware y el mismo adaptador que usa el
-// router para poder observar el valor desde un handler.
+// El handler autenticado ve el usuario_id que dejó RequireAuth, resuelto por el adaptador de prueba.
 func TestAuthenticatedRouteSeesTestUserID(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(RequireAuth(auth.UsuarioDePrueba{}, RutasDeDinero))
@@ -440,7 +446,7 @@ func TestRutasPublicasCoincidenConElContrato(t *testing.T) {
 	if publicas != 8 {
 		t.Fatalf("operaciones publicas = %d, quiero 8", publicas)
 	}
-	if privadas != 13 {
-		t.Fatalf("operaciones no publicas = %d, quiero 13", privadas)
+	if privadas != 21 {
+		t.Fatalf("operaciones no publicas = %d, quiero 21", privadas)
 	}
 }
