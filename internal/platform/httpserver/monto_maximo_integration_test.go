@@ -16,7 +16,7 @@ import (
 func pedirMontoMaximo(t *testing.T, r http.Handler, query string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, "/transferencias/maximo"+query, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/transferencias/maximo"+query, nil)
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -61,7 +61,7 @@ func TestHU_NF_06_Criterio14_MontoMaximoSinCredencialDa401(t *testing.T) {
 	servicio := nucleo.NewServicio(pool, nucleo.LectorNivelKYCFijo{}, nil, nil, nil)
 	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: auth.UsuarioDePrueba{}})
 
-	req := httptest.NewRequest(http.MethodGet, "/transferencias/maximo", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/transferencias/maximo", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

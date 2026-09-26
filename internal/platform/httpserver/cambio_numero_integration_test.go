@@ -163,7 +163,7 @@ func TestCambioDeNumeroPorHTTPDejaElAccessViejoEn401(t *testing.T) {
 	}
 
 	viejo := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/saldo", nil)
 	req.Header.Set("Authorization", "Bearer "+acceso)
 	r.ServeHTTP(viejo, req)
 	assertErrorEnvelope(t, viejo, http.StatusUnauthorized, "Unauthorized")

@@ -10,7 +10,7 @@ import (
 // baseDeEntorno es el entorno mínimo con el que el binario arranca.
 var baseDeEntorno = map[string]string{
 	"CUSTODIO_DB":             "/tmp/custodio.db",
-	"NUCLEO_CONFIRMACION_URL": "http://127.0.0.1:38080/depositos/confirmaciones",
+	"NUCLEO_CONFIRMACION_URL": "http://127.0.0.1:38080/v1/depositos/confirmaciones",
 	"CUSTODIO_TOKEN":          "fedcba9876543210fedcba9876543210",
 	"SIMULADOR_CUSTODIA_URL":  "http://127.0.0.1:8099/notificaciones/depositos",
 }

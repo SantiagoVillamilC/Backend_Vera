@@ -325,16 +325,16 @@ func contextosYCambioDeContextoCriterio7(t *testing.T, m montajeDeEmpresa, sesio
 // saldoYIdentidadCriterio7 afirma que el núcleo ve el uuid de la empresa bajo el access de empresa.
 func saldoYIdentidadCriterio7(t *testing.T, m montajeDeEmpresa, access, empresaID string) {
 	t.Helper()
-	rec := pedirDeDispositivos(m.router, http.MethodGet, "/saldo", access, "")
+	rec := pedirDeDispositivos(m.router, http.MethodGet, "/v1/saldo", access, "")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /saldo bajo empresa = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
+		t.Fatalf("GET /v1/saldo bajo empresa = %d, quiero 200 (cuerpo %q)", rec.Code, rec.Body.String())
 	}
 	saldo := decodificarData[respuestaSaldoDeIntegracion](t, rec)
 	if saldo.Moneda != "COP" || saldo.Monto != "0" {
 		t.Fatalf("saldo = %+v, quiero 0 COP de la empresa recién registrada", saldo)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/saldo", nil)
 	req.Header.Set("Authorization", "Bearer "+access)
 	sonda, err := m.identidad.Identidad(req)
 	if err != nil {

@@ -26,7 +26,7 @@ func servicioConResolutor(pool *pgxpool.Pool) *nucleo.Servicio {
 func pedirTransferenciaAutenticada(t *testing.T, r http.Handler, cuerpo string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, "/transferencias", strings.NewReader(cuerpo))
+	req := httptest.NewRequest(http.MethodPost, "/v1/transferencias", strings.NewReader(cuerpo))
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)

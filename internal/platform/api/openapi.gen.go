@@ -15,6 +15,39 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ConfirmarDepositoRequestEstado.
+const (
+	Aprobado  ConfirmarDepositoRequestEstado = "aprobado"
+	Rechazado ConfirmarDepositoRequestEstado = "rechazado"
+)
+
+// Valid indicates whether the value is a known member of the ConfirmarDepositoRequestEstado enum.
+func (e ConfirmarDepositoRequestEstado) Valid() bool {
+	switch e {
+	case Aprobado:
+		return true
+	case Rechazado:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfirmarDepositoRequestMoneda.
+const (
+	ConfirmarDepositoRequestMonedaCOP ConfirmarDepositoRequestMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the ConfirmarDepositoRequestMoneda enum.
+func (e ConfirmarDepositoRequestMoneda) Valid() bool {
+	switch e {
+	case ConfirmarDepositoRequestMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConsentAccion.
 const (
 	ConsentAccionOtorgar ConsentAccion = "otorgar"
@@ -156,6 +189,105 @@ func (e ContextosResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for CrearDepositoRequestMoneda.
+const (
+	CrearDepositoRequestMonedaCOP CrearDepositoRequestMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the CrearDepositoRequestMoneda enum.
+func (e CrearDepositoRequestMoneda) Valid() bool {
+	switch e {
+	case CrearDepositoRequestMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CrearTransferenciaInterbancariaRequestMoneda.
+const (
+	CrearTransferenciaInterbancariaRequestMonedaCOP CrearTransferenciaInterbancariaRequestMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the CrearTransferenciaInterbancariaRequestMoneda enum.
+func (e CrearTransferenciaInterbancariaRequestMoneda) Valid() bool {
+	switch e {
+	case CrearTransferenciaInterbancariaRequestMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CrearTransferenciaRequestMoneda.
+const (
+	CrearTransferenciaRequestMonedaCOP CrearTransferenciaRequestMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the CrearTransferenciaRequestMoneda enum.
+func (e CrearTransferenciaRequestMoneda) Valid() bool {
+	switch e {
+	case CrearTransferenciaRequestMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DepositoEstado.
+const (
+	DepositoEstadoConfirmada DepositoEstado = "confirmada"
+	DepositoEstadoExpirada   DepositoEstado = "expirada"
+	DepositoEstadoPendiente  DepositoEstado = "pendiente"
+	DepositoEstadoRechazada  DepositoEstado = "rechazada"
+)
+
+// Valid indicates whether the value is a known member of the DepositoEstado enum.
+func (e DepositoEstado) Valid() bool {
+	switch e {
+	case DepositoEstadoConfirmada:
+		return true
+	case DepositoEstadoExpirada:
+		return true
+	case DepositoEstadoPendiente:
+		return true
+	case DepositoEstadoRechazada:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DepositoMoneda.
+const (
+	DepositoMonedaCOP DepositoMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the DepositoMoneda enum.
+func (e DepositoMoneda) Valid() bool {
+	switch e {
+	case DepositoMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DepositoResponseSuccess.
+const (
+	DepositoResponseSuccessTrue DepositoResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the DepositoResponseSuccess enum.
+func (e DepositoResponseSuccess) Valid() bool {
+	switch e {
+	case DepositoResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DesafioProposito.
 const (
 	DesafioPropositoCambioNumero      DesafioProposito = "cambio_numero"
@@ -207,6 +339,69 @@ const (
 func (e EmpresaCreadaResponseSuccess) Valid() bool {
 	switch e {
 	case EmpresaCreadaResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvioPorLlaveEstado.
+const (
+	EnvioPorLlaveEstadoCompensada    EnvioPorLlaveEstado = "compensada"
+	EnvioPorLlaveEstadoConfirmada    EnvioPorLlaveEstado = "confirmada"
+	EnvioPorLlaveEstadoCreada        EnvioPorLlaveEstado = "creada"
+	EnvioPorLlaveEstadoDespachada    EnvioPorLlaveEstado = "despachada"
+	EnvioPorLlaveEstadoFallida       EnvioPorLlaveEstado = "fallida"
+	EnvioPorLlaveEstadoIndeterminada EnvioPorLlaveEstado = "indeterminada"
+	EnvioPorLlaveEstadoReservada     EnvioPorLlaveEstado = "reservada"
+)
+
+// Valid indicates whether the value is a known member of the EnvioPorLlaveEstado enum.
+func (e EnvioPorLlaveEstado) Valid() bool {
+	switch e {
+	case EnvioPorLlaveEstadoCompensada:
+		return true
+	case EnvioPorLlaveEstadoConfirmada:
+		return true
+	case EnvioPorLlaveEstadoCreada:
+		return true
+	case EnvioPorLlaveEstadoDespachada:
+		return true
+	case EnvioPorLlaveEstadoFallida:
+		return true
+	case EnvioPorLlaveEstadoIndeterminada:
+		return true
+	case EnvioPorLlaveEstadoReservada:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvioPorLlaveMoneda.
+const (
+	EnvioPorLlaveMonedaCOP EnvioPorLlaveMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the EnvioPorLlaveMoneda enum.
+func (e EnvioPorLlaveMoneda) Valid() bool {
+	switch e {
+	case EnvioPorLlaveMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvioPorLlaveResponseSuccess.
+const (
+	EnvioPorLlaveResponseSuccessTrue EnvioPorLlaveResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the EnvioPorLlaveResponseSuccess enum.
+func (e EnvioPorLlaveResponseSuccess) Valid() bool {
+	switch e {
+	case EnvioPorLlaveResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -285,6 +480,36 @@ func (e KycVerificacionRequestNivel) Valid() bool {
 	}
 }
 
+// Defines values for LineaMovimientoMotivo.
+const (
+	LineaMovimientoMotivoDeposito              LineaMovimientoMotivo = "deposito"
+	LineaMovimientoMotivoDevolucion            LineaMovimientoMotivo = "devolucion"
+	LineaMovimientoMotivoDevolucionGravamen    LineaMovimientoMotivo = "devolucion_gravamen"
+	LineaMovimientoMotivoEnvio                 LineaMovimientoMotivo = "envio"
+	LineaMovimientoMotivoGravamen              LineaMovimientoMotivo = "gravamen"
+	LineaMovimientoMotivoTransferenciaRecibida LineaMovimientoMotivo = "transferencia_recibida"
+)
+
+// Valid indicates whether the value is a known member of the LineaMovimientoMotivo enum.
+func (e LineaMovimientoMotivo) Valid() bool {
+	switch e {
+	case LineaMovimientoMotivoDeposito:
+		return true
+	case LineaMovimientoMotivoDevolucion:
+		return true
+	case LineaMovimientoMotivoDevolucionGravamen:
+		return true
+	case LineaMovimientoMotivoEnvio:
+		return true
+	case LineaMovimientoMotivoGravamen:
+		return true
+	case LineaMovimientoMotivoTransferenciaRecibida:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LoginRequestContexto.
 const (
 	LoginRequestContextoEmpresa LoginRequestContexto = "empresa"
@@ -297,6 +522,66 @@ func (e LoginRequestContexto) Valid() bool {
 	case LoginRequestContextoEmpresa:
 		return true
 	case LoginRequestContextoUsuario:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MontoCalculadoMoneda.
+const (
+	MontoCalculadoMonedaCOP MontoCalculadoMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the MontoCalculadoMoneda enum.
+func (e MontoCalculadoMoneda) Valid() bool {
+	switch e {
+	case MontoCalculadoMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MontoMaximoResponseSuccess.
+const (
+	MontoMaximoResponseSuccessTrue MontoMaximoResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the MontoMaximoResponseSuccess enum.
+func (e MontoMaximoResponseSuccess) Valid() bool {
+	switch e {
+	case MontoMaximoResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MovimientoMoneda.
+const (
+	MovimientoMonedaCOP MovimientoMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the MovimientoMoneda enum.
+func (e MovimientoMoneda) Valid() bool {
+	switch e {
+	case MovimientoMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MovimientosResponseSuccess.
+const (
+	MovimientosResponseSuccessTrue MovimientosResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the MovimientosResponseSuccess enum.
+func (e MovimientosResponseSuccess) Valid() bool {
+	switch e {
+	case MovimientosResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -477,6 +762,21 @@ func (e ResetTokenResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for SaldoResponseSuccess.
+const (
+	SaldoResponseSuccessTrue SaldoResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the SaldoResponseSuccess enum.
+func (e SaldoResponseSuccess) Valid() bool {
+	switch e {
+	case SaldoResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SegundoMetodoTipo.
 const (
 	CodigoRespaldo SegundoMetodoTipo = "codigo_respaldo"
@@ -516,6 +816,69 @@ const (
 func (e SesionesResponseSuccess) Valid() bool {
 	switch e {
 	case SesionesResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransferenciaEstado.
+const (
+	TransferenciaEstadoCompensada    TransferenciaEstado = "compensada"
+	TransferenciaEstadoConfirmada    TransferenciaEstado = "confirmada"
+	TransferenciaEstadoCreada        TransferenciaEstado = "creada"
+	TransferenciaEstadoDespachada    TransferenciaEstado = "despachada"
+	TransferenciaEstadoFallida       TransferenciaEstado = "fallida"
+	TransferenciaEstadoIndeterminada TransferenciaEstado = "indeterminada"
+	TransferenciaEstadoReservada     TransferenciaEstado = "reservada"
+)
+
+// Valid indicates whether the value is a known member of the TransferenciaEstado enum.
+func (e TransferenciaEstado) Valid() bool {
+	switch e {
+	case TransferenciaEstadoCompensada:
+		return true
+	case TransferenciaEstadoConfirmada:
+		return true
+	case TransferenciaEstadoCreada:
+		return true
+	case TransferenciaEstadoDespachada:
+		return true
+	case TransferenciaEstadoFallida:
+		return true
+	case TransferenciaEstadoIndeterminada:
+		return true
+	case TransferenciaEstadoReservada:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransferenciaMoneda.
+const (
+	TransferenciaMonedaCOP TransferenciaMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the TransferenciaMoneda enum.
+func (e TransferenciaMoneda) Valid() bool {
+	switch e {
+	case TransferenciaMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransferenciaResponseSuccess.
+const (
+	TransferenciaResponseSuccessTrue TransferenciaResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the TransferenciaResponseSuccess enum.
+func (e TransferenciaResponseSuccess) Valid() bool {
+	switch e {
+	case TransferenciaResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -604,6 +967,24 @@ type APIError struct {
 	Details *[]FieldError `json:"details,omitempty"`
 	Message string        `json:"message"`
 }
+
+// ConfirmarDepositoRequest Senal del custodio simulado. monto, ocurrido_en y cus solo son obligatorios cuando estado es aprobado (validacion required_if que vive en el handler, no expresable en JSON Schema puro).
+type ConfirmarDepositoRequest struct {
+	Cus    *string                         `json:"cus,omitempty" validate:"omitempty,max=128"`
+	Estado ConfirmarDepositoRequestEstado  `json:"estado" validate:"required,oneof=aprobado rechazado"`
+	Moneda *ConfirmarDepositoRequestMoneda `json:"moneda,omitempty"`
+
+	// Monto Requerido y >= 0 si estado es aprobado.
+	Monto      *string    `json:"monto,omitempty"`
+	OcurridoEn *time.Time `json:"ocurrido_en,omitempty"`
+	Referencia string     `json:"referencia" validate:"required"`
+}
+
+// ConfirmarDepositoRequestEstado defines model for ConfirmarDepositoRequest.Estado.
+type ConfirmarDepositoRequestEstado string
+
+// ConfirmarDepositoRequestMoneda defines model for ConfirmarDepositoRequest.Moneda.
+type ConfirmarDepositoRequestMoneda string
 
 // Consent defines model for Consent.
 type Consent struct {
@@ -701,11 +1082,77 @@ type ContextosResponse struct {
 // ContextosResponseSuccess defines model for ContextosResponse.Success.
 type ContextosResponseSuccess bool
 
+// CrearDepositoRequest defines model for CrearDepositoRequest.
+type CrearDepositoRequest struct {
+	IdempotencyKey string                      `json:"idempotency_key" validate:"required,max=128"`
+	Moneda         *CrearDepositoRequestMoneda `json:"moneda,omitempty"`
+
+	// Monto Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+	Monto string `json:"monto" validate:"required,gt=0"`
+}
+
+// CrearDepositoRequestMoneda defines model for CrearDepositoRequest.Moneda.
+type CrearDepositoRequestMoneda string
+
 // CrearEmpresaRequest defines model for CrearEmpresaRequest.
 type CrearEmpresaRequest struct {
 	Nit         string `json:"nit" validate:"required,nit"`
 	RazonSocial string `json:"razon_social" validate:"required,max=200"`
 }
+
+// CrearTransferenciaInterbancariaRequest defines model for CrearTransferenciaInterbancariaRequest.
+type CrearTransferenciaInterbancariaRequest struct {
+	IdempotencyKey string                                        `json:"idempotency_key" validate:"required,max=128"`
+	Llave          string                                        `json:"llave" validate:"required,max=320"`
+	Moneda         *CrearTransferenciaInterbancariaRequestMoneda `json:"moneda,omitempty"`
+
+	// Monto Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+	Monto     string `json:"monto" validate:"required,gt=0"`
+	TipoLlave string `json:"tipo_llave" validate:"required"`
+}
+
+// CrearTransferenciaInterbancariaRequestMoneda defines model for CrearTransferenciaInterbancariaRequest.Moneda.
+type CrearTransferenciaInterbancariaRequestMoneda string
+
+// CrearTransferenciaRequest defines model for CrearTransferenciaRequest.
+type CrearTransferenciaRequest struct {
+	Destino        string                           `json:"destino" validate:"required,max=320"`
+	IdempotencyKey string                           `json:"idempotency_key" validate:"required,max=128"`
+	Moneda         *CrearTransferenciaRequestMoneda `json:"moneda,omitempty"`
+
+	// Monto Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+	Monto string `json:"monto" validate:"required,gt=0"`
+}
+
+// CrearTransferenciaRequestMoneda defines model for CrearTransferenciaRequest.Moneda.
+type CrearTransferenciaRequestMoneda string
+
+// Deposito defines model for Deposito.
+type Deposito struct {
+	CreadaEn   time.Time          `json:"creada_en"`
+	Estado     DepositoEstado     `json:"estado"`
+	Id         openapi_types.UUID `json:"id"`
+	Moneda     DepositoMoneda     `json:"moneda"`
+	Monto      string             `json:"monto"`
+	Referencia string             `json:"referencia"`
+}
+
+// DepositoEstado defines model for Deposito.Estado.
+type DepositoEstado string
+
+// DepositoMoneda defines model for Deposito.Moneda.
+type DepositoMoneda string
+
+// DepositoResponse defines model for DepositoResponse.
+type DepositoResponse struct {
+	Data    Deposito                `json:"data"`
+	Error   *map[string]interface{} `json:"error"`
+	Meta    *map[string]interface{} `json:"meta"`
+	Success DepositoResponseSuccess `json:"success"`
+}
+
+// DepositoResponseSuccess defines model for DepositoResponse.Success.
+type DepositoResponseSuccess bool
 
 // Desafio defines model for Desafio.
 type Desafio struct {
@@ -757,6 +1204,35 @@ type EmpresaCreadaResponse struct {
 // EmpresaCreadaResponseSuccess defines model for EmpresaCreadaResponse.Success.
 type EmpresaCreadaResponseSuccess bool
 
+// EnvioPorLlave defines model for EnvioPorLlave.
+type EnvioPorLlave struct {
+	ActualizadaEn time.Time           `json:"actualizada_en"`
+	CreadaEn      time.Time           `json:"creada_en"`
+	Estado        EnvioPorLlaveEstado `json:"estado"`
+	Id            openapi_types.UUID  `json:"id"`
+	Llave         string              `json:"llave"`
+	Moneda        EnvioPorLlaveMoneda `json:"moneda"`
+	Monto         string              `json:"monto"`
+	TipoLlave     string              `json:"tipo_llave"`
+}
+
+// EnvioPorLlaveEstado defines model for EnvioPorLlave.Estado.
+type EnvioPorLlaveEstado string
+
+// EnvioPorLlaveMoneda defines model for EnvioPorLlave.Moneda.
+type EnvioPorLlaveMoneda string
+
+// EnvioPorLlaveResponse defines model for EnvioPorLlaveResponse.
+type EnvioPorLlaveResponse struct {
+	Data    EnvioPorLlave                `json:"data"`
+	Error   *map[string]interface{}      `json:"error"`
+	Meta    *map[string]interface{}      `json:"meta"`
+	Success EnvioPorLlaveResponseSuccess `json:"success"`
+}
+
+// EnvioPorLlaveResponseSuccess defines model for EnvioPorLlaveResponse.Success.
+type EnvioPorLlaveResponseSuccess bool
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Data    *map[string]interface{} `json:"data"`
@@ -806,6 +1282,16 @@ type KycVerificacionRequest struct {
 // KycVerificacionRequestNivel defines model for KycVerificacionRequest.Nivel.
 type KycVerificacionRequestNivel string
 
+// LineaMovimiento defines model for LineaMovimiento.
+type LineaMovimiento struct {
+	// Monto Monto en centavos con el signo de la linea (a favor o en contra de la subcuenta disponible). Viaja como texto por la misma razon que el resto de los montos.
+	Monto  string                `json:"monto"`
+	Motivo LineaMovimientoMotivo `json:"motivo"`
+}
+
+// LineaMovimientoMotivo defines model for LineaMovimiento.Motivo.
+type LineaMovimientoMotivo string
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Celular    string                `json:"celular" validate:"required,e164"`
@@ -822,6 +1308,53 @@ type Meta struct {
 	Limit      int    `json:"limit"`
 	NextCursor *int64 `json:"next_cursor"`
 }
+
+// MontoCalculado Forma compartida de saldo y del monto maximo enviable: los dos son un monto en centavos, la moneda y el instante en que se calcularon.
+type MontoCalculado struct {
+	CalculadoEn time.Time            `json:"calculado_en"`
+	Moneda      MontoCalculadoMoneda `json:"moneda"`
+
+	// Monto Monto en centavos. Viaja como texto porque Centavos se serializa como cadena JSON, nunca como numero.
+	Monto string `json:"monto"`
+}
+
+// MontoCalculadoMoneda defines model for MontoCalculado.Moneda.
+type MontoCalculadoMoneda string
+
+// MontoMaximoResponse defines model for MontoMaximoResponse.
+type MontoMaximoResponse struct {
+	// Data Forma compartida de saldo y del monto maximo enviable: los dos son un monto en centavos, la moneda y el instante en que se calcularon.
+	Data    MontoCalculado             `json:"data"`
+	Error   *map[string]interface{}    `json:"error"`
+	Meta    *map[string]interface{}    `json:"meta"`
+	Success MontoMaximoResponseSuccess `json:"success"`
+}
+
+// MontoMaximoResponseSuccess defines model for MontoMaximoResponse.Success.
+type MontoMaximoResponseSuccess bool
+
+// Movimiento defines model for Movimiento.
+type Movimiento struct {
+	EntryId      int64             `json:"entry_id"`
+	Lineas       []LineaMovimiento `json:"lineas"`
+	Moneda       MovimientoMoneda  `json:"moneda"`
+	OcurridoEn   time.Time         `json:"ocurrido_en"`
+	RegistradoEn time.Time         `json:"registrado_en"`
+}
+
+// MovimientoMoneda defines model for Movimiento.Moneda.
+type MovimientoMoneda string
+
+// MovimientosResponse defines model for MovimientosResponse.
+type MovimientosResponse struct {
+	Data    []Movimiento               `json:"data"`
+	Error   *map[string]interface{}    `json:"error"`
+	Meta    *Meta                      `json:"meta"`
+	Success MovimientosResponseSuccess `json:"success"`
+}
+
+// MovimientosResponseSuccess defines model for MovimientosResponse.Success.
+type MovimientosResponseSuccess bool
 
 // OkData defines model for OkData.
 type OkData struct {
@@ -982,6 +1515,18 @@ type ResetTokenResponse struct {
 // ResetTokenResponseSuccess defines model for ResetTokenResponse.Success.
 type ResetTokenResponseSuccess bool
 
+// SaldoResponse defines model for SaldoResponse.
+type SaldoResponse struct {
+	// Data Forma compartida de saldo y del monto maximo enviable: los dos son un monto en centavos, la moneda y el instante en que se calcularon.
+	Data    MontoCalculado          `json:"data"`
+	Error   *map[string]interface{} `json:"error"`
+	Meta    *map[string]interface{} `json:"meta"`
+	Success SaldoResponseSuccess    `json:"success"`
+}
+
+// SaldoResponseSuccess defines model for SaldoResponse.Success.
+type SaldoResponseSuccess bool
+
 // SegundoMetodo defines model for SegundoMetodo.
 type SegundoMetodo struct {
 	Codigo string            `json:"codigo" validate:"required"`
@@ -1025,6 +1570,34 @@ type Tokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
+
+// Transferencia defines model for Transferencia.
+type Transferencia struct {
+	ActualizadaEn time.Time           `json:"actualizada_en"`
+	CreadaEn      time.Time           `json:"creada_en"`
+	Destino       string              `json:"destino"`
+	Estado        TransferenciaEstado `json:"estado"`
+	Id            openapi_types.UUID  `json:"id"`
+	Moneda        TransferenciaMoneda `json:"moneda"`
+	Monto         string              `json:"monto"`
+}
+
+// TransferenciaEstado defines model for Transferencia.Estado.
+type TransferenciaEstado string
+
+// TransferenciaMoneda defines model for Transferencia.Moneda.
+type TransferenciaMoneda string
+
+// TransferenciaResponse defines model for TransferenciaResponse.
+type TransferenciaResponse struct {
+	Data    Transferencia                `json:"data"`
+	Error   *map[string]interface{}      `json:"error"`
+	Meta    *map[string]interface{}      `json:"meta"`
+	Success TransferenciaResponseSuccess `json:"success"`
+}
+
+// TransferenciaResponseSuccess defines model for TransferenciaResponse.Success.
+type TransferenciaResponseSuccess bool
 
 // Usuario defines model for Usuario.
 type Usuario struct {
@@ -1079,6 +1652,15 @@ type VerifyPhoneRequest struct {
 // Error defines model for Error.
 type Error = ErrorResponse
 
+// MovimientosParams defines parameters for Movimientos.
+type MovimientosParams struct {
+	// Limit Tamano de pagina, de 1 a 100. Por defecto 50. El handler recorta a 100 un valor mayor, no lo rechaza. Se tipa x-go-type string para que un valor no numerico llegue al handler y salga como ValidationError, en vez de fallar antes en el binding generado como BadRequest.
+	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Ancla del ultimo movimiento de la pagina anterior. Mismo motivo de x-go-type string que limit.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
 type CreateCompanyJSONRequestBody = CrearEmpresaRequest
 
@@ -1097,8 +1679,17 @@ type PhoneChangeConfirmJSONRequestBody = VerifyOtpRequest
 // PhoneChangeRequestJSONRequestBody defines body for PhoneChangeRequest for application/json ContentType.
 type PhoneChangeRequestJSONRequestBody = PhoneChangeRequest
 
+// CrearDepositoJSONRequestBody defines body for CrearDeposito for application/json ContentType.
+type CrearDepositoJSONRequestBody = CrearDepositoRequest
+
 // KycVerificacionJSONRequestBody defines body for KycVerificacion for application/json ContentType.
 type KycVerificacionJSONRequestBody = KycVerificacionRequest
+
+// TransferirJSONRequestBody defines body for Transferir for application/json ContentType.
+type TransferirJSONRequestBody = CrearTransferenciaRequest
+
+// TransferirInterbancariaJSONRequestBody defines body for TransferirInterbancaria for application/json ContentType.
+type TransferirInterbancariaJSONRequestBody = CrearTransferenciaInterbancariaRequest
 
 // AsRegisterPersonaRequest returns the union data inside the RegisterRequest as a RegisterPersonaRequest
 func (t RegisterRequest) AsRegisterPersonaRequest() (RegisterPersonaRequest, error) {
@@ -1236,12 +1827,33 @@ type ServerInterface interface {
 	// DeleteSession Revoca una sesion.
 	// (DELETE /v1/auth/sessions/{session_id})
 	DeleteSession(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID)
+	// CrearDeposito Crea una intencion de deposito o devuelve la ya guardada para la misma clave de idempotencia.
+	// (POST /v1/depositos)
+	CrearDeposito(w http.ResponseWriter, r *http.Request)
+	// Deposito Consulta el estado actual de una intencion de deposito del usuario autenticado.
+	// (GET /v1/depositos/{id})
+	Deposito(w http.ResponseWriter, r *http.Request, id string)
 	// KycEstado Consulta el producto, el estado de KYC y los limites.
 	// (GET /v1/kyc/estado)
 	KycEstado(w http.ResponseWriter, r *http.Request)
 	// KycVerificacion Inicia o completa la verificacion del nivel solicitado.
 	// (POST /v1/kyc/verificacion)
 	KycVerificacion(w http.ResponseWriter, r *http.Request)
+	// Movimientos Lista una pagina del historial del usuario autenticado, del movimiento mas nuevo al mas viejo.
+	// (GET /v1/movimientos)
+	Movimientos(w http.ResponseWriter, r *http.Request, params MovimientosParams)
+	// Saldo Consulta el saldo disponible del usuario autenticado.
+	// (GET /v1/saldo)
+	Saldo(w http.ResponseWriter, r *http.Request)
+	// Transferir Envia dinero a otro usuario o devuelve el envio ya guardado para la misma clave de idempotencia.
+	// (POST /v1/transferencias)
+	Transferir(w http.ResponseWriter, r *http.Request)
+	// TransferirInterbancaria Envia dinero por llave a otra entidad o devuelve el envio ya guardado para la misma clave de idempotencia.
+	// (POST /v1/transferencias/interbancarias)
+	TransferirInterbancaria(w http.ResponseWriter, r *http.Request)
+	// MontoMaximo Consulta el monto maximo que el usuario puede enviar sin quedarse sin saldo por el GMF.
+	// (GET /v1/transferencias/maximo)
+	MontoMaximo(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -1314,6 +1926,18 @@ func (_ Unimplemented) DeleteSession(w http.ResponseWriter, r *http.Request, ses
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// CrearDeposito Crea una intencion de deposito o devuelve la ya guardada para la misma clave de idempotencia.
+// (POST /v1/depositos)
+func (_ Unimplemented) CrearDeposito(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Deposito Consulta el estado actual de una intencion de deposito del usuario autenticado.
+// (GET /v1/depositos/{id})
+func (_ Unimplemented) Deposito(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // KycEstado Consulta el producto, el estado de KYC y los limites.
 // (GET /v1/kyc/estado)
 func (_ Unimplemented) KycEstado(w http.ResponseWriter, r *http.Request) {
@@ -1323,6 +1947,36 @@ func (_ Unimplemented) KycEstado(w http.ResponseWriter, r *http.Request) {
 // KycVerificacion Inicia o completa la verificacion del nivel solicitado.
 // (POST /v1/kyc/verificacion)
 func (_ Unimplemented) KycVerificacion(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Movimientos Lista una pagina del historial del usuario autenticado, del movimiento mas nuevo al mas viejo.
+// (GET /v1/movimientos)
+func (_ Unimplemented) Movimientos(w http.ResponseWriter, r *http.Request, params MovimientosParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Saldo Consulta el saldo disponible del usuario autenticado.
+// (GET /v1/saldo)
+func (_ Unimplemented) Saldo(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Transferir Envia dinero a otro usuario o devuelve el envio ya guardado para la misma clave de idempotencia.
+// (POST /v1/transferencias)
+func (_ Unimplemented) Transferir(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TransferirInterbancaria Envia dinero por llave a otra entidad o devuelve el envio ya guardado para la misma clave de idempotencia.
+// (POST /v1/transferencias/interbancarias)
+func (_ Unimplemented) TransferirInterbancaria(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// MontoMaximo Consulta el monto maximo que el usuario puede enviar sin quedarse sin saldo por el GMF.
+// (GET /v1/transferencias/maximo)
+func (_ Unimplemented) MontoMaximo(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1501,6 +2155,46 @@ func (siw *ServerInterfaceWrapper) DeleteSession(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CrearDeposito operation middleware
+func (siw *ServerInterfaceWrapper) CrearDeposito(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearDeposito(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Deposito operation middleware
+func (siw *ServerInterfaceWrapper) Deposito(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Deposito(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // KycEstado operation middleware
 func (siw *ServerInterfaceWrapper) KycEstado(w http.ResponseWriter, r *http.Request) {
 
@@ -1520,6 +2214,108 @@ func (siw *ServerInterfaceWrapper) KycVerificacion(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.KycVerificacion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Movimientos operation middleware
+func (siw *ServerInterfaceWrapper) Movimientos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params MovimientosParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Movimientos(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Saldo operation middleware
+func (siw *ServerInterfaceWrapper) Saldo(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Saldo(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Transferir operation middleware
+func (siw *ServerInterfaceWrapper) Transferir(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Transferir(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TransferirInterbancaria operation middleware
+func (siw *ServerInterfaceWrapper) TransferirInterbancaria(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TransferirInterbancaria(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MontoMaximo operation middleware
+func (siw *ServerInterfaceWrapper) MontoMaximo(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MontoMaximo(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1680,6 +2476,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/auth/consents", wrapper.CreateConsent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/saldo", wrapper.Saldo)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/transferencias/maximo", wrapper.MontoMaximo)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/movimientos", wrapper.Movimientos)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/depositos", wrapper.CrearDeposito)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/depositos/{id}", wrapper.Deposito)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/transferencias", wrapper.Transferir)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/transferencias/interbancarias", wrapper.TransferirInterbancaria)
 	})
 
 	return r

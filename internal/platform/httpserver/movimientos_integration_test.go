@@ -75,7 +75,7 @@ func transferenciaDe(u uuid.UUID) pgtype.UUID {
 func pedirMovimientos(t *testing.T, r http.Handler, query string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, "/movimientos"+query, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/movimientos"+query, nil)
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
