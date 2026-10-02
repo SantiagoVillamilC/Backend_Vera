@@ -22,11 +22,12 @@ const (
 	rateLimitWindow   = time.Minute
 )
 
-// RutasDeDinero son los endpoints que mueven dinero y por eso cierran si la denylist no responde.
+// RutasDeDinero son las operaciones sensibles que cierran si la denylist no responde.
 var RutasDeDinero = []string{
 	http.MethodPost + " /v1/transferencias",
 	http.MethodPost + " /v1/depositos",
 	http.MethodPost + " /v1/transferencias/interbancarias",
+	http.MethodGet + " /v1/destinatarios",
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
@@ -53,7 +54,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
 	nucleoHandler := nucleo.NewHandler(nucleoServicio)
-	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler}
+	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler, destinatarios: authDeps.Destinatarios}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {

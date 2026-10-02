@@ -42,6 +42,28 @@ func baseDeConfig(t *testing.T) {
 	entornoDeAuth(t)
 }
 
+func TestDestinatariosLimiteConfigurable(t *testing.T) {
+	baseDeConfig(t)
+	t.Setenv("DESTINATARIOS_LIMITE", "7")
+	t.Setenv("DESTINATARIOS_VENTANA", "30m")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Auth.DestinatariosLimite != 7 || cfg.Auth.DestinatariosVentana != 30*time.Minute {
+		t.Fatalf("limite=%d ventana=%s", cfg.Auth.DestinatariosLimite, cfg.Auth.DestinatariosVentana)
+	}
+	for _, caso := range []struct{ clave, valor string }{{"DESTINATARIOS_LIMITE", "0"}, {"DESTINATARIOS_VENTANA", "0s"}} {
+		t.Run(caso.clave, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv(caso.clave, caso.valor)
+			if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), caso.clave) {
+				t.Fatalf("se esperaba error de %s, recibi %v", caso.clave, err)
+			}
+		})
+	}
+}
+
 func TestLoadConfigAuth(t *testing.T) {
 	tests := map[string]struct {
 		redisURL string

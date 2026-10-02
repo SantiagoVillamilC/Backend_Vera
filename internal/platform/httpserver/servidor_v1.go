@@ -84,36 +84,46 @@ type NucleoHandler interface {
 
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
-	Identidad    IdentidadDeLaPeticion
-	Auth         AuthHandler
-	KYC          KYCHandler
-	Consent      ConsentHandler
-	Redis        *redis.Client
-	CanalOTP     auth.CanalOTP
-	Contadores   auth.Contadores
-	Desafios     DesafiosHandler
-	Registro     RegistroHandler
-	Verificacion VerificacionHandler
-	Login        LoginHandler
-	Refresh      RefreshHandler
-	Recuperacion RecuperacionHandler
-	Firmador     *auth.TokensDeAcceso
-	Denylist     auth.RevocadorDeSesiones
-	Subcuentas   auth.AbridorDeSubcuentas
-	Recuperar2FA RecuperacionVerifyHandler
-	ResetClave   RecuperacionResetHandler
-	PhoneChange  PhoneChangeHandler
-	Companies    CompaniesHandler
+	Identidad     IdentidadDeLaPeticion
+	Auth          AuthHandler
+	KYC           KYCHandler
+	Consent       ConsentHandler
+	Redis         *redis.Client
+	CanalOTP      auth.CanalOTP
+	Contadores    auth.Contadores
+	Desafios      DesafiosHandler
+	Registro      RegistroHandler
+	Verificacion  VerificacionHandler
+	Login         LoginHandler
+	Refresh       RefreshHandler
+	Recuperacion  RecuperacionHandler
+	Firmador      *auth.TokensDeAcceso
+	Denylist      auth.RevocadorDeSesiones
+	Subcuentas    auth.AbridorDeSubcuentas
+	Recuperar2FA  RecuperacionVerifyHandler
+	ResetClave    RecuperacionResetHandler
+	PhoneChange   PhoneChangeHandler
+	Companies     CompaniesHandler
+	Destinatarios *DestinatariosHandler
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
 type servidorV1 struct {
-	auth        AuthHandler
-	kyc         KYCHandler
-	consent     ConsentHandler
-	phoneChange PhoneChangeHandler
-	companies   CompaniesHandler
-	nucleo      NucleoHandler
+	auth          AuthHandler
+	kyc           KYCHandler
+	consent       ConsentHandler
+	phoneChange   PhoneChangeHandler
+	companies     CompaniesHandler
+	nucleo        NucleoHandler
+	destinatarios *DestinatariosHandler
+}
+
+func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request, _ api.ConsultarDestinatarioParams) {
+	if s.destinatarios == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.destinatarios.ConsultarDestinatario(w, r)
 }
 
 var _ api.ServerInterface = servidorV1{}

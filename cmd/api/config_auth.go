@@ -28,6 +28,8 @@ type ConfigAuth struct {
 	JWTAudience              string
 	ResetTokenTTL            time.Duration
 	EnfriamientoCambioNumero time.Duration
+	DestinatariosLimite      int
+	DestinatariosVentana     time.Duration
 	ContactoSoporte          string
 	VentanaPendiente         time.Duration
 	LimpiezaInterval         time.Duration
@@ -86,6 +88,15 @@ func cargarConfigAuth() (ConfigAuth, []error) {
 	cfg.EnfriamientoCambioNumero, errEnfriamiento = duracionRequerida("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO", os.Getenv("AUTH_ENFRIAMIENTO_CAMBIO_NUMERO"))
 	if errEnfriamiento != nil {
 		errs = append(errs, errEnfriamiento)
+	}
+	var errLimite error
+	cfg.DestinatariosLimite, errLimite = enteroPositivoRequerido("DESTINATARIOS_LIMITE", envOr("DESTINATARIOS_LIMITE", "20"))
+	if errLimite != nil {
+		errs = append(errs, errLimite)
+	}
+	cfg.DestinatariosVentana, errLimite = duracionRequerida("DESTINATARIOS_VENTANA", envOr("DESTINATARIOS_VENTANA", "1h"))
+	if errLimite != nil {
+		errs = append(errs, errLimite)
 	}
 	if cfg.ContactoSoporte == "" {
 		errs = append(errs, errors.New("AUTH_CONTACTO_SOPORTE is required"))
