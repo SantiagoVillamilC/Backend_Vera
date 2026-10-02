@@ -14,6 +14,7 @@ const jwtDePrueba = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"
 // entornoDeAuth fija las variables del bloque de auth que LoadConfig exige para aislar cada caso.
 func entornoDeAuth(t *testing.T) {
 	t.Helper()
+	t.Setenv("PSE_URL", "https://pse.veraapp.tech")
 	t.Setenv("REDIS_URL", "redis://:secreta@127.0.0.1:16381/0")
 	t.Setenv("JWT_ISSUER", "centinela-auth")
 	t.Setenv("JWT_AUDIENCE", "centinela-api")

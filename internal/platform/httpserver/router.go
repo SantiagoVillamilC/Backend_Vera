@@ -30,7 +30,7 @@ var RutasDeDinero = []string{
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
-func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth) http.Handler {
+func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, pseURL ...string) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)
 	}
@@ -52,7 +52,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
-	nucleoHandler := nucleo.NewHandler(nucleoServicio)
+	nucleoHandler := nucleo.NewHandler(nucleoServicio, pseURL...)
 	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.

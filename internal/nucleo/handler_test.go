@@ -5,11 +5,25 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 )
+
+// HU-NF-07 C23: la URL conserva la referencia codificada y el monto exacto en centavos.
+func TestHU_NF_07_C23_URLPagoPSE(t *testing.T) {
+	intencion := IntencionDeposito{Referencia: "dep-a b&c", Monto: 150000}
+	enlace := urlPagoPSE("https://pse.veraapp.tech/", intencion)
+	if enlace != "https://pse.veraapp.tech/pse?referencia=dep-a+b%26c&monto=150000" {
+		t.Fatalf("url_pago = %q", enlace)
+	}
+	u, err := url.Parse(enlace)
+	if err != nil || u.Query().Get("referencia") != intencion.Referencia || u.Query().Get("monto") != "150000" {
+		t.Fatalf("URL no recupera referencia y monto: %q, %v", enlace, err)
+	}
+}
 
 // Un Handler sin Servicio es un error de programación: falla al construir, no en la petición.
 func TestNewHandlerConServicioNuloFallaAlConstruir(t *testing.T) {

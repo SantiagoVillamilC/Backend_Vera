@@ -67,6 +67,7 @@ services:
       - ${ARCHIVO_CUSTODIO_TOKEN}
     environment:
       PORT: "8080"
+      PSE_URL: https://pse.veraapp.tech
       LOG_LEVEL: info
       LOG_FORMAT: json
       REDIS_URL: redis://redis:6379

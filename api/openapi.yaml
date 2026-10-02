@@ -681,13 +681,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DepositoResponse"
+                $ref: "#/components/schemas/DepositoConPagoResponse"
         "201":
           description: Intencion de deposito creada.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DepositoResponse"
+                $ref: "#/components/schemas/DepositoConPagoResponse"
+              example:
+                success: true
+                data:
+                  id: "123e4567-e89b-42d3-a456-426614174000"
+                  referencia: "dep-123e4567-e89b-42d3-a456-426614174000"
+                  monto: "150000"
+                  moneda: COP
+                  estado: pendiente
+                  creada_en: "2026-10-02T10:00:00Z"
+                  url_pago: "https://pse.veraapp.tech/pse?referencia=dep-123e4567-e89b-42d3-a456-426614174000&monto=150000"
+                error: null
+                meta: null
         "400":
           $ref: "#/components/responses/Error"
         "401":
@@ -1853,6 +1865,33 @@ components:
           enum: [true]
         data:
           $ref: "#/components/schemas/Deposito"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    DepositoConPago:
+      allOf:
+        - $ref: "#/components/schemas/Deposito"
+        - type: object
+          required: [url_pago]
+          properties:
+            url_pago:
+              type: string
+              format: uri
+              description: URL del PSE simulado con referencia y monto en centavos (HU-NF-07 C23).
+
+    DepositoConPagoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/DepositoConPago"
         error:
           type: object
           nullable: true
