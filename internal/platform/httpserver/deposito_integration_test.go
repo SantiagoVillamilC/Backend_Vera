@@ -259,6 +259,29 @@ func TestHU_NF_07_Criterio20_DobleToqueEsUnaSolaIntencion(t *testing.T) {
 	}
 }
 
+// HU-NF-07 C23: POST crea una URL lista para el PSE y el reintento conserva la misma.
+func TestHU_NF_07_C23_URLPagoEnCreacionYReintento(t *testing.T) {
+	pool := abrirPoolDeIntegracion(t)
+	servicio := nucleo.NewServicio(pool, nil, nil, nil, nil)
+	usuarioID := sembrarUsuarioConSaldo(t, pool, servicio, 0, 0)
+	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{Identidad: identidadFija{usuarioID}}, "https://pse.veraapp.tech")
+	clave := "k-" + uuid.NewString()
+	cuerpo := `{"monto":"150000","idempotency_key":"` + clave + `"}`
+	primera := crearDeposito(t, r, cuerpo, true)
+	if primera.Code != http.StatusCreated {
+		t.Fatalf("primera: status=%d cuerpo=%s", primera.Code, primera.Body.String())
+	}
+	datos := datosDeDeposito(t, primera)
+	urlEsperada := "https://pse.veraapp.tech/pse?referencia=" + datos["referencia"].(string) + "&monto=150000"
+	if datos["url_pago"] != urlEsperada {
+		t.Fatalf("url_pago=%v, quiero %q", datos["url_pago"], urlEsperada)
+	}
+	segunda := crearDeposito(t, r, `{"monto":"999999","idempotency_key":"`+clave+`"}`, true)
+	if segunda.Code != http.StatusOK || datosDeDeposito(t, segunda)["url_pago"] != urlEsperada {
+		t.Fatalf("reintento: status=%d cuerpo=%s", segunda.Code, segunda.Body.String())
+	}
+}
+
 // HU-NF-07 Criterio 20: un doble toque simultáneo con la misma clave deja una sola intención.
 func TestHU_NF_07_Criterio20_DobleToqueConcurrenteEsUnaSolaIntencion(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)

@@ -212,7 +212,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), deps),
+		Handler:           httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

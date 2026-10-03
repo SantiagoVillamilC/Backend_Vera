@@ -93,6 +93,32 @@ func TestLoadConfigExigeElTokenDelCustodio(t *testing.T) {
 	}
 }
 
+// HU-NF-07 C23: el API solo arranca con el origen del PSE configurado.
+func TestHU_NF_07_C23_PSEURLObligatoria(t *testing.T) {
+	for _, caso := range []struct{ nombre, valor, errorEsperado string }{
+		{"origen valido", "https://pse.veraapp.tech", ""},
+		{"ausente", "", "PSE_URL is required"},
+		{"con ruta", "https://pse.veraapp.tech/pse", "PSE_URL must be the origin"},
+		{"con consulta", "https://pse.veraapp.tech?x=1", "PSE_URL must be the origin"},
+		{"esquema invalido", "ftp://pse.veraapp.tech", "PSE_URL must be an absolute http(s) URL"},
+	} {
+		t.Run(caso.nombre, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("PSE_URL", caso.valor)
+			cfg, err := LoadConfig()
+			if caso.errorEsperado != "" {
+				if err == nil || !strings.Contains(err.Error(), caso.errorEsperado) {
+					t.Fatalf("LoadConfig: %v, quiero %q", err, caso.errorEsperado)
+				}
+				return
+			}
+			if err != nil || cfg.PSEURL != caso.valor {
+				t.Fatalf("PSE_URL=%q, error=%v", cfg.PSEURL, err)
+			}
+		})
+	}
+}
+
 // NF-A1-07.3: TTL_INTENCION por defecto en 60s y el apagado con vacío, 0 o 0s.
 func TestLoadConfigTTLIntencion(t *testing.T) {
 	const jwt = "jwt-secreto-de-al-menos-treinta-y-dos-bytes"

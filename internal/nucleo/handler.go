@@ -3,7 +3,9 @@ package nucleo
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
@@ -70,14 +72,21 @@ type confirmarDepositoRequest struct {
 }
 
 // Handler sirve el saldo, el historial y las intenciones de depósito del usuario autenticado.
-type Handler struct{ servicio *Servicio }
+type Handler struct {
+	servicio *Servicio
+	pseURL   string
+}
 
 // NewHandler construye el handler sobre el servicio del núcleo y falla si el servicio es nulo.
-func NewHandler(s *Servicio) *Handler {
+func NewHandler(s *Servicio, pseURL ...string) *Handler {
 	if s == nil {
 		panic(ErrServicioNulo)
 	}
-	return &Handler{servicio: s}
+	h := &Handler{servicio: s}
+	if len(pseURL) > 0 {
+		h.pseURL = pseURL[0]
+	}
+	return h
 }
 
 // parametrosDeDestino son los nombres con los que un cliente intentaría apuntar a otra cuenta.
@@ -187,7 +196,26 @@ func (h *Handler) CrearDeposito(w http.ResponseWriter, r *http.Request) {
 	if creada {
 		estado = http.StatusCreated
 	}
-	api.WriteData(w, estado, respuestaDeDeposito(intencion), nil)
+	api.WriteData(w, estado, respuestaDeDepositoConPago(intencion, h.pseURL), nil)
+}
+
+// respuestaDeDepositoConPago arma el DTO del POST con el enlace del PSE simulado.
+func respuestaDeDepositoConPago(i IntencionDeposito, origen string) api.DepositoConPago {
+	return api.DepositoConPago{
+		Id:         i.ID,
+		Referencia: i.Referencia,
+		Monto:      strconv.FormatInt(i.Monto.Int64(), 10),
+		Moneda:     api.DepositoConPagoMoneda(i.Moneda),
+		Estado:     api.DepositoConPagoEstado(i.Estado),
+		CreadaEn:   i.CreadaEn,
+		UrlPago:    urlPagoPSE(origen, i),
+	}
+}
+
+// urlPagoPSE usa los datos persistidos para que el reintento de la misma intencion repita el enlace.
+func urlPagoPSE(origen string, i IntencionDeposito) string {
+	return strings.TrimSuffix(origen, "/") + "/pse?referencia=" + url.QueryEscape(i.Referencia) +
+		"&monto=" + strconv.FormatInt(i.Monto.Int64(), 10)
 }
 
 // Deposito responde el estado actual de la intención del usuario autenticado.

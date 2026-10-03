@@ -273,6 +273,60 @@ func (e DepositoMoneda) Valid() bool {
 	}
 }
 
+// Defines values for DepositoConPagoEstado.
+const (
+	DepositoConPagoEstadoConfirmada DepositoConPagoEstado = "confirmada"
+	DepositoConPagoEstadoExpirada   DepositoConPagoEstado = "expirada"
+	DepositoConPagoEstadoPendiente  DepositoConPagoEstado = "pendiente"
+	DepositoConPagoEstadoRechazada  DepositoConPagoEstado = "rechazada"
+)
+
+// Valid indicates whether the value is a known member of the DepositoConPagoEstado enum.
+func (e DepositoConPagoEstado) Valid() bool {
+	switch e {
+	case DepositoConPagoEstadoConfirmada:
+		return true
+	case DepositoConPagoEstadoExpirada:
+		return true
+	case DepositoConPagoEstadoPendiente:
+		return true
+	case DepositoConPagoEstadoRechazada:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DepositoConPagoMoneda.
+const (
+	DepositoConPagoMonedaCOP DepositoConPagoMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the DepositoConPagoMoneda enum.
+func (e DepositoConPagoMoneda) Valid() bool {
+	switch e {
+	case DepositoConPagoMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DepositoConPagoResponseSuccess.
+const (
+	DepositoConPagoResponseSuccessTrue DepositoConPagoResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the DepositoConPagoResponseSuccess enum.
+func (e DepositoConPagoResponseSuccess) Valid() bool {
+	switch e {
+	case DepositoConPagoResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DepositoResponseSuccess.
 const (
 	DepositoResponseSuccessTrue DepositoResponseSuccess = true
@@ -1159,6 +1213,36 @@ type DepositoEstado string
 
 // DepositoMoneda defines model for Deposito.Moneda.
 type DepositoMoneda string
+
+// DepositoConPago defines model for DepositoConPago.
+type DepositoConPago struct {
+	CreadaEn   time.Time             `json:"creada_en"`
+	Estado     DepositoConPagoEstado `json:"estado"`
+	Id         openapi_types.UUID    `json:"id"`
+	Moneda     DepositoConPagoMoneda `json:"moneda"`
+	Monto      string                `json:"monto"`
+	Referencia string                `json:"referencia"`
+
+	// UrlPago URL del PSE simulado con referencia y monto en centavos (HU-NF-07 C23).
+	UrlPago string `json:"url_pago"`
+}
+
+// DepositoConPagoEstado defines model for DepositoConPago.Estado.
+type DepositoConPagoEstado string
+
+// DepositoConPagoMoneda defines model for DepositoConPago.Moneda.
+type DepositoConPagoMoneda string
+
+// DepositoConPagoResponse defines model for DepositoConPagoResponse.
+type DepositoConPagoResponse struct {
+	Data    DepositoConPago                `json:"data"`
+	Error   *map[string]interface{}        `json:"error"`
+	Meta    *map[string]interface{}        `json:"meta"`
+	Success DepositoConPagoResponseSuccess `json:"success"`
+}
+
+// DepositoConPagoResponseSuccess defines model for DepositoConPagoResponse.Success.
+type DepositoConPagoResponseSuccess bool
 
 // DepositoResponse defines model for DepositoResponse.
 type DepositoResponse struct {

@@ -19,6 +19,7 @@ type Config struct {
 	AppDatabaseURL         string
 	JWTSecret              string
 	CustodioToken          string
+	PSEURL                 string
 	CustodioExtractoURL    string
 	RielSimuladorURL       string
 	DirectorioSimuladorURL string
@@ -47,6 +48,7 @@ func LoadConfig() (*Config, error) {
 		AppDatabaseURL:         os.Getenv("APP_DATABASE_URL"),
 		JWTSecret:              os.Getenv("JWT_SECRET"),
 		CustodioToken:          os.Getenv("CUSTODIO_TOKEN"),
+		PSEURL:                 os.Getenv("PSE_URL"),
 		CustodioExtractoURL:    os.Getenv("CUSTODIO_EXTRACTO_URL"),
 		RielSimuladorURL:       os.Getenv("RIEL_SIMULADOR_URL"),
 		DirectorioSimuladorURL: os.Getenv("DIRECTORIO_SIMULADOR_URL"),
@@ -65,6 +67,7 @@ func LoadConfig() (*Config, error) {
 		{"APP_DATABASE_URL", cfg.AppDatabaseURL},
 		{"JWT_SECRET", cfg.JWTSecret},
 		{"CUSTODIO_TOKEN", cfg.CustodioToken},
+		{"PSE_URL", cfg.PSEURL},
 	}
 	for _, r := range required {
 		if r.value == "" {
@@ -85,6 +88,13 @@ func LoadConfig() (*Config, error) {
 	}
 	if err := urlOpcional("CUSTODIO_EXTRACTO_URL", cfg.CustodioExtractoURL); err != nil {
 		errs = append(errs, err)
+	}
+	if cfg.PSEURL != "" {
+		if err := urlOrigenOpcional("PSE_URL", cfg.PSEURL); err != nil {
+			errs = append(errs, err)
+		} else if u, _ := url.Parse(cfg.PSEURL); u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			errs = append(errs, fmt.Errorf("PSE_URL must be the origin without credentials, query or fragment, got %q", cfg.PSEURL))
+		}
 	}
 	if err := urlOrigenOpcional("RIEL_SIMULADOR_URL", cfg.RielSimuladorURL); err != nil {
 		errs = append(errs, err)
@@ -163,6 +173,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("app_database_url_set", c.AppDatabaseURL != ""),
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
 		slog.Bool("custodio_token_set", c.CustodioToken != ""),
+		slog.String("pse_url", c.PSEURL),
 		slog.Bool("custodio_extracto_url_set", c.CustodioExtractoURL != ""),
 		slog.Bool("redis_url_set", c.Auth.RedisURL != ""),
 		slog.Bool("contadores_pepper_set", len(c.Auth.ContadoresPepper) > 0),
