@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/internal/repositorio"
@@ -54,6 +55,66 @@ func (r *ResolutorDestino) usuarioPorCelular(ctx context.Context, celular string
 		})
 	})
 	return destinoODesconocido(fila, err)
+}
+
+// NombreDeDestinoPorCelular consulta la misma regla del envio y devuelve solo el nombre presentable.
+// La consulta de nombre corre en la misma transaccion que ResolverDestinoPorCelular.
+func (r *ResolutorDestino) NombreDeDestinoPorCelular(ctx context.Context, celular, usuarioID string) (string, bool, bool, error) {
+	type resultado struct {
+		nombre string
+		existe bool
+		propio bool
+	}
+	res, err := enTransaccion(ctx, r.pool, func(ctx context.Context, tx transaccionDeAuth, q *repositorio.Queries) (resultado, error) {
+		id, err := q.ResolverDestinoPorCelular(ctx, repositorio.ResolverDestinoPorCelularParams{
+			Celular: celular, EnfriamientoSegundos: r.enfriamiento.Seconds(),
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return resultado{}, nil
+		}
+		if err != nil {
+			return resultado{}, err
+		}
+		if uuid.UUID(id.Bytes).String() == usuarioID {
+			return resultado{existe: true, propio: true}, nil
+		}
+		var tipo string
+		var nombre, razonSocial *string
+		err = tx.QueryRow(ctx, `SELECT p.tipo, pe.nombre, em.razon_social
+			FROM auth.partes p
+			LEFT JOIN auth.personas pe ON pe.parte_id = p.id
+			LEFT JOIN auth.empresas em ON em.parte_id = p.id
+			WHERE p.id = $1`, id).Scan(&tipo, &nombre, &razonSocial)
+		if err != nil {
+			return resultado{}, err
+		}
+		if tipo == "empresa" && razonSocial != nil && strings.TrimSpace(*razonSocial) != "" {
+			return resultado{nombre: *razonSocial, existe: true}, nil
+		}
+		if tipo == "persona" && nombre != nil {
+			if visible := nombreEnmascarado(*nombre); visible != "" {
+				return resultado{nombre: visible, existe: true}, nil
+			}
+		}
+		return resultado{}, nil
+	})
+	return res.nombre, res.existe, res.propio, err
+}
+
+// nombreEnmascarado muestra el primer nombre y la inicial del primer apellido en nombres de dos a cuatro componentes.
+func nombreEnmascarado(nombre string) string {
+	partes := strings.Fields(nombre)
+	if len(partes) == 0 {
+		return ""
+	}
+	if len(partes) == 1 {
+		return partes[0]
+	}
+	indiceApellido := len(partes) - 1
+	if len(partes) >= 4 {
+		indiceApellido--
+	}
+	return partes[0] + " " + string([]rune(partes[indiceApellido])[0]) + "."
 }
 
 // destinoODesconocido traduce el no encontrado a existe falso y formatea el uuid resuelto.

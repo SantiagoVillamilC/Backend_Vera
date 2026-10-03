@@ -330,6 +330,21 @@ func (e DesafioResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for DestinatarioResponseSuccess.
+const (
+	DestinatarioResponseSuccessTrue DestinatarioResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the DestinatarioResponseSuccess enum.
+func (e DestinatarioResponseSuccess) Valid() bool {
+	switch e {
+	case DestinatarioResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmpresaCreadaResponseSuccess.
 const (
 	EmpresaCreadaResponseSuccessTrue EmpresaCreadaResponseSuccess = true
@@ -953,6 +968,8 @@ type APIError struct {
 	// ContextInvalid, ResetInvalid, SecondFactorRequired, KycRequired, ConsentRequired,
 	// DuplicateIdentifier, PhoneUnverified, OtpTooManyResends, PhoneChangeCooldown,
 	// TooManyRequests, NotImplemented, PayloadTooLarge (cuerpo mayor a 1 MiB),
+	// RecipientNotFound (404, destino interno inexistente),
+	// SelfTransferNotAllowed (422, destino interno propio),
 	// MethodNotAllowed (metodo no permitido), NotFound (recurso inexistente),
 	// AuthUnavailable (fail closed de Redis o del canal),
 	// OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
@@ -1176,6 +1193,23 @@ type DesafioResponse struct {
 
 // DesafioResponseSuccess defines model for DesafioResponse.Success.
 type DesafioResponseSuccess bool
+
+// Destinatario defines model for Destinatario.
+type Destinatario struct {
+	// Nombre Persona, primer nombre e inicial del apellido; empresa, razon social completa.
+	Nombre string `json:"nombre"`
+}
+
+// DestinatarioResponse defines model for DestinatarioResponse.
+type DestinatarioResponse struct {
+	Data    Destinatario                `json:"data"`
+	Error   *map[string]interface{}     `json:"error"`
+	Meta    *map[string]interface{}     `json:"meta"`
+	Success DestinatarioResponseSuccess `json:"success"`
+}
+
+// DestinatarioResponseSuccess defines model for DestinatarioResponse.Success.
+type DestinatarioResponseSuccess bool
 
 // Dispositivo defines model for Dispositivo.
 type Dispositivo struct {
@@ -1652,6 +1686,11 @@ type VerifyPhoneRequest struct {
 // Error defines model for Error.
 type Error = ErrorResponse
 
+// ConsultarDestinatarioParams defines parameters for ConsultarDestinatario.
+type ConsultarDestinatarioParams struct {
+	Celular string `form:"celular" json:"celular"`
+}
+
 // MovimientosParams defines parameters for Movimientos.
 type MovimientosParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50. El handler recorta a 100 un valor mayor, no lo rechaza. Se tipa x-go-type string para que un valor no numerico llegue al handler y salga como ValidationError, en vez de fallar antes en el binding generado como BadRequest.
@@ -1833,6 +1872,9 @@ type ServerInterface interface {
 	// Deposito Consulta el estado actual de una intencion de deposito del usuario autenticado.
 	// (GET /v1/depositos/{id})
 	Deposito(w http.ResponseWriter, r *http.Request, id string)
+	// ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
+	// (GET /v1/destinatarios)
+	ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams)
 	// KycEstado Consulta el producto, el estado de KYC y los limites.
 	// (GET /v1/kyc/estado)
 	KycEstado(w http.ResponseWriter, r *http.Request)
@@ -1935,6 +1977,12 @@ func (_ Unimplemented) CrearDeposito(w http.ResponseWriter, r *http.Request) {
 // Deposito Consulta el estado actual de una intencion de deposito del usuario autenticado.
 // (GET /v1/depositos/{id})
 func (_ Unimplemented) Deposito(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
+// (GET /v1/destinatarios)
+func (_ Unimplemented) ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2186,6 +2234,39 @@ func (siw *ServerInterfaceWrapper) Deposito(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Deposito(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConsultarDestinatario operation middleware
+func (siw *ServerInterfaceWrapper) ConsultarDestinatario(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConsultarDestinatarioParams
+
+	// ------------- Required query parameter "celular" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "celular", r.URL.Query(), &params.Celular, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "celular"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "celular", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConsultarDestinatario(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2491,6 +2572,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/depositos/{id}", wrapper.Deposito)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/destinatarios", wrapper.ConsultarDestinatario)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/transferencias", wrapper.Transferir)

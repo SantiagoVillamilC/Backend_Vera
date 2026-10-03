@@ -728,6 +728,66 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/destinatarios:
+    get:
+      operationId: consultarDestinatario
+      summary: Consulta el nombre visible de un destinatario interno por celular.
+      description: HU-NF-06 C15.1 a C15.4. Usa el celular verificado y respeta el enfriamiento tras cambio de numero. Limite por usuario configurable con DESTINATARIOS_LIMITE y DESTINATARIOS_VENTANA.
+      tags: [nucleo]
+      parameters:
+        - name: celular
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Nombre visible del destinatario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinatarioResponse"
+              example: {success: true, data: {nombre: "Laura R."}, error: null, meta: null}
+        "400":
+          description: Falta el celular.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: BadRequest, message: "A required parameter is missing.", details: [{field: celular, rule: required}]}, meta: null}
+        "401":
+          description: Sesion ausente o invalida.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: Unauthorized, message: "Missing or invalid token."}, meta: null}
+        "404":
+          description: Celular no resuelto, incluso durante el enfriamiento.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: RecipientNotFound, message: "The destination does not exist."}, meta: null}
+        "422":
+          description: El celular pertenece al usuario autenticado.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: SelfTransferNotAllowed, message: "You cannot send money to yourself."}, meta: null}
+        "429":
+          description: Limite de consultas por usuario excedido.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: TooManyRequests, message: "Too many recipient lookups."}, meta: null}
+        "503":
+          description: No se pudo verificar la sesion o contar la consulta.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: AuthUnavailable, message: "Recipient lookup is temporarily unavailable."}, meta: null}
+        "504":
+          $ref: "#/components/responses/Error"
+
   /v1/transferencias:
     post:
       operationId: transferir
@@ -874,6 +934,8 @@ components:
             ContextInvalid, ResetInvalid, SecondFactorRequired, KycRequired, ConsentRequired,
             DuplicateIdentifier, PhoneUnverified, OtpTooManyResends, PhoneChangeCooldown,
             TooManyRequests, NotImplemented, PayloadTooLarge (cuerpo mayor a 1 MiB),
+            RecipientNotFound (404, destino interno inexistente),
+            SelfTransferNotAllowed (422, destino interno propio),
             MethodNotAllowed (metodo no permitido), NotFound (recurso inexistente),
             AuthUnavailable (fail closed de Redis o del canal),
             OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
@@ -1692,6 +1754,30 @@ components:
           nullable: true
         meta:
           $ref: "#/components/schemas/Meta"
+
+    Destinatario:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          description: Persona, primer nombre e inicial del apellido; empresa, razon social completa.
+
+    DestinatarioResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Destinatario"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
 
     MontoCalculado:
       type: object
