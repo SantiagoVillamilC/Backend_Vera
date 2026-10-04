@@ -44,7 +44,7 @@ func (*contadorDestinoFalso) Bloqueada(context.Context, string) (bool, error)   
 
 func pedirDestino(t *testing.T, h http.Handler, celular, usuario string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/v1/destinatarios?celular="+celular, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/destinatarios?celular="+celular, nil)
 	if usuario != "" {
 		req = req.WithContext(identidad.ConUsuarioID(req.Context(), usuario))
 	}
@@ -116,7 +116,7 @@ func TestHU_NF_06_C15_1_RutaDeConsulta(t *testing.T) {
 		{"/v1/destinatarios", true, 400, "BadRequest"},
 		{"/v1/destinatarios?celular=3001234567", true, 200, "Laura R."},
 	} {
-		req := httptest.NewRequest(http.MethodGet, caso.ruta, nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, caso.ruta, nil)
 		if caso.token {
 			req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 		}
