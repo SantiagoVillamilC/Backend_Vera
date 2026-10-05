@@ -1028,6 +1028,15 @@ type APIError struct {
 	// AuthUnavailable (fail closed de Redis o del canal),
 	// OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
 	// WhatsappUnicoCanal (409, revocar el opt-in de WhatsApp mientras sea el unico canal del OTP),
+	// TargetNotAllowed (400, el saldo y el maximo solo responden por el usuario autenticado),
+	// InsufficientFunds (422, saldo insuficiente), OperationLimitExceeded (422, el monto
+	// supera el tope por operacion de un saldo bajo), MonthlyQuotaExceeded (422, cupo
+	// mensual agotado), IdempotencyConflict (409, la clave de idempotencia se reuso con
+	// otra peticion), DirectoryUnavailable (503, el directorio de llaves no responde),
+	// DepositNotFound (404, la confirmacion del custodio apunta a un deposito inexistente),
+	// ConfirmationConflict (409, la confirmacion no coincide con el deposito),
+	// LateConfirmation (409, el deposito ya no esta pendiente),
+	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
 	// InternalError (siempre generico). Los identificadores InvalidEmail, InvalidPhone,
 	// InvalidName, WeakPassword e InvalidNit ya no existen: los reemplaza
 	// ValidationError con details[{field, rule, param}].
@@ -1087,14 +1096,18 @@ type ConsentRequestAccion string
 // ConsentRequestTipo defines model for ConsentRequest.Tipo.
 type ConsentRequestTipo string
 
-// Consentimiento defines model for Consentimiento.
+// Consentimiento Consentimiento que acompana al registro. En el alta de persona y de empresa son obligatorios y deben venir aceptados (aceptado en true) tratamiento_datos y whatsapp_optin, con la version de texto v1. Si falta alguno, viene sin aceptar o trae una version inexistente, el registro responde 403 ConsentRequired. biometricos es opcional.
 type Consentimiento struct {
-	Aceptado     *bool              `json:"aceptado" validate:"required"`
-	Tipo         ConsentimientoTipo `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos"`
-	VersionTexto string             `json:"version_texto" validate:"required,max=64"`
+	Aceptado *bool `json:"aceptado" validate:"required"`
+
+	// Tipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos es opcional.
+	Tipo ConsentimientoTipo `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos"`
+
+	// VersionTexto Version del texto legal que la persona acepto. La version valida hoy es v1 para los tres tipos.
+	VersionTexto string `json:"version_texto" validate:"required,max=64"`
 }
 
-// ConsentimientoTipo defines model for Consentimiento.Tipo.
+// ConsentimientoTipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos es opcional.
 type ConsentimientoTipo string
 
 // ConsentsResponse defines model for ConsentsResponse.
@@ -1122,6 +1135,7 @@ type ContextoTipo string
 
 // ContextoActivo defines model for ContextoActivo.
 type ContextoActivo struct {
+	// AccessToken JWT de acceso con el contexto elegido. Vive 5 minutos, como cualquier access.
 	AccessToken string   `json:"access_token"`
 	Contexto    Contexto `json:"contexto"`
 }
@@ -1167,18 +1181,22 @@ type CrearDepositoRequestMoneda string
 
 // CrearEmpresaRequest defines model for CrearEmpresaRequest.
 type CrearEmpresaRequest struct {
+	// Nit NIT colombiano. Se valida el digito de verificacion DIAN (modulo 11). Un NIT con digito incorrecto responde 422 con la regla nit.
 	Nit         string `json:"nit" validate:"required,nit"`
 	RazonSocial string `json:"razon_social" validate:"required,max=200"`
 }
 
 // CrearTransferenciaInterbancariaRequest defines model for CrearTransferenciaInterbancariaRequest.
 type CrearTransferenciaInterbancariaRequest struct {
+	// IdempotencyKey Clave de idempotencia del envio. La misma clave con el mismo cuerpo devuelve el envio ya guardado con 200. La misma clave con otro cuerpo responde 409 IdempotencyConflict.
 	IdempotencyKey string                                        `json:"idempotency_key" validate:"required,max=128"`
 	Llave          string                                        `json:"llave" validate:"required,max=320"`
 	Moneda         *CrearTransferenciaInterbancariaRequestMoneda `json:"moneda,omitempty"`
 
 	// Monto Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
-	Monto     string `json:"monto" validate:"required,gt=0"`
+	Monto string `json:"monto" validate:"required,gt=0"`
+
+	// TipoLlave Uno de cinco tipos de llave Bre-B, cada uno con la forma que debe cumplir llave. documento, 6 a 10 digitos (^[0-9]{6,10}$). celular, celular colombiano de 10 digitos que empieza en 3 (^3[0-9]{9}$). correo, correo electronico (^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$). alfanumerico, arroba y de 1 a 64 letras o digitos (^@[A-Za-z0-9]{1,64}$). comercio, de 6 a 20 letras o digitos (^[A-Za-z0-9]{6,20}$). Un tipo desconocido o una llave que no cumple la forma de su tipo responde 422.
 	TipoLlave string `json:"tipo_llave" validate:"required"`
 }
 
@@ -1187,7 +1205,10 @@ type CrearTransferenciaInterbancariaRequestMoneda string
 
 // CrearTransferenciaRequest defines model for CrearTransferenciaRequest.
 type CrearTransferenciaRequest struct {
-	Destino        string                           `json:"destino" validate:"required,max=320"`
+	// Destino Solo resuelve como UUID de una parte no cerrada o como celular E.164 exacto de una persona activa y verificada. Cualquier otro valor responde 404 RecipientNotFound.
+	Destino string `json:"destino" validate:"required,max=320"`
+
+	// IdempotencyKey Clave de idempotencia del envio. La misma clave con el mismo cuerpo devuelve el envio ya guardado con 200. La misma clave con otro cuerpo responde 409 IdempotencyConflict.
 	IdempotencyKey string                           `json:"idempotency_key" validate:"required,max=128"`
 	Moneda         *CrearTransferenciaRequestMoneda `json:"moneda,omitempty"`
 
@@ -1280,7 +1301,7 @@ type DesafioResponseSuccess bool
 
 // Destinatario defines model for Destinatario.
 type Destinatario struct {
-	// Nombre Persona, primer nombre e inicial del apellido; empresa, razon social completa.
+	// Nombre Nombre enmascarado. Persona, el primer nombre y la inicial del apellido con punto (por ejemplo Laura R.). Para elegir el apellido, con 2 componentes en el nombre completo se toma el ultimo y con 3 o mas se toma el penultimo. Empresa, la razon social completa. Solo se resuelve un destino que cumpla la misma regla de la transferencia: celular E.164 exacto de una persona activa y verificada.
 	Nombre string `json:"nombre"`
 }
 
@@ -1494,7 +1515,9 @@ type OkResponseSuccess bool
 type PhoneChangeRequest struct {
 	CodigoRespaldo   *string `json:"codigo_respaldo,omitempty" validate:"omitempty"`
 	ContrasenaActual string  `json:"contrasena_actual" validate:"required"`
-	NuevoCelular     string  `json:"nuevo_celular" validate:"required,e164"`
+
+	// NuevoCelular Celular nuevo en formato E.164, validado con libphonenumber. Un numero con forma E.164 pero inexistente, por ejemplo +573061234567 (prefijos 306 a 308), responde 422 con la regla e164.
+	NuevoCelular string `json:"nuevo_celular" validate:"required,e164"`
 }
 
 // RecoveryRequest defines model for RecoveryRequest.
@@ -1533,11 +1556,15 @@ type RefreshResponseSuccess bool
 
 // RegisterEmpresaRequest defines model for RegisterEmpresaRequest.
 type RegisterEmpresaRequest struct {
-	// Celular Celular del representante legal, ancla del OTP.
-	Celular            string                           `json:"celular" validate:"required,e164"`
-	Consentimientos    []Consentimiento                 `json:"consentimientos" validate:"required,min=1,dive"`
-	Contrasena         string                           `json:"contrasena" validate:"required,min=8,max=64"`
-	Correo             string                           `json:"correo" validate:"required,email"`
+	// Celular Celular del representante legal, ancla del OTP. Formato E.164 validado con libphonenumber. Un numero con forma E.164 pero inexistente, por ejemplo +573061234567 (prefijos 306 a 308), responde 422 con la regla e164.
+	Celular string `json:"celular" validate:"required,e164"`
+
+	// Consentimientos Obligatorios tratamiento_datos y whatsapp_optin, ambos aceptados y con version_texto v1. Sin ellos el registro responde 403 ConsentRequired.
+	Consentimientos []Consentimiento `json:"consentimientos" validate:"required,min=1,dive"`
+	Contrasena      string           `json:"contrasena" validate:"required,min=8,max=64"`
+	Correo          string           `json:"correo" validate:"required,email"`
+
+	// Nit NIT colombiano. Se valida el digito de verificacion DIAN (modulo 11). Acepta puntos, guion y espacios, que se ignoran, y un NIT con digito incorrecto responde 422 con la regla nit.
 	Nit                string                           `json:"nit" validate:"required,nit"`
 	RazonSocial        string                           `json:"razon_social" validate:"required,max=200"`
 	RepresentanteLegal RepresentanteLegal               `json:"representante_legal"`
@@ -1549,7 +1576,10 @@ type RegisterEmpresaRequestTipoCuenta string
 
 // RegisterPersonaRequest defines model for RegisterPersonaRequest.
 type RegisterPersonaRequest struct {
-	Celular         string                              `json:"celular" validate:"required,e164"`
+	// Celular Celular en formato E.164, validado con libphonenumber. Un numero con forma E.164 pero inexistente, por ejemplo +573061234567 (prefijos 306 a 308), responde 422 con la regla e164.
+	Celular string `json:"celular" validate:"required,e164"`
+
+	// Consentimientos Obligatorios tratamiento_datos y whatsapp_optin, ambos aceptados y con version_texto v1. Sin ellos el registro responde 403 ConsentRequired.
 	Consentimientos []Consentimiento                    `json:"consentimientos" validate:"required,min=1,dive"`
 	Contrasena      string                              `json:"contrasena" validate:"required,min=8,max=64"`
 	Correo          string                              `json:"correo" validate:"required,email"`
@@ -1656,7 +1686,10 @@ type SegundoMetodoTipo string
 
 // Sesion defines model for Sesion.
 type Sesion struct {
-	AccessToken  string  `json:"access_token"`
+	// AccessToken JWT de acceso. Vive 5 minutos. Al vencer se renueva con el refresh en POST /v1/auth/refresh.
+	AccessToken string `json:"access_token"`
+
+	// RefreshToken Token de renovacion. Cada uso en POST /v1/auth/refresh lo rota por uno nuevo.
 	RefreshToken string  `json:"refresh_token"`
 	Usuario      Usuario `json:"usuario"`
 }
@@ -1685,7 +1718,10 @@ type SesionesResponseSuccess bool
 
 // Tokens defines model for Tokens.
 type Tokens struct {
-	AccessToken  string `json:"access_token"`
+	// AccessToken JWT de acceso. Vive 5 minutos. Al vencer se renueva con el refresh en POST /v1/auth/refresh.
+	AccessToken string `json:"access_token"`
+
+	// RefreshToken Refresh nuevo. El anterior queda invalido tras la rotacion.
 	RefreshToken string `json:"refresh_token"`
 }
 

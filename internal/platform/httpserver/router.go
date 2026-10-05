@@ -10,7 +10,6 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -38,7 +37,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	r := chi.NewRouter()
 
 	r.Use(RequestID())
-	r.Use(middleware.ClientIPFromHeader("X-Real-IP"))
+	r.Use(ClientIPConfianzaLocal("X-Real-IP"))
 	r.Use(logging.AccessLogger())
 	r.Use(Recoverer)
 	r.Use(cors.Handler(cors.Options{
@@ -50,6 +49,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))
 	r.Use(MethodNotAllowedEnvelope)
 
+	// /copilot sigue con NewService(nil): decisión S7 pendiente, no se toca en esta unidad.
 	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
