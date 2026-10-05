@@ -101,7 +101,11 @@ func (r *ResolutorDestino) NombreDeDestinoPorCelular(ctx context.Context, celula
 	return res.nombre, res.existe, res.propio, err
 }
 
-// nombreEnmascarado muestra el primer nombre y la inicial del primer apellido en nombres de dos a cuatro componentes.
+// nombreEnmascarado muestra el primer nombre y la inicial de un apellido, por runa.
+//
+// Supuesto pendiente de la respuesta S5 de Santiago: con 2 componentes toma el último, con 3 o más
+// toma el penúltimo (el primer apellido en nombres como "Juan Carlos Rodríguez Pérez"). Con 1
+// componente devuelve el nombre solo y con la entrada vacía devuelve cadena vacía.
 func nombreEnmascarado(nombre string) string {
 	partes := strings.Fields(nombre)
 	if len(partes) == 0 {
@@ -111,7 +115,7 @@ func nombreEnmascarado(nombre string) string {
 		return partes[0]
 	}
 	indiceApellido := len(partes) - 1
-	if len(partes) >= 4 {
+	if len(partes) >= 3 {
 		indiceApellido--
 	}
 	return partes[0] + " " + string([]rune(partes[indiceApellido])[0]) + "."
