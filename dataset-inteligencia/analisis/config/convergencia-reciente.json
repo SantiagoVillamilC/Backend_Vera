@@ -1,0 +1,11 @@
+{
+  "ks": [1, 2, 3],
+  "politicas": {
+    "sin_filtro": null,
+    "solo_comercio": ["comercio"]
+  },
+  "politica_principal": "solo_comercio",
+  "k_referencia": 2,
+  "umbral_similitud": null,
+  "regla_deriva": "reciente"
+}

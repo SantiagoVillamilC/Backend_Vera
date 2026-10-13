@@ -1,0 +1,30 @@
+{
+  "meses_minimos": 3,
+  "ventana_pago_dias": 7,
+  "ventana_cobro_dias": 35,
+  "pagos_minimos_cobro": 2,
+  "k_categoria_inferida": 2,
+  "multiplicador_gasto": 1.0,
+  "caida_d": 0.3,
+  "cv_robusto_max": 0.25,
+  "z_factor": 0.6745,
+  "z_umbral": 3.5,
+  "tol_monto_cobro": 0.15,
+  "prorrateo_acumulado": true,
+  "tope_avisos_mes": 3,
+  "tipos_asiento_gasto": ["liquidacion_confirmada"],
+  "tipos_asiento_ingreso": ["deposito"],
+  "descripciones_no_ingreso": ["Saldo inicial"],
+  "reglas": ["R1", "R2"],
+  "lineas_base": ["mediana", "media"],
+  "fuentes_series": ["oraculo", "detectadas"],
+  "recurrencia": {
+    "w_monto": 0.6,
+    "w_fecha": 0.4,
+    "tol_monto": 0.15,
+    "cadencias_dias": [7, 14, 30],
+    "tolerancias_dias": [2, 3, 4],
+    "n_min": 3,
+    "umbral": 0.7
+  }
+}

@@ -1,0 +1,21 @@
+iteracion,clasificador,variante,exactitud,cobertura,exactitud_revela,exactitud_ficticia,exactitud_real,disco_modelo_mb,rss_mb,latencia_ms,entrenamiento_s,nota
+1,TF-IDF,produccion con MCC,0.9487,1.0,1.0,0.9412,1.0,0.02,18.5,0.85,,holdout 39. linea base de produccion. RSS y latencia medidos aparte
+1,TF-IDF,produccion con MCC (CV5),0.9458,,,,,0.02,18.5,0.85,,"CV5 estratificada sobre 130, desviacion 0.018"
+1,TF-IDF,nombre solo,0.7632,0.9744,1.0,0.7879,0.6,0.02,18.5,0.85,,holdout 39. comparacion justa sin el token MCC
+1,TF-IDF,nombre solo (CV5),0.6862,,,,,0.02,18.5,0.85,,"CV5 estratificada sobre 130, desviacion 0.039"
+1,MiniLM congelado,int8 raw/centroide,0.4359,1.0,0.55,0.4706,0.2,118.5,1628,13.94,,holdout 39. RSS con AutoTokenizer; el tokenizador Rust directo baja a ~500 MB
+1,MiniLM congelado,int8 raw/logreg,0.641,1.0,0.8,0.6176,0.8,118.5,1628,13.94,,holdout 39. cabeza de regresion logistica sobre embeddings congelados
+1,MiniLM congelado,fp32 raw/centroide,0.5385,1.0,0.65,0.5588,0.4,470.3,1961,17.65,,holdout 39
+1,MiniLM congelado,fp32 raw/logreg,0.6923,1.0,0.8,0.6765,0.8,470.3,1961,17.65,,holdout 39. mejor metodo congelado
+1,MiniLM congelado,fp32 raw/centroide (CV5),0.5074,,,,,470.3,,,,"CV5 estratificada sobre 130, desviacion 0.060"
+1,MiniLM congelado,fp32 raw/logreg (CV5),0.675,,,,,470.3,,,,"CV5 estratificada sobre 130, desviacion 0.064"
+1,MiniLM SetFit,fine-tune GPU,0.8205,1.0,0.95,0.8529,0.6,487.7,2006,11.11,222.5,"holdout 39. GPU GTX 1650, VRAM pico 2176 MB"
+1,MiniLM SetFit,fine-tune GPU (CV5),0.7962,,,,,487.7,,,,"CV5 estratificada sobre 130, desviacion 0.064"
+2,MiniLM SetFit+LoRA,fine-tune GPU,0.7692,1.0,0.85,0.8235,0.4,,,,99.1,"entrenables 294912/117948672 (0.25%), adaptador 1.18 MB, VRAM pico 541.4 MB"
+2,MiniLM SetFit+LoRA,fine-tune LoRA (CV5),0.7232,,,,,,,,,"CV5 estratificada, desviacion 0.0908, VRAM pico 918.4 MB"
+2,MiniLM congelado,int8 raw/logreg (Rust tok),0.641,1.0,0.8,0.6176,0.8,118.5,504.1,14.9,,"iteracion 2. tokenizador Rust + transformers perezoso. misma exactitud, RSS 1628 a 504"
+2,MiniLM congelado,fp32 raw/logreg (Rust tok),0.6923,1.0,0.8,0.6765,0.8,470.3,905.5,8.01,,"iteracion 2. misma exactitud, RSS 1961 a 905"
+3,MiniLM SetFit ONNX,SetFit exportado ONNX int8,0.8205,1.0,0.95,0.8529,0.6,118.1,500.5,12.01,,sin torch. tokenizador Rust. head.npz int8
+3,MiniLM SetFit ONNX,SetFit exportado ONNX fp32,0.8205,1.0,0.95,0.8529,0.6,470.2,896.8,13.37,,sin torch. tokenizador Rust. head.npz fp32
+4,LLM API,deepseek-v4.1-flash,0.5923,1.0,0.8939,0.531,1.0,,,7868.4,,zero-shot sobre 130; 39 de prueba 0.5128; 1199.2 tokens/llamada
+4,LLM API,gpt-6-luna,0.6,1.0,0.9091,0.5398,1.0,,,2682.2,,zero-shot sobre 130; 39 de prueba 0.5128; 217.0 tokens/llamada

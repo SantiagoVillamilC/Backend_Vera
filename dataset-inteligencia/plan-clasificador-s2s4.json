@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "operation_id": "clasificador-mcc-abstencion-s2s4",
+  "objective": "Continuar la mejora del clasificador TF-IDF (S1 MCC ya aplicado en la operacion clasificador-mcc-abstencion) con los pasos S2 abstencion por umbral, S3 vectorizador ampliado y S4 lexico semilla, sin bajar la exactitud de linea base 0,718 sobre salida/2026-3000-A y sin romper la suite.",
+  "project_root": "/home/chris/Documents/universidad-2026B/proyecto-fin-de-grado/dataset-inteligencia",
+  "base_branch": "docs/practica-empresarial-2026-ii",
+  "acceptance_criteria": [
+    "Las cuatro capacidades (MCC de S1, abstencion por umbral, vectorizador ampliado, lexico semilla) quedan implementadas en analisis/clasificador_tfidf.py y cubiertas por pruebas.",
+    "La exactitud sobre salida/2026-3000-A no baja de 0,718, y medir reporta la cobertura y las abstenciones.",
+    "La suite completa (python3 -m unittest) pasa."
+  ],
+  "acceptance_commands": [
+    { "command": "python3 -m unittest", "expect_exit": 0 },
+    {
+      "command": "python3 -c \"from analisis.clasificador_tfidf import medir; r = medir('salida/2026-3000-A'); assert r['exactitud'] >= 0.718, r; print(r)\"",
+      "expect_exit": 0
+    }
+  ],
+  "budget_total": { "max_turns": 120, "max_tokens": 24000000, "timeout_ms": 4000000 },
+  "steps": [
+    {
+      "id": "S2",
+      "title": "Abstencion por umbral de coseno",
+      "task": "Amplia predecir en analisis/clasificador_tfidf.py con un umbral minimo de coseno. Si el mejor coseno queda por debajo del umbral, devuelve None (abstencion) en lugar de forzar una categoria. El umbral vive en la configuracion del modulo o como parametro con valor por defecto. Ajusta medir para que siga reportando la clave exactitud, y agrega las claves cobertura y abstenciones. exactitud se calcula sobre las predicciones no abstenidas y cobertura sobre el total de la prueba.",
+      "outcome": "predecir puede abstenerse, medir reporta exactitud, cobertura y abstenciones, y las pruebas cubren un nombre por debajo del umbral.",
+      "tools": ["read", "edit", "write", "bash", "grep", "glob"],
+      "must_do": [
+        "Conservar la clave exactitud en el diccionario que devuelve medir.",
+        "Agregar las claves cobertura y abstenciones al resultado de medir.",
+        "Cubrir en las pruebas el caso de abstencion y el caso de prediccion por encima del umbral.",
+        "Ejecutar python3 -m unittest tests.test_analisis_clasificador_tfidf antes de reportar."
+      ],
+      "must_not_do": [
+        "No romper las pruebas de S1 ni el uso del MCC.",
+        "No tocar modulos de analisis fuera de clasificador_tfidf.py.",
+        "No hacer commit ni push."
+      ],
+      "context": [
+        "analisis/clasificador_tfidf.py",
+        "analisis/similitud.py (coseno_vectores)",
+        "Corpus de medida: salida/2026-3000-A"
+      ],
+      "inputs": [],
+      "outputs": ["analisis/clasificador_tfidf.py", "tests/test_analisis_clasificador_tfidf.py"],
+      "verify": [
+        { "command": "python3 -m unittest tests.test_analisis_clasificador_tfidf", "expect_exit": 0 }
+      ],
+      "budget": { "max_turns": 30, "max_tokens": 6000000, "timeout_ms": 1200000 },
+      "tag": "clasificador"
+    },
+    {
+      "id": "S3",
+      "title": "Vectorizador ampliado con palabras, tf sublineal y sufijos legales",
+      "task": "Amplia el vectorizador del clasificador para combinar tokens de palabra con los trigramas de caracter, aplicar tf sublineal (1 + log(tf)) y descartar sufijos y genericos legales (SAS, LTDA, SA, SUCURSAL, TIENDA, ALMACEN). Reutiliza o extiende analisis/similitud.py sin cambiar el comportamiento de vector_tfidf que ya usan las pruebas de similitud.",
+      "outcome": "El clasificador vectoriza con palabras y trigramas, con tf sublineal y limpieza de sufijos, y las pruebas de similitud siguen verdes.",
+      "tools": ["read", "edit", "write", "bash", "grep", "glob"],
+      "must_do": [
+        "Mantener intactas las pruebas de analisis/similitud.py.",
+        "Anadir casos a mano para el tf sublineal y para el descarte de sufijos.",
+        "Ejecutar python3 -m unittest tests.test_analisis_clasificador_tfidf tests.test_analisis_similitud antes de reportar."
+      ],
+      "must_not_do": [
+        "No romper vector_tfidf ni coseno_vectores.",
+        "No romper las capacidades de S1 y S2.",
+        "No hacer commit ni push."
+      ],
+      "context": [
+        "analisis/clasificador_tfidf.py",
+        "analisis/similitud.py (trigramas, ajustar_idf, vector_tfidf)",
+        "tests/test_analisis_similitud.py"
+      ],
+      "inputs": [],
+      "outputs": ["analisis/clasificador_tfidf.py", "analisis/similitud.py", "tests/test_analisis_clasificador_tfidf.py"],
+      "verify": [
+        { "command": "python3 -m unittest tests.test_analisis_clasificador_tfidf tests.test_analisis_similitud", "expect_exit": 0 }
+      ],
+      "budget": { "max_turns": 40, "max_tokens": 8000000, "timeout_ms": 1500000 },
+      "tag": "clasificador"
+    },
+    {
+      "id": "S4",
+      "title": "Lexico semilla palabra a categoria",
+      "task": "Anade a analisis/clasificador_tfidf.py un lexico semilla de palabras a categoria (por ejemplo farmacia a salud, mercado a alimentos_mercado, restaurante a restaurantes_domicilios, universidad a educacion) y combinalo con el Jaro-Winkler de analisis/similitud.py para reforzar la prediccion cuando el coseno no es concluyente. El lexico no debe sobreescribir una prediccion de coseno alta.",
+      "outcome": "El clasificador usa el lexico semilla cuando el coseno es debil, y las pruebas cubren al menos una palabra del lexico y un caso de no sobreescritura.",
+      "tools": ["read", "edit", "write", "bash", "grep", "glob"],
+      "must_do": [
+        "Dejar el lexico como dato editable en el modulo o en un archivo de configuracion.",
+        "Cubrir con pruebas una palabra del lexico y un caso en que el coseno alto manda.",
+        "Ejecutar python3 -m unittest tests.test_analisis_clasificador_tfidf antes de reportar."
+      ],
+      "must_not_do": [
+        "No romper las pruebas de S1 a S3.",
+        "No tocar modulos de analisis fuera de clasificador_tfidf.py y similitud.py.",
+        "No hacer commit ni push."
+      ],
+      "context": [
+        "analisis/clasificador_tfidf.py",
+        "analisis/similitud.py (jaro_winkler)",
+        "Corpus de medida: salida/2026-3000-A"
+      ],
+      "inputs": [],
+      "outputs": ["analisis/clasificador_tfidf.py", "tests/test_analisis_clasificador_tfidf.py"],
+      "verify": [
+        { "command": "python3 -m unittest tests.test_analisis_clasificador_tfidf", "expect_exit": 0 }
+      ],
+      "budget": { "max_turns": 30, "max_tokens": 6000000, "timeout_ms": 1200000 },
+      "tag": "clasificador"
+    }
+  ]
+}

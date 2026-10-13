@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "operation_id": "clasificador-mcc-abstencion",
+  "objective": "Mejorar el clasificador TF-IDF de categoria por nombre de comercio de analisis/clasificador_tfidf.py con cuatro capacidades (usar el MCC, abstenerse por umbral, ampliar el vectorizador y sumar un lexico semilla), sin bajar la exactitud de linea base 0,718 sobre salida/2026-3000-A y sin romper la suite en 629 pruebas.",
+  "project_root": "/home/chris/Documents/universidad-2026B/proyecto-fin-de-grado/dataset-inteligencia",
+  "base_commit": "be7e0a85290ef0cd15b8b15c5bd68177f1581436",
+  "plan_sha256": "d8268717ba8c1f59424b7a9106f0ddd1c4c2f1dbc7af193a15ed0916e8bc142d",
+  "created_at": "2026-10-12T17:24:15.104Z",
+  "updated_at": "2026-10-12T17:26:38.424Z",
+  "status": "blocked",
+  "current_step": "S1",
+  "last_successful_step": "S1",
+  "budget": {
+    "tokens_limit": 1200000,
+    "tokens_used": 2585147,
+    "cost_usd": 0,
+    "cost_usd_by_model": {
+      "opendesign/deepseek-v4.1-flash": 0
+    }
+  },
+  "steps": {
+    "S1": {
+      "status": "done",
+      "step_hash": "6ffe44902f22ea3548713e635c50dba4de2cb69e1de4eb8920e7650bb457e429",
+      "session_id": "ses_ecedb37fdffeBORjQ3zHaBcKyR",
+      "started_at": "2026-10-12T17:24:16.465Z",
+      "finished_at": "2026-10-12T17:26:38.368Z",
+      "attempts": 1,
+      "tokens": {
+        "input": 150215,
+        "output": 5513,
+        "total": 2585147,
+        "reasoning": 6507,
+        "cache_read": 2422912,
+        "cache_write": 0
+      },
+      "cost_usd": 0,
+      "evidence": {
+        "verify": [
+          {
+            "command": "python3 -m unittest tests.test_analisis_clasificador_tfidf",
+            "exit": 0,
+            "expect_exit": 0,
+            "output": "................\n----------------------------------------------------------------------\nRan 16 tests in 0.004s\n\nOK\n"
+          }
+        ],
+        "artifacts": [
+          {
+            "path": "analisis/clasificador_tfidf.py",
+            "sha256": "1b6dca58be0ca71bec3a27fdfe13e7749a9124bb5454d2509a0116d163af19cd"
+          },
+          {
+            "path": "tests/test_analisis_clasificador_tfidf.py",
+            "sha256": "9bcc36d0b4d5c74a9ace0e8071dd42c9f90d7d37cddccd8796cf6683de9db896"
+          }
+        ]
+      },
+      "tokens_by_model": {
+        "opendesign/deepseek-v4.1-flash": {
+          "input": 150215,
+          "output": 5513,
+          "total": 2585147,
+          "reasoning": 6507,
+          "cache_read": 2422912,
+          "cache_write": 0,
+          "cost_usd": 0
+        }
+      },
+      "live": {
+        "tokens": {
+          "input": 150215,
+          "output": 5513,
+          "total": 2585147,
+          "reasoning": 6507,
+          "cache_read": 2422912,
+          "cache_write": 0
+        },
+        "cost_usd": 0,
+        "messages": 17,
+        "updated_at": "2026-10-12T17:26:38.368Z"
+      },
+      "accounting": {
+        "source": "session.messages"
+      }
+    }
+  },
+  "blockers": [
+    {
+      "step": "S1",
+      "reason": "paso consumio 2585147 tokens, supera su max_tokens (300000); corrida consumio 2585147 tokens, supera budget_total (1200000)",
+      "at": "2026-10-12T17:26:38.368Z"
+    }
+  ]
+}

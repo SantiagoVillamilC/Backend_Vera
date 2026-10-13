@@ -1,0 +1,9 @@
+{
+  "w_monto": 0.6,
+  "w_fecha": 0.4,
+  "tol_monto": 0.1,
+  "cadencias_dias": [7, 14, 30],
+  "tolerancias_dias": [2, 3, 4],
+  "n_min": 3,
+  "umbral": 0.5
+}

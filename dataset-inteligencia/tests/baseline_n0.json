@@ -1,0 +1,13 @@
+{
+  "entrada/correcciones.csv": "5ffa5ec895bc1578c44c88a1b1a9f5b42ae40e8caa14da5262dd333905244957",
+  "entrada/movimientos.csv": "9979413caa139a06c1cf279b7aabb0b1c1532f6230fc8a38ce24a7e0d8c1399d",
+  "manifiesto.json": "db15ea8cf2114839ad6ed8157429b87dfc5813adbcc36eeca848881152cecce8",
+  "verdad/avisos_esperados.csv": "13716f585fa47c90ccd836fba20655d7f71a87e493cfac8da9d3eca65de1db23",
+  "verdad/casos_vista.csv": "8babe3849869d4c7a39e5a8f1ddf1563f7096bee5e2771c52ec065a911231988",
+  "verdad/comercios.csv": "59d5a7b361caff32d109f09bcac6c6b4bca3a3d58b4c61c1881ce26bed510430",
+  "verdad/correcciones_verdad.csv": "314752451927ae6eaf397303d557e8272ab3fc750a8a90b7f73c0fe2d11423f1",
+  "verdad/empresas.csv": "b92aa531ae97ae7632e980722c81662ddf5b968f8b0d9b10e9b3e1ee6fc67166",
+  "verdad/etiquetas.csv": "1d4b62f882cd3cecfac46288f4d8b8888edb2aa68bd8bfba41b4a97148d719c7",
+  "verdad/nombres_historial.csv": "c9921ff82deac4bb218db2e7877204807856018e66e93f75fad84703d3bd6251",
+  "verdad/series.csv": "2e725ebcd9cf005ad3233021f990a5ca5b1049d2af99c5a9bc83d622697bfb0e"
+}

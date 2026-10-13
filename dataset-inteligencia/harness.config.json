@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "routing": {
+    "planner": { "model": "opendesign/deepseek-v4.1-flash", "variant": "max" },
+    "executor": { "default": "opendesign/deepseek-v4.1-flash", "variant": "high", "rules": [] },
+    "reviewer": { "model": "opendesign/deepseek-v4.1-flash", "variant": "max" }
+  }
+}

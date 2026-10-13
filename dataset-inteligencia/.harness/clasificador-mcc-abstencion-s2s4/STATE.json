@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "operation_id": "clasificador-mcc-abstencion-s2s4",
+  "objective": "Continuar la mejora del clasificador TF-IDF (S1 MCC ya aplicado en la operacion clasificador-mcc-abstencion) con los pasos S2 abstencion por umbral, S3 vectorizador ampliado y S4 lexico semilla, sin bajar la exactitud de linea base 0,718 sobre salida/2026-3000-A y sin romper la suite.",
+  "project_root": "/home/chris/Documents/universidad-2026B/proyecto-fin-de-grado/dataset-inteligencia",
+  "base_commit": "be7e0a85290ef0cd15b8b15c5bd68177f1581436",
+  "plan_sha256": "e2df3ba5b05a4c07b5126aa23f0583f80a0c710bb5d82b9639ec7e8ca4c4e8bd",
+  "created_at": "2026-10-12T17:31:29.388Z",
+  "updated_at": "2026-10-12T22:57:55.600Z",
+  "status": "done",
+  "current_step": null,
+  "last_successful_step": "S4",
+  "budget": {
+    "tokens_limit": 24000000,
+    "tokens_used": 18956062,
+    "cost_usd": 0,
+    "cost_usd_by_model": {
+      "opendesign/deepseek-v4.1-flash": 0
+    }
+  },
+  "steps": {
+    "S2": {
+      "status": "done",
+      "step_hash": "baaa2a9ea6147296f9aabab7ed326d972ec7cd77332a11f7e604430820c8c166",
+      "session_id": "ses_eced49932ffedNdKRNXPylCFMg",
+      "started_at": "2026-10-12T17:31:30.341Z",
+      "finished_at": "2026-10-12T17:34:47.865Z",
+      "attempts": 1,
+      "tokens": {
+        "input": 29418,
+        "output": 7311,
+        "total": 3781789,
+        "reasoning": 10148,
+        "cache_read": 3734912,
+        "cache_write": 0
+      },
+      "cost_usd": 0,
+      "evidence": {
+        "verify": [
+          {
+            "command": "python3 -m unittest tests.test_analisis_clasificador_tfidf",
+            "exit": 0,
+            "expect_exit": 0,
+            "output": "....................\n----------------------------------------------------------------------\nRan 20 tests in 0.006s\n\nOK\n"
+          }
+        ],
+        "artifacts": [
+          {
+            "path": "analisis/clasificador_tfidf.py",
+            "sha256": "16785db9e7483de746593520b2c57f855e1afe2e20a6f31375bdf866e29312c7"
+          },
+          {
+            "path": "tests/test_analisis_clasificador_tfidf.py",
+            "sha256": "c0c8f8b5acc35ddee007fb73dc37e821d9bbc1085f6d93a6ebd2c835166ac7bb"
+          }
+        ]
+      },
+      "tokens_by_model": {
+        "opendesign/deepseek-v4.1-flash": {
+          "input": 29418,
+          "output": 7311,
+          "total": 3781789,
+          "reasoning": 10148,
+          "cache_read": 3734912,
+          "cache_write": 0,
+          "cost_usd": 0
+        }
+      },
+      "live": {
+        "tokens": {
+          "input": 29418,
+          "output": 7311,
+          "total": 3781789,
+          "reasoning": 10148,
+          "cache_read": 3734912,
+          "cache_write": 0
+        },
+        "cost_usd": 0,
+        "messages": 23,
+        "updated_at": "2026-10-12T17:34:47.865Z"
+      },
+      "accounting": {
+        "source": "session.messages"
+      }
+    },
+    "S3": {
+      "status": "done",
+      "step_hash": "12da1ef9d2b1afdb3bd637772ce7a2a7cf87296f8b5a3f7eb4b6625cac6311d4",
+      "session_id": "ses_eced1958effeWHDSucdfPJ0LbQ",
+      "started_at": "2026-10-12T17:34:47.911Z",
+      "finished_at": "2026-10-12T17:39:03.869Z",
+      "attempts": 1,
+      "tokens": {
+        "input": 27624,
+        "output": 10818,
+        "total": 5159597,
+        "reasoning": 12931,
+        "cache_read": 5108224,
+        "cache_write": 0
+      },
+      "cost_usd": 0,
+      "evidence": {
+        "verify": [
+          {
+            "command": "python3 -m unittest tests.test_analisis_clasificador_tfidf tests.test_analisis_similitud",
+            "exit": 0,
+            "expect_exit": 0,
+            "output": "....................................................\n----------------------------------------------------------------------\nRan 52 tests in 0.012s\n\nOK\n"
+          }
+        ],
+        "artifacts": [
+          {
+            "path": "analisis/clasificador_tfidf.py",
+            "sha256": "0dc23e89820547ff2496050075aae19f6bfb14e112e6ee47fb1ad078988dd9fc"
+          },
+          {
+            "path": "analisis/similitud.py",
+            "sha256": "9cc0d506f4ac2c99f4f7abc05d57138accb70c82b6aee87d24b8a0b1fa2f2990"
+          },
+          {
+            "path": "tests/test_analisis_clasificador_tfidf.py",
+            "sha256": "23393ae2ac4d2445ca6b83516ab9fa7fd15b2c0041e41303e316a58e8947b23a"
+          }
+        ]
+      },
+      "tokens_by_model": {
+        "opendesign/deepseek-v4.1-flash": {
+          "input": 27624,
+          "output": 10818,
+          "total": 5159597,
+          "reasoning": 12931,
+          "cache_read": 5108224,
+          "cache_write": 0,
+          "cost_usd": 0
+        }
+      },
+      "live": {
+        "tokens": {
+          "input": 27624,
+          "output": 10818,
+          "total": 5159597,
+          "reasoning": 12931,
+          "cache_read": 5108224,
+          "cache_write": 0
+        },
+        "cost_usd": 0,
+        "messages": 31,
+        "updated_at": "2026-10-12T17:39:03.869Z"
+      },
+      "accounting": {
+        "source": "session.messages"
+      }
+    },
+    "S4": {
+      "status": "done",
+      "step_hash": "dd94138e38e1b4bb58c929c4bcc5c0c1fb00317b9568d60fdf00e5c7ce70b2f0",
+      "session_id": "ses_ecebc7b35ffetQ1a7FNluM0kUM",
+      "started_at": "2026-10-12T17:57:50.909Z",
+      "finished_at": "2026-10-12T22:57:55.600Z",
+      "attempts": 3,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "total": 0
+      },
+      "cost_usd": 0,
+      "evidence": {
+        "verify": [
+          {
+            "command": "python3 -m unittest tests.test_analisis_clasificador_tfidf",
+            "exit": 0,
+            "expect_exit": 0,
+            "output": ".......................................\n----------------------------------------------------------------------\nRan 39 tests in 0.017s\n\nOK\n"
+          }
+        ],
+        "artifacts": [
+          {
+            "path": "analisis/clasificador_tfidf.py",
+            "sha256": "f283875e6c4a44306a68c4f3ced20ffaeaad0941455822dc10cc48e6db40ce72"
+          },
+          {
+            "path": "tests/test_analisis_clasificador_tfidf.py",
+            "sha256": "456ea8dcdd2a10575b2a20a5a5d34bdc0820fbe04bb98ed90be4dd7f8c473b00"
+          }
+        ]
+      },
+      "tokens_by_model": {
+        "opendesign/deepseek-v4.1-flash": {
+          "input": 48749,
+          "output": 2110,
+          "total": 2215322,
+          "reasoning": 6767,
+          "cache_read": 2157696,
+          "cache_write": 0,
+          "cost_usd": 0
+        }
+      },
+      "live": {
+        "tokens": {
+          "input": 48749,
+          "output": 2110,
+          "total": 2215322,
+          "reasoning": 6767,
+          "cache_read": 2157696,
+          "cache_write": 0
+        },
+        "cost_usd": 0,
+        "messages": 13,
+        "updated_at": "2026-10-12T18:02:31.907Z"
+      },
+      "accounting": {
+        "source": "session.messages"
+      }
+    }
+  },
+  "blockers": [],
+  "acceptance": [
+    {
+      "command": "python3 -m unittest",
+      "exit": 0,
+      "expect_exit": 0,
+      "output": "resultados: /tmp/tmpfu2swehc/resultados0/convergencia/convergencia-49b6e11c8a3c\ncorridas evaluadas: 1. K: 1, 2, 3. Políticas: sin_filtro, solo_comercio.\nresultados: /tmp/tmpfu2swehc/resultados1/convergencia/convergencia-49b6e11c8a3c\ncorridas evaluadas: 1. K: 1, 2, 3. Políticas: sin_filtro, solo_comercio.\nresultados: /tmp/tmpvz_0lfaa/res/convergencia/convergencia-49b6e11c8a3c\ncorridas evaluadas: 1. K: 1, 2, 3. Políticas: sin_filtro, solo_comercio.\n....................................................................................................................................................................................................................................................................................................tiempo: 0.04 s\ntiempo: 0.04 s\n.usage: python3 -m unittest [-h]\n                           --experimento {recurrencia,recurrencia-barrido,recurrencia-comparacion,convergencia,avisos}\n                           [--corrida CORRIDA] [--config CONFIG]\n                           [--corridas CORRIDAS [CORRIDAS ...]]\n                           [--entrenamiento ENTRENAMIENTO]\n                           [--validacion VALIDACION [VALIDACION ...]]\n                           [--rejilla REJILLA]\n                           [--verificacion [VERIFICACION ...]]\n                           [--rejilla-restringida REJILLA_RESTRINGIDA]\n                           [--bootstrap-b BOOTSTRAP_B]\n                           [--semilla-bootstrap SEMILLA_BOOTSTRAP]\n                           [--resultados RESULTADOS]\npython3 -m unittest: error: el experimento convergencia exige --corridas\n......................tiempo: 0.03 s\n......................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 657 tests in 35.679s\n\nOK\n"
+    },
+    {
+      "command": "python3 -c \"from analisis.clasificador_tfidf import medir; r = medir('salida/2026-3000-A'); assert r['exactitud'] >= 0.718, r; print(r)\"",
+      "exit": 0,
+      "expect_exit": 0,
+      "output": "{'n_prueba': 39, 'exactitud': 0.9487179487179487, 'cobertura': 1.0, 'abstenciones': 0, 'n_revela': 20, 'exactitud_revela': 1.0, 'n_ficticia': 34, 'exactitud_ficticia': 0.9411764705882353, 'n_real': 5, 'exactitud_real': 1.0}\n"
+    }
+  ]
+}
