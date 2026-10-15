@@ -15,6 +15,108 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AccionPendienteEstado.
+const (
+	AccionPendienteEstadoCancelada  AccionPendienteEstado = "cancelada"
+	AccionPendienteEstadoConfirmada AccionPendienteEstado = "confirmada"
+	AccionPendienteEstadoFallida    AccionPendienteEstado = "fallida"
+	AccionPendienteEstadoPendiente  AccionPendienteEstado = "pendiente"
+	AccionPendienteEstadoVencida    AccionPendienteEstado = "vencida"
+)
+
+// Valid indicates whether the value is a known member of the AccionPendienteEstado enum.
+func (e AccionPendienteEstado) Valid() bool {
+	switch e {
+	case AccionPendienteEstadoCancelada:
+		return true
+	case AccionPendienteEstadoConfirmada:
+		return true
+	case AccionPendienteEstadoFallida:
+		return true
+	case AccionPendienteEstadoPendiente:
+		return true
+	case AccionPendienteEstadoVencida:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccionPendienteMoneda.
+const (
+	AccionPendienteMonedaCOP AccionPendienteMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the AccionPendienteMoneda enum.
+func (e AccionPendienteMoneda) Valid() bool {
+	switch e {
+	case AccionPendienteMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccionPendienteTipo.
+const (
+	TransferenciaInterna AccionPendienteTipo = "transferencia_interna"
+	TransferenciaLlave   AccionPendienteTipo = "transferencia_llave"
+)
+
+// Valid indicates whether the value is a known member of the AccionPendienteTipo enum.
+func (e AccionPendienteTipo) Valid() bool {
+	switch e {
+	case TransferenciaInterna:
+		return true
+	case TransferenciaLlave:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccionPendienteTipoLlave.
+const (
+	Alfanumerico AccionPendienteTipoLlave = "alfanumerico"
+	Celular      AccionPendienteTipoLlave = "celular"
+	Comercio     AccionPendienteTipoLlave = "comercio"
+	Correo       AccionPendienteTipoLlave = "correo"
+	Documento    AccionPendienteTipoLlave = "documento"
+)
+
+// Valid indicates whether the value is a known member of the AccionPendienteTipoLlave enum.
+func (e AccionPendienteTipoLlave) Valid() bool {
+	switch e {
+	case Alfanumerico:
+		return true
+	case Celular:
+		return true
+	case Comercio:
+		return true
+	case Correo:
+		return true
+	case Documento:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccionResueltaResponseSuccess.
+const (
+	AccionResueltaResponseSuccessTrue AccionResueltaResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the AccionResueltaResponseSuccess enum.
+func (e AccionResueltaResponseSuccess) Valid() bool {
+	switch e {
+	case AccionResueltaResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConfirmarDepositoRequestEstado.
 const (
 	Aprobado  ConfirmarDepositoRequestEstado = "aprobado"
@@ -86,6 +188,7 @@ func (e ConsentRequestAccion) Valid() bool {
 
 // Defines values for ConsentRequestTipo.
 const (
+	ConsentRequestTipoAsistenteIa      ConsentRequestTipo = "asistente_ia"
 	ConsentRequestTipoBiometricos      ConsentRequestTipo = "biometricos"
 	ConsentRequestTipoTratamientoDatos ConsentRequestTipo = "tratamiento_datos"
 	ConsentRequestTipoWhatsappOptin    ConsentRequestTipo = "whatsapp_optin"
@@ -94,6 +197,8 @@ const (
 // Valid indicates whether the value is a known member of the ConsentRequestTipo enum.
 func (e ConsentRequestTipo) Valid() bool {
 	switch e {
+	case ConsentRequestTipoAsistenteIa:
+		return true
 	case ConsentRequestTipoBiometricos:
 		return true
 	case ConsentRequestTipoTratamientoDatos:
@@ -107,6 +212,7 @@ func (e ConsentRequestTipo) Valid() bool {
 
 // Defines values for ConsentimientoTipo.
 const (
+	ConsentimientoTipoAsistenteIa      ConsentimientoTipo = "asistente_ia"
 	ConsentimientoTipoBiometricos      ConsentimientoTipo = "biometricos"
 	ConsentimientoTipoTratamientoDatos ConsentimientoTipo = "tratamiento_datos"
 	ConsentimientoTipoWhatsappOptin    ConsentimientoTipo = "whatsapp_optin"
@@ -115,6 +221,8 @@ const (
 // Valid indicates whether the value is a known member of the ConsentimientoTipo enum.
 func (e ConsentimientoTipo) Valid() bool {
 	switch e {
+	case ConsentimientoTipoAsistenteIa:
+		return true
 	case ConsentimientoTipoBiometricos:
 		return true
 	case ConsentimientoTipoTratamientoDatos:
@@ -183,6 +291,21 @@ const (
 func (e ContextosResponseSuccess) Valid() bool {
 	switch e {
 	case ContextosResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConversacionesVeraResponseSuccess.
+const (
+	ConversacionesVeraResponseSuccessTrue ConversacionesVeraResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the ConversacionesVeraResponseSuccess enum.
+func (e ConversacionesVeraResponseSuccess) Valid() bool {
+	switch e {
+	case ConversacionesVeraResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -344,11 +467,12 @@ func (e DepositoResponseSuccess) Valid() bool {
 
 // Defines values for DesafioProposito.
 const (
-	DesafioPropositoCambioNumero      DesafioProposito = "cambio_numero"
-	DesafioPropositoCambioNumeroViejo DesafioProposito = "cambio_numero_viejo"
-	DesafioPropositoLogin             DesafioProposito = "login"
-	DesafioPropositoRecuperacion      DesafioProposito = "recuperacion"
-	DesafioPropositoRegistro          DesafioProposito = "registro"
+	DesafioPropositoCambioNumero              DesafioProposito = "cambio_numero"
+	DesafioPropositoCambioNumeroViejo         DesafioProposito = "cambio_numero_viejo"
+	DesafioPropositoConfirmacionTransferencia DesafioProposito = "confirmacion_transferencia"
+	DesafioPropositoLogin                     DesafioProposito = "login"
+	DesafioPropositoRecuperacion              DesafioProposito = "recuperacion"
+	DesafioPropositoRegistro                  DesafioProposito = "registro"
 )
 
 // Valid indicates whether the value is a known member of the DesafioProposito enum.
@@ -357,6 +481,8 @@ func (e DesafioProposito) Valid() bool {
 	case DesafioPropositoCambioNumero:
 		return true
 	case DesafioPropositoCambioNumeroViejo:
+		return true
+	case DesafioPropositoConfirmacionTransferencia:
 		return true
 	case DesafioPropositoLogin:
 		return true
@@ -408,6 +534,21 @@ const (
 func (e EmpresaCreadaResponseSuccess) Valid() bool {
 	switch e {
 	case EmpresaCreadaResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnviarAudioVeraRequestFormato.
+const (
+	M4a EnviarAudioVeraRequestFormato = "m4a"
+)
+
+// Valid indicates whether the value is a known member of the EnviarAudioVeraRequestFormato enum.
+func (e EnviarAudioVeraRequestFormato) Valid() bool {
+	switch e {
+	case M4a:
 		return true
 	default:
 		return false
@@ -591,6 +732,57 @@ func (e LoginRequestContexto) Valid() bool {
 	case LoginRequestContextoEmpresa:
 		return true
 	case LoginRequestContextoUsuario:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MensajeVeraCanal.
+const (
+	Texto MensajeVeraCanal = "texto"
+	Voz   MensajeVeraCanal = "voz"
+)
+
+// Valid indicates whether the value is a known member of the MensajeVeraCanal enum.
+func (e MensajeVeraCanal) Valid() bool {
+	switch e {
+	case Texto:
+		return true
+	case Voz:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MensajeVeraRol.
+const (
+	MensajeVeraRolUsuario MensajeVeraRol = "usuario"
+	MensajeVeraRolVera    MensajeVeraRol = "vera"
+)
+
+// Valid indicates whether the value is a known member of the MensajeVeraRol enum.
+func (e MensajeVeraRol) Valid() bool {
+	switch e {
+	case MensajeVeraRolUsuario:
+		return true
+	case MensajeVeraRolVera:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MensajesVeraResponseSuccess.
+const (
+	MensajesVeraResponseSuccessTrue MensajesVeraResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the MensajesVeraResponseSuccess enum.
+func (e MensajesVeraResponseSuccess) Valid() bool {
+	switch e {
+	case MensajesVeraResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -831,6 +1023,21 @@ func (e ResetTokenResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for RespuestaAsistenteResponseSuccess.
+const (
+	RespuestaAsistenteResponseSuccessTrue RespuestaAsistenteResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the RespuestaAsistenteResponseSuccess enum.
+func (e RespuestaAsistenteResponseSuccess) Valid() bool {
+	switch e {
+	case RespuestaAsistenteResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SaldoResponseSuccess.
 const (
 	SaldoResponseSuccessTrue SaldoResponseSuccess = true
@@ -1037,6 +1244,10 @@ type APIError struct {
 	// ConfirmationConflict (409, la confirmacion no coincide con el deposito),
 	// LateConfirmation (409, el deposito ya no esta pendiente),
 	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
+	// AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
+	// AudioNotUnderstood (422, el audio no tiene voz reconocible),
+	// ActionExpired (410, la accion pendiente supero su vigencia),
+	// ActionNotPending (409, la accion no esta pendiente ni confirmada),
 	// InternalError (siempre generico). Los identificadores InvalidEmail, InvalidPhone,
 	// InvalidName, WeakPassword e InvalidNit ya no existen: los reemplaza
 	// ValidationError con details[{field, rule, param}].
@@ -1046,6 +1257,59 @@ type APIError struct {
 	Code    string        `json:"code"`
 	Details *[]FieldError `json:"details,omitempty"`
 	Message string        `json:"message"`
+}
+
+// AccionPendiente Tarjeta de confirmacion de una transferencia preparada por el asistente. La app la usa tal cual y manda sobre el texto del modelo. Para tipo transferencia_interna viene destinatario. Para transferencia_llave vienen llave y tipo_llave, y destinatario puede venir con la entidad o en null.
+type AccionPendiente struct {
+	Destinatario *DestinatarioAccion   `json:"destinatario,omitempty"`
+	Estado       AccionPendienteEstado `json:"estado"`
+	ExpiraEn     time.Time             `json:"expira_en"`
+	Id           openapi_types.UUID    `json:"id"`
+	Llave        *string               `json:"llave,omitempty"`
+	Moneda       AccionPendienteMoneda `json:"moneda"`
+
+	// Monto Example: 150000
+	Monto          string                    `json:"monto"`
+	RequiereCodigo bool                      `json:"requiere_codigo"`
+	Tipo           AccionPendienteTipo       `json:"tipo"`
+	TipoLlave      *AccionPendienteTipoLlave `json:"tipo_llave,omitempty"`
+}
+
+// AccionPendienteEstado defines model for AccionPendiente.Estado.
+type AccionPendienteEstado string
+
+// AccionPendienteMoneda defines model for AccionPendiente.Moneda.
+type AccionPendienteMoneda string
+
+// AccionPendienteTipo defines model for AccionPendiente.Tipo.
+type AccionPendienteTipo string
+
+// AccionPendienteTipoLlave defines model for AccionPendiente.TipoLlave.
+type AccionPendienteTipoLlave string
+
+// AccionResuelta defines model for AccionResuelta.
+type AccionResuelta struct {
+	// AccionPendiente Tarjeta de confirmacion de una transferencia preparada por el asistente. La app la usa tal cual y manda sobre el texto del modelo. Para tipo transferencia_interna viene destinatario. Para transferencia_llave vienen llave y tipo_llave, y destinatario puede venir con la entidad o en null.
+	AccionPendiente AccionPendiente `json:"accion_pendiente"`
+	Transferencia   *Transferencia  `json:"transferencia,omitempty"`
+}
+
+// AccionResueltaResponse defines model for AccionResueltaResponse.
+type AccionResueltaResponse struct {
+	Data    AccionResuelta                `json:"data"`
+	Error   *map[string]interface{}       `json:"error"`
+	Meta    *map[string]interface{}       `json:"meta"`
+	Success AccionResueltaResponseSuccess `json:"success"`
+}
+
+// AccionResueltaResponseSuccess defines model for AccionResueltaResponse.Success.
+type AccionResueltaResponseSuccess bool
+
+// ConfirmarAccionVeraRequest defines model for ConfirmarAccionVeraRequest.
+type ConfirmarAccionVeraRequest struct {
+	Codigo               *string             `json:"codigo,omitempty" validate:"omitempty,max=10"`
+	DesafioId            *openapi_types.UUID `json:"desafio_id,omitempty"`
+	SinVerificacionLocal *bool               `json:"sin_verificacion_local,omitempty"`
 }
 
 // ConfirmarDepositoRequest Senal del custodio simulado. monto, ocurrido_en y cus solo son obligatorios cuando estado es aprobado (validacion required_if que vive en el handler, no expresable en JSON Schema puro).
@@ -1086,7 +1350,7 @@ type ConsentRequest struct {
 	Accion       *ConsentRequestAccion `json:"accion,omitempty" validate:"omitempty,oneof=otorgar revocar"`
 	Aceptado     *bool                 `json:"aceptado" validate:"required"`
 	Metodo       *string               `json:"metodo,omitempty" validate:"omitempty,max=64"`
-	Tipo         ConsentRequestTipo    `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos"`
+	Tipo         ConsentRequestTipo    `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
 	VersionTexto string                `json:"version_texto" validate:"required,max=64"`
 }
 
@@ -1100,14 +1364,14 @@ type ConsentRequestTipo string
 type Consentimiento struct {
 	Aceptado *bool `json:"aceptado" validate:"required"`
 
-	// Tipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos es opcional.
-	Tipo ConsentimientoTipo `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos"`
+	// Tipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos y asistente_ia son opcionales.
+	Tipo ConsentimientoTipo `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
 
-	// VersionTexto Version del texto legal que la persona acepto. La version valida hoy es v1 para los tres tipos.
+	// VersionTexto Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y biometricos usan la version v1 hoy. asistente_ia usa la version que fije su tarjeta.
 	VersionTexto string `json:"version_texto" validate:"required,max=64"`
 }
 
-// ConsentimientoTipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos es opcional.
+// ConsentimientoTipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos y asistente_ia son opcionales.
 type ConsentimientoTipo string
 
 // ConsentsResponse defines model for ConsentsResponse.
@@ -1166,6 +1430,27 @@ type ContextosResponse struct {
 
 // ContextosResponseSuccess defines model for ContextosResponse.Success.
 type ContextosResponseSuccess bool
+
+// ConversacionVera defines model for ConversacionVera.
+type ConversacionVera struct {
+	CreadaEn time.Time          `json:"creada_en"`
+	Id       openapi_types.UUID `json:"id"`
+
+	// Titulo Example: Consulta de saldo
+	Titulo          string    `json:"titulo"`
+	UltimaActividad time.Time `json:"ultima_actividad"`
+}
+
+// ConversacionesVeraResponse defines model for ConversacionesVeraResponse.
+type ConversacionesVeraResponse struct {
+	Data    []ConversacionVera                `json:"data"`
+	Error   *map[string]interface{}           `json:"error"`
+	Meta    *Meta                             `json:"meta"`
+	Success ConversacionesVeraResponseSuccess `json:"success"`
+}
+
+// ConversacionesVeraResponseSuccess defines model for ConversacionesVeraResponse.Success.
+type ConversacionesVeraResponseSuccess bool
 
 // CrearDepositoRequest defines model for CrearDepositoRequest.
 type CrearDepositoRequest struct {
@@ -1282,7 +1567,7 @@ type Desafio struct {
 
 	// ExpiraEnSegundos Example: 300
 	ExpiraEnSegundos int              `json:"expira_en_segundos"`
-	Proposito        DesafioProposito `json:"proposito" validate:"required,oneof=registro login recuperacion cambio_numero cambio_numero_viejo"`
+	Proposito        DesafioProposito `json:"proposito" validate:"required,oneof=registro login recuperacion cambio_numero cambio_numero_viejo confirmacion_transferencia"`
 }
 
 // DesafioProposito defines model for Desafio.Proposito.
@@ -1302,6 +1587,18 @@ type DesafioResponseSuccess bool
 // Destinatario defines model for Destinatario.
 type Destinatario struct {
 	// Nombre Nombre enmascarado. Persona, el primer nombre y la inicial del apellido con punto (por ejemplo Laura R.). Para elegir el apellido, con 2 componentes en el nombre completo se toma el ultimo y con 3 o mas se toma el penultimo. Empresa, la razon social completa. Solo se resuelve un destino que cumpla la misma regla de la transferencia: celular E.164 exacto de una persona activa y verificada.
+	Nombre string `json:"nombre"`
+}
+
+// DestinatarioAccion defines model for DestinatarioAccion.
+type DestinatarioAccion struct {
+	// CelularParcial Example: ******4321
+	CelularParcial *string `json:"celular_parcial,omitempty"`
+
+	// Nombre Nombre enmascarado del destinatario, o la llave enmascarada o la entidad para una llave Bre-B.
+	//
+	//
+	// Example: Laura R.
 	Nombre string `json:"nombre"`
 }
 
@@ -1342,6 +1639,23 @@ type EmpresaCreadaResponse struct {
 
 // EmpresaCreadaResponseSuccess defines model for EmpresaCreadaResponse.Success.
 type EmpresaCreadaResponseSuccess bool
+
+// EnviarAudioVeraRequest defines model for EnviarAudioVeraRequest.
+type EnviarAudioVeraRequest struct {
+	// Audio Audio del clip en base64. No puede superar los 700 KB decodificados ni los 60 segundos. El tope de longitud es 960000 caracteres en base64.
+	Audio          string                        `json:"audio" validate:"required,max=960000"`
+	ConversacionId *openapi_types.UUID           `json:"conversacion_id,omitempty"`
+	Formato        EnviarAudioVeraRequestFormato `json:"formato" validate:"required,oneof=m4a"`
+}
+
+// EnviarAudioVeraRequestFormato defines model for EnviarAudioVeraRequest.Formato.
+type EnviarAudioVeraRequestFormato string
+
+// EnviarMensajeVeraRequest defines model for EnviarMensajeVeraRequest.
+type EnviarMensajeVeraRequest struct {
+	ConversacionId *openapi_types.UUID `json:"conversacion_id,omitempty"`
+	Texto          string              `json:"texto" validate:"required,min=1,max=1000"`
+}
 
 // EnvioPorLlave defines model for EnvioPorLlave.
 type EnvioPorLlave struct {
@@ -1440,6 +1754,33 @@ type LoginRequest struct {
 
 // LoginRequestContexto defines model for LoginRequest.Contexto.
 type LoginRequestContexto string
+
+// MensajeVera defines model for MensajeVera.
+type MensajeVera struct {
+	AccionPendiente *AccionPendiente   `json:"accion_pendiente,omitempty"`
+	Canal           MensajeVeraCanal   `json:"canal"`
+	CreadoEn        time.Time          `json:"creado_en"`
+	Id              openapi_types.UUID `json:"id"`
+	Rol             MensajeVeraRol     `json:"rol"`
+	Texto           string             `json:"texto"`
+}
+
+// MensajeVeraCanal defines model for MensajeVera.Canal.
+type MensajeVeraCanal string
+
+// MensajeVeraRol defines model for MensajeVera.Rol.
+type MensajeVeraRol string
+
+// MensajesVeraResponse defines model for MensajesVeraResponse.
+type MensajesVeraResponse struct {
+	Data    []MensajeVera               `json:"data"`
+	Error   *map[string]interface{}     `json:"error"`
+	Meta    *Meta                       `json:"meta"`
+	Success MensajesVeraResponseSuccess `json:"success"`
+}
+
+// MensajesVeraResponseSuccess defines model for MensajesVeraResponse.Success.
+type MensajesVeraResponseSuccess bool
 
 // Meta defines model for Meta.
 type Meta struct {
@@ -1663,6 +2004,29 @@ type ResetTokenResponse struct {
 // ResetTokenResponseSuccess defines model for ResetTokenResponse.Success.
 type ResetTokenResponseSuccess bool
 
+// RespuestaAsistente defines model for RespuestaAsistente.
+type RespuestaAsistente struct {
+	AccionPendiente *AccionPendiente   `json:"accion_pendiente,omitempty"`
+	ConversacionId  openapi_types.UUID `json:"conversacion_id"`
+	CreadoEn        time.Time          `json:"creado_en"`
+	MensajeId       openapi_types.UUID `json:"mensaje_id"`
+	Texto           string             `json:"texto"`
+
+	// Transcripcion Solo en la ruta de voz.
+	Transcripcion *string `json:"transcripcion,omitempty"`
+}
+
+// RespuestaAsistenteResponse defines model for RespuestaAsistenteResponse.
+type RespuestaAsistenteResponse struct {
+	Data    RespuestaAsistente                `json:"data"`
+	Error   *map[string]interface{}           `json:"error"`
+	Meta    *map[string]interface{}           `json:"meta"`
+	Success RespuestaAsistenteResponseSuccess `json:"success"`
+}
+
+// RespuestaAsistenteResponseSuccess defines model for RespuestaAsistenteResponse.Success.
+type RespuestaAsistenteResponseSuccess bool
+
 // SaldoResponse defines model for SaldoResponse.
 type SaldoResponse struct {
 	// Data Forma compartida de saldo y del monto maximo enviable: los dos son un monto en centavos, la moneda y el instante en que se calcularon.
@@ -1820,6 +2184,24 @@ type MovimientosParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// ListarConversacionesVeraParams defines parameters for ListarConversacionesVera.
+type ListarConversacionesVeraParams struct {
+	// Limit Tamano de pagina, de 1 a 100. Por defecto 50.
+	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Ancla de la ultima conversacion de la pagina anterior.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListarMensajesConversacionVeraParams defines parameters for ListarMensajesConversacionVera.
+type ListarMensajesConversacionVeraParams struct {
+	// Limit Tamano de pagina, de 1 a 100. Por defecto 50.
+	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Ancla del ultimo mensaje de la pagina anterior.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
 type CreateCompanyJSONRequestBody = CrearEmpresaRequest
 
@@ -1849,6 +2231,15 @@ type TransferirJSONRequestBody = CrearTransferenciaRequest
 
 // TransferirInterbancariaJSONRequestBody defines body for TransferirInterbancaria for application/json ContentType.
 type TransferirInterbancariaJSONRequestBody = CrearTransferenciaInterbancariaRequest
+
+// ConfirmarAccionVeraJSONRequestBody defines body for ConfirmarAccionVera for application/json ContentType.
+type ConfirmarAccionVeraJSONRequestBody = ConfirmarAccionVeraRequest
+
+// EnviarMensajeVeraJSONRequestBody defines body for EnviarMensajeVera for application/json ContentType.
+type EnviarMensajeVeraJSONRequestBody = EnviarMensajeVeraRequest
+
+// EnviarMensajeVozVeraJSONRequestBody defines body for EnviarMensajeVozVera for application/json ContentType.
+type EnviarMensajeVozVeraJSONRequestBody = EnviarAudioVeraRequest
 
 // AsRegisterPersonaRequest returns the union data inside the RegisterRequest as a RegisterPersonaRequest
 func (t RegisterRequest) AsRegisterPersonaRequest() (RegisterPersonaRequest, error) {
@@ -2016,6 +2407,33 @@ type ServerInterface interface {
 	// MontoMaximo Consulta el monto maximo que el usuario puede enviar sin quedarse sin saldo por el GMF.
 	// (GET /v1/transferencias/maximo)
 	MontoMaximo(w http.ResponseWriter, r *http.Request)
+	// CancelarAccionVera Cancela una accion pendiente.
+	// (POST /v1/vera/acciones/{id}/cancelar)
+	CancelarAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// SolicitarCodigoAccionVera Solicita el codigo de confirmacion de una accion pendiente.
+	// (POST /v1/vera/acciones/{id}/codigo)
+	SolicitarCodigoAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ConfirmarAccionVera Confirma y ejecuta una accion pendiente.
+	// (POST /v1/vera/acciones/{id}/confirmar)
+	ConfirmarAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// BorrarConversacionesVera Borra todas las conversaciones del usuario y cancela sus acciones pendientes.
+	// (DELETE /v1/vera/conversaciones)
+	BorrarConversacionesVera(w http.ResponseWriter, r *http.Request)
+	// ListarConversacionesVera Lista una pagina de las conversaciones del usuario.
+	// (GET /v1/vera/conversaciones)
+	ListarConversacionesVera(w http.ResponseWriter, r *http.Request, params ListarConversacionesVeraParams)
+	// BorrarConversacionVera Borra una conversacion del usuario y cancela sus acciones pendientes.
+	// (DELETE /v1/vera/conversaciones/{id})
+	BorrarConversacionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListarMensajesConversacionVera Lista una pagina de los mensajes de una conversacion del usuario.
+	// (GET /v1/vera/conversaciones/{id}/mensajes)
+	ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ListarMensajesConversacionVeraParams)
+	// EnviarMensajeVera Envia un mensaje de texto al asistente y devuelve su respuesta.
+	// (POST /v1/vera/mensajes)
+	EnviarMensajeVera(w http.ResponseWriter, r *http.Request)
+	// EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
+	// (POST /v1/vera/mensajes/voz)
+	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -2145,6 +2563,60 @@ func (_ Unimplemented) TransferirInterbancaria(w http.ResponseWriter, r *http.Re
 // MontoMaximo Consulta el monto maximo que el usuario puede enviar sin quedarse sin saldo por el GMF.
 // (GET /v1/transferencias/maximo)
 func (_ Unimplemented) MontoMaximo(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CancelarAccionVera Cancela una accion pendiente.
+// (POST /v1/vera/acciones/{id}/cancelar)
+func (_ Unimplemented) CancelarAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SolicitarCodigoAccionVera Solicita el codigo de confirmacion de una accion pendiente.
+// (POST /v1/vera/acciones/{id}/codigo)
+func (_ Unimplemented) SolicitarCodigoAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ConfirmarAccionVera Confirma y ejecuta una accion pendiente.
+// (POST /v1/vera/acciones/{id}/confirmar)
+func (_ Unimplemented) ConfirmarAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BorrarConversacionesVera Borra todas las conversaciones del usuario y cancela sus acciones pendientes.
+// (DELETE /v1/vera/conversaciones)
+func (_ Unimplemented) BorrarConversacionesVera(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarConversacionesVera Lista una pagina de las conversaciones del usuario.
+// (GET /v1/vera/conversaciones)
+func (_ Unimplemented) ListarConversacionesVera(w http.ResponseWriter, r *http.Request, params ListarConversacionesVeraParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BorrarConversacionVera Borra una conversacion del usuario y cancela sus acciones pendientes.
+// (DELETE /v1/vera/conversaciones/{id})
+func (_ Unimplemented) BorrarConversacionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarMensajesConversacionVera Lista una pagina de los mensajes de una conversacion del usuario.
+// (GET /v1/vera/conversaciones/{id}/mensajes)
+func (_ Unimplemented) ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ListarMensajesConversacionVeraParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// EnviarMensajeVera Envia un mensaje de texto al asistente y devuelve su respuesta.
+// (POST /v1/vera/mensajes)
+func (_ Unimplemented) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
+// (POST /v1/vera/mensajes/voz)
+func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2526,6 +2998,253 @@ func (siw *ServerInterfaceWrapper) MontoMaximo(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// CancelarAccionVera operation middleware
+func (siw *ServerInterfaceWrapper) CancelarAccionVera(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelarAccionVera(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SolicitarCodigoAccionVera operation middleware
+func (siw *ServerInterfaceWrapper) SolicitarCodigoAccionVera(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SolicitarCodigoAccionVera(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmarAccionVera operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmarAccionVera(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmarAccionVera(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BorrarConversacionesVera operation middleware
+func (siw *ServerInterfaceWrapper) BorrarConversacionesVera(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BorrarConversacionesVera(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarConversacionesVera operation middleware
+func (siw *ServerInterfaceWrapper) ListarConversacionesVera(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarConversacionesVeraParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarConversacionesVera(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BorrarConversacionVera operation middleware
+func (siw *ServerInterfaceWrapper) BorrarConversacionVera(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BorrarConversacionVera(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarMensajesConversacionVera operation middleware
+func (siw *ServerInterfaceWrapper) ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarMensajesConversacionVeraParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarMensajesConversacionVera(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EnviarMensajeVera operation middleware
+func (siw *ServerInterfaceWrapper) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnviarMensajeVera(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EnviarMensajeVozVera operation middleware
+func (siw *ServerInterfaceWrapper) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnviarMensajeVozVera(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2701,6 +3420,33 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/transferencias/interbancarias", wrapper.TransferirInterbancaria)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/vera/mensajes", wrapper.EnviarMensajeVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/vera/mensajes/voz", wrapper.EnviarMensajeVozVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/v1/vera/conversaciones", wrapper.BorrarConversacionesVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/vera/conversaciones", wrapper.ListarConversacionesVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/v1/vera/conversaciones/{id}", wrapper.BorrarConversacionVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/vera/conversaciones/{id}/mensajes", wrapper.ListarMensajesConversacionVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/vera/acciones/{id}/codigo", wrapper.SolicitarCodigoAccionVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/vera/acciones/{id}/confirmar", wrapper.ConfirmarAccionVera)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/vera/acciones/{id}/cancelar", wrapper.CancelarAccionVera)
 	})
 
 	return r

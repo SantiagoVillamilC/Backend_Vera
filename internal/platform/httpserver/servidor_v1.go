@@ -126,6 +126,45 @@ func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request
 	s.destinatarios.ConsultarDestinatario(w, r)
 }
 
+// Los metodos del asistente Vera aun no tienen handler: responden 501 dentro del envelope.
+// Los implementan las tarjetas de la epica del asistente.
+
+func (s servidorV1) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) ListarConversacionesVera(w http.ResponseWriter, r *http.Request, _ api.ListarConversacionesVeraParams) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) BorrarConversacionesVera(w http.ResponseWriter, r *http.Request) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) BorrarConversacionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _ api.ListarMensajesConversacionVeraParams) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) SolicitarCodigoAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) ConfirmarAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) CancelarAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
+}
+
 var _ api.ServerInterface = servidorV1{}
 
 // sinImplementar responde 501 dentro del envelope para un método que todavía no tiene handler.
