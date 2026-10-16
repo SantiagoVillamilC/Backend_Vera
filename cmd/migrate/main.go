@@ -1,5 +1,5 @@
 // Package main es el binario de migraciones: aplica en orden el esquema del núcleo, las
-// migraciones de River y el esquema de auth, y los revierte en orden inverso.
+// migraciones de River, auth y asistente, y los revierte en orden inverso.
 package main
 
 import (
@@ -43,7 +43,7 @@ func run() error {
 
 	ctx := context.Background()
 	comando := os.Args[1]
-	// El binario impone el orden: arriba goose del núcleo, River y auth; abajo auth, River y goose.
+	// El asistente referencia auth.partes, así que sube al final y baja primero.
 	switch comando {
 	case "up":
 		if err := goose.RunContext(ctx, "up", db, "migraciones"); err != nil {
@@ -52,8 +52,14 @@ func run() error {
 		if err := subirRiver(ctx, dsn); err != nil {
 			return err
 		}
-		return correrAuth(ctx, db, "up")
+		if err := correrAuth(ctx, db, "up"); err != nil {
+			return err
+		}
+		return correrAsistente(ctx, db, "up")
 	case "down":
+		if err := correrAsistente(ctx, db, "down"); err != nil {
+			return err
+		}
 		if err := correrAuth(ctx, db, "down"); err != nil {
 			return err
 		}
@@ -71,7 +77,10 @@ func run() error {
 		if err := estadoRiver(ctx, dsn); err != nil {
 			return err
 		}
-		return correrAuth(ctx, db, "status")
+		if err := correrAuth(ctx, db, "status"); err != nil {
+			return err
+		}
+		return correrAsistente(ctx, db, "status")
 	default:
 		if err := goose.RunContext(ctx, comando, db, "migraciones"); err != nil {
 			return fmt.Errorf("goose %s: %w", comando, err)
