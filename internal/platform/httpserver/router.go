@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/logging"
@@ -30,6 +31,12 @@ var RutasDeDinero = []string{
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
 func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, pseURL ...string) http.Handler {
+	return NewRouterConVera(pool, nucleoServicio, autenticadorCustodio, authDeps, nil, pseURL...)
+}
+
+// NewRouterConVera recibe el puerto listo para la futura orquestación del chat.
+// Las rutas Vera siguen cerradas (501) hasta implementar consentimiento y orquestador.
+func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, proveedor copilot.ProveedorIA, pseURL ...string) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)
 	}
@@ -52,6 +59,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	health := NewHealthResource(pool)
 	nucleoHandler := nucleo.NewHandler(nucleoServicio, pseURL...)
 	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler, destinatarios: authDeps.Destinatarios}
+	srv.ProveedorIA = proveedor
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {

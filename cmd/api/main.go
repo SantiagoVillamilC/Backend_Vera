@@ -53,6 +53,10 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	proveedorIA, err := nuevoProveedorIA(ctx, cfg.Vera)
+	if err != nil {
+		return fmt.Errorf("proveedor IA: %w", err)
+	}
 
 	pool, err := database.NewPool(ctx, cfg.AppDatabaseURL)
 	if err != nil {
@@ -212,7 +216,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, proveedorIA, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

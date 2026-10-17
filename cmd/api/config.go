@@ -37,6 +37,7 @@ type Config struct {
 	A6PosicionLiquidacion  nucleo.Centavos
 	A6PrefondeoActivo      bool
 	Auth                   ConfigAuth
+	Vera                   ConfigVera
 }
 
 // LoadConfig valida el entorno y reporta todos los errores juntos.
@@ -59,6 +60,9 @@ func LoadConfig() (*Config, error) {
 	var errsAuth []error
 	cfg.Auth, errsAuth = cargarConfigAuth()
 	errs = append(errs, errsAuth...)
+	var errsVera []error
+	cfg.Vera, errsVera = cargarConfigVera()
+	errs = append(errs, errsVera...)
 	required := []struct{ name, value string }{
 		{"APP_DATABASE_URL", cfg.AppDatabaseURL},
 		{"JWT_SECRET", cfg.JWTSecret},
@@ -165,6 +169,7 @@ func ValidarCorridaA6(cfg *Config) error {
 // LogValue imprime qué variables resolvieron y nunca sus valores.
 func (c Config) LogValue() slog.Value {
 	return slog.GroupValue(
+		slog.Any("vera", c.Vera),
 		slog.String("port", c.Port),
 		slog.Bool("app_database_url_set", c.AppDatabaseURL != ""),
 		slog.Bool("jwt_secret_set", c.JWTSecret != ""),
