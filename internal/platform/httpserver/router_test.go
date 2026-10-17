@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
@@ -129,7 +128,7 @@ func TestDeleteSessionWithMalformedUUIDReturnsEnvelope400(t *testing.T) {
 
 func TestAuthedRouteWithoutTestCredentialReturnsEnvelope401(t *testing.T) {
 	r := newTestRouter()
-	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/vera/mensajes", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -147,7 +146,7 @@ func TestAuthedRouteRejectsMissingTestCredential(t *testing.T) {
 	for name, preparar := range tests {
 		t.Run(name, func(t *testing.T) {
 			r := newTestRouter()
-			req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/vera/mensajes", nil)
 			preparar(req)
 			rec := httptest.NewRecorder()
 
@@ -161,7 +160,7 @@ func TestAuthedRouteRejectsMissingTestCredential(t *testing.T) {
 // Un bearer bien formado no basta en la fase 0: la credencial de prueba es la cabecera X-Test-User.
 func TestAuthedRouteRejectsWellFormedBearerWithoutTestHeader(t *testing.T) {
 	r := newTestRouter()
-	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/vera/mensajes", nil)
 	req.Header.Set("Authorization", "Bearer cualquier-token")
 	rec := httptest.NewRecorder()
 
@@ -181,10 +180,10 @@ func TestMontoMaximoRouteRequiresAuth(t *testing.T) {
 	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
 }
 
-// Con la credencial de prueba, el handler de /copilot responde 400 por el cuerpo vacío, nunca 401.
+// Con la credencial de prueba se alcanza el stub de Vera, sin rechazo de autenticación.
 func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 	r := newTestRouter()
-	req := httptest.NewRequest(http.MethodPost, "/copilot", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/vera/mensajes", nil)
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 
@@ -193,8 +192,8 @@ func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 	if rec.Code == http.StatusUnauthorized {
 		t.Fatalf("con la credencial de prueba no debe dar 401 (cuerpo %q)", rec.Body.String())
 	}
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, quiero 400 por el cuerpo vacío (cuerpo %q)", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("status = %d, quiero 501 por el stub de Vera (cuerpo %q)", rec.Code, rec.Body.String())
 	}
 }
 
@@ -368,7 +367,6 @@ func TestResponseDTOsSerializeWithLowercaseKeys(t *testing.T) {
 		value any
 		keys  []string
 	}{
-		"copilot.Response":     {copilot.Response{Intent: copilot.IntentQuery, Message: "m"}, []string{"intent", "message"}},
 		"receipts.Receipt":     {receipts.Receipt{ID: "r", UserID: "u", Merchant: "m", Total: 1, Items: []receipts.ReceiptItem{}}, []string{"id", "user_id", "merchant", "total", "items"}},
 		"receipts.ReceiptItem": {receipts.ReceiptItem{Name: "n", Quantity: 1, Price: 2}, []string{"name", "quantity", "price"}},
 	}

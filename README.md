@@ -30,10 +30,8 @@ backend/
 │   │   └── handler.go               # POST /transactions
 │   │
 │   ├── copilot/
-│   │   ├── domain.go                # Entidad ChatMessage, Intent (consulta vs. transacción)
-│   │   ├── service.go               # Arma contexto, decide intención, orquesta la respuesta
-│   │   ├── llm_client.go            # Cliente hacia Groq / OpenAI
-│   │   └── handler.go               # POST /copilot
+│   │   ├── transaccion.go           # Acceso con rol_asistente
+│   │   └── internal/repositorio/    # Conversaciones, mensajes y acciones (sqlc)
 │   │
 │   ├── receipts/
 │   │   ├── domain.go                # Entidad Receipt, ReceiptItem
@@ -68,13 +66,15 @@ backend/
 
 ## Variables de entorno esperadas (`.env.example`)
 
+El asistente tiene su contrato bajo `/v1/vera` en `api/openapi.yaml`; sus handlers
+siguen pendientes de implementación. La ruta experimental `POST /copilot` fue
+retirada y devuelve `404 NotFound`. El adaptador de IA se implementará en SCRUM-119.
+
 ```env
 PORT=8080
 DATABASE_URL=postgres://user:password@host:5432/dbname
 APP_DATABASE_URL=postgres://rol_api:password@host:5432/dbname
 JWT_SECRET=
-GROQ_API_KEY=
-OPENAI_API_KEY=
 OCR_WORKER_URL=http://localhost:8000
 ```
 

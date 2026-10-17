@@ -86,3 +86,6 @@ y regeneración de OpenAPI sin cambios. El linter 2.13.1, incluyendo el tag
 `integration`, no reportó hallazgos en los archivos nuevos; el paquete conserva
 hallazgos previos de formato y comentarios en el esqueleto de copilot que se
 retirará en SCRUM-156. Por eso el comando de lint del paquete aún no está verde.
+
+Actualización SCRUM-156: retirado el esqueleto antiguo, el lint del paquete
+`internal/copilot/...` (incluyendo las pruebas de integración) pasa sin hallazgos.

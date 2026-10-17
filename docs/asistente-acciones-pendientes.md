@@ -86,3 +86,6 @@ reversión/reaplicación de la migración, suite general con `-race`, `go vet` y
 regeneración de OpenAPI sin diferencias. El linter 2.13.1 no reporta hallazgos en
 los archivos nuevos; conserva los hallazgos preexistentes del esqueleto antiguo
 de copilot, cuyo retiro corresponde a SCRUM-156.
+
+Actualización SCRUM-156: el esqueleto antiguo ya fue retirado y el lint de
+`internal/copilot/...`, con el tag `integration`, pasa sin hallazgos.
