@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/redis/go-redis/v9"
@@ -110,8 +109,8 @@ type DependenciasAuth struct {
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
 type servidorV1 struct {
-	// ProveedorIA queda reservado al orquestador; los stubs nunca lo invocan.
-	ProveedorIA   copilot.ProveedorIA
+	// Vera queda reservado al orquestador; los stubs nunca invocan sus dependencias.
+	Vera          DependenciasVera
 	auth          AuthHandler
 	kyc           KYCHandler
 	consent       ConsentHandler

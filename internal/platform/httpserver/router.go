@@ -31,12 +31,18 @@ var RutasDeDinero = []string{
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
 func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, pseURL ...string) http.Handler {
-	return NewRouterConVera(pool, nucleoServicio, autenticadorCustodio, authDeps, nil, pseURL...)
+	return NewRouterConVera(pool, nucleoServicio, autenticadorCustodio, authDeps, DependenciasVera{}, pseURL...)
 }
 
-// NewRouterConVera recibe el puerto listo para la futura orquestación del chat.
+// DependenciasVera reúne el proveedor y el catálogo para la futura orquestación.
+type DependenciasVera struct {
+	Proveedor copilot.ProveedorIA
+	Catalogo  *copilot.Catalogo
+}
+
+// NewRouterConVera recibe los puertos listos para la futura orquestación del chat.
 // Las rutas Vera siguen cerradas (501) hasta implementar consentimiento y orquestador.
-func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, proveedor copilot.ProveedorIA, pseURL ...string) http.Handler {
+func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, vera DependenciasVera, pseURL ...string) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)
 	}
@@ -59,7 +65,7 @@ func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, auten
 	health := NewHealthResource(pool)
 	nucleoHandler := nucleo.NewHandler(nucleoServicio, pseURL...)
 	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler, destinatarios: authDeps.Destinatarios}
-	srv.ProveedorIA = proveedor
+	srv.Vera = vera
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {

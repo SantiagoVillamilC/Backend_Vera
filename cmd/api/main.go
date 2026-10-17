@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
@@ -92,6 +93,13 @@ func run() error {
 			Tope:   cfg.OutboxBackoffMax,
 		}),
 	)
+
+	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
+		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
+	}, slog.Default())
+	if err != nil {
+		return fmt.Errorf("catálogo IA: %w", err)
+	}
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
@@ -216,7 +224,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, proveedorIA, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.
