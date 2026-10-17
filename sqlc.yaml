@@ -16,6 +16,7 @@ sql:
         rename:
           asistente_conversacion: Conversacion
           asistente_mensaje: Mensaje
+          asistente_accion_pendiente: AccionPendiente
   # Repositorio de auth (SCRUM-52): solo sus archivos, para que el ledger no se cuele en sus modelos.
   - engine: postgresql
     schema:

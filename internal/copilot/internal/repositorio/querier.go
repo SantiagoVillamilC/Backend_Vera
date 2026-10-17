@@ -12,13 +12,27 @@ type Querier interface {
 	// La actualización bloquea la conversación y asigna orden sin MAX()+1 ni carreras.
 	// Si el INSERT falla, el contador y la fecha también se revierten.
 	AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (Mensaje, error)
+	// Mantener este bloqueo hasta terminar la confirmación, usando siempre el mismo tx.
+	BloquearAccion(ctx context.Context, arg BloquearAccionParams) (AccionPendiente, error)
+	CancelarAccion(ctx context.Context, arg CancelarAccionParams) (AccionPendiente, error)
+	// CAS: cero filas significa que el llamador debe releer el estado, no ejecutar de nuevo.
+	// El núcleo es quien genera transferencia_id; esta consulta no ejecuta ni autoriza dinero.
+	ConfirmarAccion(ctx context.Context, arg ConfirmarAccionParams) (AccionPendiente, error)
 	// Contexto de los últimos 20 turnos de usuario, incluyendo sus respuestas y funciones.
 	// Así el corte no deja resultados de herramienta sin el turno que los originó.
 	ContextoConversacion(ctx context.Context, arg ContextoConversacionParams) ([]Mensaje, error)
+	CrearAccion(ctx context.Context, arg CrearAccionParams) (AccionPendiente, error)
 	CrearConversacion(ctx context.Context, arg CrearConversacionParams) (Conversacion, error)
+	FallarAccion(ctx context.Context, arg FallarAccionParams) (AccionPendiente, error)
 	// El estado sin respuesta se deriva sin editar el turno emitido (DBML append-only).
 	MensajesSinRespuesta(ctx context.Context, arg MensajesSinRespuestaParams) ([]Mensaje, error)
+	ObtenerAccion(ctx context.Context, arg ObtenerAccionParams) (AccionPendiente, error)
 	ObtenerConversacion(ctx context.Context, arg ObtenerConversacionParams) (Conversacion, error)
+	VencerAccion(ctx context.Context, arg VencerAccionParams) (AccionPendiente, error)
+	// Base del barrido periódico de SCRUM-137: lotes pequeños y trabajadores sin bloqueo mutuo.
+	VencerAcciones(ctx context.Context, limite int32) (int64, error)
+	// Una verificación local no disponible solo puede elevar la exigencia, nunca rebajarla.
+	VincularDesafioAccion(ctx context.Context, arg VincularDesafioAccionParams) (AccionPendiente, error)
 }
 
 var _ Querier = (*Queries)(nil)

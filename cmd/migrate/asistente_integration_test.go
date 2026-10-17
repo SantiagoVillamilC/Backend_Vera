@@ -69,8 +69,8 @@ func TestMigracionAsistenteReversible(t *testing.T) {
 	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM information_schema.tables WHERE table_schema='asistente'").Scan(&tablas); err != nil {
 		t.Fatal(err)
 	}
-	if tablas != 2 {
-		t.Fatalf("tablas=%d, esperadas 2", tablas)
+	if tablas != 3 {
+		t.Fatalf("tablas=%d, esperadas 3", tablas)
 	}
 	var existeAuth bool
 	if err := db.QueryRowContext(t.Context(), "SELECT to_regclass('auth.partes') IS NOT NULL").Scan(&existeAuth); err != nil || !existeAuth {
