@@ -116,7 +116,6 @@ jobs:
             echo "DATABASE_URL=postgres://owner:$OWNER_PW@127.0.0.1:5432/vera?sslmode=disable"
             echo "APP_DATABASE_URL=postgres://rol_api:$API_PW@127.0.0.1:5432/vera?sslmode=disable"
             echo "REDIS_URL=redis://127.0.0.1:6379"
-            echo "SIMULADOR_CUSTODIA_URL=http://127.0.0.1:8099"
           } >> "$GITHUB_ENV"
 
       - name: Run migrations and set role passwords
@@ -126,19 +125,8 @@ jobs:
             -c "ALTER ROLE owner WITH PASSWORD '$OWNER_PW'" \
             -c "ALTER ROLE rol_api WITH PASSWORD '$API_PW'"
 
-      - name: Start custodian simulator
-        run: |
-          go build -o "$RUNNER_TEMP/simulador-custodia" ./cmd/simulador-custodia
-          SIMULADOR_CUSTODIA_PORT=8099 SIMULADOR_CUSTODIA_DB="$RUNNER_TEMP/simulador-custodia.db" \
-            nohup "$RUNNER_TEMP/simulador-custodia" >"$RUNNER_TEMP/simulador-custodia.log" 2>&1 &
-          for _ in $(seq 1 30); do
-            if curl -s -o /dev/null "$SIMULADOR_CUSTODIA_URL/extracto"; then exit 0; fi
-            sleep 1
-          done
-          cat "$RUNNER_TEMP/simulador-custodia.log"
-          echo "::error::El simulador de custodia no arrancó."
-          exit 1
-
+      # El simulador de custodia vive en el monorepo Simuladores_Vera. Sin
+      # SIMULADOR_CUSTODIA_URL, las pruebas que lo necesitan se saltan solas.
       # -p 1 porque los paquetes comparten la misma base y varias pruebas escriben
       # tablas globales (ledger, outbox, UVT), así que en paralelo se pisarían.
       - name: Integration tests

@@ -40,23 +40,40 @@ func NewPaginaPSE(despachador *Despachador) *PaginaPSE {
 	}
 }
 
-// Rutas monta la página de PSE y los dos desenlaces del usuario.
+// Rutas monta la página de PSE y los dos desenlaces del usuario. El chequeo de vida
+// queda fuera del limitador para no consumir el cupo de las personas.
 func (p *PaginaPSE) Rutas() chi.Router {
 	r := chi.NewRouter()
-	r.Use(httprate.LimitBy(topePeticionesPSE, ventanaPeticionesPSE, claveDeIP, httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "demasiadas peticiones al PSE simulado", http.StatusTooManyRequests)
-	})))
-	r.Get("/pse", p.Formulario)
-	r.Post("/pse/autorizar", p.Autorizar)
-	r.Post("/pse/cancelar", p.Cancelar)
+	r.Get("/healthz", p.Salud)
+	r.Group(func(r chi.Router) {
+		r.Use(httprate.LimitBy(topePeticionesPSE, ventanaPeticionesPSE, claveDeIP, httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "demasiadas peticiones al PSE simulado", http.StatusTooManyRequests)
+		})))
+		r.Get("/pse", p.Formulario)
+		r.Post("/pse/autorizar", p.Autorizar)
+		r.Post("/pse/cancelar", p.Cancelar)
+	})
 	return r
 }
 
-// claveDeIP agrupa el rate limit por la IP del cliente, sin el puerto.
+// Salud responde el chequeo de vida del contenedor sin tocar el almacén.
+func (p *PaginaPSE) Salud(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
+// claveDeIP agrupa el rate limit por la IP del cliente, sin el puerto. Detrás de nginx
+// toma X-Real-IP solo cuando la conexión viene de una dirección local o privada.
 func claveDeIP(r *http.Request) (string, error) {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && (ip.IsLoopback() || ip.IsPrivate()) {
+		if real := strings.TrimSpace(r.Header.Get("X-Real-IP")); net.ParseIP(real) != nil {
+			return httprate.CanonicalizeIP(real), nil
+		}
 	}
 	return httprate.CanonicalizeIP(host), nil
 }
@@ -107,16 +124,23 @@ func (p *PaginaPSE) resolver(w http.ResponseWriter, r *http.Request, estado, cus
 
 	ahora := p.ahora()
 	envio := Envio{Referencia: referencia, Monto: monto, Moneda: "COP", Estado: estado, CUS: cus, OcurridoEn: ahora}
-	if _, err := p.despachador.almacen.Registrar(r.Context(), envio, ahora); err != nil {
+	registro, err := p.despachador.almacen.RegistrarUnaVez(r.Context(), envio, ahora)
+	if errors.Is(err, ErrEnvioEnConflicto) {
+		http.Error(w, "la referencia ya tiene otro desenlace", http.StatusConflict)
+		return
+	}
+	if err != nil {
 		slog.ErrorContext(r.Context(), "registrar evento", "referencia", referencia, "err", err)
 		http.Error(w, "no se pudo registrar el evento", http.StatusInternalServerError)
 		return
 	}
-	p.despachador.Despertar()
+	if registro.Creado {
+		p.despachador.Despertar()
+	}
 
 	escribirPagina(w, plantillaResultado, datosResultado{
-		Referencia: referencia, Monto: monto, Presentado: presentarCentavos(monto),
-		Estado: estado, CUS: cus, Aprobado: estado == estadoAprobado,
+		Referencia: registro.Envio.Referencia, Monto: registro.Envio.Monto, Presentado: presentarCentavos(registro.Envio.Monto),
+		Estado: registro.Envio.Estado, CUS: registro.Envio.CUS, Aprobado: registro.Envio.Estado == estadoAprobado,
 	})
 }
 

@@ -68,6 +68,9 @@ services:
     environment:
       PORT: "8080"
       PSE_URL: https://pse.veraapp.tech
+      RIEL_SIMULADOR_URL: http://simulador-riel:8098
+      DIRECTORIO_SIMULADOR_URL: http://simulador-riel:8098
+      CUSTODIO_EXTRACTO_URL: http://simulador-custodia:8099/extracto
       LOG_LEVEL: info
       LOG_FORMAT: json
       REDIS_URL: redis://redis:6379
