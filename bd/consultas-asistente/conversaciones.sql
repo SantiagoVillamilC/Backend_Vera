@@ -12,6 +12,7 @@ WITH conversacion AS (
     UPDATE asistente.conversacion
     SET cantidad_mensajes = cantidad_mensajes + 1, ultimo_mensaje_en = clock_timestamp()
     WHERE asistente.conversacion.id = @conversacion_id AND usuario_id = @usuario_id AND estado = 'activo'
+    AND (@rol::text <> 'usuario' OR ciclo_expira_en IS NULL OR ciclo_expira_en <= clock_timestamp())
     RETURNING asistente.conversacion.id, asistente.conversacion.cantidad_mensajes
 )
 INSERT INTO asistente.mensaje (

@@ -46,6 +46,7 @@ type DependenciasVera struct {
 	Catalogo       *copilot.Catalogo
 	Consentimiento *copilot.ControlConsentimiento
 	Uso            LimitadorUsoVera
+	Orquestador    *copilot.Orquestador
 }
 
 // NewRouterConVera recibe los puertos listos para la futura orquestación del chat.

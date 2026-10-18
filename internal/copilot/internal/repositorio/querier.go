@@ -6,9 +6,14 @@ package repositorio
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	// El mensaje debe ser el último del usuario y no tener respuesta final.
+	// El UUID de cercado evita que un proceso atrasado escriba o libere el ciclo de otro.
+	AdquirirCiclo(ctx context.Context, arg AdquirirCicloParams) (pgtype.UUID, error)
 	// La actualización bloquea la conversación y asigna orden sin MAX()+1 ni carreras.
 	// Si el INSERT falla, el contador y la fecha también se revierten.
 	AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (Mensaje, error)
@@ -24,10 +29,15 @@ type Querier interface {
 	CrearAccion(ctx context.Context, arg CrearAccionParams) (AccionPendiente, error)
 	CrearConversacion(ctx context.Context, arg CrearConversacionParams) (Conversacion, error)
 	FallarAccion(ctx context.Context, arg FallarAccionParams) (AccionPendiente, error)
+	LiberarCiclo(ctx context.Context, arg LiberarCicloParams) error
+	MensajeDeCiclo(ctx context.Context, arg MensajeDeCicloParams) (Mensaje, error)
+	// Nunca exponer los turnos de function calling al historial de la aplicación.
+	MensajesPublicosConversacion(ctx context.Context, arg MensajesPublicosConversacionParams) ([]Mensaje, error)
 	// El estado sin respuesta se deriva sin editar el turno emitido (DBML append-only).
 	MensajesSinRespuesta(ctx context.Context, arg MensajesSinRespuestaParams) ([]Mensaje, error)
 	ObtenerAccion(ctx context.Context, arg ObtenerAccionParams) (AccionPendiente, error)
 	ObtenerConversacion(ctx context.Context, arg ObtenerConversacionParams) (Conversacion, error)
+	ValidarCiclo(ctx context.Context, arg ValidarCicloParams) (pgtype.UUID, error)
 	VencerAccion(ctx context.Context, arg VencerAccionParams) (AccionPendiente, error)
 	// Base del barrido periódico de SCRUM-137: lotes pequeños y trabajadores sin bloqueo mutuo.
 	VencerAcciones(ctx context.Context, limite int32) (int64, error)

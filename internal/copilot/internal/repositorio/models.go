@@ -38,6 +38,8 @@ type Conversacion struct {
 	CantidadMensajes int32              `json:"cantidad_mensajes"`
 	CreadaEn         pgtype.Timestamptz `json:"creada_en"`
 	UltimoMensajeEn  pgtype.Timestamptz `json:"ultimo_mensaje_en"`
+	CicloToken       pgtype.UUID        `json:"ciclo_token"`
+	CicloExpiraEn    pgtype.Timestamptz `json:"ciclo_expira_en"`
 }
 
 type Mensaje struct {

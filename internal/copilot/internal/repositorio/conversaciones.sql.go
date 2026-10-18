@@ -17,6 +17,7 @@ WITH conversacion AS (
     UPDATE asistente.conversacion
     SET cantidad_mensajes = cantidad_mensajes + 1, ultimo_mensaje_en = clock_timestamp()
     WHERE asistente.conversacion.id = $11 AND usuario_id = $12 AND estado = 'activo'
+    AND ($1::text <> 'usuario' OR ciclo_expira_en IS NULL OR ciclo_expira_en <= clock_timestamp())
     RETURNING asistente.conversacion.id, asistente.conversacion.cantidad_mensajes
 )
 INSERT INTO asistente.mensaje (
@@ -142,7 +143,7 @@ func (q *Queries) ContextoConversacion(ctx context.Context, arg ContextoConversa
 
 const crearConversacion = `-- name: CrearConversacion :one
 INSERT INTO asistente.conversacion (usuario_id, titulo)
-VALUES ($1, $2) RETURNING id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en
+VALUES ($1, $2) RETURNING id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en, ciclo_token, ciclo_expira_en
 `
 
 type CrearConversacionParams struct {
@@ -161,6 +162,8 @@ func (q *Queries) CrearConversacion(ctx context.Context, arg CrearConversacionPa
 		&i.CantidadMensajes,
 		&i.CreadaEn,
 		&i.UltimoMensajeEn,
+		&i.CicloToken,
+		&i.CicloExpiraEn,
 	)
 	if err != nil {
 		err = fmt.Errorf("query CrearConversacion: %w", err)
@@ -218,7 +221,7 @@ func (q *Queries) MensajesSinRespuesta(ctx context.Context, arg MensajesSinRespu
 }
 
 const obtenerConversacion = `-- name: ObtenerConversacion :one
-SELECT id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en FROM asistente.conversacion WHERE id = $1 AND usuario_id = $2
+SELECT id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en, ciclo_token, ciclo_expira_en FROM asistente.conversacion WHERE id = $1 AND usuario_id = $2
 `
 
 type ObtenerConversacionParams struct {
@@ -237,6 +240,8 @@ func (q *Queries) ObtenerConversacion(ctx context.Context, arg ObtenerConversaci
 		&i.CantidadMensajes,
 		&i.CreadaEn,
 		&i.UltimoMensajeEn,
+		&i.CicloToken,
+		&i.CicloExpiraEn,
 	)
 	if err != nil {
 		err = fmt.Errorf("query ObtenerConversacion: %w", err)
