@@ -126,63 +126,77 @@ func verificarLimite(ctx context.Context, q *repositorio.Queries, usuarioID, niv
 	return evaluarGMF(contexto.reglas, contexto.valorUVT, contexto.acumulado, monto)
 }
 
-// MontoMaximoEnviable devuelve lo máximo que el usuario puede enviar sin que el saldo insuficiente por GMF lo sorprenda (HU-NF-06, criterio 14).
+// DesgloseLimites explica el máximo calculado por las mismas reglas del envío.
+// SaldoDespuesGMF es el máximo por saldo y gravamen antes de recortar por los cupos.
+type DesgloseLimites struct {
+	MaximoEnviable, SaldoDespuesGMF, TopeOperacion, CupoMensualRestante, GMF Centavos
+	AplicaGMF                                                                bool
+}
+
+// MontoMaximoEnviable conserva la respuesta pública usando el mismo cálculo del desglose.
 func (s *Servicio) MontoMaximoEnviable(ctx context.Context, usuarioID string, momento time.Time) (Centavos, error) {
+	d, err := s.DesgloseLimites(ctx, usuarioID, momento)
+	return d.MaximoEnviable, err
+}
+
+// DesgloseLimites lee el nivel de KYC y devuelve el máximo con su desglose, sin escribir ledger.
+func (s *Servicio) DesgloseLimites(ctx context.Context, usuarioID string, momento time.Time) (DesgloseLimites, error) {
 	if s.kyc == nil {
-		return 0, ErrKYCNoDisponible
+		return DesgloseLimites{}, ErrKYCNoDisponible
 	}
 	nivel, err := s.kyc.NivelKYC(ctx, usuarioID)
 	if err != nil {
-		return 0, fmt.Errorf("nucleo: leer el nivel de KYC de %q: %w", usuarioID, err)
+		return DesgloseLimites{}, fmt.Errorf("nucleo: leer el nivel de KYC de %q: %w", usuarioID, err)
 	}
 	return enTransaccion(ctx, s.pool,
-		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (Centavos, error) {
-			return montoMaximoEnviable(ctx, q, usuarioID, nivel, momento)
+		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (DesgloseLimites, error) {
+			return desgloseMaximoEnviable(ctx, q, usuarioID, nivel, momento)
 		})
 }
 
-// montoMaximoEnviable lee el contexto del límite y el saldo del emisor, y despeja el mayor monto enviable (HU-NF-06, criterio 14).
-func montoMaximoEnviable(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, momento time.Time) (Centavos, error) {
+// desgloseMaximoEnviable lee el contexto del límite y el saldo del emisor, y despeja el mayor monto enviable (HU-NF-06, criterio 14).
+func desgloseMaximoEnviable(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, momento time.Time) (DesgloseLimites, error) {
 	contexto, err := leerContextoDeLimite(ctx, q, usuarioID, nivelKYC, momento)
 	if err != nil {
-		return 0, err
+		return DesgloseLimites{}, err
 	}
 	saldo, err := q.SaldoDeCuenta(ctx, NombreCuentaDisponible(usuarioID))
 	if err != nil {
-		return 0, fmt.Errorf("nucleo: leer el saldo de %q: %w", usuarioID, err)
+		return DesgloseLimites{}, fmt.Errorf("nucleo: leer el saldo de %q: %w", usuarioID, err)
 	}
 	disponible, err := Centavos(0).Restar(Centavos(saldo))
 	if err != nil {
-		return 0, err
+		return DesgloseLimites{}, err
 	}
-	return despejeDelTope(contexto, disponible)
+	return desgloseDelTope(contexto, disponible)
 }
 
-// despejeDelTope resuelve los tres casos del criterio y recorta por el tope por operación y el cupo mensual restante (HU-NF-06, criterio 14).
-func despejeDelTope(contexto contextoDeLimite, saldo Centavos) (Centavos, error) {
+// desgloseDelTope resuelve los tres casos del criterio y recorta por el tope por operación y el cupo mensual restante (HU-NF-06, criterio 14).
+func desgloseDelTope(contexto contextoDeLimite, saldo Centavos) (DesgloseLimites, error) {
 	topeMensual, err := topeDeRegla(contexto.reglas, TipoReglaRechaza, VentanaLimiteMensual, contexto.valorUVT)
 	if err != nil {
-		return 0, err
+		return DesgloseLimites{}, err
 	}
 	reglaGMF, ok := reglaGMFVigente(contexto.reglas)
 	if !ok {
-		return 0, ErrReglaGMFNoVigente
+		return DesgloseLimites{}, ErrReglaGMFNoVigente
 	}
 	topeExento, err := centavosDesdeTopeUVT(reglaGMF.TopeUVTCentesimas, contexto.valorUVT)
 	if err != nil {
-		return 0, err
+		return DesgloseLimites{}, err
 	}
 	monto, err := montoSinCupo(saldo, contexto.acumulado, topeExento, reglaGMF.TarifaPPM)
 	if err != nil {
-		return 0, err
+		return DesgloseLimites{}, err
 	}
+	porSaldo := monto
 	restante, err := cupoRestante(topeMensual, contexto.acumulado)
 	if err != nil {
-		return 0, err
+		return DesgloseLimites{}, err
 	}
 	topeOperacion, err := topeDeRegla(contexto.reglas, TipoReglaRechaza, VentanaLimiteOperacion, contexto.valorUVT)
 	if err != nil {
-		return 0, err
+		return DesgloseLimites{}, err
 	}
 	if monto > restante {
 		monto = restante
@@ -190,7 +204,21 @@ func despejeDelTope(contexto contextoDeLimite, saldo Centavos) (Centavos, error)
 	if monto > topeOperacion {
 		monto = topeOperacion
 	}
-	return monto, nil
+	gmf, err := evaluarGMF(contexto.reglas, contexto.valorUVT, contexto.acumulado, monto)
+	if err != nil {
+		return DesgloseLimites{}, err
+	}
+	return DesgloseLimites{MaximoEnviable: monto, SaldoDespuesGMF: porSaldo, TopeOperacion: topeOperacion, CupoMensualRestante: restante, GMF: gmf, AplicaGMF: gmf > 0}, nil
+}
+
+func montoMaximoEnviable(ctx context.Context, q *repositorio.Queries, usuarioID, nivelKYC string, momento time.Time) (Centavos, error) {
+	d, err := desgloseMaximoEnviable(ctx, q, usuarioID, nivelKYC, momento)
+	return d.MaximoEnviable, err
+}
+
+func despejeDelTope(c contextoDeLimite, saldo Centavos) (Centavos, error) {
+	d, err := desgloseDelTope(c, saldo)
+	return d.MaximoEnviable, err
 }
 
 // topeDeRegla convierte el tope de la regla vigente del tipo y la ventana pedidos; sin ella falla cerrado (HU-NF-06, criterios 10 y 13).

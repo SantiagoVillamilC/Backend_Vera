@@ -21,7 +21,10 @@ type SaldoHerramienta struct{ Disponible, Retenido nucleo.Centavos }
 func (SaldoHerramienta) datosHerramienta() {}
 
 // LimitesHerramienta contiene exclusivamente importes calculados por el núcleo.
-type LimitesHerramienta struct{ MaximoEnviable, TopeOperacion, CupoMensualRestante, GMF nucleo.Centavos }
+type LimitesHerramienta struct {
+	MaximoEnviable, SaldoDespuesGMF, TopeOperacion, CupoMensualRestante, GMF nucleo.Centavos
+	AplicaGMF                                                                bool
+}
 
 func (LimitesHerramienta) datosHerramienta() {}
 
@@ -100,12 +103,12 @@ func serializarDatos(nombre string, args ArgumentosHerramienta, datos DatosHerra
 		if nombre != "consultar_saldo" {
 			return nil, ErrHerramientaValidacion
 		}
-		vista = map[string]any{"disponible": montoParaModelo(d.Disponible), "retenido": montoParaModelo(d.Retenido)}
+		vista = map[string]any{"disponible": montoParaModelo(d.Disponible), "retenido": montoParaModelo(d.Retenido), "moneda": nucleo.MonedaCOP}
 	case LimitesHerramienta:
 		if nombre != "consultar_limites" {
 			return nil, ErrHerramientaValidacion
 		}
-		vista = map[string]any{"maximo_enviable": montoParaModelo(d.MaximoEnviable), "tope_operacion": montoParaModelo(d.TopeOperacion), "cupo_mensual_restante": montoParaModelo(d.CupoMensualRestante), "gmf": montoParaModelo(d.GMF)}
+		vista = map[string]any{"maximo_enviable": montoParaModelo(d.MaximoEnviable), "saldo_despues_gmf": montoParaModelo(d.SaldoDespuesGMF), "tope_operacion": montoParaModelo(d.TopeOperacion), "cupo_mensual_restante": montoParaModelo(d.CupoMensualRestante), "gmf": montoParaModelo(d.GMF), "aplica_gmf": d.AplicaGMF, "moneda": nucleo.MonedaCOP}
 	case MovimientosHerramienta:
 		if nombre != "listar_movimientos" {
 			return nil, ErrHerramientaValidacion

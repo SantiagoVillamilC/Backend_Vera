@@ -22,8 +22,8 @@ otro integrante, conforme a la HU.
 
 | Función | Clase | Argumentos | Manejador real |
 | --- | --- | --- | --- |
-| `consultar_saldo` | lectura | `{}` | Pendiente SCRUM-126 |
-| `consultar_limites` | lectura | `{}` | Pendiente SCRUM-126 |
+| `consultar_saldo` | lectura | `{}` | Conectado al núcleo en SCRUM-126 |
+| `consultar_limites` | lectura | `{}` | Conectado al desglose del núcleo en SCRUM-126 |
 | `listar_movimientos` | lectura | `desde`, `hasta`; opcionales `tipo`, `limite` | Pendiente SCRUM-127 |
 | `resumir_movimientos` | lectura | `desde`, `hasta`, `agrupar_por` | Pendiente SCRUM-127 |
 | `buscar_destinatario` | lectura | Exactamente uno: `celular` o `nombre` | Pendiente SCRUM-128 |

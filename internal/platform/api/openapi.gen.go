@@ -1289,6 +1289,7 @@ type APIError struct {
 	// ConfirmationConflict (409, la confirmacion no coincide con el deposito),
 	// LateConfirmation (409, el deposito ya no esta pendiente),
 	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
+	// LimitsUnavailable (503, falta configuracion vigente de limites, UVT, GMF o KYC),
 	// AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
 	// AudioNotUnderstood (422, el audio no tiene voz reconocible),
 	// ActionExpired (410, la accion pendiente supero su vigencia),
