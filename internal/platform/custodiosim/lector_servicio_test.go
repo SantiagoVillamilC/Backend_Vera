@@ -70,9 +70,9 @@ func construirSimulador(t *testing.T) string {
 		t.Skipf("sin toolchain de Go para construir el simulador: %v", err)
 	}
 	raiz := filepath.Dir(strings.TrimSpace(string(salida)))
-	fuente := filepath.Join(filepath.Dir(raiz), "Simuladores_Vera", "cmd", "simulador-custodia")
+	fuente := filepath.Join(raiz, "servicios", "simuladores", "cmd", "simulador-custodia")
 	if _, err := os.Stat(filepath.Join(fuente, "main.go")); err != nil {
-		t.Skip("el simulador de custodia vive en el monorepo Simuladores_Vera; define SIMULADOR_CUSTODIA_BIN para correr esta prueba")
+		t.Skip("el simulador de custodia vive en servicios/simuladores; define SIMULADOR_CUSTODIA_BIN para correr esta prueba")
 	}
 	bin := filepath.Join(t.TempDir(), "simulador-custodia")
 	construir := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")

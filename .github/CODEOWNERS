@@ -1,0 +1,5 @@
+/servicios/simuladores/cmd/simulador-riel/ @SantiagoVillamilC
+/servicios/simuladores/cmd/simulador-custodia/ @soy-chrislo
+/servicios/simuladores/cmd/simulador-pse/ @soy-chrislo
+/servicios/simuladores/contratos/ @SantiagoVillamilC @soy-chrislo
+/servicios/simuladores/deploy/ @soy-chrislo

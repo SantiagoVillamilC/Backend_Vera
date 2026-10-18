@@ -1,0 +1,75 @@
+name: CD simuladores
+
+on:
+  push:
+    branches: [staging, main]
+    paths:
+      - "servicios/simuladores/**"
+      - ".github/workflows/cd-simuladores.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cd-simuladores-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRO: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and push ${{ matrix.servicio }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        servicio: [simulador-riel, simulador-custodia, simulador-pse]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRO }}/${{ matrix.servicio }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=${{ github.ref_name }}-
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: servicios/simuladores
+          file: servicios/simuladores/deploy/Dockerfile
+          build-args: |
+            SERVICIO=${{ matrix.servicio }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    name: Deploy simuladores on the VM
+    needs: build-and-push
+    if: vars.DEPLOY_SIMULADORES == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the restricted deploy command over SSH
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/centinela_deploy
+          chmod 600 ~/.ssh/centinela_deploy
+          ssh -i ~/.ssh/centinela_deploy -p "$DEPLOY_SSH_PORT" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST"
