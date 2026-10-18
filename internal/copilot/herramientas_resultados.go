@@ -34,12 +34,14 @@ type MovimientoHerramienta struct {
 	Motivo      string
 	Monto       nucleo.Centavos
 	Contraparte string
+	Componentes []nucleo.LineaMovimiento
 }
 
 // MovimientosHerramienta anuncia si existen más registros fuera de la página.
 type MovimientosHerramienta struct {
 	Movimientos []MovimientoHerramienta
 	HayMas      bool
+	Total       int64
 }
 
 func (MovimientosHerramienta) datosHerramienta() {}
@@ -119,28 +121,42 @@ func serializarDatos(nombre string, args ArgumentosHerramienta, datos DatosHerra
 			if !motivoValido(m.Motivo) || m.Fecha.IsZero() {
 				return nil, ErrHerramientaValidacion
 			}
-			filas = append(filas, map[string]any{"fecha": fechaColombia(m.Fecha), "motivo": m.Motivo, "monto": montoParaModelo(m.Monto), "contraparte": nombreParaModelo(m.Contraparte)})
+			componentes := make([]map[string]any, 0, len(m.Componentes))
+			for _, l := range m.Componentes {
+				if !motivoValido(string(l.Motivo)) {
+					return nil, ErrHerramientaValidacion
+				}
+				componentes = append(componentes, map[string]any{"motivo": l.Motivo, "monto": montoParaModelo(l.Monto)})
+			}
+			filas = append(filas, map[string]any{"fecha": fechaColombia(m.Fecha), "motivo": m.Motivo, "monto": montoParaModelo(m.Monto), "contraparte": nombreParaModelo(m.Contraparte), "componentes": componentes})
 		}
-		vista = map[string]any{"movimientos": filas, "hay_mas": d.HayMas || len(d.Movimientos) > limite}
+		vista = map[string]any{"movimientos": filas, "hay_mas": d.HayMas || len(d.Movimientos) > limite, "total": max(d.Total, int64(len(d.Movimientos)))}
 	case ResumenHerramienta:
 		if nombre != "resumir_movimientos" || d.Cantidad < 0 {
 			return nil, ErrHerramientaValidacion
 		}
-		grupos := make([]map[string]any, 0, min(len(d.Grupos), 20))
-		for _, g := range d.Grupos[:min(len(d.Grupos), 20)] {
+		grupos := make([]map[string]any, 0, min(len(d.Grupos), 10))
+		for _, g := range d.Grupos[:min(len(d.Grupos), 10)] {
 			if g.Cantidad < 0 {
 				return nil, ErrHerramientaValidacion
 			}
 			etiqueta := nombreParaModelo(g.Nombre)
+			if g.Nombre == "Sin contraparte" || g.Nombre == "Contraparte no disponible" {
+				etiqueta = g.Nombre
+			}
 			if args.AgruparPor == "motivo" {
 				if !motivoValido(g.Nombre) {
 					return nil, ErrHerramientaValidacion
 				}
 				etiqueta = g.Nombre
 			}
-			grupos = append(grupos, map[string]any{"grupo": etiqueta, "entradas": montoParaModelo(g.Entradas), "salidas": montoParaModelo(g.Salidas), "neto": montoParaModelo(g.Neto), "cantidad": g.Cantidad})
+			total, err := g.Entradas.Sumar(g.Salidas)
+			if err != nil {
+				return nil, err
+			}
+			grupos = append(grupos, map[string]any{"grupo": etiqueta, "entradas": montoParaModelo(g.Entradas), "salidas": montoParaModelo(g.Salidas), "neto": montoParaModelo(g.Neto), "cantidad": g.Cantidad, "total": montoParaModelo(total)})
 		}
-		vista = map[string]any{"entradas": montoParaModelo(d.Entradas), "salidas": montoParaModelo(d.Salidas), "neto": montoParaModelo(d.Neto), "cantidad": d.Cantidad, "grupos": grupos, "hay_mas": d.HayMas || len(d.Grupos) > 20}
+		vista = map[string]any{"entradas": montoParaModelo(d.Entradas), "salidas": montoParaModelo(d.Salidas), "neto": montoParaModelo(d.Neto), "cantidad": d.Cantidad, "grupos": grupos, "hay_mas": d.HayMas || len(d.Grupos) > 10}
 	case DestinatariosHerramienta:
 		if nombre != "buscar_destinatario" {
 			return nil, ErrHerramientaValidacion

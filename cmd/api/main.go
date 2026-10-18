@@ -99,6 +99,8 @@ func run() error {
 	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
 		"consultar_saldo":         copilot.ConsultaSaldoIA(servicio),
 		"consultar_limites":       copilot.ConsultaLimitesIA(servicio),
+		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
+		"resumir_movimientos":     copilot.ResumenMovimientosIA(servicio, resolutorDestino),
 		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
 	}, slog.Default())
 	if err != nil {

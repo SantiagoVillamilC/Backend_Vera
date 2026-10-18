@@ -58,6 +58,9 @@ type Querier interface {
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error)
 	MarcarDesafioVerificado(ctx context.Context, id pgtype.UUID) (int64, error)
+	// Consulta interna por referencias que el núcleo obtuvo del historial propio.
+	// No resuelve celulares actuales: evita atribuir transferencias antiguas a un nuevo titular.
+	NombresDeContrapartes(ctx context.Context, ids []pgtype.UUID) ([]NombresDeContrapartesRow, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error

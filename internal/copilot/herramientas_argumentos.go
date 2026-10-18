@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
-	"time"
 	"unicode/utf8"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
@@ -56,9 +55,7 @@ func validarArgumentos(nombre string, esquema *openapi3.Schema, raw json.RawMess
 		return args, nil, ErrHerramientaValidacion
 	}
 	if nombre == "listar_movimientos" || nombre == "resumir_movimientos" {
-		desde, e1 := time.Parse(time.DateOnly, args.Desde)
-		hasta, e2 := time.Parse(time.DateOnly, args.Hasta)
-		if e1 != nil || e2 != nil || desde.After(hasta) {
+		if _, _, err := nucleo.RangoMovimientosColombia(args.Desde, args.Hasta); err != nil {
 			return args, nil, ErrHerramientaValidacion
 		}
 	}

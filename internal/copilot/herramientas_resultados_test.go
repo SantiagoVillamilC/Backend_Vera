@@ -74,7 +74,7 @@ func TestResultadosAcotados(t *testing.T) {
 		limite        int
 	}{
 		{"listar_movimientos", "movimientos", ArgumentosHerramienta{Limite: 2}, MovimientosHerramienta{Movimientos: movimientos}, 2},
-		{"resumir_movimientos", "grupos", ArgumentosHerramienta{AgruparPor: "contraparte"}, ResumenHerramienta{Grupos: grupos}, 20},
+		{"resumir_movimientos", "grupos", ArgumentosHerramienta{AgruparPor: "contraparte"}, ResumenHerramienta{Grupos: grupos}, 10},
 		{"buscar_destinatario", "destinatarios", ArgumentosHerramienta{}, DestinatariosHerramienta{Destinatarios: destinatarios}, 20},
 	} {
 		b, err := serializarDatos(caso.nombre, caso.args, caso.datos)

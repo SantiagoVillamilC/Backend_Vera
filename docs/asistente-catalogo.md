@@ -24,8 +24,8 @@ otro integrante, conforme a la HU.
 | --- | --- | --- | --- |
 | `consultar_saldo` | lectura | `{}` | Conectado al núcleo en SCRUM-126 |
 | `consultar_limites` | lectura | `{}` | Conectado al desglose del núcleo en SCRUM-126 |
-| `listar_movimientos` | lectura | `desde`, `hasta`; opcionales `tipo`, `limite` | Pendiente SCRUM-127 |
-| `resumir_movimientos` | lectura | `desde`, `hasta`, `agrupar_por` | Pendiente SCRUM-127 |
+| `listar_movimientos` | lectura | `desde`, `hasta`; opcionales `tipo`, `limite` | Conectado al núcleo en SCRUM-127 |
+| `resumir_movimientos` | lectura | `desde`, `hasta`, `agrupar_por` | Conectado al núcleo en SCRUM-127 |
 | `buscar_destinatario` | lectura | Exactamente uno: `celular` o `nombre` | Pendiente SCRUM-128 |
 | `consultar_transferencia` | lectura | `transferencia_id` | Conectado al núcleo en esta HU |
 | `preparar_transferencia` | preparación | `monto_pesos` y exactamente uno: `destinatario_ref`, `celular` o `llave_breb` | Pendiente SCRUM-131 |
@@ -45,7 +45,7 @@ implementar sus historias, incluido el consentimiento.
   `identidad.DeContexto` aporta la identidad al manejador. El futuro orquestador
   aportará la conversación desde estado del servidor, nunca desde argumentos IA.
 - `desde` y `hasta`: fechas reales `YYYY-MM-DD`, ordenadas e inclusivas en hora de
-  Colombia. Los manejadores convertirán ese rango a instantes para consultar SQL.
+  Colombia, máximo 366 días inclusivos. El núcleo convierte el rango a instantes para SQL.
 - `tipo`: `deposito`, `transferencia_recibida`, `envio`, `gravamen`, `devolucion`
   o `devolucion_gravamen`; `limite`: entero de 1 a 20, predeterminado 20.
 - `agrupar_por`: `motivo` o `contraparte`.
@@ -78,8 +78,9 @@ explícita. No admite mapas arbitrarios, entidades del núcleo ni DTOs de auth.
 - Nombres: iniciales enmascaradas (por ejemplo `L*** R***`), máximo dos componentes.
   Celulares: sólo los últimos tres dígitos. Es una proyección más restrictiva que
   la usada por auth y se limita a datos enviados al proveedor externo.
-- Listas: máximo 20; movimientos respetan además el límite solicitado. Si se
-  recorta una lista, `hay_mas=true`. Las listas vacías se serializan como `[]`.
+- Listas: máximo 20; movimientos respetan además el límite solicitado y entregan `total`.
+  Los resúmenes muestran máximo 10 grupos, ordenados por entradas más salidas.
+  Si se recorta una lista, `hay_mas=true`. Las listas vacías se serializan como `[]`.
 - Resultado completo: máximo 16 KiB; si excede ese tamaño, se rechaza íntegramente.
 - Fechas: RFC3339 con UTC-5. Los estados y motivos son valores conocidos.
 - Una preparación sólo puede devolver estado `pendiente` y

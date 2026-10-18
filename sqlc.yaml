@@ -44,6 +44,7 @@ sql:
       - bd/migraciones/0016_create_gmf_rule.sql
       - bd/migraciones/0018_create_outbox.sql
       - bd/migraciones/0019_create_descuadre_y_cursor.sql
+      - bd/migraciones/0021_indice_movimientos_por_cuenta_fecha.sql
     queries: bd/consultas-nucleo
     gen:
       go:
