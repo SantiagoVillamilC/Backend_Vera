@@ -180,7 +180,7 @@ func TestMontoMaximoRouteRequiresAuth(t *testing.T) {
 	assertErrorEnvelope(t, rec, http.StatusUnauthorized, "Unauthorized")
 }
 
-// Con la credencial de prueba se alcanza el stub de Vera, sin rechazo de autenticación.
+// Con la credencial de prueba se alcanza el control de Vera, sin rechazo de autenticación.
 func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 	r := newTestRouter()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/vera/mensajes", nil)
@@ -192,8 +192,8 @@ func TestAuthedRouteWithTestCredentialReachesHandler(t *testing.T) {
 	if rec.Code == http.StatusUnauthorized {
 		t.Fatalf("con la credencial de prueba no debe dar 401 (cuerpo %q)", rec.Body.String())
 	}
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, quiero 501 por el stub de Vera (cuerpo %q)", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, quiero 503 sin lector de consentimiento (cuerpo %q)", rec.Code, rec.Body.String())
 	}
 }
 

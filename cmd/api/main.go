@@ -64,6 +64,9 @@ func run() error {
 		return fmt.Errorf("pool: %w", err)
 	}
 	defer pool.Close()
+	consentimientos := auth.NuevoServicioDeConsentimientos(pool)
+	controlIA := copilot.NuevoControlConsentimiento(consentimientos, copilot.NuevoCanceladorConsentimiento(pool))
+	proveedorIA = controlIA.ProtegerProveedor(proveedorIA)
 
 	// Rellenos de lo que aún no existe (KYC real); el directorio, el extracto del custodio y el riel son reales cuando hay URL.
 	var riel nucleo.Riel = nucleo.RielNoDisponible{}
@@ -176,7 +179,7 @@ func run() error {
 		Identidad:     identidadPeticion,
 		Auth:          httpserver.NuevoDispositivosHandler(servicioSesion),
 		KYC:           handlerKYC,
-		Consent:       httpserver.NuevoConsentimientosHandler(auth.NuevoServicioDeConsentimientos(pool)),
+		Consent:       httpserver.NuevoConsentimientosHandler(consentimientos),
 		Redis:         clienteRedisAuth,
 		CanalOTP:      canal,
 		Contadores:    contadoresAuth,
@@ -224,7 +227,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA}, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

@@ -18,7 +18,7 @@ INSERT INTO auth.consentimientos (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
-RETURNING id, parte_id, tipo, version_texto, texto, aceptado, accion, actor, origen, user_agent, metodo, ocurrido_en
+RETURNING id, parte_id, tipo, version_texto, texto, aceptado, accion, actor, origen, user_agent, metodo, ocurrido_en, orden
 `
 
 type CrearConsentimientoParams struct {
@@ -65,6 +65,7 @@ func (q *Queries) CrearConsentimiento(ctx context.Context, arg CrearConsentimien
 		&i.UserAgent,
 		&i.Metodo,
 		&i.OcurridoEn,
+		&i.Orden,
 	)
 	if err != nil {
 		err = fmt.Errorf("query CrearConsentimiento: %w", err)
@@ -72,8 +73,42 @@ func (q *Queries) CrearConsentimiento(ctx context.Context, arg CrearConsentimien
 	return i, err
 }
 
+const estadoConsentimientoAsistente = `-- name: EstadoConsentimientoAsistente :one
+SELECT t.tipo, t.version, t.texto,
+    COALESCE((SELECT c.aceptado AND c.accion = 'otorgar' AND c.version_texto = t.version
+        FROM auth.consentimientos c
+        WHERE c.parte_id = $1 AND c.tipo = 'asistente_ia'
+        ORDER BY c.orden DESC LIMIT 1), false)::boolean AS autorizado
+FROM auth.textos_consentimiento t
+WHERE t.tipo = 'asistente_ia' AND t.vigente_desde <= clock_timestamp()
+ORDER BY t.vigente_desde DESC, t.version DESC LIMIT 1
+`
+
+type EstadoConsentimientoAsistenteRow struct {
+	Tipo       string `json:"tipo"`
+	Version    string `json:"version"`
+	Texto      string `json:"texto"`
+	Autorizado bool   `json:"autorizado"`
+}
+
+// Una única sentencia evita combinar un texto y un evento de snapshots distintos.
+func (q *Queries) EstadoConsentimientoAsistente(ctx context.Context, parteID pgtype.UUID) (EstadoConsentimientoAsistenteRow, error) {
+	row := q.db.QueryRow(ctx, estadoConsentimientoAsistente, parteID)
+	var i EstadoConsentimientoAsistenteRow
+	err := row.Scan(
+		&i.Tipo,
+		&i.Version,
+		&i.Texto,
+		&i.Autorizado,
+	)
+	if err != nil {
+		err = fmt.Errorf("query EstadoConsentimientoAsistente: %w", err)
+	}
+	return i, err
+}
+
 const listarConsentimientosDeParte = `-- name: ListarConsentimientosDeParte :many
-SELECT id, parte_id, tipo, version_texto, texto, aceptado, accion, actor, origen, user_agent, metodo, ocurrido_en
+SELECT id, parte_id, tipo, version_texto, texto, aceptado, accion, actor, origen, user_agent, metodo, ocurrido_en, orden
 FROM auth.consentimientos
 WHERE parte_id = $1
 ORDER BY ocurrido_en DESC
@@ -101,6 +136,7 @@ func (q *Queries) ListarConsentimientosDeParte(ctx context.Context, parteID pgty
 			&i.UserAgent,
 			&i.Metodo,
 			&i.OcurridoEn,
+			&i.Orden,
 		); err != nil {
 			return nil, fmt.Errorf("query ListarConsentimientosDeParte: %w", err)
 		}
@@ -135,6 +171,28 @@ func (q *Queries) TextoDeConsentimiento(ctx context.Context, arg TextoDeConsenti
 	err := row.Scan(&i.Tipo, &i.Version, &i.Texto)
 	if err != nil {
 		err = fmt.Errorf("query TextoDeConsentimiento: %w", err)
+	}
+	return i, err
+}
+
+const textoVigenteAsistente = `-- name: TextoVigenteAsistente :one
+SELECT tipo, version, texto FROM auth.textos_consentimiento
+WHERE tipo = 'asistente_ia' AND vigente_desde <= clock_timestamp()
+ORDER BY vigente_desde DESC, version DESC LIMIT 1
+`
+
+type TextoVigenteAsistenteRow struct {
+	Tipo    string `json:"tipo"`
+	Version string `json:"version"`
+	Texto   string `json:"texto"`
+}
+
+func (q *Queries) TextoVigenteAsistente(ctx context.Context) (TextoVigenteAsistenteRow, error) {
+	row := q.db.QueryRow(ctx, textoVigenteAsistente)
+	var i TextoVigenteAsistenteRow
+	err := row.Scan(&i.Tipo, &i.Version, &i.Texto)
+	if err != nil {
+		err = fmt.Errorf("query TextoVigenteAsistente: %w", err)
 	}
 	return i, err
 }

@@ -26,9 +26,29 @@ func NuevoConsentimientosHandler(servicio ServicioDeConsentimientos) *HandlerDeC
 }
 
 // ListConsents lista el historial completo de la persona, mas reciente primero, con el texto exacto.
-func (h *HandlerDeConsentimientos) ListConsents(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerDeConsentimientos) ListConsents(w http.ResponseWriter, r *http.Request, params api.ListConsentsParams) {
 	parteID, ok := personaDeConsentimiento(w, r)
 	if !ok {
+		return
+	}
+	if params.Tipo != nil {
+		if string(*params.Tipo) != auth.TipoConsentimientoAsistente {
+			api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Tipo de consentimiento inválido.", nil)
+			return
+		}
+		lector, ok := h.servicio.(interface {
+			EstadoAsistente(context.Context, uuid.UUID) (auth.EstadoConsentimientoAsistente, error)
+		})
+		if !ok {
+			api.WriteError(w, http.StatusServiceUnavailable, "AuthUnavailable", "Consentimiento no disponible.", nil)
+			return
+		}
+		estado, err := lector.EstadoAsistente(r.Context(), parteID)
+		if err != nil {
+			escribirErrorDeConsentimiento(w, r, err)
+			return
+		}
+		api.WriteData(w, http.StatusOK, api.EstadoConsentimientoAsistente{Tipo: api.EstadoConsentimientoAsistenteTipo(auth.TipoConsentimientoAsistente), VersionTexto: estado.VersionTexto, Texto: estado.Texto, Autorizado: estado.Autorizado}, nil)
 		return
 	}
 	consentimientos, err := h.servicio.Listar(r.Context(), parteID)

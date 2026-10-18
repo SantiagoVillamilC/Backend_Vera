@@ -36,12 +36,13 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 
 // DependenciasVera reúne el proveedor y el catálogo para la futura orquestación.
 type DependenciasVera struct {
-	Proveedor copilot.ProveedorIA
-	Catalogo  *copilot.Catalogo
+	Proveedor      copilot.ProveedorIA
+	Catalogo       *copilot.Catalogo
+	Consentimiento *copilot.ControlConsentimiento
 }
 
 // NewRouterConVera recibe los puertos listos para la futura orquestación del chat.
-// Las rutas Vera siguen cerradas (501) hasta implementar consentimiento y orquestador.
+// Las rutas de mensajes y confirmación validan consentimiento antes del futuro orquestador (501).
 func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, vera DependenciasVera, pseURL ...string) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)

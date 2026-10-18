@@ -657,18 +657,33 @@ paths:
       operationId: listConsents
       summary: Lista los consentimientos del usuario.
       tags: [consentimiento]
+      description: >
+        Sin filtro devuelve el historial existente. Con tipo=asistente_ia devuelve
+        texto y version vigentes, y autorizado segun el ultimo evento de la parte
+        autenticada y la version actual. Un cambio de version exige nueva aceptacion.
+      parameters:
+        - name: tipo
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asistente_ia]
       responses:
         "200":
           description: Consentimientos con su version y fecha.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ConsentsResponse"
+                $ref: "#/components/schemas/ConsultaConsentsResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "422":
           $ref: "#/components/responses/Error"
         "429":
           $ref: "#/components/responses/Error"
         "500":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -1865,7 +1880,8 @@ components:
           type: string
           description: >
             Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y
-            biometricos usan la version v1 hoy. asistente_ia usa la version que fije su tarjeta.
+            biometricos usan la version v1 hoy. asistente_ia exige la version vigente
+            devuelta por GET /v1/auth/consents?tipo=asistente_ia (inicialmente v1).
           x-oapi-codegen-extra-tags:
             validate: "required,max=64"
         aceptado:
@@ -2541,6 +2557,7 @@ components:
             validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"
         version_texto:
           type: string
+          description: Para asistente_ia debe ser la version vigente devuelta por la consulta filtrada.
           x-oapi-codegen-extra-tags:
             validate: "required,max=64"
         aceptado:
@@ -2593,6 +2610,41 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Consent"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    EstadoConsentimientoAsistente:
+      type: object
+      required: [tipo, version_texto, texto, autorizado]
+      properties:
+        tipo:
+          type: string
+          enum: [asistente_ia]
+        version_texto:
+          type: string
+        texto:
+          type: string
+          description: Texto vigente del servidor, incluso si nunca fue aceptado.
+        autorizado:
+          type: boolean
+          description: Ultimo evento otorgado para la version actualmente vigente.
+
+    ConsultaConsentsResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          oneOf:
+            - type: array
+              items:
+                $ref: "#/components/schemas/Consent"
+            - $ref: "#/components/schemas/EstadoConsentimientoAsistente"
         error:
           type: object
           nullable: true

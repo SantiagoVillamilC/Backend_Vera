@@ -29,7 +29,7 @@ type KYCHandler interface {
 
 // ConsentHandler agrupa los dos endpoints autenticados del módulo de consentimientos.
 type ConsentHandler interface {
-	ListConsents(http.ResponseWriter, *http.Request)
+	ListConsents(http.ResponseWriter, *http.Request, api.ListConsentsParams)
 	CreateConsent(http.ResponseWriter, *http.Request)
 }
 
@@ -132,10 +132,16 @@ func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request
 // Los implementan las tarjetas de la epica del asistente.
 
 func (s servidorV1) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
+	if !s.exigirConsentimientoVera(w, r, nil) {
+		return
+	}
 	sinImplementar(w, r)
 }
 
 func (s servidorV1) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
+	if !s.exigirConsentimientoVera(w, r, nil) {
+		return
+	}
 	sinImplementar(w, r)
 }
 
@@ -159,7 +165,10 @@ func (s servidorV1) SolicitarCodigoAccionVera(w http.ResponseWriter, r *http.Req
 	sinImplementar(w, r)
 }
 
-func (s servidorV1) ConfirmarAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+func (s servidorV1) ConfirmarAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	if !s.exigirConsentimientoVera(w, r, &id) {
+		return
+	}
 	sinImplementar(w, r)
 }
 
@@ -174,12 +183,12 @@ func sinImplementar(w http.ResponseWriter, _ *http.Request) {
 	api.WriteError(w, http.StatusNotImplemented, "NotImplemented", "Endpoint not implemented yet.", nil)
 }
 
-func (s servidorV1) ListConsents(w http.ResponseWriter, r *http.Request) {
+func (s servidorV1) ListConsents(w http.ResponseWriter, r *http.Request, params api.ListConsentsParams) {
 	if s.consent == nil {
 		sinImplementar(w, r)
 		return
 	}
-	s.consent.ListConsents(w, r)
+	s.consent.ListConsents(w, r, params)
 }
 
 func (s servidorV1) CreateConsent(w http.ResponseWriter, r *http.Request) {

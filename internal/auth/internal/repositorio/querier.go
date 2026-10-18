@@ -39,6 +39,8 @@ type Querier interface {
 	DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error)
 	EmpresaDeParte(ctx context.Context, parteID pgtype.UUID) (EmpresaDeParteRow, error)
 	EmpresaExistePorNit(ctx context.Context, nit string) (bool, error)
+	// Una única sentencia evita combinar un texto y un evento de snapshots distintos.
+	EstadoConsentimientoAsistente(ctx context.Context, parteID pgtype.UUID) (EstadoConsentimientoAsistenteRow, error)
 	FamiliasVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]pgtype.UUID, error)
 	IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID) (IncrementarIntentoDesafioRow, error)
 	InsertarAviso(ctx context.Context, arg InsertarAvisoParams) (AvisoOutbox, error)
@@ -72,6 +74,7 @@ type Querier interface {
 	RotarSesion(ctx context.Context, refreshHash []byte) (Sesion, error)
 	SesionPorRefreshHash(ctx context.Context, refreshHash []byte) (Sesion, error)
 	TextoDeConsentimiento(ctx context.Context, arg TextoDeConsentimientoParams) (TextoDeConsentimientoRow, error)
+	TextoVigenteAsistente(ctx context.Context) (TextoVigenteAsistenteRow, error)
 	TipoDeParte(ctx context.Context, id pgtype.UUID) (string, error)
 	TokenRestablecimientoVigente(ctx context.Context, tokenHash []byte) (TokenRestablecimientoVigenteRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)

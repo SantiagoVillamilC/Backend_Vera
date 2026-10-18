@@ -249,6 +249,21 @@ func (e ConsentsResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for ConsultaConsentsResponseSuccess.
+const (
+	ConsultaConsentsResponseSuccessTrue ConsultaConsentsResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the ConsultaConsentsResponseSuccess enum.
+func (e ConsultaConsentsResponseSuccess) Valid() bool {
+	switch e {
+	case ConsultaConsentsResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContextoTipo.
 const (
 	ContextoTipoEmpresa ContextoTipo = "empresa"
@@ -627,6 +642,21 @@ const (
 func (e ErrorResponseSuccess) Valid() bool {
 	switch e {
 	case False:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EstadoConsentimientoAsistenteTipo.
+const (
+	EstadoConsentimientoAsistenteTipoAsistenteIa EstadoConsentimientoAsistenteTipo = "asistente_ia"
+)
+
+// Valid indicates whether the value is a known member of the EstadoConsentimientoAsistenteTipo enum.
+func (e EstadoConsentimientoAsistenteTipo) Valid() bool {
+	switch e {
+	case EstadoConsentimientoAsistenteTipoAsistenteIa:
 		return true
 	default:
 		return false
@@ -1218,6 +1248,21 @@ func (e VerificacionResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for ListConsentsParamsTipo.
+const (
+	ListConsentsParamsTipoAsistenteIa ListConsentsParamsTipo = "asistente_ia"
+)
+
+// Valid indicates whether the value is a known member of the ListConsentsParamsTipo enum.
+func (e ListConsentsParamsTipo) Valid() bool {
+	switch e {
+	case ListConsentsParamsTipoAsistenteIa:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIError defines model for APIError.
 type APIError struct {
 	// Code Identificador estable del catalogo de errores, en PascalCase. Nunca se compara el
@@ -1347,11 +1392,13 @@ type ConsentAccion string
 
 // ConsentRequest defines model for ConsentRequest.
 type ConsentRequest struct {
-	Accion       *ConsentRequestAccion `json:"accion,omitempty" validate:"omitempty,oneof=otorgar revocar"`
-	Aceptado     *bool                 `json:"aceptado" validate:"required"`
-	Metodo       *string               `json:"metodo,omitempty" validate:"omitempty,max=64"`
-	Tipo         ConsentRequestTipo    `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
-	VersionTexto string                `json:"version_texto" validate:"required,max=64"`
+	Accion   *ConsentRequestAccion `json:"accion,omitempty" validate:"omitempty,oneof=otorgar revocar"`
+	Aceptado *bool                 `json:"aceptado" validate:"required"`
+	Metodo   *string               `json:"metodo,omitempty" validate:"omitempty,max=64"`
+	Tipo     ConsentRequestTipo    `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
+
+	// VersionTexto Para asistente_ia debe ser la version vigente devuelta por la consulta filtrada.
+	VersionTexto string `json:"version_texto" validate:"required,max=64"`
 }
 
 // ConsentRequestAccion defines model for ConsentRequest.Accion.
@@ -1367,7 +1414,7 @@ type Consentimiento struct {
 	// Tipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos y asistente_ia son opcionales.
 	Tipo ConsentimientoTipo `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
 
-	// VersionTexto Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y biometricos usan la version v1 hoy. asistente_ia usa la version que fije su tarjeta.
+	// VersionTexto Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y biometricos usan la version v1 hoy. asistente_ia exige la version vigente devuelta por GET /v1/auth/consents?tipo=asistente_ia (inicialmente v1).
 	VersionTexto string `json:"version_texto" validate:"required,max=64"`
 }
 
@@ -1384,6 +1431,25 @@ type ConsentsResponse struct {
 
 // ConsentsResponseSuccess defines model for ConsentsResponse.Success.
 type ConsentsResponseSuccess bool
+
+// ConsultaConsentsResponse defines model for ConsultaConsentsResponse.
+type ConsultaConsentsResponse struct {
+	Data    ConsultaConsentsResponse_Data   `json:"data"`
+	Error   *map[string]interface{}         `json:"error"`
+	Meta    *Meta                           `json:"meta"`
+	Success ConsultaConsentsResponseSuccess `json:"success"`
+}
+
+// ConsultaConsentsResponseData0 defines model for ConsultaConsentsResponse.Data.0.
+type ConsultaConsentsResponseData0 = []Consent
+
+// ConsultaConsentsResponse_Data defines model for ConsultaConsentsResponse.Data.
+type ConsultaConsentsResponse_Data struct {
+	union json.RawMessage
+}
+
+// ConsultaConsentsResponseSuccess defines model for ConsultaConsentsResponse.Success.
+type ConsultaConsentsResponseSuccess bool
 
 // Contexto defines model for Contexto.
 type Contexto struct {
@@ -1696,6 +1762,20 @@ type ErrorResponse struct {
 
 // ErrorResponseSuccess defines model for ErrorResponse.Success.
 type ErrorResponseSuccess bool
+
+// EstadoConsentimientoAsistente defines model for EstadoConsentimientoAsistente.
+type EstadoConsentimientoAsistente struct {
+	// Autorizado Ultimo evento otorgado para la version actualmente vigente.
+	Autorizado bool `json:"autorizado"`
+
+	// Texto Texto vigente del servidor, incluso si nunca fue aceptado.
+	Texto        string                            `json:"texto"`
+	Tipo         EstadoConsentimientoAsistenteTipo `json:"tipo"`
+	VersionTexto string                            `json:"version_texto"`
+}
+
+// EstadoConsentimientoAsistenteTipo defines model for EstadoConsentimientoAsistente.Tipo.
+type EstadoConsentimientoAsistenteTipo string
 
 // FieldError defines model for FieldError.
 type FieldError struct {
@@ -2170,6 +2250,14 @@ type VerifyPhoneRequest struct {
 // Error defines model for Error.
 type Error = ErrorResponse
 
+// ListConsentsParams defines parameters for ListConsents.
+type ListConsentsParams struct {
+	Tipo *ListConsentsParamsTipo `form:"tipo,omitempty" json:"tipo,omitempty"`
+}
+
+// ListConsentsParamsTipo defines parameters for ListConsents.
+type ListConsentsParamsTipo string
+
 // ConsultarDestinatarioParams defines parameters for ConsultarDestinatario.
 type ConsultarDestinatarioParams struct {
 	Celular string `form:"celular" json:"celular"`
@@ -2240,6 +2328,68 @@ type EnviarMensajeVeraJSONRequestBody = EnviarMensajeVeraRequest
 
 // EnviarMensajeVozVeraJSONRequestBody defines body for EnviarMensajeVozVera for application/json ContentType.
 type EnviarMensajeVozVeraJSONRequestBody = EnviarAudioVeraRequest
+
+// AsConsultaConsentsResponseData0 returns the union data inside the ConsultaConsentsResponse_Data as a ConsultaConsentsResponseData0
+func (t ConsultaConsentsResponse_Data) AsConsultaConsentsResponseData0() (ConsultaConsentsResponseData0, error) {
+	var body ConsultaConsentsResponseData0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromConsultaConsentsResponseData0 overwrites any union data inside the ConsultaConsentsResponse_Data as the provided ConsultaConsentsResponseData0
+func (t *ConsultaConsentsResponse_Data) FromConsultaConsentsResponseData0(v ConsultaConsentsResponseData0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeConsultaConsentsResponseData0 performs a merge with any union data inside the ConsultaConsentsResponse_Data, using the provided ConsultaConsentsResponseData0
+func (t *ConsultaConsentsResponse_Data) MergeConsultaConsentsResponseData0(v ConsultaConsentsResponseData0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsEstadoConsentimientoAsistente returns the union data inside the ConsultaConsentsResponse_Data as a EstadoConsentimientoAsistente
+func (t ConsultaConsentsResponse_Data) AsEstadoConsentimientoAsistente() (EstadoConsentimientoAsistente, error) {
+	var body EstadoConsentimientoAsistente
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromEstadoConsentimientoAsistente overwrites any union data inside the ConsultaConsentsResponse_Data as the provided EstadoConsentimientoAsistente
+func (t *ConsultaConsentsResponse_Data) FromEstadoConsentimientoAsistente(v EstadoConsentimientoAsistente) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeEstadoConsentimientoAsistente performs a merge with any union data inside the ConsultaConsentsResponse_Data, using the provided EstadoConsentimientoAsistente
+func (t *ConsultaConsentsResponse_Data) MergeEstadoConsentimientoAsistente(v EstadoConsentimientoAsistente) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ConsultaConsentsResponse_Data) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ConsultaConsentsResponse_Data) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsRegisterPersonaRequest returns the union data inside the RegisterRequest as a RegisterPersonaRequest
 func (t RegisterRequest) AsRegisterPersonaRequest() (RegisterPersonaRequest, error) {
@@ -2349,7 +2499,7 @@ type ServerInterface interface {
 	CreateCompany(w http.ResponseWriter, r *http.Request)
 	// ListConsents Lista los consentimientos del usuario.
 	// (GET /v1/auth/consents)
-	ListConsents(w http.ResponseWriter, r *http.Request)
+	ListConsents(w http.ResponseWriter, r *http.Request, params ListConsentsParams)
 	// CreateConsent Registra un consentimiento.
 	// (POST /v1/auth/consents)
 	CreateConsent(w http.ResponseWriter, r *http.Request)
@@ -2448,7 +2598,7 @@ func (_ Unimplemented) CreateCompany(w http.ResponseWriter, r *http.Request) {
 
 // ListConsents Lista los consentimientos del usuario.
 // (GET /v1/auth/consents)
-func (_ Unimplemented) ListConsents(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) ListConsents(w http.ResponseWriter, r *http.Request, params ListConsentsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2646,8 +2796,27 @@ func (siw *ServerInterfaceWrapper) CreateCompany(w http.ResponseWriter, r *http.
 // ListConsents operation middleware
 func (siw *ServerInterfaceWrapper) ListConsents(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConsentsParams
+
+	// ------------- Optional query parameter "tipo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tipo", r.URL.Query(), &params.Tipo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tipo"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tipo", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListConsents(w, r)
+		siw.Handler.ListConsents(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
