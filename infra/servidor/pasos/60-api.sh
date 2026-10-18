@@ -30,6 +30,8 @@ ARCHIVO_CONTADORES_PEPPER="${DIRECTORIO_API}/contadores-pepper.env"
 ARCHIVO_OTP_PEPPER="${DIRECTORIO_API}/otp-pepper.env"
 ARCHIVO_ROL_API_PASSWORD="${DIRECTORIO_API}/rol-api-password.env"
 ARCHIVO_APP_DATABASE_URL="${DIRECTORIO_API}/app-database-url.env"
+# La API no corre migraciones: un servicio de un solo uso las aplica antes de arrancar.
+ARCHIVO_DATABASE_URL="${DIRECTORIO_API}/database-url.env"
 # El núcleo financiero exige CUSTODIO_TOKEN de al menos 32 bytes y distinto de JWT_SECRET
 # (cmd/api/config.go), lo firma el custodio simulado como bearer estático.
 ARCHIVO_CUSTODIO_TOKEN="${DIRECTORIO_API}/custodio-token.env"
@@ -48,6 +50,14 @@ printf 'APP_DATABASE_URL=postgres://rol_api:%s@postgres:5432/centinela?sslmode=d
   "${ROL_API_PASSWORD}" > "${ARCHIVO_APP_DATABASE_URL}"
 chmod 600 "${ARCHIVO_APP_DATABASE_URL}"
 
+# DATABASE_URL es el DSN del usuario dueño del esquema, dueño de las migraciones.
+# Sale del mismo secreto que inicializó Postgres, no se genera otro.
+# shellcheck source=/dev/null
+. "/opt/centinela/postgres/postgres.env"
+printf 'DATABASE_URL=postgres://centinela:%s@postgres:5432/centinela?sslmode=disable\n' \
+  "${POSTGRES_PASSWORD}" > "${ARCHIVO_DATABASE_URL}"
+chmod 600 "${ARCHIVO_DATABASE_URL}"
+
 # Delimitador sin comillas: interpola IMAGEN_API. Los cinco archivos
 # generados arriba entran por env_file (secretos, 600); todo lo que sigue en
 # "environment:" es config fija, no sensible.
@@ -55,6 +65,19 @@ contenido_compose_api="$(cat <<EOF
 # infra/servidor/compose.api.yaml, generado por 60-api.sh, no
 # versionado como archivo estático aparte.
 services:
+  migrate:
+    image: ${IMAGEN_API}
+    container_name: centinela-migrate
+    entrypoint: ["/app/migrate", "up"]
+    env_file:
+      - ${ARCHIVO_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - centinela
+    restart: "no"
+
   api:
     image: ${IMAGEN_API}
     container_name: centinela-api
@@ -95,6 +118,8 @@ services:
     networks:
       - centinela
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

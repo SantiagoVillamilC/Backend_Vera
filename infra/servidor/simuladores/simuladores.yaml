@@ -1,0 +1,86 @@
+# Template de los tres servicios simulados en el VPS. Lo copia 65-simuladores.sh a
+# /opt/centinela/simuladores/compose.yaml. Las imágenes las publica cd-simuladores.yml.
+name: simuladores
+
+services:
+  simulador-riel:
+    image: ${REGISTRO}/simulador-riel:${TAG}
+    container_name: vera-simulador-riel
+    restart: unless-stopped
+    environment:
+      SIMULADOR_RIEL_ADDR: "0.0.0.0"
+      SIMULADOR_RIEL_PORT: "8098"
+      SIMULADOR_RIEL_DB: /datos/simulador-riel.db
+      SIMULADOR_RIEL_ORIGEN: simulador-riel
+      SIMULADOR_RIEL_PERMITIR_EXPOSICION: "true"
+    ports:
+      - "127.0.0.1:8098:8098"
+    volumes:
+      - datos-simulador-riel:/datos
+    networks:
+      - centinela
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8098/control"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  simulador-custodia:
+    image: ${REGISTRO}/simulador-custodia:${TAG}
+    container_name: vera-simulador-custodia
+    restart: unless-stopped
+    environment:
+      SIMULADOR_CUSTODIA_ADDR: "0.0.0.0"
+      SIMULADOR_CUSTODIA_PORT: "8099"
+      SIMULADOR_CUSTODIA_DB: /datos/simulador-custodia.db
+      SIMULADOR_CUSTODIA_ORIGEN: simulador-custodia
+      SIMULADOR_CUSTODIA_PERMITIR_EXPOSICION: "true"
+    ports:
+      - "127.0.0.1:8099:8099"
+    volumes:
+      - datos-simulador-custodia:/datos
+    networks:
+      - centinela
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8099/control/perillas"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  simulador-pse:
+    image: ${REGISTRO}/simulador-pse:${TAG}
+    container_name: vera-simulador-pse
+    restart: unless-stopped
+    environment:
+      SIMULADOR_PSE_ADDR: "0.0.0.0"
+      SIMULADOR_PSE_PORT: "8090"
+      SIMULADOR_PSE_DB: /datos/simulador-pse.db
+      SIMULADOR_PSE_PERMITIR_EXPOSICION: "true"
+      CUSTODIO_TOKEN: ${CUSTODIO_TOKEN:?define CUSTODIO_TOKEN}
+      NUCLEO_CONFIRMACION_URL: ${NUCLEO_CONFIRMACION_URL}
+      SIMULADOR_CUSTODIA_URL: ${SIMULADOR_CUSTODIA_URL}
+    ports:
+      - "127.0.0.1:${PSE_HOST_PORT:-8091}:8090"
+    volumes:
+      - datos-simulador-pse:/datos
+    networks:
+      - centinela
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      - simulador-custodia
+
+volumes:
+  datos-simulador-riel:
+    name: simulador-riel_datos-simulador-riel
+  datos-simulador-custodia:
+    name: simulador-custodia_datos-simulador-custodia
+  datos-simulador-pse:
+    name: simulador-pse_datos-simulador-pse
+
+networks:
+  centinela:
+    name: centinela

@@ -42,6 +42,9 @@ fi
 
 banderas_texto="${banderas_compose[*]}"
 comando_forzado="cd ${directorio_compose} && sudo docker compose ${banderas_texto} pull api && sudo docker compose ${banderas_texto} up -d api"
+# Los simuladores viven en su propio proyecto compose. Se actualizan después de la API,
+# y solo si 65-simuladores.sh ya dejó el directorio. Si fallan, el deploy falla.
+comando_forzado+=" && if [ -d /opt/centinela/simuladores ]; then cd /opt/centinela/simuladores && sudo docker compose pull && sudo docker compose up -d; fi"
 
 linea_actual="$(grep -F "${MARCADOR_LLAVE}" "${ARCHIVO_AUTHORIZED_KEYS}")"
 
