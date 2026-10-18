@@ -1,16 +1,20 @@
-// Package main es el custodio simulado: expone el checkout PSE de un depósito y notifica
-// la confirmación al núcleo financiero, sin tocar un banco real.
+// Package main es el simulador de PSE: expone el checkout simulado de un depósito y notifica
+// la confirmación al núcleo financiero y al simulador de custodia, sin tocar un banco real.
 package main
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+// ErrEnvioEnConflicto reporta una referencia ya resuelta con otro desenlace.
+var ErrEnvioEnConflicto = errors.New("simulador-pse: la referencia ya tiene otro desenlace")
 
 // formatoInstante fija el ancho del instante para que el orden lexicográfico sea cronológico.
 const formatoInstante = "2006-01-02T15:04:05.000000000Z07:00"
@@ -37,6 +41,7 @@ const (
 
 // Envio es el evento que dispara el usuario y que las dos patas entregan.
 type Envio struct {
+	ID         int64
 	Referencia string
 	Monto      int64
 	Moneda     string
@@ -84,20 +89,20 @@ func AbrirAlmacen(ruta string) (*Almacen, error) {
 
 // crearArchivo deja la base en 0600 antes de que SQLite la abra, de donde hereda el modo de sus sidecars.
 func crearArchivo(ruta string) error {
-	f, err := os.OpenFile(ruta, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // ruta viene de la variable de entorno CUSTODIO_DB, config local del proceso, no de entrada de red
+	f, err := os.OpenFile(ruta, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // ruta viene de la variable de entorno SIMULADOR_PSE_DB, config local del proceso, no de entrada de red
 	if err != nil {
 		return err
 	}
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Chmod(ruta, 0o600) //nolint:gosec // ruta viene de CUSTODIO_DB, ver AbrirAlmacen
+	return os.Chmod(ruta, 0o600) //nolint:gosec // ruta viene de SIMULADOR_PSE_DB, ver AbrirAlmacen
 }
 
 // restringirArchivo deja en 0600 la base y los sidecars que ya existan, sin fallar si el sistema no lo permite.
 func restringirArchivo(ruta string) {
 	for _, sufijo := range []string{"", "-journal", "-wal", "-shm"} {
-		_ = os.Chmod(ruta+sufijo, 0o600) //nolint:gosec // ruta viene de CUSTODIO_DB, ver AbrirAlmacen
+		_ = os.Chmod(ruta+sufijo, 0o600) //nolint:gosec // ruta viene de SIMULADOR_PSE_DB, ver AbrirAlmacen
 	}
 }
 
@@ -115,6 +120,7 @@ CREATE TABLE IF NOT EXISTS envio (
   ocurrido_en TEXT NOT NULL,
   creado_en   TEXT NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS envio_referencia_monto ON envio (referencia, monto);
 CREATE TABLE IF NOT EXISTS pata (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   envio_id      INTEGER NOT NULL REFERENCES envio(id),
@@ -126,13 +132,38 @@ CREATE TABLE IF NOT EXISTS pata (
   UNIQUE (envio_id, nombre)
 );`
 
+// Registro es el resultado de registrar un envío: el evento canónico y si se creó ahora.
+type Registro struct {
+	ID     int64
+	Envio  Envio
+	Creado bool
+}
+
 // Registrar guarda el envío y sus dos patas; la de custodia no aplica a un rechazo.
 func (a *Almacen) Registrar(ctx context.Context, envio Envio, ahora time.Time) (int64, error) {
+	registro, err := a.RegistrarUnaVez(ctx, envio, ahora)
+	return registro.ID, err
+}
+
+// RegistrarUnaVez es idempotente por referencia y monto: un reenvío del mismo desenlace
+// devuelve el evento original con su CUS, y un desenlace distinto responde conflicto.
+func (a *Almacen) RegistrarUnaVez(ctx context.Context, envio Envio, ahora time.Time) (Registro, error) {
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, fmt.Errorf("begin: %w", err)
+		return Registro{}, fmt.Errorf("begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	existente, encontrado, err := buscarEnvio(ctx, tx, envio.Referencia, envio.Monto)
+	if err != nil {
+		return Registro{}, err
+	}
+	if encontrado {
+		if existente.Estado != envio.Estado {
+			return Registro{}, fmt.Errorf("%w: referencia %q, monto %d", ErrEnvioEnConflicto, envio.Referencia, envio.Monto)
+		}
+		return Registro{ID: existente.ID, Envio: existente, Creado: false}, nil
+	}
 
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO envio (referencia, monto, moneda, estado, cus, ocurrido_en, creado_en)
@@ -140,11 +171,11 @@ func (a *Almacen) Registrar(ctx context.Context, envio Envio, ahora time.Time) (
 		envio.Referencia, envio.Monto, envio.Moneda, envio.Estado, nuloSiVacio(envio.CUS),
 		envio.OcurridoEn.UTC().Format(formatoInstante), ahora.UTC().Format(formatoInstante))
 	if err != nil {
-		return 0, fmt.Errorf("insertar envío: %w", err)
+		return Registro{}, fmt.Errorf("insertar envío: %w", err)
 	}
 	envioID, err := res.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("id del envío: %w", err)
+		return Registro{}, fmt.Errorf("id del envío: %w", err)
 	}
 
 	custodio := pataPendiente
@@ -158,13 +189,40 @@ func (a *Almacen) Registrar(ctx context.Context, envio Envio, ahora time.Time) (
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO pata (envio_id, nombre, estado, intentos, disponible_en) VALUES (?, ?, ?, 0, ?)`,
 			envioID, p.nombre, p.estado, ahora.UTC().Format(formatoInstante)); err != nil {
-			return 0, fmt.Errorf("insertar pata %s: %w", p.nombre, err)
+			return Registro{}, fmt.Errorf("insertar pata %s: %w", p.nombre, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("commit: %w", err)
+		return Registro{}, fmt.Errorf("commit: %w", err)
 	}
-	return envioID, nil
+	envio.ID = envioID
+	return Registro{ID: envioID, Envio: envio, Creado: true}, nil
+}
+
+// buscarEnvio devuelve el evento ya registrado para una referencia y un monto.
+func buscarEnvio(ctx context.Context, tx *sql.Tx, referencia string, monto int64) (Envio, bool, error) {
+	var (
+		e          Envio
+		ocurridoEn string
+		cus        sql.NullString
+	)
+	err := tx.QueryRowContext(ctx,
+		`SELECT id, referencia, monto, moneda, estado, cus, ocurrido_en
+		   FROM envio WHERE referencia = ? AND monto = ?`,
+		referencia, monto).Scan(&e.ID, &e.Referencia, &e.Monto, &e.Moneda, &e.Estado,
+		&cus, &ocurridoEn)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Envio{}, false, nil
+	}
+	if err != nil {
+		return Envio{}, false, fmt.Errorf("buscar envío: %w", err)
+	}
+	e.CUS = cus.String
+	e.OcurridoEn, err = time.Parse(formatoInstante, ocurridoEn)
+	if err != nil {
+		return Envio{}, false, fmt.Errorf("leer ocurrido_en: %w", err)
+	}
+	return e, true, nil
 }
 
 // Pendientes devuelve las patas vencidas de un destino, sin mirar el estado de la otra.

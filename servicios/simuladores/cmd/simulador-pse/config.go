@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Config reúne el entorno con el que arranca el despachador del custodio simulado.
+// Config reúne el entorno con el que arranca el simulador PSE y su despachador.
 type Config struct {
 	Addr                  string
 	Port                  string
@@ -25,18 +25,18 @@ type Config struct {
 // LoadConfig valida el entorno y reporta todos los errores del boot juntos.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		Addr:                  envOr("CUSTODIO_ADDR", "127.0.0.1"),
-		Port:                  envOr("CUSTODIO_PORT", "8090"),
-		DBPath:                os.Getenv("CUSTODIO_DB"),
+		Addr:                  envOr("SIMULADOR_PSE_ADDR", "127.0.0.1"),
+		Port:                  envOr("SIMULADOR_PSE_PORT", "8090"),
+		DBPath:                os.Getenv("SIMULADOR_PSE_DB"),
 		NucleoConfirmacionURL: os.Getenv("NUCLEO_CONFIRMACION_URL"),
 		CustodioToken:         os.Getenv("CUSTODIO_TOKEN"),
 		SimuladorCustodiaURL:  os.Getenv("SIMULADOR_CUSTODIA_URL"),
-		PermitirExposicion:    os.Getenv("CUSTODIO_PERMITIR_EXPOSICION") == "true",
+		PermitirExposicion:    os.Getenv("SIMULADOR_PSE_PERMITIR_EXPOSICION") == "true",
 	}
 
 	var errs []error
 	obligatorias := []struct{ nombre, valor string }{
-		{"CUSTODIO_DB", cfg.DBPath},
+		{"SIMULADOR_PSE_DB", cfg.DBPath},
 		{"NUCLEO_CONFIRMACION_URL", cfg.NucleoConfirmacionURL},
 		{"CUSTODIO_TOKEN", cfg.CustodioToken},
 		{"SIMULADOR_CUSTODIA_URL", cfg.SimuladorCustodiaURL},
@@ -47,7 +47,7 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 	if p, err := strconv.Atoi(cfg.Port); err != nil || p < 1 || p > 65535 {
-		errs = append(errs, fmt.Errorf("CUSTODIO_PORT must be 1..65535, got %q", cfg.Port))
+		errs = append(errs, fmt.Errorf("SIMULADOR_PSE_PORT must be 1..65535, got %q", cfg.Port))
 	}
 	errs = append(errs, validarAddr(cfg.Addr, cfg.PermitirExposicion)...)
 	if cfg.CustodioToken != "" && len(cfg.CustodioToken) < 32 {
@@ -79,7 +79,7 @@ func validarAddr(addr string, permitirExposicion bool) []error {
 	if permitirExposicion || esLoopback(addr) {
 		return nil
 	}
-	return []error{fmt.Errorf("CUSTODIO_ADDR must be a loopback address (127.0.0.1, ::1 or localhost) because the PSE simulator has no authentication; set CUSTODIO_PERMITIR_EXPOSICION=true to expose it explicitly")}
+	return []error{fmt.Errorf("SIMULADOR_PSE_ADDR must be a loopback address (127.0.0.1, ::1 or localhost) because the PSE simulator has no authentication; set SIMULADOR_PSE_PERMITIR_EXPOSICION=true to expose it explicitly")}
 }
 
 // esLoopback acepta las direcciones de loopback IPv4 e IPv6 y el nombre localhost.

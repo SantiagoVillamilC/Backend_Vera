@@ -57,17 +57,26 @@ func TestLectorExtractoContraElSimuladorReal(t *testing.T) {
 	}
 }
 
-// construirSimulador compila el binario real del simulador en un directorio temporal.
+// construirSimulador compila el binario real del simulador desde el monorepo de simuladores
+// o desde SIMULADOR_CUSTODIA_BIN; se salta la prueba si no encuentra la fuente.
 func construirSimulador(t *testing.T) string {
 	t.Helper()
 
+	if bin := os.Getenv("SIMULADOR_CUSTODIA_BIN"); bin != "" {
+		return bin
+	}
 	salida, err := exec.CommandContext(t.Context(), "go", "env", "GOMOD").Output()
 	if err != nil {
 		t.Skipf("sin toolchain de Go para construir el simulador: %v", err)
 	}
 	raiz := filepath.Dir(strings.TrimSpace(string(salida)))
+	fuente := filepath.Join(raiz, "servicios", "simuladores", "cmd", "simulador-custodia")
+	if _, err := os.Stat(filepath.Join(fuente, "main.go")); err != nil {
+		t.Skip("el simulador de custodia vive en servicios/simuladores; define SIMULADOR_CUSTODIA_BIN para correr esta prueba")
+	}
 	bin := filepath.Join(t.TempDir(), "simulador-custodia")
-	construir := exec.CommandContext(t.Context(), "go", "build", "-o", bin, filepath.Join(raiz, "cmd", "simulador-custodia"))
+	construir := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
+	construir.Dir = fuente
 	if compilado, err := construir.CombinedOutput(); err != nil {
 		t.Fatalf("construir el simulador: %v\n%s", err, compilado)
 	}

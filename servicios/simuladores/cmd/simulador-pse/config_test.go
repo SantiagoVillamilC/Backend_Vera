@@ -9,7 +9,7 @@ import (
 
 // baseDeEntorno es el entorno mínimo con el que el binario arranca.
 var baseDeEntorno = map[string]string{
-	"CUSTODIO_DB":             "/tmp/custodio.db",
+	"SIMULADOR_PSE_DB":             "/tmp/custodio.db",
 	"NUCLEO_CONFIRMACION_URL": "http://127.0.0.1:38080/v1/depositos/confirmaciones",
 	"CUSTODIO_TOKEN":          "fedcba9876543210fedcba9876543210",
 	"SIMULADOR_CUSTODIA_URL":  "http://127.0.0.1:8099/notificaciones/depositos",
@@ -17,7 +17,7 @@ var baseDeEntorno = map[string]string{
 
 // todasLasClaves son las variables que LoadConfig lee, para limpiarlas entre casos.
 var todasLasClaves = []string{
-	"CUSTODIO_ADDR", "CUSTODIO_PERMITIR_EXPOSICION", "CUSTODIO_PORT", "CUSTODIO_DB", "NUCLEO_CONFIRMACION_URL", "CUSTODIO_TOKEN", "SIMULADOR_CUSTODIA_URL",
+	"SIMULADOR_PSE_ADDR", "SIMULADOR_PSE_PERMITIR_EXPOSICION", "SIMULADOR_PSE_PORT", "SIMULADOR_PSE_DB", "NUCLEO_CONFIRMACION_URL", "CUSTODIO_TOKEN", "SIMULADOR_CUSTODIA_URL",
 }
 
 // LoadConfig valida el entorno completo y reporta el primer defecto de cada caso.
@@ -30,14 +30,14 @@ func TestLoadConfig(t *testing.T) {
 		addr     string
 	}{
 		"valida con el puerto por defecto": {puerto: "8090", addr: "127.0.0.1"},
-		"puerto explícito":                 {override: map[string]string{"CUSTODIO_PORT": "9000"}, puerto: "9000", addr: "127.0.0.1"},
-		"addr localhost":                   {override: map[string]string{"CUSTODIO_ADDR": "localhost"}, puerto: "8090", addr: "localhost"},
-		"addr loopback ipv6":               {override: map[string]string{"CUSTODIO_ADDR": "::1"}, puerto: "8090", addr: "::1"},
-		"addr no loopback falla":           {override: map[string]string{"CUSTODIO_ADDR": "0.0.0.0"}, wantErr: true},
-		"addr no loopback habilitada":      {override: map[string]string{"CUSTODIO_ADDR": "0.0.0.0", "CUSTODIO_PERMITIR_EXPOSICION": "true"}, puerto: "8090", addr: "0.0.0.0"},
-		"habilitación no explícita":        {override: map[string]string{"CUSTODIO_ADDR": "0.0.0.0", "CUSTODIO_PERMITIR_EXPOSICION": "1"}, wantErr: true},
-		"puerto cero":                      {override: map[string]string{"CUSTODIO_PORT": "0"}, wantErr: true},
-		"sin base sqlite":                  {vaciar: []string{"CUSTODIO_DB"}, wantErr: true},
+		"puerto explícito":                 {override: map[string]string{"SIMULADOR_PSE_PORT": "9000"}, puerto: "9000", addr: "127.0.0.1"},
+		"addr localhost":                   {override: map[string]string{"SIMULADOR_PSE_ADDR": "localhost"}, puerto: "8090", addr: "localhost"},
+		"addr loopback ipv6":               {override: map[string]string{"SIMULADOR_PSE_ADDR": "::1"}, puerto: "8090", addr: "::1"},
+		"addr no loopback falla":           {override: map[string]string{"SIMULADOR_PSE_ADDR": "0.0.0.0"}, wantErr: true},
+		"addr no loopback habilitada":      {override: map[string]string{"SIMULADOR_PSE_ADDR": "0.0.0.0", "SIMULADOR_PSE_PERMITIR_EXPOSICION": "true"}, puerto: "8090", addr: "0.0.0.0"},
+		"habilitación no explícita":        {override: map[string]string{"SIMULADOR_PSE_ADDR": "0.0.0.0", "SIMULADOR_PSE_PERMITIR_EXPOSICION": "1"}, wantErr: true},
+		"puerto cero":                      {override: map[string]string{"SIMULADOR_PSE_PORT": "0"}, wantErr: true},
+		"sin base sqlite":                  {vaciar: []string{"SIMULADOR_PSE_DB"}, wantErr: true},
 		"sin token":                        {vaciar: []string{"CUSTODIO_TOKEN"}, wantErr: true},
 		"token de 31 bytes":                {override: map[string]string{"CUSTODIO_TOKEN": strings.Repeat("a", 31)}, wantErr: true},
 		"token de 32 bytes arranca":        {override: map[string]string{"CUSTODIO_TOKEN": strings.Repeat("a", 32)}, puerto: "8090", addr: "127.0.0.1"},
@@ -90,13 +90,13 @@ func TestLoadConfigRechazaAddrNoLoopbackConIndicacionDeHabilitar(t *testing.T) {
 	for clave, valor := range baseDeEntorno {
 		t.Setenv(clave, valor)
 	}
-	t.Setenv("CUSTODIO_ADDR", "0.0.0.0")
+	t.Setenv("SIMULADOR_PSE_ADDR", "0.0.0.0")
 
 	_, err := LoadConfig()
 	if err == nil {
 		t.Fatal("LoadConfig aceptó una dirección no loopback sin habilitación")
 	}
-	if !strings.Contains(err.Error(), "CUSTODIO_PERMITIR_EXPOSICION=true") {
+	if !strings.Contains(err.Error(), "SIMULADOR_PSE_PERMITIR_EXPOSICION=true") {
 		t.Errorf("el error no indica cómo habilitar la exposición: %v", err)
 	}
 }

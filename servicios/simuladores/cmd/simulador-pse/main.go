@@ -19,7 +19,7 @@ const intervaloDespacho = time.Second
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("custodio-simulado: %v", err)
+		log.Fatalf("simulador-pse: %v", err)
 	}
 }
 
@@ -70,7 +70,7 @@ func run() error {
 			errCh <- err
 		}
 	}()
-	slog.Info("custodio simulado escuchando", "addr", srv.Addr)
+	slog.Info("simulador PSE escuchando", "addr", srv.Addr)
 
 	select {
 	case err := <-errCh:
