@@ -66,6 +66,13 @@ backend/
 └── go.sum
 ```
 
+## Servicios simulados
+
+Los tres sistemas externos (riel Bre-B, banco custodio y pasarela PSE) no viven en este
+repositorio. Están en el monorepo `Simuladores_Vera`, como procesos independientes con su
+propio almacenamiento, y este backend los consume por HTTP con `RIEL_SIMULADOR_URL`,
+`DIRECTORIO_SIMULADOR_URL`, `CUSTODIO_EXTRACTO_URL`, `PSE_URL` y `CUSTODIO_TOKEN`.
+
 ## Variables de entorno esperadas (`.env.example`)
 
 ```env
