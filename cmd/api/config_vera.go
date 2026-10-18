@@ -22,6 +22,7 @@ type ConfigVera struct {
 	Modelo      string
 	Timeout     time.Duration
 	Temperatura float32
+	Limites     copilot.LimitesUso
 }
 
 func cargarConfigVera() (ConfigVera, []error) {
@@ -50,7 +51,37 @@ func cargarConfigVera() (ConfigVera, []error) {
 	} else {
 		c.Temperatura = float32(t)
 	}
+	c.Limites, err = cargarLimitesVera()
+	if err != nil {
+		errs = append(errs, err)
+	}
 	return c, errs
+}
+
+func cargarLimitesVera() (copilot.LimitesUso, error) {
+	var l copilot.LimitesUso
+	var errs []error
+	for _, campo := range []struct {
+		nombre, defecto string
+		destino         *int64
+	}{
+		{"VERA_LIMITE_TEXTO_HORA", "30", &l.TextoHora},
+		{"VERA_LIMITE_TEXTO_DIA", "150", &l.TextoDia},
+		{"VERA_LIMITE_VOZ_HORA", "10", &l.VozHora},
+		{"VERA_TOKENS_DIARIOS", "100000", &l.TokensDiarios},
+		{"VERA_TOKENS_RESERVA_LLAMADA", "4096", &l.ReservaTokens},
+	} {
+		valor, err := strconv.ParseInt(envOr(campo.nombre, campo.defecto), 10, 64)
+		if err != nil || valor <= 0 || valor > 1_000_000_000_000 {
+			errs = append(errs, errors.New(campo.nombre+" debe ser un entero positivo hasta 1000000000000"))
+		} else {
+			*campo.destino = valor
+		}
+	}
+	if l.ReservaTokens > l.TokensDiarios {
+		errs = append(errs, errors.New("VERA_TOKENS_RESERVA_LLAMADA no puede superar VERA_TOKENS_DIARIOS"))
+	}
+	return l, errors.Join(errs...)
 }
 
 // LogValue omite la clave y sólo indica su presencia.

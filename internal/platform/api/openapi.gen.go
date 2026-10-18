@@ -1289,7 +1289,7 @@ type APIError struct {
 	// ConfirmationConflict (409, la confirmacion no coincide con el deposito),
 	// LateConfirmation (409, el deposito ya no esta pendiente),
 	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
-	// AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
+	// AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
 	// AudioNotUnderstood (422, el audio no tiene voz reconocible),
 	// ActionExpired (410, la accion pendiente supero su vigencia),
 	// ActionNotPending (409, la accion no esta pendiente ni confirmada),
@@ -2249,6 +2249,9 @@ type VerifyPhoneRequest struct {
 
 // Error defines model for Error.
 type Error = ErrorResponse
+
+// LimiteUsoAsistente defines model for LimiteUsoAsistente.
+type LimiteUsoAsistente = ErrorResponse
 
 // ListConsentsParams defines parameters for ListConsents.
 type ListConsentsParams struct {

@@ -54,7 +54,7 @@ func TestVeraConsentimientoIntegracion(t *testing.T) {
 	servicio := auth.NuevoServicioDeConsentimientos(app)
 	control := copilot.NuevoControlConsentimiento(servicio, copilot.NuevoCanceladorConsentimiento(app))
 	id := identidad.Identidad{UsuarioID: uuid.NewString(), ParteID: parte.String(), Contexto: auth.ContextoUsuario}
-	router := NewRouterConVera(app, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: identidadDeContextoFijo{id: id}, Consent: NuevoConsentimientosHandler(servicio)}, DependenciasVera{Consentimiento: control})
+	router := NewRouterConVera(app, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: identidadDeContextoFijo{id: id}, Consent: NuevoConsentimientosHandler(servicio)}, DependenciasVera{Consentimiento: control, Uso: &usoVeraPrueba{}})
 	request := func(method, path, body string, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequestWithContext(ctx, method, path, strings.NewReader(body))

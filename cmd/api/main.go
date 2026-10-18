@@ -66,7 +66,6 @@ func run() error {
 	defer pool.Close()
 	consentimientos := auth.NuevoServicioDeConsentimientos(pool)
 	controlIA := copilot.NuevoControlConsentimiento(consentimientos, copilot.NuevoCanceladorConsentimiento(pool))
-	proveedorIA = controlIA.ProtegerProveedor(proveedorIA)
 
 	// Rellenos de lo que aún no existe (KYC real); el directorio, el extracto del custodio y el riel son reales cuando hay URL.
 	var riel nucleo.Riel = nucleo.RielNoDisponible{}
@@ -118,6 +117,15 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("claves de contadores: %w", err)
 	}
+	presupuestoIA, err := copilot.NuevoPresupuestoRedis(clienteRedisAuth)
+	if err != nil {
+		return fmt.Errorf("presupuesto IA: %w", err)
+	}
+	usoIA, err := copilot.NuevoControlUso(contadoresAuth, clavesContadores, presupuestoIA, cfg.Vera.Limites)
+	if err != nil {
+		return fmt.Errorf("límites IA: %w", err)
+	}
+	proveedorIA = controlIA.ProtegerProveedor(usoIA.ProtegerProveedor(proveedorIA))
 	lectorOptIn := auth.NuevoLectorOptInDeConsentimientos(pool)
 	gestorDesafios, err := auth.NuevoGestorDesafios(pool, canal, auth.NuevoRegistradorEventos(pool), lectorOptIn, cfg.Auth.OTPPepper,
 		auth.ConRacionamiento(contadoresAuth, clavesContadores))
@@ -227,7 +235,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA}, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

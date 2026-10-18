@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -34,11 +35,17 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	return NewRouterConVera(pool, nucleoServicio, autenticadorCustodio, authDeps, DependenciasVera{}, pseURL...)
 }
 
-// DependenciasVera reúne el proveedor y el catálogo para la futura orquestación.
+// LimitadorUsoVera admite una entrada sin contar de nuevo las vueltas del proveedor.
+type LimitadorUsoVera interface {
+	Admitir(context.Context, copilot.CanalAsistente) error
+}
+
+// DependenciasVera reúne los puertos del asistente para la futura orquestación.
 type DependenciasVera struct {
 	Proveedor      copilot.ProveedorIA
 	Catalogo       *copilot.Catalogo
 	Consentimiento *copilot.ControlConsentimiento
+	Uso            LimitadorUsoVera
 }
 
 // NewRouterConVera recibe los puertos listos para la futura orquestación del chat.
@@ -57,6 +64,7 @@ func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, auten
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		ExposedHeaders: []string{"Retry-After"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))

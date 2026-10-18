@@ -1170,7 +1170,7 @@ paths:
         "422":
           $ref: "#/components/responses/Error"
         "429":
-          $ref: "#/components/responses/Error"
+          $ref: "#/components/responses/LimiteUsoAsistente"
         "500":
           $ref: "#/components/responses/Error"
         "503":
@@ -1247,7 +1247,7 @@ paths:
                       message: "No entendi el audio, repite o escribe."
                     meta: null
         "429":
-          $ref: "#/components/responses/Error"
+          $ref: "#/components/responses/LimiteUsoAsistente"
         "500":
           $ref: "#/components/responses/Error"
         "503":
@@ -1711,6 +1711,22 @@ components:
         de bearerAuth.
 
   responses:
+    LimiteUsoAsistente:
+      description: >
+        TooManyRequests por cuota de texto, voz o presupuesto diario compartido de tokens.
+        Para las cuotas del asistente, Retry-After indica segundos hasta poder reintentar;
+        el presupuesto diario reinicia a medianoche de Colombia. Los intentos cuentan.
+        El limite general por IP puede responder 429 antes de estos controles.
+      headers:
+        Retry-After:
+          description: Segundos de espera para la cuota del asistente que bloqueo la solicitud.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     Error:
       description: Envelope de error. Misma forma en cualquier status.
       content:
@@ -1750,7 +1766,7 @@ components:
             ConfirmationConflict (409, la confirmacion no coincide con el deposito),
             LateConfirmation (409, el deposito ya no esta pendiente),
             NotReady (503, solo en GET /readyz cuando una dependencia no responde),
-            AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
+            AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
             AudioNotUnderstood (422, el audio no tiene voz reconocible),
             ActionExpired (410, la accion pendiente supero su vigencia),
             ActionNotPending (409, la accion no esta pendiente ni confirmada),
