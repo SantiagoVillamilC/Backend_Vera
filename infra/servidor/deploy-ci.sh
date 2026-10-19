@@ -89,9 +89,9 @@ sudo docker compose "${banderas_compose[@]}" up -d api
 esperar_sano centinela-api
 
 if [[ -d "${DIRECTORIO_SIMULADORES}" ]]; then
-  cd "${DIRECTORIO_SIMULADORES}"
-  sudo docker compose pull
-  sudo docker compose up -d
+  # El directorio es 700 porque su .env lleva CUSTODIO_TOKEN: centinela no
+  # puede entrar, así que todo el bloque corre bajo sudo.
+  sudo bash -c "cd ${DIRECTORIO_SIMULADORES} && docker compose pull && docker compose up -d"
   for contenedor in vera-simulador-riel vera-simulador-custodia vera-simulador-pse; do
     esperar_sano "${contenedor}"
   done

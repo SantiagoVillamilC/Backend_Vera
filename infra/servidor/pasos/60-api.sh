@@ -157,8 +157,17 @@ else
     -c "ALTER ROLE rol_api WITH PASSWORD '${ROL_API_PASSWORD}';" >/dev/null
 
   # Sin pull explícito, "up -d" reusa la imagen local si la etiqueta ya existe
-  # y el despliegue no trae nada nuevo aunque GHCR tenga otro digest.
-  docker compose -f "${ARCHIVO_COMPOSE_API}" pull migrate api
+  # y el despliegue no trae nada nuevo aunque GHCR tenga otro digest. Hacen
+  # falta todos los compose*.yaml, no solo compose.api.yaml: la red
+  # "centinela" se declara en los demás y sin ella la validación del proyecto
+  # aborta con "refers to undefined network".
+  banderas_pull=(-f "${ARCHIVO_COMPOSE_API}")
+  for archivo_compose in "${DIRECTORIO_SCRIPT}"/compose*.yaml; do
+    [[ -f "${archivo_compose}" ]] || continue
+    [[ "${archivo_compose}" == "${ARCHIVO_COMPOSE_API}" ]] && continue
+    banderas_pull+=(-f "${archivo_compose}")
+  done
+  docker compose "${banderas_pull[@]}" pull migrate api
 
   asegurar_servicio_compose "${ARCHIVO_COMPOSE_API}" api
 
