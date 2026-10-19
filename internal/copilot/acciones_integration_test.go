@@ -134,8 +134,8 @@ func accionEnTransaccion(t *testing.T, expirada bool) (pgx.Tx, *repositorio.Quer
 	if expirada {
 		creada = time.Now().Add(-10 * time.Minute)
 	}
-	if _, err = tx.Exec(t.Context(), `INSERT INTO asistente.accion_pendiente(id,usuario_id,conversacion_id,tipo,destino,nombre_mostrado,monto,requiere_codigo,creada_en,expira_en)
-VALUES ($1,$2,$3,'transferencia_interna','+573001234567','Laura R.',100,false,$4,$4::timestamptz+interval '5 minutes')`, a, u, c, creada); err != nil {
+	if _, err = tx.Exec(t.Context(), `INSERT INTO asistente.accion_pendiente(id,usuario_id,conversacion_id,tipo,destino,nombre_mostrado,monto,requiere_codigo,creada_en,expira_en,usuario_financiero_id)
+VALUES ($1,$2,$3,'transferencia_interna','+573001234567','Laura R.',100,false,$4,$4::timestamptz+interval '5 minutes',$2::uuid::text)`, a, u, c, creada); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = tx.Exec(t.Context(), "SET LOCAL ROLE rol_asistente"); err != nil {
@@ -302,8 +302,8 @@ func TestAccionDatosDeCreacion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = tx.Exec(t.Context(), `INSERT INTO asistente.accion_pendiente(usuario_id,conversacion_id,tipo,destino,nombre_mostrado,monto,requiere_codigo)
-VALUES (gen_random_uuid(),$1,'transferencia_interna','destino','Laura R.',100,false)`, a.ConversacionID)
+		_, err = tx.Exec(t.Context(), `INSERT INTO asistente.accion_pendiente(usuario_id,conversacion_id,tipo,destino,nombre_mostrado,monto,requiere_codigo,usuario_financiero_id)
+VALUES (gen_random_uuid(),$1,'transferencia_interna','destino','Laura R.',100,false,'prueba')`, a.ConversacionID)
 		exigirSQLState(t, err, "23503")
 	})
 	t.Run("confirmar exige referencia a transferencia real", func(t *testing.T) {

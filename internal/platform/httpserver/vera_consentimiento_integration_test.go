@@ -122,7 +122,7 @@ func TestVeraConsentimientoIntegracion(t *testing.T) {
 		if err := admin.QueryRow(ctx, "INSERT INTO asistente.conversacion(usuario_id) VALUES ($1) RETURNING id", titular).Scan(&conversacion); err != nil {
 			t.Fatal(err)
 		}
-		if err := admin.QueryRow(ctx, "INSERT INTO asistente.accion_pendiente(usuario_id,conversacion_id,tipo,destino,nombre_mostrado,monto,requiere_codigo) VALUES ($1,$2,'transferencia_interna','+573001234567','Laura R.',100,false) RETURNING id", titular, conversacion).Scan(&accion); err != nil {
+		if err := admin.QueryRow(ctx, "INSERT INTO asistente.accion_pendiente(usuario_id,conversacion_id,tipo,destino,nombre_mostrado,monto,requiere_codigo,usuario_financiero_id) VALUES ($1,$2,'transferencia_interna','+573001234567','Laura R.',100,false,$1::uuid::text) RETURNING id", titular, conversacion).Scan(&accion); err != nil {
 			t.Fatal(err)
 		}
 		return accion

@@ -13,7 +13,7 @@ import (
 )
 
 const bloquearAccion = `-- name: BloquearAccion :one
-SELECT id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en FROM asistente.accion_pendiente WHERE id = $1 AND usuario_id = $2 FOR UPDATE
+SELECT id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id FROM asistente.accion_pendiente WHERE id = $1 AND usuario_id = $2 FOR UPDATE
 `
 
 type BloquearAccionParams struct {
@@ -45,6 +45,7 @@ func (q *Queries) BloquearAccion(ctx context.Context, arg BloquearAccionParams) 
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query BloquearAccion: %w", err)
@@ -56,7 +57,7 @@ const cancelarAccion = `-- name: CancelarAccion :one
 UPDATE asistente.accion_pendiente
 SET estado = 'cancelada', resuelta_en = clock_timestamp()
 WHERE id = $1 AND usuario_id = $2 AND estado = 'pendiente'
-RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en
+RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id
 `
 
 type CancelarAccionParams struct {
@@ -87,6 +88,7 @@ func (q *Queries) CancelarAccion(ctx context.Context, arg CancelarAccionParams) 
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query CancelarAccion: %w", err)
@@ -98,7 +100,7 @@ const confirmarAccion = `-- name: ConfirmarAccion :one
 UPDATE asistente.accion_pendiente
 SET estado = 'confirmada', transferencia_id = $1, resuelta_en = clock_timestamp()
 WHERE id = $2 AND usuario_id = $3 AND estado = 'pendiente' AND expira_en > clock_timestamp()
-RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en
+RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id
 `
 
 type ConfirmarAccionParams struct {
@@ -132,6 +134,7 @@ func (q *Queries) ConfirmarAccion(ctx context.Context, arg ConfirmarAccionParams
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query ConfirmarAccion: %w", err)
@@ -142,26 +145,28 @@ func (q *Queries) ConfirmarAccion(ctx context.Context, arg ConfirmarAccionParams
 const crearAccion = `-- name: CrearAccion :one
 INSERT INTO asistente.accion_pendiente (
     usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado,
-    celular_enmascarado, entidad_destino, monto, requiere_codigo
+    celular_enmascarado, entidad_destino, monto, requiere_codigo, usuario_financiero_id
 )
 SELECT c.usuario_id, c.id, $1, $2, $3, $4,
-    $5, $6, $7, $8
+    $5, $6, $7, $8,
+    COALESCE($9::text, c.usuario_id::text)
 FROM asistente.conversacion c
-WHERE c.id = $9 AND c.usuario_id = $10 AND c.estado = 'activo'
-RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en
+WHERE c.id = $10 AND c.usuario_id = $11 AND c.estado = 'activo'
+RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id
 `
 
 type CrearAccionParams struct {
-	Tipo               string      `json:"tipo"`
-	Destino            string      `json:"destino"`
-	TipoLlave          pgtype.Text `json:"tipo_llave"`
-	NombreMostrado     string      `json:"nombre_mostrado"`
-	CelularEnmascarado pgtype.Text `json:"celular_enmascarado"`
-	EntidadDestino     pgtype.Text `json:"entidad_destino"`
-	Monto              int64       `json:"monto"`
-	RequiereCodigo     bool        `json:"requiere_codigo"`
-	ConversacionID     pgtype.UUID `json:"conversacion_id"`
-	UsuarioID          pgtype.UUID `json:"usuario_id"`
+	Tipo                string      `json:"tipo"`
+	Destino             string      `json:"destino"`
+	TipoLlave           pgtype.Text `json:"tipo_llave"`
+	NombreMostrado      string      `json:"nombre_mostrado"`
+	CelularEnmascarado  pgtype.Text `json:"celular_enmascarado"`
+	EntidadDestino      pgtype.Text `json:"entidad_destino"`
+	Monto               int64       `json:"monto"`
+	RequiereCodigo      bool        `json:"requiere_codigo"`
+	UsuarioFinancieroID pgtype.Text `json:"usuario_financiero_id"`
+	ConversacionID      pgtype.UUID `json:"conversacion_id"`
+	UsuarioID           pgtype.UUID `json:"usuario_id"`
 }
 
 func (q *Queries) CrearAccion(ctx context.Context, arg CrearAccionParams) (AccionPendiente, error) {
@@ -174,6 +179,7 @@ func (q *Queries) CrearAccion(ctx context.Context, arg CrearAccionParams) (Accio
 		arg.EntidadDestino,
 		arg.Monto,
 		arg.RequiereCodigo,
+		arg.UsuarioFinancieroID,
 		arg.ConversacionID,
 		arg.UsuarioID,
 	)
@@ -198,6 +204,7 @@ func (q *Queries) CrearAccion(ctx context.Context, arg CrearAccionParams) (Accio
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query CrearAccion: %w", err)
@@ -209,7 +216,7 @@ const fallarAccion = `-- name: FallarAccion :one
 UPDATE asistente.accion_pendiente
 SET estado = 'fallida', codigo_error = $1, resuelta_en = clock_timestamp()
 WHERE id = $2 AND usuario_id = $3 AND estado = 'pendiente' AND expira_en > clock_timestamp()
-RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en
+RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id
 `
 
 type FallarAccionParams struct {
@@ -241,6 +248,7 @@ func (q *Queries) FallarAccion(ctx context.Context, arg FallarAccionParams) (Acc
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query FallarAccion: %w", err)
@@ -249,7 +257,7 @@ func (q *Queries) FallarAccion(ctx context.Context, arg FallarAccionParams) (Acc
 }
 
 const obtenerAccion = `-- name: ObtenerAccion :one
-SELECT id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en FROM asistente.accion_pendiente WHERE id = $1 AND usuario_id = $2
+SELECT id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id FROM asistente.accion_pendiente WHERE id = $1 AND usuario_id = $2
 `
 
 type ObtenerAccionParams struct {
@@ -280,6 +288,7 @@ func (q *Queries) ObtenerAccion(ctx context.Context, arg ObtenerAccionParams) (A
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query ObtenerAccion: %w", err)
@@ -291,7 +300,7 @@ const vencerAccion = `-- name: VencerAccion :one
 UPDATE asistente.accion_pendiente
 SET estado = 'vencida', resuelta_en = clock_timestamp()
 WHERE id = $1 AND usuario_id = $2 AND estado = 'pendiente' AND expira_en <= clock_timestamp()
-RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en
+RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id
 `
 
 type VencerAccionParams struct {
@@ -322,6 +331,7 @@ func (q *Queries) VencerAccion(ctx context.Context, arg VencerAccionParams) (Acc
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query VencerAccion: %w", err)
@@ -351,7 +361,7 @@ func (q *Queries) VencerAcciones(ctx context.Context, limite int32) (int64, erro
 const vincularDesafioAccion = `-- name: VincularDesafioAccion :one
 UPDATE asistente.accion_pendiente SET desafio_id = $1, requiere_codigo = true
 WHERE id = $2 AND usuario_id = $3 AND estado = 'pendiente' AND expira_en > clock_timestamp()
-RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en
+RETURNING id, usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado, celular_enmascarado, entidad_destino, monto, moneda, requiere_codigo, desafio_id, estado, transferencia_id, codigo_error, creada_en, expira_en, resuelta_en, usuario_financiero_id
 `
 
 type VincularDesafioAccionParams struct {
@@ -384,6 +394,7 @@ func (q *Queries) VincularDesafioAccion(ctx context.Context, arg VincularDesafio
 		&i.CreadaEn,
 		&i.ExpiraEn,
 		&i.ResueltaEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query VincularDesafioAccion: %w", err)

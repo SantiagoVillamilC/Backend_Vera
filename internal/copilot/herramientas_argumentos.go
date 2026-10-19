@@ -3,7 +3,6 @@ package copilot
 import (
 	"bytes"
 	"encoding/json"
-	"math"
 	"unicode/utf8"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
@@ -76,11 +75,11 @@ func validarArgumentos(nombre string, esquema *openapi3.Schema, raw json.RawMess
 		args.Celular = celular
 	}
 	if nombre == "preparar_transferencia" {
-		pesos, err := nucleo.ParsearCentavos(args.MontoPesos)
-		if err != nil || pesos <= 0 || pesos.Int64() > math.MaxInt64/100 {
+		monto, err := nucleo.ParsearPesosEnteros(args.MontoPesos)
+		if err != nil {
 			return args, nil, ErrHerramientaValidacion
 		}
-		args.Monto = nucleo.Centavos(pesos.Int64() * 100)
+		args.Monto = monto
 	}
 	return args, campos, nil
 }

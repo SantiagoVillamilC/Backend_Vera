@@ -22,6 +22,7 @@ type EntradaOrquestador struct{ ConversacionID, MensajeID uuid.UUID }
 type AccionOrquestador struct {
 	ID                                       uuid.UUID
 	Tipo, NombreMostrado, CelularEnmascarado string
+	EntidadDestino                           string
 	Monto                                    nucleo.Centavos
 	RequiereCodigo                           bool
 	ExpiraEn                                 time.Time

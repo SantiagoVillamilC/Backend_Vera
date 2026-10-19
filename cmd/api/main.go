@@ -115,8 +115,14 @@ func run() error {
 		return fmt.Errorf("referencias de destinatario: %w", err)
 	}
 
+	limiteDestinatarios := auth.NuevoLimiteDestinatarios(contadoresAuth, clavesContadores, cfg.Auth.DestinatariosLimite, cfg.Auth.DestinatariosVentana)
+	preparadorIA, err := copilot.NuevoPreparadorTransferencias(servicio, resolutorDestino, copilot.NuevasPropuestasPostgres(pool), referenciasDestinatario, limiteDestinatarios, contadoresAuth, clavesContadores, cfg.Vera.Preparacion)
+	if err != nil {
+		return fmt.Errorf("preparación IA: %w", err)
+	}
 	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
-		"buscar_destinatario":     copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, auth.NuevoLimiteDestinatarios(contadoresAuth, clavesContadores, cfg.Auth.DestinatariosLimite, cfg.Auth.DestinatariosVentana), referenciasDestinatario),
+		"preparar_transferencia":  preparadorIA.Manejar,
+		"buscar_destinatario":     copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, limiteDestinatarios, referenciasDestinatario),
 		"consultar_saldo":         copilot.ConsultaSaldoIA(servicio),
 		"consultar_limites":       copilot.ConsultaLimitesIA(servicio),
 		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),

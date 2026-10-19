@@ -1,10 +1,11 @@
 -- name: CrearAccion :one
 INSERT INTO asistente.accion_pendiente (
     usuario_id, conversacion_id, tipo, destino, tipo_llave, nombre_mostrado,
-    celular_enmascarado, entidad_destino, monto, requiere_codigo
+    celular_enmascarado, entidad_destino, monto, requiere_codigo, usuario_financiero_id
 )
 SELECT c.usuario_id, c.id, @tipo, @destino, sqlc.narg('tipo_llave'), @nombre_mostrado,
-    sqlc.narg('celular_enmascarado'), sqlc.narg('entidad_destino'), @monto, @requiere_codigo
+    sqlc.narg('celular_enmascarado'), sqlc.narg('entidad_destino'), @monto, @requiere_codigo,
+    COALESCE(sqlc.narg('usuario_financiero_id')::text, c.usuario_id::text)
 FROM asistente.conversacion c
 WHERE c.id = @conversacion_id AND c.usuario_id = @usuario_id AND c.estado = 'activo'
 RETURNING *;

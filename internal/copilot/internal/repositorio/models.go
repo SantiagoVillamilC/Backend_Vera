@@ -9,25 +9,26 @@ import (
 )
 
 type AccionPendiente struct {
-	ID                 pgtype.UUID        `json:"id"`
-	UsuarioID          pgtype.UUID        `json:"usuario_id"`
-	ConversacionID     pgtype.UUID        `json:"conversacion_id"`
-	Tipo               string             `json:"tipo"`
-	Destino            string             `json:"destino"`
-	TipoLlave          pgtype.Text        `json:"tipo_llave"`
-	NombreMostrado     string             `json:"nombre_mostrado"`
-	CelularEnmascarado pgtype.Text        `json:"celular_enmascarado"`
-	EntidadDestino     pgtype.Text        `json:"entidad_destino"`
-	Monto              int64              `json:"monto"`
-	Moneda             string             `json:"moneda"`
-	RequiereCodigo     bool               `json:"requiere_codigo"`
-	DesafioID          pgtype.UUID        `json:"desafio_id"`
-	Estado             string             `json:"estado"`
-	TransferenciaID    pgtype.UUID        `json:"transferencia_id"`
-	CodigoError        pgtype.Text        `json:"codigo_error"`
-	CreadaEn           pgtype.Timestamptz `json:"creada_en"`
-	ExpiraEn           pgtype.Timestamptz `json:"expira_en"`
-	ResueltaEn         pgtype.Timestamptz `json:"resuelta_en"`
+	ID                  pgtype.UUID        `json:"id"`
+	UsuarioID           pgtype.UUID        `json:"usuario_id"`
+	ConversacionID      pgtype.UUID        `json:"conversacion_id"`
+	Tipo                string             `json:"tipo"`
+	Destino             string             `json:"destino"`
+	TipoLlave           pgtype.Text        `json:"tipo_llave"`
+	NombreMostrado      string             `json:"nombre_mostrado"`
+	CelularEnmascarado  pgtype.Text        `json:"celular_enmascarado"`
+	EntidadDestino      pgtype.Text        `json:"entidad_destino"`
+	Monto               int64              `json:"monto"`
+	Moneda              string             `json:"moneda"`
+	RequiereCodigo      bool               `json:"requiere_codigo"`
+	DesafioID           pgtype.UUID        `json:"desafio_id"`
+	Estado              string             `json:"estado"`
+	TransferenciaID     pgtype.UUID        `json:"transferencia_id"`
+	CodigoError         pgtype.Text        `json:"codigo_error"`
+	CreadaEn            pgtype.Timestamptz `json:"creada_en"`
+	ExpiraEn            pgtype.Timestamptz `json:"expira_en"`
+	ResueltaEn          pgtype.Timestamptz `json:"resuelta_en"`
+	UsuarioFinancieroID string             `json:"usuario_financiero_id"`
 }
 
 type Conversacion struct {

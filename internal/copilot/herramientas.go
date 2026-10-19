@@ -168,6 +168,11 @@ const (
 )
 
 func codigoErrorHerramienta(err error) string {
+	for _, codigo := range []ErrorHerramienta{"InsufficientFunds", "OperationLimitExceeded", "MonthlyQuotaExceeded", "DirectoryUnavailable"} {
+		if errors.Is(err, codigo) {
+			return string(codigo)
+		}
+	}
 	for _, permitido := range []ErrorHerramienta{ErrHerramientaNoEncontrado, ErrHerramientaLimite, ErrHerramientaValidacion, ErrHerramientaNoDisponible, ErrHerramientaDestinatarioNoEncontrado, ErrHerramientaDestinoPropio} {
 		if errors.Is(err, permitido) {
 			return string(permitido)

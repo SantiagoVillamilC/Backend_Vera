@@ -19,7 +19,11 @@ type Querier interface {
 	AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (Mensaje, error)
 	// Mantener este bloqueo hasta terminar la confirmación, usando siempre el mismo tx.
 	BloquearAccion(ctx context.Context, arg BloquearAccionParams) (AccionPendiente, error)
+	// Serializa el reemplazo de propuestas, también cuando todavía no existe ninguna.
+	BloquearConversacionParaAccion(ctx context.Context, arg BloquearConversacionParaAccionParams) (pgtype.UUID, error)
 	CancelarAccion(ctx context.Context, arg CancelarAccionParams) (AccionPendiente, error)
+	// La cancelación y el INSERT siguiente deben compartir la transacción y el bloqueo.
+	CancelarPropuestaAnterior(ctx context.Context, arg CancelarPropuestaAnteriorParams) error
 	// CAS: cero filas significa que el llamador debe releer el estado, no ejecutar de nuevo.
 	// El núcleo es quien genera transferencia_id; esta consulta no ejecuta ni autoriza dinero.
 	ConfirmarAccion(ctx context.Context, arg ConfirmarAccionParams) (AccionPendiente, error)

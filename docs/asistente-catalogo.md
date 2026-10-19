@@ -28,7 +28,7 @@ otro integrante, conforme a la HU.
 | `resumir_movimientos` | lectura | `desde`, `hasta`, `agrupar_por` | Conectado al núcleo en SCRUM-127 |
 | `buscar_destinatario` | lectura | Exactamente uno: `celular` o `nombre` | Conectado a auth e historial propio en SCRUM-128 |
 | `consultar_transferencia` | lectura | `transferencia_id` | Conectado al núcleo en esta HU |
-| `preparar_transferencia` | preparación | `monto_pesos` y exactamente uno: `destinatario_ref`, `celular` o `llave_breb` | Pendiente SCRUM-131 |
+| `preparar_transferencia` | preparación | `monto_pesos` y exactamente uno: `destinatario_ref`, `celular` o `llave_breb` | Conectado a prevalidación del núcleo y acciones pendientes en SCRUM-131 |
 
 Un manejador pendiente devuelve `FunctionUnavailable`, sin inventar saldo ni
 crear acciones. Las siete declaraciones están disponibles mediante
@@ -55,11 +55,11 @@ implementar sus historias, incluido el consentimiento.
   adaptador la vuelve a comprobar y proyecta sólo estado, monto y fechas.
 - `destinatario_ref`: 16–1024 caracteres de token (`A-Z`, `a-z`, `0-9`, `_`, `-`,
   `.`). SCRUM-128 cifra y autentica las referencias, con vigencia de 15 minutos y vinculación a usuario/conversación.
-  `llave_breb`: 3–100 caracteres, no sólo espacios; su resolución es SCRUM-131.
+  `llave_breb`: 3–100 caracteres, no sólo espacios; su resolución está conectada en SCRUM-131 y exige `VERA_LLAVES_HABILITADAS=true`.
 - `monto_pesos`: string de dígitos, positivo, sin separadores, decimales, signo ni
   ceros iniciales. Máximo `92233720368547758`; se multiplica por 100 después de
   comprobar el rango `int64`. El manejador recibe además `Monto` como
-  `nucleo.Centavos`. Los límites de negocio se validarán en SCRUM-131.
+  `nucleo.Centavos`. Los límites de negocio se prevalidan en SCRUM-131 con el mismo motor del núcleo.
 
 El validador es `kin-openapi v0.142.0`, que ya estaba en el grafo de dependencias;
 ahora es dependencia directa, sin actualizar su versión. Sólo el límite de

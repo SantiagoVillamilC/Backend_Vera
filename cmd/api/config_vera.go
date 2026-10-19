@@ -13,6 +13,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/gemini"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/provsim"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
 // ConfigVera selecciona el proveedor sin exponer credenciales en logs.
@@ -23,6 +24,7 @@ type ConfigVera struct {
 	Timeout     time.Duration
 	Temperatura float32
 	Limites     copilot.LimitesUso
+	Preparacion copilot.ConfigPreparacion
 }
 
 func cargarConfigVera() (ConfigVera, []error) {
@@ -54,6 +56,14 @@ func cargarConfigVera() (ConfigVera, []error) {
 	c.Limites, err = cargarLimitesVera()
 	if err != nil {
 		errs = append(errs, err)
+	}
+	c.Preparacion.UmbralCodigo, err = nucleo.ParsearPesosEnteros(envOr("VERA_UMBRAL_CODIGO", "500000"))
+	if err != nil {
+		errs = append(errs, errors.New("VERA_UMBRAL_CODIGO debe ser un entero positivo de pesos sin separadores"))
+	}
+	c.Preparacion.LlavesHabilitadas, err = strconv.ParseBool(envOr("VERA_LLAVES_HABILITADAS", "false"))
+	if err != nil {
+		errs = append(errs, errors.New("VERA_LLAVES_HABILITADAS debe ser un booleano"))
 	}
 	return c, errs
 }

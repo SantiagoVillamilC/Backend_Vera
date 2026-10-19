@@ -85,10 +85,12 @@ func (TransferenciaHerramienta) datosHerramienta() {}
 
 // AccionHerramienta representa una propuesta pendiente, nunca una transferencia ejecutada.
 type AccionHerramienta struct {
-	AccionID     uuid.UUID
-	Destinatario DestinatarioHerramienta
-	Monto        nucleo.Centavos
-	ExpiraEn     time.Time
+	AccionID       uuid.UUID
+	Destinatario   DestinatarioHerramienta
+	Monto          nucleo.Centavos
+	ExpiraEn       time.Time
+	RequiereCodigo bool
+	Entidad        string
 }
 
 func (AccionHerramienta) datosHerramienta() {}
@@ -178,7 +180,7 @@ func serializarDatos(nombre string, args ArgumentosHerramienta, datos DatosHerra
 		if nombre != "preparar_transferencia" || d.AccionID == uuid.Nil || d.Monto <= 0 || d.ExpiraEn.IsZero() {
 			return nil, ErrHerramientaValidacion
 		}
-		vista = map[string]any{"accion_id": d.AccionID.String(), "estado": "pendiente", "requiere_confirmacion": true, "destinatario": map[string]any{"nombre": nombreParaModelo(d.Destinatario.Nombre), "celular": celularParaModelo(d.Destinatario.Celular)}, "monto": montoParaModelo(d.Monto), "expira_en": fechaColombia(d.ExpiraEn)}
+		vista = map[string]any{"accion_id": d.AccionID.String(), "estado": "pendiente", "requiere_confirmacion": true, "requiere_codigo": d.RequiereCodigo, "destinatario": map[string]any{"nombre": nombreParaModelo(d.Destinatario.Nombre), "celular": celularParaModelo(d.Destinatario.Celular)}, "entidad_destino": d.Entidad, "monto": montoParaModelo(d.Monto), "expira_en": fechaColombia(d.ExpiraEn)}
 	default:
 		return nil, ErrHerramientaValidacion
 	}
@@ -239,6 +241,12 @@ func nombreParaModelo(nombre string) string {
 }
 
 func celularParaModelo(celular string) string {
+	if len(celular) == 10 && strings.HasPrefix(celular, "*******") {
+		ultimos := celular[7:]
+		if ultimos[0] >= '0' && ultimos[0] <= '9' && ultimos[1] >= '0' && ultimos[1] <= '9' && ultimos[2] >= '0' && ultimos[2] <= '9' {
+			return celular
+		}
+	}
 	digitos := make([]rune, 0, len(celular))
 	for _, r := range celular {
 		if r >= '0' && r <= '9' {

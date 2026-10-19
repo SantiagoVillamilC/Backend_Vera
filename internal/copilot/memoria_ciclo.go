@@ -176,7 +176,7 @@ func (s *sesionPostgres) Accion(ctx context.Context, id uuid.UUID) (*AccionOrque
 	if uuid.UUID(a.ConversacionID.Bytes) != s.entrada.ConversacionID || a.Estado != "pendiente" || !a.ExpiraEn.Time.After(time.Now()) {
 		return nil, ErrCicloNoDisponible
 	}
-	return &AccionOrquestador{ID: uuid.UUID(a.ID.Bytes), Tipo: a.Tipo, NombreMostrado: a.NombreMostrado, CelularEnmascarado: a.CelularEnmascarado.String, Monto: nucleo.Centavos(a.Monto), RequiereCodigo: a.RequiereCodigo, ExpiraEn: a.ExpiraEn.Time}, nil
+	return &AccionOrquestador{ID: uuid.UUID(a.ID.Bytes), Tipo: a.Tipo, NombreMostrado: a.NombreMostrado, CelularEnmascarado: a.CelularEnmascarado.String, EntidadDestino: a.EntidadDestino.String, Monto: nucleo.Centavos(a.Monto), RequiereCodigo: a.RequiereCodigo, ExpiraEn: a.ExpiraEn.Time}, nil
 }
 
 func (s *sesionPostgres) Cerrar(ctx context.Context) error {
