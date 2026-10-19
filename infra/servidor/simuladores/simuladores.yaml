@@ -82,5 +82,8 @@ volumes:
     name: simulador-pse_datos-simulador-pse
 
 networks:
+  # La red la crea 30-nginx.sh (proyecto "centinela"); sin external: true
+  # compose avisa que no la creó el proyecto "simuladores" y podría recrearla.
   centinela:
     name: centinela
+    external: true
