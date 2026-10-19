@@ -66,6 +66,9 @@ type Querier interface {
 	NombresDeContrapartes(ctx context.Context, ids []pgtype.UUID) ([]NombresDeContrapartesRow, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
+	// Sólo permite reintentar una entrega fallida sin intentos de verificación.
+	// Conserva enfriamiento y reenvíos; nunca recupera un desafío agotado o usado.
+	ReenviarEntregaConfirmacion(ctx context.Context, arg ReenviarEntregaConfirmacionParams) (AuthDesafio, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
 	RegistrarTransicionCredencial(ctx context.Context, arg RegistrarTransicionCredencialParams) error
 	RehashCredencial(ctx context.Context, arg RehashCredencialParams) (int64, error)

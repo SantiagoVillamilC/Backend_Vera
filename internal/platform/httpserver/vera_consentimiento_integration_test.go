@@ -53,8 +53,16 @@ func TestVeraConsentimientoIntegracion(t *testing.T) {
 	exec("INSERT INTO auth.partes(id,tipo) VALUES ($1,'persona'),($2,'persona')", parte, ajena)
 	servicio := auth.NuevoServicioDeConsentimientos(app)
 	control := copilot.NuevoControlConsentimiento(servicio, copilot.NuevoCanceladorConsentimiento(app))
-	id := identidad.Identidad{UsuarioID: uuid.NewString(), ParteID: parte.String(), Contexto: auth.ContextoUsuario}
-	router := NewRouterConVera(app, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: identidadDeContextoFijo{id: id}, Consent: NuevoConsentimientosHandler(servicio)}, DependenciasVera{Consentimiento: control, Uso: &usoVeraPrueba{}})
+	id := identidad.Identidad{UsuarioID: parte.String(), ParteID: parte.String(), Contexto: auth.ContextoUsuario}
+	otp, err := auth.NuevoGestorDesafios(app, nil, nil, nil, []byte(strings.Repeat("p", 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	acciones, err := copilot.NuevoControlAcciones(app, nucleo.NewServicio(nil, nil, nil, nil, nil), otp, control, 50000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := NewRouterConVera(app, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: identidadDeContextoFijo{id: id}, Consent: NuevoConsentimientosHandler(servicio)}, DependenciasVera{Consentimiento: control, Uso: &usoVeraPrueba{}, Acciones: acciones})
 	request := func(method, path, body string, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequestWithContext(ctx, method, path, strings.NewReader(body))
@@ -132,7 +140,11 @@ func TestVeraConsentimientoIntegracion(t *testing.T) {
 	estado("v1", false)
 	denegado()
 	for _, accion := range []uuid.UUID{propia, otra} {
-		request(http.MethodPost, "/v1/vera/acciones/"+accion.String()+"/confirmar", `{}`, 403)
+		status := 403
+		if accion == otra {
+			status = 404
+		}
+		request(http.MethodPost, "/v1/vera/acciones/"+accion.String()+"/confirmar", `{}`, status)
 	}
 	for accion, esperado := range map[uuid.UUID]string{propia: "cancelada", otra: "pendiente"} {
 		var actual string

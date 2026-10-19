@@ -1492,6 +1492,12 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperacionAccionVeraRequest"
       responses:
         "200":
           description: Desafio creado para el codigo, con su vigencia.
@@ -1509,6 +1515,18 @@ paths:
                       proposito: "confirmacion_transferencia"
                     error: null
                     meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "410":
+          description: ActionExpired; la acción fue marcada como vencida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
         "403":
@@ -1544,7 +1562,7 @@ paths:
       operationId: confirmarAccionVera
       summary: Confirma y ejecuta una accion pendiente.
       description: >
-        Si la accion no esta pendiente responde 409 ActionNotPending. Si supero su vigencia
+        Una acción ya confirmada devuelve la misma transferencia, sin repetir el código. Si no está pendiente ni confirmada responde 409 ActionNotPending. Si supero su vigencia
         responde 410 ActionExpired. Si el monto o el dispositivo exigen codigo y no viene
         valido, responde 403 SecondFactorRequired. Un 403 ConsentRequired ademas cancela la
         accion, asi que el cliente debe refrescar la tarjeta al recibirlo.
@@ -1581,14 +1599,14 @@ paths:
                         destinatario:
                           nombre: "Laura R."
                           celular_parcial: "******4321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         requiere_codigo: true
                         expira_en: "2026-10-15T14:21:00-05:00"
                       transferencia:
                         id: "9c8b7a6d-0000-4000-8000-000000000010"
                         destino: "3001234321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         estado: "confirmada"
                         creada_en: "2026-10-15T14:18:00-05:00"
@@ -1684,6 +1702,12 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperacionAccionVeraRequest"
       responses:
         "200":
           description: Accion cancelada.
@@ -1703,12 +1727,24 @@ paths:
                         destinatario:
                           nombre: "Laura R."
                           celular_parcial: "******4321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         requiere_codigo: true
                         expira_en: "2026-10-15T14:21:00-05:00"
                     error: null
                     meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "410":
+          description: ActionExpired; la acción fue marcada como vencida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
         "404":
@@ -3317,8 +3353,15 @@ components:
           type: object
           nullable: true
 
+    OperacionAccionVeraRequest:
+      type: object
+      x-go-type: "struct{}"
+      additionalProperties: false
+      description: Cuerpo opcional vacío; no admite destino, monto ni datos del desafío.
+
     ConfirmarAccionVeraRequest:
       type: object
+      additionalProperties: false
       properties:
         desafio_id:
           type: string
@@ -3328,7 +3371,7 @@ components:
           type: string
           nullable: true
           x-oapi-codegen-extra-tags:
-            validate: "omitempty,max=10"
+            validate: "omitempty,len=6,numeric"
         sin_verificacion_local:
           type: boolean
           default: false

@@ -158,6 +158,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("gestor de desafíos: %w", err)
 	}
+	accionesIA, err := copilot.NuevoControlAcciones(pool, servicio, gestorDesafios, controlIA, cfg.Vera.Preparacion.UmbralCodigo)
+	if err != nil {
+		return fmt.Errorf("acciones IA: %w", err)
+	}
 	gestorEstados := auth.NuevoGestorDeEstados(auth.NuevoRegistradorEventos(pool))
 	activador, err := auth.NuevoActivadorDeCuenta(pool, gestorDesafios, gestorEstados, cfg.Auth.OTPPepper)
 	if err != nil {
@@ -251,7 +255,7 @@ func run() error {
 		ConciliationWindow:   cfg.ConciliationWindow,
 		ExpirationInterval:   cfg.ExpirationInterval,
 		ExpirationTTL:        cfg.ExpirationTTL,
-	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
+	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox, copilot.OpcionExpiracionAcciones(accionesIA))
 	if err != nil {
 		return fmt.Errorf("river: %w", err)
 	}
@@ -261,7 +265,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA}, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

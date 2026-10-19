@@ -162,12 +162,35 @@ func RequireAuth(quien IdentidadDeLaPeticion, rutasDeDinero []string) func(http.
 	}
 }
 
-// esRutaDeDinero compara el método y la ruta exacta contra la lista explícita del router.
+// esRutaDeDinero reconoce rutas literales y parámetros completos de la lista explícita.
 func esRutaDeDinero(r *http.Request, rutasDeDinero []string) bool {
 	objetivo := r.Method + " " + r.URL.Path
 	for _, ruta := range rutasDeDinero {
 		if ruta == objetivo {
 			return true
+		}
+		metodo, patron, ok := strings.Cut(ruta, " ")
+		if !ok || metodo != r.Method {
+			continue
+		}
+		for _, camino := range []string{r.URL.Path, r.URL.EscapedPath()} {
+			a, b := strings.Split(patron, "/"), strings.Split(camino, "/")
+			if len(a) != len(b) {
+				continue
+			}
+			coincide := true
+			for i, segmento := range a {
+				if segmento == "{id}" {
+					if b[i] == "" {
+						coincide = false
+					}
+				} else if segmento != b[i] {
+					coincide = false
+				}
+			}
+			if coincide {
+				return true
+			}
 		}
 	}
 	return false

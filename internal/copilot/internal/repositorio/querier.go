@@ -22,6 +22,8 @@ type Querier interface {
 	AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (Mensaje, error)
 	// Mantener este bloqueo hasta terminar la confirmación, usando siempre el mismo tx.
 	BloquearAccion(ctx context.Context, arg BloquearAccionParams) (AccionPendiente, error)
+	// El orden global de bloqueos es conversación, acción y luego cuentas del núcleo.
+	BloquearConversacionConfirmacion(ctx context.Context, arg BloquearConversacionConfirmacionParams) (Conversacion, error)
 	// Serializa el reemplazo de propuestas, también cuando todavía no existe ninguna.
 	BloquearConversacionParaAccion(ctx context.Context, arg BloquearConversacionParaAccionParams) (pgtype.UUID, error)
 	// Serializa únicamente la admisión en DB, nunca la llamada de red.
@@ -36,8 +38,12 @@ type Querier interface {
 	// Así el corte no deja resultados de herramienta sin el turno que los originó.
 	ContextoConversacion(ctx context.Context, arg ContextoConversacionParams) ([]Mensaje, error)
 	ConversacionParaTexto(ctx context.Context, arg ConversacionParaTextoParams) (Conversacion, error)
+	// Barrido con el mismo orden de candados que las confirmaciones.
+	ConversacionesConAccionesVencidas(ctx context.Context, limite int32) ([]Conversacion, error)
 	CrearAccion(ctx context.Context, arg CrearAccionParams) (AccionPendiente, error)
 	CrearConversacion(ctx context.Context, arg CrearConversacionParams) (Conversacion, error)
+	// El cliente sólo puede elevar el segundo factor; nunca rebajarlo.
+	ElevarCodigoAccion(ctx context.Context, arg ElevarCodigoAccionParams) (AccionPendiente, error)
 	FallarAccion(ctx context.Context, arg FallarAccionParams) (AccionPendiente, error)
 	LiberarCiclo(ctx context.Context, arg LiberarCicloParams) error
 	MensajeDeCiclo(ctx context.Context, arg MensajeDeCicloParams) (Mensaje, error)
@@ -56,6 +62,7 @@ type Querier interface {
 	VencerAccion(ctx context.Context, arg VencerAccionParams) (AccionPendiente, error)
 	// Base del barrido periódico de SCRUM-137: lotes pequeños y trabajadores sin bloqueo mutuo.
 	VencerAcciones(ctx context.Context, limite int32) (int64, error)
+	VencerAccionesDeConversacion(ctx context.Context, conversacionID pgtype.UUID) ([]AccionPendiente, error)
 	// Una verificación local no disponible solo puede elevar la exigencia, nunca rebajarla.
 	VincularDesafioAccion(ctx context.Context, arg VincularDesafioAccionParams) (AccionPendiente, error)
 }

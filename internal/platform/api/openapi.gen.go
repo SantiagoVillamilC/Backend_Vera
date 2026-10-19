@@ -1357,7 +1357,7 @@ type AccionResueltaResponseSuccess bool
 
 // ConfirmarAccionVeraRequest defines model for ConfirmarAccionVeraRequest.
 type ConfirmarAccionVeraRequest struct {
-	Codigo               *string             `json:"codigo,omitempty" validate:"omitempty,max=10"`
+	Codigo               *string             `json:"codigo,omitempty" validate:"omitempty,len=6,numeric"`
 	DesafioId            *openapi_types.UUID `json:"desafio_id,omitempty"`
 	SinVerificacionLocal *bool               `json:"sin_verificacion_local,omitempty"`
 }
@@ -1937,6 +1937,9 @@ type OkResponse struct {
 // OkResponseSuccess defines model for OkResponse.Success.
 type OkResponseSuccess bool
 
+// OperacionAccionVeraRequest Cuerpo opcional vacío; no admite destino, monto ni datos del desafío.
+type OperacionAccionVeraRequest = struct{}
+
 // PhoneChangeRequest defines model for PhoneChangeRequest.
 type PhoneChangeRequest struct {
 	CodigoRespaldo   *string `json:"codigo_respaldo,omitempty" validate:"omitempty"`
@@ -2339,6 +2342,12 @@ type TransferirJSONRequestBody = CrearTransferenciaRequest
 
 // TransferirInterbancariaJSONRequestBody defines body for TransferirInterbancaria for application/json ContentType.
 type TransferirInterbancariaJSONRequestBody = CrearTransferenciaInterbancariaRequest
+
+// CancelarAccionVeraJSONRequestBody defines body for CancelarAccionVera for application/json ContentType.
+type CancelarAccionVeraJSONRequestBody = OperacionAccionVeraRequest
+
+// SolicitarCodigoAccionVeraJSONRequestBody defines body for SolicitarCodigoAccionVera for application/json ContentType.
+type SolicitarCodigoAccionVeraJSONRequestBody = OperacionAccionVeraRequest
 
 // ConfirmarAccionVeraJSONRequestBody defines body for ConfirmarAccionVera for application/json ContentType.
 type ConfirmarAccionVeraJSONRequestBody = ConfirmarAccionVeraRequest

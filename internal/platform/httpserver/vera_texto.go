@@ -68,25 +68,7 @@ func escribirRespuestaVera(w http.ResponseWriter, salida copilot.RespuestaTexto)
 	if salida.Transcripcion != "" {
 		respuesta.Transcripcion = &salida.Transcripcion
 	}
-	if a := salida.Accion; a != nil {
-		nombre := a.Nombre
-		if a.Tipo == "transferencia_llave" && a.Entidad != "" {
-			nombre = a.Entidad
-		}
-		dest := &api.DestinatarioAccion{Nombre: nombre}
-		if a.Celular != "" {
-			dest.CelularParcial = &a.Celular
-		}
-		card := &api.AccionPendiente{Id: a.ID, Estado: api.AccionPendienteEstado(a.Estado), Tipo: api.AccionPendienteTipo(a.Tipo), Moneda: api.AccionPendienteMoneda("COP"), Monto: strconv.FormatInt(int64(a.Monto), 10), RequiereCodigo: a.RequiereCodigo, ExpiraEn: a.ExpiraEn.In(zona), Destinatario: dest}
-		if a.Llave != "" {
-			card.Llave = &a.Llave
-		}
-		if a.TipoLlave != "" {
-			tipo := api.AccionPendienteTipoLlave(a.TipoLlave)
-			card.TipoLlave = &tipo
-		}
-		respuesta.AccionPendiente = card
-	}
+	respuesta.AccionPendiente = tarjetaVeraOpcional(salida.Accion, zona)
 	api.WriteData(w, http.StatusOK, respuesta, nil)
 }
 
@@ -112,4 +94,30 @@ func errorTextoVera(w http.ResponseWriter, err error) {
 		w.Header().Set("Retry-After", strconv.FormatInt(segundos, 10))
 	}
 	api.WriteError(w, status, code, message, nil)
+}
+
+func tarjetaVeraOpcional(a *copilot.TarjetaTexto, zona *time.Location) *api.AccionPendiente {
+	if a == nil {
+		return nil
+	}
+	return tarjetaVera(a, zona)
+}
+func tarjetaVera(a *copilot.TarjetaTexto, zona *time.Location) *api.AccionPendiente {
+	nombre := a.Nombre
+	if a.Tipo == "transferencia_llave" && a.Entidad != "" {
+		nombre = a.Entidad
+	}
+	dest := &api.DestinatarioAccion{Nombre: nombre}
+	if a.Celular != "" {
+		dest.CelularParcial = &a.Celular
+	}
+	card := &api.AccionPendiente{Id: a.ID, Estado: api.AccionPendienteEstado(a.Estado), Tipo: api.AccionPendienteTipo(a.Tipo), Moneda: api.AccionPendienteMoneda("COP"), Monto: strconv.FormatInt(int64(a.Monto), 10), RequiereCodigo: a.RequiereCodigo, ExpiraEn: a.ExpiraEn.In(zona), Destinatario: dest}
+	if a.Llave != "" {
+		card.Llave = &a.Llave
+	}
+	if a.TipoLlave != "" {
+		tipo := api.AccionPendienteTipoLlave(a.TipoLlave)
+		card.TipoLlave = &tipo
+	}
+	return card
 }

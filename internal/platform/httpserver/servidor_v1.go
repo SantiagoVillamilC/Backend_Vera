@@ -147,21 +147,6 @@ func (s servidorV1) ListarMensajesConversacionVera(w http.ResponseWriter, r *htt
 	sinImplementar(w, r)
 }
 
-func (s servidorV1) SolicitarCodigoAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
-	sinImplementar(w, r)
-}
-
-func (s servidorV1) ConfirmarAccionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
-	if !s.exigirConsentimientoVera(w, r, &id) {
-		return
-	}
-	sinImplementar(w, r)
-}
-
-func (s servidorV1) CancelarAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
-	sinImplementar(w, r)
-}
-
 var _ api.ServerInterface = servidorV1{}
 
 // sinImplementar responde 501 dentro del envelope para un método que todavía no tiene handler.

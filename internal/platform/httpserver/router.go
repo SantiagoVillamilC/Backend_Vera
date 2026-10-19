@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
@@ -31,6 +32,9 @@ var RutasDeDinero = []string{
 	http.MethodGet + " /v1/destinatarios",
 	http.MethodPost + " /v1/vera/mensajes",
 	http.MethodPost + " /v1/vera/mensajes/voz",
+	http.MethodPost + " /v1/vera/acciones/{id}/codigo",
+	http.MethodPost + " /v1/vera/acciones/{id}/confirmar",
+	http.MethodPost + " /v1/vera/acciones/{id}/cancelar",
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
@@ -52,6 +56,14 @@ type DependenciasVera struct {
 	Orquestador    *copilot.Orquestador
 	Texto          ConversacionTextoVera
 	Voz            ConversacionVozVera
+	Acciones       ControlAccionesVera
+}
+
+// ControlAccionesVera sólo está disponible para las rutas de confirmación explícita.
+type ControlAccionesVera interface {
+	SolicitarCodigo(context.Context, uuid.UUID, string) (auth.Desafio, error)
+	Confirmar(context.Context, uuid.UUID, copilot.ConfirmacionAccion) (copilot.AccionResuelta, error)
+	Cancelar(context.Context, uuid.UUID) (copilot.AccionResuelta, error)
 }
 
 // ConversacionVozVera recibe sólo un clip validado en memoria y referencias de la sesión.
