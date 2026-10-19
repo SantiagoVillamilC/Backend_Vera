@@ -31,6 +31,22 @@ type AccionPendiente struct {
 	UsuarioFinancieroID string             `json:"usuario_financiero_id"`
 }
 
+type AsistenteLlamadaFuncion struct {
+	ID                   pgtype.UUID        `json:"id"`
+	LlamadaID            pgtype.UUID        `json:"llamada_id"`
+	Fase                 string             `json:"fase"`
+	UsuarioID            pgtype.UUID        `json:"usuario_id"`
+	ConversacionID       pgtype.UUID        `json:"conversacion_id"`
+	MensajeID            pgtype.UUID        `json:"mensaje_id"`
+	Funcion              string             `json:"funcion"`
+	ArgumentosSaneados   []byte             `json:"argumentos_saneados"`
+	Resultado            string             `json:"resultado"`
+	DuracionMs           int64              `json:"duracion_ms"`
+	RequestID            string             `json:"request_id"`
+	VersionInstrucciones string             `json:"version_instrucciones"`
+	OcurridaEn           pgtype.Timestamptz `json:"ocurrida_en"`
+}
+
 type Conversacion struct {
 	ID               pgtype.UUID        `json:"id"`
 	UsuarioID        pgtype.UUID        `json:"usuario_id"`

@@ -14,6 +14,9 @@ type Querier interface {
 	// El mensaje debe ser el último del usuario y no tener respuesta final.
 	// El UUID de cercado evita que un proceso atrasado escriba o libere el ciclo de otro.
 	AdquirirCiclo(ctx context.Context, arg AdquirirCicloParams) (pgtype.UUID, error)
+	// Sin RETURNING: el rol del asistente sólo anexa, ni siquiera puede leer auditoría.
+	// El mensaje y la parte se obtienen del contexto autorizado del servidor.
+	AnexarLlamadaFuncion(ctx context.Context, arg AnexarLlamadaFuncionParams) (int64, error)
 	// La actualización bloquea la conversación y asigna orden sin MAX()+1 ni carreras.
 	// Si el INSERT falla, el contador y la fecha también se revierten.
 	AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (Mensaje, error)

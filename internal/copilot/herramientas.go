@@ -11,6 +11,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/google/uuid"
 )
 
 // ClaseHerramienta limita las capacidades del catálogo: no existe escritura.
@@ -39,15 +40,19 @@ type Catalogo struct {
 	funciones map[string]herramienta
 	orden     []string
 	logger    *slog.Logger
+	auditoria AuditorLlamadas
 }
 
 // NuevoCatalogo sólo permite conectar las siete funciones conocidas. La ausencia
 // de un manejador devuelve FunctionUnavailable, nunca una respuesta inventada.
-func NuevoCatalogo(manejadores map[string]ManejadorHerramienta, logger *slog.Logger) (*Catalogo, error) {
+func NuevoCatalogo(manejadores map[string]ManejadorHerramienta, logger *slog.Logger, opciones ...OpcionCatalogo) (*Catalogo, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	c := &Catalogo{funciones: make(map[string]herramienta), logger: logger}
+	for _, opcion := range opciones {
+		opcion(c)
+	}
 	for _, d := range declaracionesHerramientas() {
 		var esquema openapi3.Schema
 		if err := json.Unmarshal(d.Parametros, &esquema); err != nil {
@@ -96,8 +101,30 @@ func (c *Catalogo) Ejecutar(ctx context.Context, llamada LlamadaIA) (resultado R
 	codigo := "OK"
 	nombreLog := "desconocida"
 	argumentosLog := make(map[string]bool)
+	registro := RegistroLlamada{ID: uuid.New(), Fase: "fin", Funcion: nombreLog, Argumentos: json.RawMessage(`{"rechazados":true}`)}
+	registrarFinal := true
 	defer func() {
-		c.logger.InfoContext(ctx, "función del asistente", "funcion", nombreLog, "resultado", codigo, "duracion", time.Since(inicio), "argumentos", argumentosLog)
+		if recover() != nil {
+			codigo = "InternalError"
+			resultado.Datos = nil
+			err = ErrNoDisponibleIA
+		}
+		if c.auditoria != nil && registrarFinal {
+			registro.Fase = "fin"
+			registro.Funcion = nombreLog
+			registro.Resultado = codigo
+			registro.Duracion = time.Since(inicio)
+			cierre, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+			defer cancel()
+			if auditErr := c.auditoria.Registrar(cierre, registro); auditErr != nil {
+				codigo = "AuditUnavailable"
+				resultado.Datos = nil
+				if err == nil {
+					err = ErrNoDisponibleIA
+				}
+			}
+		}
+		c.logger.InfoContext(ctx, "función del asistente", "funcion", nombreLog, "resultado", codigo, "duracion", time.Since(inicio), "argumentos", argumentosLog, "llamada_id", registro.ID.String(), "version_instrucciones", VersionInstruccionesVera)
 	}()
 	fallo := func(cod string) (ResultadoIA, error) {
 		codigo = cod
@@ -130,8 +157,26 @@ func (c *Catalogo) Ejecutar(ctx context.Context, llamada LlamadaIA) (resultado R
 	for campo := range campos {
 		argumentosLog[campo] = true
 	} // presencia, nunca valores ni PII
+	registro.Argumentos = argumentosParaAuditoria(args, campos)
 	if f.manejar == nil {
 		return fallo("FunctionUnavailable")
+	}
+	if c.auditoria != nil {
+		registro.Fase = "inicio"
+		registro.Funcion = nombreLog
+		registro.Resultado = "InProgress"
+		apertura, cancel := context.WithTimeout(ctx, 2*time.Second)
+		auditErr := c.auditoria.Registrar(apertura, registro)
+		cancel()
+		if auditErr != nil {
+			registrarFinal = false
+			codigo = "AuditUnavailable"
+			if ctx.Err() != nil {
+				codigo = "Canceled"
+				return resultado, ctx.Err()
+			}
+			return resultado, ErrNoDisponibleIA
+		}
 	}
 	datos, err := f.manejar(ctx, id, args)
 	if ctx.Err() != nil {

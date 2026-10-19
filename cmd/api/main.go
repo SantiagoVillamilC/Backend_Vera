@@ -128,7 +128,7 @@ func run() error {
 		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
 		"resumir_movimientos":     copilot.ResumenMovimientosIA(servicio, resolutorDestino),
 		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
-	}, slog.Default())
+	}, slog.Default(), copilot.ConAuditoriaLlamadas(copilot.NuevaAuditoriaPostgres(pool)))
 	if err != nil {
 		return fmt.Errorf("catálogo IA: %w", err)
 	}

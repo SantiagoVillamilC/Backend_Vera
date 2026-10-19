@@ -95,7 +95,14 @@ func ConversacionDelContexto(ctx context.Context) (uuid.UUID, bool) {
 }
 
 // Responder completa el ciclo sobre el último mensaje de usuario de una conversación propia.
-func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (SalidaOrquestador, error) {
+func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (respuestaFinal SalidaOrquestador, errorFinal error) {
+	defer func() {
+		if recover() != nil {
+			o.logger.ErrorContext(ctx, "ciclo del asistente interrumpido", "resultado", "InternalError", "version_instrucciones", VersionInstruccionesVera)
+			respuestaFinal = SalidaOrquestador{}
+			errorFinal = ErrNoDisponibleIA
+		}
+	}()
 	var salida SalidaOrquestador
 	if e.ConversacionID == uuid.Nil || e.MensajeID == uuid.Nil {
 		return salida, ErrSolicitudIA
@@ -113,6 +120,7 @@ func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (Sali
 	if err != nil {
 		return salida, err
 	}
+	ctx = context.WithValue(ctx, claveMensajeCiclo{}, e.MensajeID)
 	defer func() {
 		cierre, cancelar := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 		defer cancelar()
@@ -121,6 +129,9 @@ func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (Sali
 		}
 	}()
 	historial := sesion.Historial()
+	if err := validarRolesHistorial(historial); err != nil {
+		return salida, err
+	}
 	if len(historial) == 0 || (historial[len(historial)-1].Rol != "usuario" && historial[len(historial)-1].Rol != "herramienta") {
 		return salida, ErrSolicitudIA
 	}
@@ -150,6 +161,10 @@ func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (Sali
 		texto, llamadas, err := examinarRespuestaCiclo(respuesta, ids)
 		if err != nil {
 			return SalidaOrquestador{}, err
+		}
+		if revelaInstrucciones(texto) {
+			o.logger.WarnContext(ctx, "respuesta del asistente bloqueada", "resultado", "InstructionDisclosure", "version_instrucciones", VersionInstruccionesVera)
+			return SalidaOrquestador{}, ErrBloqueoIA
 		}
 		salida.Vueltas = vuelta
 		salida.TokensEntrada += int64(respuesta.TokensEntrada)

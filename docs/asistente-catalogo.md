@@ -13,6 +13,10 @@ identidad del contexto autenticado y ejecuta el manejador conectado. Devuelve un
 `ResultadoIA` con el mismo ID y nombre de la llamada, listo para reenviar al modelo.
 No concatena resultados en las instrucciones del sistema.
 
+SCRUM-138 agrega auditoría de inicio/fin con argumentos saneados y correlación
+con el mensaje autorizado. `cmd/api` la exige para ejecutar manejadores;
+ver [trazabilidad y seguridad](asistente-trazabilidad-seguridad.md).
+
 El catálogo no permite registro dinámico de funciones adicionales. Hay seis
 funciones de lectura y una de preparación; no hay clase de escritura. Agregar
 una función exige cambiar código, pruebas y este anexo y revisar el cambio con
