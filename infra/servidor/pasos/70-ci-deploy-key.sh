@@ -37,10 +37,11 @@ ARCHIVO_DEPLOY_CI="${DIRECTORIO_SCRIPT}/deploy-ci.sh"
 if [[ ! -f "${ARCHIVO_DEPLOY_CI}" ]]; then
   error_fatal "No existe ${ARCHIVO_DEPLOY_CI}: la llave de deploy apuntaría a un archivo ausente y el CD fallaría en cada push."
 fi
-# sshd ejecuta el comando forzado como root: el dueño tiene que ser root para
-# que centinela no pueda editar lo que corre como superusuario.
+# El comando forzado corre como centinela (sshd no hace sudo por su cuenta), así
+# que el script tiene que ser ejecutable por cualquiera. Lo que impide que
+# centinela lo edite es el dueño, no el modo: root:root y sin bit de escritura.
 chown root:root "${ARCHIVO_DEPLOY_CI}"
-chmod 700 "${ARCHIVO_DEPLOY_CI}"
+chmod 755 "${ARCHIVO_DEPLOY_CI}"
 
 comando_forzado="${ARCHIVO_DEPLOY_CI}"
 
