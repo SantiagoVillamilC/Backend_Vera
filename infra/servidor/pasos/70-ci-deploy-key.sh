@@ -29,22 +29,20 @@ fi
 
 # Mismo glob que asegurar_servicio_compose, pero con nombres relativos
 # (el command= ya hace "cd ${DIRECTORIO_SCRIPT}" primero).
-directorio_compose="${DIRECTORIO_SCRIPT}"
-declare -a banderas_compose=()
-for archivo in "${directorio_compose}"/compose*.yaml; do
-  [[ -f "$archivo" ]] || continue
-  banderas_compose+=(-f "$(basename "$archivo")")
-done
-
-if [[ "${#banderas_compose[@]}" -eq 0 ]]; then
-  error_fatal "No se encontró ningún archivo compose*.yaml en ${directorio_compose}."
+# El comando forzado ya no lleva los compose dentro: llama a deploy-ci.sh, que
+# recibe la rama por SSH_ORIGINAL_COMMAND y comprueba que sea dev, staging o
+# main. Así el mismo comando despliega las tres ramas sin reescribir esta
+# línea, que fue el motivo por el que "up -d api" quedó fijo en :main.
+ARCHIVO_DEPLOY_CI="${DIRECTORIO_SCRIPT}/deploy-ci.sh"
+if [[ ! -f "${ARCHIVO_DEPLOY_CI}" ]]; then
+  error_fatal "No existe ${ARCHIVO_DEPLOY_CI}: la llave de deploy apuntaría a un archivo ausente y el CD fallaría en cada push."
 fi
+# sshd ejecuta el comando forzado como root: el dueño tiene que ser root para
+# que centinela no pueda editar lo que corre como superusuario.
+chown root:root "${ARCHIVO_DEPLOY_CI}"
+chmod 700 "${ARCHIVO_DEPLOY_CI}"
 
-banderas_texto="${banderas_compose[*]}"
-comando_forzado="cd ${directorio_compose} && sudo docker compose ${banderas_texto} pull api && sudo docker compose ${banderas_texto} up -d api"
-# Los simuladores viven en su propio proyecto compose. Se actualizan después de la API,
-# y solo si 65-simuladores.sh ya dejó el directorio. Si fallan, el deploy falla.
-comando_forzado+=" && if [ -d /opt/centinela/simuladores ]; then cd /opt/centinela/simuladores && sudo docker compose pull && sudo docker compose up -d; fi"
+comando_forzado="${ARCHIVO_DEPLOY_CI}"
 
 linea_actual="$(grep -F "${MARCADOR_LLAVE}" "${ARCHIVO_AUTHORIZED_KEYS}")"
 
@@ -58,7 +56,7 @@ sufijo="${linea_actual#command=\"*\",}"
 linea_nueva="command=\"${comando_forzado}\",${sufijo}"
 
 if [[ "${linea_actual}" == "${linea_nueva}" ]]; then
-  info "El command= forzado de la llave de deploy ya incluye todos los compose*.yaml actuales."
+  info "El command= forzado de la llave de deploy ya apunta a ${ARCHIVO_DEPLOY_CI}."
 else
   # sshd exige que authorized_keys sea dueño del usuario (StrictModes): este paso corre
   # como root vía aprovisionar.sh, así que mktemp/mv heredarían root:root sin este chown
@@ -72,6 +70,6 @@ else
   chown "${dueno_original}" "${archivo_temporal}"
   chmod 600 "${archivo_temporal}"
   mv "${archivo_temporal}" "${ARCHIVO_AUTHORIZED_KEYS}"
-  info "Se actualizó el command= forzado para incluir: ${banderas_texto}"
+  info "Se actualizó el command= forzado para llamar a ${ARCHIVO_DEPLOY_CI}."
   registrar_cambio
 fi

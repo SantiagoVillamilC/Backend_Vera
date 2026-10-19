@@ -2,7 +2,9 @@ name: CD simuladores
 
 on:
   push:
-    branches: [staging, main]
+    # El despliegue de los simuladores lo hace cd.yml con deploy-ci.sh en la
+    # misma corrida que la API: aquí solo se publican las imágenes.
+    branches: [dev, staging, main]
     paths:
       - "servicios/simuladores/**"
       - ".github/workflows/cd-simuladores.yml"
@@ -54,22 +56,3 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy:
-    name: Deploy simuladores on the VM
-    needs: build-and-push
-    if: vars.DEPLOY_SIMULADORES == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run the restricted deploy command over SSH
-        env:
-          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
-          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
-          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/centinela_deploy
-          chmod 600 ~/.ssh/centinela_deploy
-          ssh -i ~/.ssh/centinela_deploy -p "$DEPLOY_SSH_PORT" \
-            -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST"

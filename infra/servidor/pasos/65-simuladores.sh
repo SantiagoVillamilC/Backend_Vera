@@ -13,9 +13,10 @@ ARCHIVO_ENV="${DIRECTORIO_SIMULADORES}/.env"
 ARCHIVO_PLANTILLA="${DIRECTORIO_SCRIPT}/simuladores/simuladores.yaml"
 ARCHIVO_TOKEN_API="/opt/centinela/api/custodio-token.env"
 
-# Las imágenes las publica .github/workflows/cd-simuladores.yml en cada push a main.
+# cd-simuladores.yml publica un tag por rama; deploy-ci.sh reescribe TAG en
+# .env en cada despliegue, así que aquí solo se fija el punto de partida.
 REGISTRO_SIMULADORES="ghcr.io/santiagovillamilc/backend_vera"
-TAG_SIMULADORES="main"
+TAG_SIMULADORES="${TAG_SIMULADORES:-main}"
 PUERTO_PSE="8091"
 
 asegurar_directorio "${DIRECTORIO_SIMULADORES}" "700"
@@ -68,4 +69,90 @@ else
     fi
     info "Confirmado con el healthcheck: ${contenedor} está listo."
   done
+fi
+
+# Borde HTTP de PSE. Es el único de los tres con nombre público: el navegador
+# del usuario tiene que abrir la página de pago. Las locaciones viven en un
+# snippet para que los bloques de :80 y :443 compartan el mismo cuerpo.
+DIRECTORIO_NGINX="${DIRECTORIO_SCRIPT}/nginx"
+ARCHIVO_SNIPPET_PSE="${DIRECTORIO_NGINX}/snippets/pse-http.conf"
+ARCHIVO_PSE_HTTP="${DIRECTORIO_NGINX}/conf.d/pse.conf"
+ARCHIVO_PSE_TLS="${DIRECTORIO_NGINX}/conf.d/pse-tls.conf"
+ARCHIVO_PLANTILLA_PSE="${DIRECTORIO_SCRIPT}/simuladores/pse-http.conf"
+DIRECTORIO_LETSENCRYPT="/opt/centinela/letsencrypt"
+ARCHIVO_FULLCHAIN_PSE="${DIRECTORIO_LETSENCRYPT}/live/${DOMINIO_PSE}/fullchain.pem"
+
+# Misma imagen que 50-certbot.sh: un solo certbot para las dos emisiones.
+IMAGEN_CERTBOT="${IMAGEN_CERTBOT:-certbot/certbot:v5.8.0}"
+CERTBOT_STAGING="${CERTBOT_STAGING:-no}"
+
+asegurar_directorio "${DIRECTORIO_NGINX}/snippets"
+asegurar_directorio "${DIRECTORIO_NGINX}/conf.d"
+asegurar_directorio "${DIRECTORIO_NGINX}/webroot"
+
+cambios_antes_borde="$(resumen_cambios)"
+
+asegurar_archivo_con_contenido "${ARCHIVO_SNIPPET_PSE}" "$(cat "${ARCHIVO_PLANTILLA_PSE}")"
+
+contenido_pse_http="$(cat <<EOF
+# infra/servidor/nginx/conf.d/pse.conf (generado por 65-simuladores.sh, no editar a mano)
+server {
+    listen 80;
+    server_name ${DOMINIO_PSE};
+
+    include /etc/nginx/snippets/pse-http.conf;
+}
+EOF
+)"
+asegurar_archivo_con_contenido "${ARCHIVO_PSE_HTTP}" "${contenido_pse_http}"
+
+if [[ -f "${ARCHIVO_FULLCHAIN_PSE}" ]]; then
+  info "El certificado de ${DOMINIO_PSE} ya existe en ${ARCHIVO_FULLCHAIN_PSE}: no se reemite."
+elif [[ -z "${CORREO_CERTBOT:-}" ]]; then
+  aviso "Falta CORREO_CERTBOT (aprovisionar.env): ${DOMINIO_PSE} se queda solo en HTTP hasta definirlo."
+elif [[ ! -d /run/systemd/system ]]; then
+  aviso "systemd no es el proceso 1 en este sistema: no se emite el certificado de ${DOMINIO_PSE}."
+else
+  comando_certonly=(certonly --webroot -w /var/www/certbot
+    -d "${DOMINIO_PSE}" -m "${CORREO_CERTBOT}" --agree-tos --non-interactive)
+  if [[ "${CERTBOT_STAGING}" == "si" ]]; then
+    comando_certonly+=(--staging)
+  fi
+  info "Emitiendo el certificado para ${DOMINIO_PSE} (correo ${CORREO_CERTBOT}, staging=${CERTBOT_STAGING})."
+  if ! docker run --rm \
+    -v "${DIRECTORIO_NGINX}/webroot:/var/www/certbot" \
+    -v "${DIRECTORIO_LETSENCRYPT}:/etc/letsencrypt" \
+    "${IMAGEN_CERTBOT}" "${comando_certonly[@]}"; then
+    error_fatal "certbot certonly falló al emitir el certificado para ${DOMINIO_PSE}. Confirma que el registro A existe y apunta a esta máquina; Let's Encrypt limita a 5 validaciones fallidas por hora (usa CERTBOT_STAGING=si para probar sin gastar ese límite)."
+  fi
+  if [[ ! -f "${ARCHIVO_FULLCHAIN_PSE}" ]]; then
+    error_fatal "certbot certonly terminó sin error, pero ${ARCHIVO_FULLCHAIN_PSE} no existe."
+  fi
+  info "Certificado emitido: ${ARCHIVO_FULLCHAIN_PSE} existe."
+  registrar_cambio
+fi
+
+if [[ -f "${ARCHIVO_FULLCHAIN_PSE}" ]]; then
+  contenido_pse_tls="$(cat <<EOF
+# infra/servidor/nginx/conf.d/pse-tls.conf (generado por 65-simuladores.sh, no editar a mano)
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMINIO_PSE};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMINIO_PSE}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMINIO_PSE}/privkey.pem;
+
+    include /etc/nginx/snippets/pse-http.conf;
+}
+EOF
+)"
+  asegurar_archivo_con_contenido "${ARCHIVO_PSE_TLS}" "${contenido_pse_tls}"
+fi
+
+if [[ "$(resumen_cambios)" != "${cambios_antes_borde}" ]] && docker inspect centinela-nginx >/dev/null 2>&1; then
+  # 30-nginx.sh no vuelve a correr entre este paso y el anterior, así que el
+  # vhost nuevo entra con una recarga explícita del contenedor que ya corre.
+  docker kill -s HUP centinela-nginx >/dev/null
+  info "nginx recargado para tomar el vhost de ${DOMINIO_PSE}."
 fi

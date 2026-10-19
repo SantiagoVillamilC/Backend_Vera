@@ -14,3 +14,7 @@ aprovisionar.env
 # ignora completo.
 compose*.yaml
 nginx/
+
+# Generado en tiempo de aprovisionamiento por 60-api.sh y reescrito por
+# deploy-ci.sh en cada despliegue (etiqueta de la imagen por rama).
+.env
