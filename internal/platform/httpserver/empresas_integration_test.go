@@ -5,9 +5,11 @@ package httpserver
 import (
 	"context"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,10 +19,11 @@ import (
 func montajeDeEmpresasDeIntegracion(t *testing.T, pool *pgxpool.Pool) montajeDeEmpresa {
 	t.Helper()
 	pila := construirPilaDeAuthDeEmpresa(t, pool, clienteRedisDeIntegracion(t))
-	registrador, err := auth.NuevoRegistradorDePersonas(pool, pila.derivador, pila.eventos, pila.gestor, subcuentasSinNucleo{})
+	servicioNucleo := nucleo.NewServicio(pool, nil, nil, nil, nil)
+	registrador, err := auth.NuevoRegistradorDePersonas(pool, pila.derivador, pila.eventos, pila.gestor, servicioNucleo)
 	exigirSinError(t, err, "registrador")
 	identidad := adaptadorJWTDePrueba{tokens: pila.tokens, denylist: pila.denylist}
-	router := NewRouter(pool, DependenciasAuth{
+	router := NewRouter(pool, servicioNucleo, custodioDePrueba, DependenciasAuth{
 		Identidad: identidad,
 		Companies: NuevoEmpresasHandler(registrador),
 	})
@@ -41,6 +44,25 @@ func contarFilasDeEmpresa(t *testing.T, pool *pgxpool.Pool, consulta string, arg
 	var total int
 	if err := tx.QueryRow(t.Context(), consulta, args...).Scan(&total); err != nil {
 		t.Fatalf("contar (%s): %v", consulta, err)
+	}
+	return total
+}
+
+// contarSubcuentasDeEmpresa cuenta las subcuentas del ledger con el rol dueno, que si ve el esquema nucleo.
+func contarSubcuentasDeEmpresa(t *testing.T, titularID string) int {
+	t.Helper()
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		t.Fatalf("DATABASE_URL es obligatoria para leer las subcuentas del nucleo")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("pool dueno: %v", err)
+	}
+	defer pool.Close()
+	var total int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM nucleo.cuenta WHERE titular_id = $1`, titularID).Scan(&total); err != nil {
+		t.Fatalf("contar subcuentas: %v", err)
 	}
 	return total
 }
@@ -73,6 +95,9 @@ func TestCrearEmpresaAutenticadaDePuntaAPunta(t *testing.T) {
 	if total := contarFilasDeEmpresa(t, pool, `SELECT count(*) FROM auth.roles_de_parte WHERE parte_id = $1 AND representada_id = $2 AND rol = 'representante_legal' AND revocado_en IS NULL`,
 		personaID, empresaID); total != 1 {
 		t.Errorf("roles representante_legal vigentes = %d, quiero 1", total)
+	}
+	if total := contarSubcuentasDeEmpresa(t, empresaID.String()); total != 2 {
+		t.Errorf("subcuentas de la empresa = %d, quiero 2", total)
 	}
 
 	antes := contarFilasDeEmpresa(t, pool, `SELECT count(*) FROM auth.partes`)

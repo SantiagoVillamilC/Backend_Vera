@@ -32,6 +32,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.service.Process(r.Context(), image)
+	if errors.Is(err, ErrSinBackend) {
+		api.WriteError(w, http.StatusNotImplemented, "NotImplemented", "Endpoint not implemented yet.", nil)
+		return
+	}
 	if err != nil {
 		api.WriteAPIError(w, r, err)
 		return

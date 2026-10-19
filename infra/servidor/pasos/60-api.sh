@@ -12,29 +12,41 @@ TARJETA="SCRUM-100"
 
 paso "${NOMBRE_PASO} (${TARJETA})"
 
-# Tag flotante: staging y main comparten esta misma VM y el mismo comando SSH
-# forzado (no hay segundo ambiente), un push a staging también redespliega
-# esta imagen. Ver bitácora técnica 2026-09-24.
+# staging y main comparten esta misma VM y el mismo comando SSH forzado (no
+# hay segundo ambiente): la rama desplegada es solo la etiqueta de la imagen.
+# cd.yml publica un tag por rama y deploy-ci.sh reescribe esa etiqueta en cada
+# despliegue, así que este valor es solo el punto de partida de una instalación
+# nueva. Ver bitácora técnica 2026-09-24.
 #
 # El nombre de la imagen sigue a github.repository (cd.yml: env.IMAGE), que
 # GitHub actualiza solo tras un rename de repo. Este valor NO se actualiza
 # solo: el repo pasó de Backend_Centinela a Backend_Vera el 24 de sep y este
 # hardcode se quedó apuntando al nombre viejo, "manifest unknown" en el
 # primer deploy real aunque la imagen sí existía (bitácora técnica del mismo día).
-IMAGEN_API="ghcr.io/santiagovillamilc/backend_vera:main"
+IMAGEN_TAG="${IMAGEN_TAG:-main}"
+IMAGEN_API="ghcr.io/santiagovillamilc/backend_vera:${IMAGEN_TAG}"
 
 DIRECTORIO_API="/opt/centinela/api"
 ARCHIVO_COMPOSE_API="${DIRECTORIO_SCRIPT}/compose.api.yaml"
+# compose.api.yaml referencia ${IMAGEN_API} en vez de llevar la etiqueta dentro,
+# para que deploy-ci.sh cambie de rama sin regenerar el compose.
+ARCHIVO_ENV_API="${DIRECTORIO_SCRIPT}/.env"
 ARCHIVO_JWT_SECRET="${DIRECTORIO_API}/jwt-secret.env"
 ARCHIVO_CONTADORES_PEPPER="${DIRECTORIO_API}/contadores-pepper.env"
 ARCHIVO_OTP_PEPPER="${DIRECTORIO_API}/otp-pepper.env"
 ARCHIVO_ROL_API_PASSWORD="${DIRECTORIO_API}/rol-api-password.env"
 ARCHIVO_APP_DATABASE_URL="${DIRECTORIO_API}/app-database-url.env"
+# La API no corre migraciones: un servicio de un solo uso las aplica antes de arrancar.
+ARCHIVO_DATABASE_URL="${DIRECTORIO_API}/database-url.env"
+# El núcleo financiero exige CUSTODIO_TOKEN de al menos 32 bytes y distinto de JWT_SECRET
+# (cmd/api/config.go), lo firma el custodio simulado como bearer estático.
+ARCHIVO_CUSTODIO_TOKEN="${DIRECTORIO_API}/custodio-token.env"
 
 asegurar_archivo_con_secreto "${ARCHIVO_JWT_SECRET}" "JWT_SECRET"
 asegurar_archivo_con_secreto_hex "${ARCHIVO_CONTADORES_PEPPER}" "CONTADORES_PEPPER"
 asegurar_archivo_con_secreto_hex "${ARCHIVO_OTP_PEPPER}" "OTP_PEPPER"
 asegurar_archivo_con_secreto "${ARCHIVO_ROL_API_PASSWORD}" "ROL_API_PASSWORD"
+asegurar_archivo_con_secreto "${ARCHIVO_CUSTODIO_TOKEN}" "CUSTODIO_TOKEN"
 
 # APP_DATABASE_URL se deriva de ROL_API_PASSWORD (no es un secreto aparte).
 # shellcheck source=/dev/null
@@ -44,15 +56,38 @@ printf 'APP_DATABASE_URL=postgres://rol_api:%s@postgres:5432/centinela?sslmode=d
   "${ROL_API_PASSWORD}" > "${ARCHIVO_APP_DATABASE_URL}"
 chmod 600 "${ARCHIVO_APP_DATABASE_URL}"
 
-# Delimitador sin comillas: interpola IMAGEN_API. Los cuatro archivos
-# generados arriba entran por env_file (secretos, 600); todo lo que sigue en
-# "environment:" es config fija, no sensible.
+# DATABASE_URL es el DSN del usuario dueño del esquema, dueño de las migraciones.
+# Sale del mismo secreto que inicializó Postgres, no se genera otro.
+# shellcheck source=/dev/null
+. "/opt/centinela/postgres/postgres.env"
+printf 'DATABASE_URL=postgres://centinela:%s@postgres:5432/centinela?sslmode=disable\n' \
+  "${POSTGRES_PASSWORD}" > "${ARCHIVO_DATABASE_URL}"
+chmod 600 "${ARCHIVO_DATABASE_URL}"
+
+# Delimitador sin comillas: interpola las rutas de los secretos. IMAGEN_API va
+# escapada para que la resuelva docker compose desde .env en cada despliegue,
+# no este script una sola vez. Los cinco archivos generados arriba entran por
+# env_file (secretos, 600); todo lo que sigue en "environment:" es config
+# fija, no sensible.
 contenido_compose_api="$(cat <<EOF
 # infra/servidor/compose.api.yaml, generado por 60-api.sh, no
 # versionado como archivo estático aparte.
 services:
+  migrate:
+    image: \${IMAGEN_API:?define IMAGEN_API en infra-servidor/.env}
+    container_name: centinela-migrate
+    entrypoint: ["/app/migrate", "up"]
+    env_file:
+      - ${ARCHIVO_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - centinela
+    restart: "no"
+
   api:
-    image: ${IMAGEN_API}
+    image: \${IMAGEN_API:?define IMAGEN_API en infra-servidor/.env}
     container_name: centinela-api
     restart: unless-stopped
     env_file:
@@ -60,8 +95,13 @@ services:
       - ${ARCHIVO_CONTADORES_PEPPER}
       - ${ARCHIVO_OTP_PEPPER}
       - ${ARCHIVO_APP_DATABASE_URL}
+      - ${ARCHIVO_CUSTODIO_TOKEN}
     environment:
       PORT: "8080"
+      PSE_URL: https://pse.veraapp.tech
+      RIEL_SIMULADOR_URL: http://simulador-riel:8098
+      DIRECTORIO_SIMULADOR_URL: http://simulador-riel:8098
+      CUSTODIO_EXTRACTO_URL: http://simulador-custodia:8099/extracto
       LOG_LEVEL: info
       LOG_FORMAT: json
       REDIS_URL: redis://redis:6379
@@ -86,6 +126,8 @@ services:
     networks:
       - centinela
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -99,12 +141,33 @@ EOF
 )"
 asegurar_archivo_con_contenido "${ARCHIVO_COMPOSE_API}" "${contenido_compose_api}"
 
+contenido_env_api="$(cat <<EOF
+# infra/servidor/.env, generado por 60-api.sh. deploy-ci.sh reescribe la
+# etiqueta en cada despliegue; no editar a mano.
+IMAGEN_API=${IMAGEN_API}
+EOF
+)"
+asegurar_archivo_con_contenido "${ARCHIVO_ENV_API}" "${contenido_env_api}"
+
 if [[ ! -d /run/systemd/system ]]; then
   # Mismo criterio que el resto de los pasos de contenedor (ver README).
   aviso "systemd no es el proceso 1 en este sistema (no existe /run/systemd/system): se omite por completo el contenedor de la API. Verifícalo en la VM real (Azure o Vagrant)."
 else
   docker exec centinela-postgres psql -U centinela -d centinela -v ON_ERROR_STOP=1 \
     -c "ALTER ROLE rol_api WITH PASSWORD '${ROL_API_PASSWORD}';" >/dev/null
+
+  # Sin pull explícito, "up -d" reusa la imagen local si la etiqueta ya existe
+  # y el despliegue no trae nada nuevo aunque GHCR tenga otro digest. Hacen
+  # falta todos los compose*.yaml, no solo compose.api.yaml: la red
+  # "centinela" se declara en los demás y sin ella la validación del proyecto
+  # aborta con "refers to undefined network".
+  banderas_pull=(-f "${ARCHIVO_COMPOSE_API}")
+  for archivo_compose in "${DIRECTORIO_SCRIPT}"/compose*.yaml; do
+    [[ -f "${archivo_compose}" ]] || continue
+    [[ "${archivo_compose}" == "${ARCHIVO_COMPOSE_API}" ]] && continue
+    banderas_pull+=(-f "${archivo_compose}")
+  done
+  docker compose "${banderas_pull[@]}" pull migrate api
 
   asegurar_servicio_compose "${ARCHIVO_COMPOSE_API}" api
 

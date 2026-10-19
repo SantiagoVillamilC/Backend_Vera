@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
 )
@@ -46,7 +47,7 @@ func routerConEmpresas(identidadPeticion IdentidadDeLaPeticion, creador CreadorD
 	if creador != nil {
 		handler = NuevoEmpresasHandler(creador)
 	}
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: identidadPeticion,
 		Companies: handler,
 	})

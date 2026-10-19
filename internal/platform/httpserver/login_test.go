@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 )
@@ -31,7 +32,7 @@ func routerConLogin(iniciador IniciadorDeSesion) http.Handler {
 	if iniciador != nil {
 		handler = NuevoLoginHandler(iniciador)
 	}
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		Login:     handler,
 	})

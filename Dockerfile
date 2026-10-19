@@ -7,6 +7,9 @@ COPY . .
 # raíz, y "go build -o api" con ese nombre existente como directorio deja el binario adentro
 # (/app/api/api) en vez de como archivo. Primer deploy real, nunca se había corrido esta imagen.
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api ./cmd/api
+# El mismo binario de migraciones que usa la CI, para que el despliegue aplique
+# el esquema antes de arrancar la API sin depender de una máquina con Go.
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/migrate ./cmd/migrate
 
 FROM alpine:3.20
 WORKDIR /app
@@ -14,5 +17,6 @@ WORKDIR /app
 # contra /healthz, sin arrastrar curl completo.
 RUN apk add --no-cache wget
 COPY --from=build /app/bin/api ./api
+COPY --from=build /app/bin/migrate ./migrate
 EXPOSE 8080
 CMD ["./api"]

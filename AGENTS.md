@@ -108,7 +108,8 @@ hueco y dejarlo sin decir nada.
 ## Estado real del código hoy vs. lo que las skills documentan
 
 Esto es importante para no asumir de más: varias de estas skills documentan hacia dónde va el
-diseño del backend, no necesariamente lo que el código ya implementa hoy.
+diseño del backend, no necesariamente lo que el código ya implementa hoy. Esta sección se actualiza
+a medida que el código avanza.
 
 - `go.mod` declara `go 1.27` con `toolchain go1.27.0`, y el stack que las skills asumen ya está
   wireado: chi v5, pgx v5.10.0, goose v3, river v0.44.1, validator v10 y uuid. `go.sum` está
@@ -161,6 +162,9 @@ archivo real primero.
   `api.*Response`: el envelope lo arma el helper de `internal/platform/api`.
 - Todo handler que devuelva un array inicializa con `make([]T, 0, n)` para que el JSON lleve `[]` y
   no `null`.
+- `/healthz`, `/readyz`, `/copilot` y `/receipts` quedan fuera de `api/openapi.yaml` por decisión
+  (B-05): las sondas son para el orquestador y no forman parte del contrato del cliente (ver
+  `.claude/skills/golang-docs/SKILL.md`, sección de límites). Su ausencia en el YAML no es un hueco.
 - El gate de `go generate ./...` es local, no hay CI en el repo: el evaluador hace `git add` de las
   rutas, corre `go generate ./...` y exige `git diff --exit-code` sobre
   `internal/platform/api/openapi.gen.go`.

@@ -277,9 +277,10 @@ func TestRequireAuthCierraLasRutasDeDineroCuandoLaDenylistFalla(t *testing.T) {
 			}
 			r := chi.NewRouter()
 			r.Use(httpserver.RequireAuth(adaptador, httpserver.RutasDeDinero))
-			r.Get("/saldo", responderOk)
-			r.Post("/transferencias", responderOk)
-			r.Post("/depositos", responderOk)
+			r.Get("/v1/saldo", responderOk)
+			r.Post("/v1/transferencias", responderOk)
+			r.Post("/v1/depositos", responderOk)
+			r.Post("/v1/transferencias/interbancarias", responderOk)
 
 			for _, ruta := range []struct {
 				metodo string
@@ -287,9 +288,10 @@ func TestRequireAuthCierraLasRutasDeDineroCuandoLaDenylistFalla(t *testing.T) {
 				want   int
 				code   string
 			}{
-				{http.MethodPost, "/transferencias", caso.statusDinero, caso.codeDinero},
-				{http.MethodPost, "/depositos", caso.statusDinero, caso.codeDinero},
-				{http.MethodGet, "/saldo", caso.statusSaldo, ""},
+				{http.MethodPost, "/v1/transferencias", caso.statusDinero, caso.codeDinero},
+				{http.MethodPost, "/v1/depositos", caso.statusDinero, caso.codeDinero},
+				{http.MethodPost, "/v1/transferencias/interbancarias", caso.statusDinero, caso.codeDinero},
+				{http.MethodGet, "/v1/saldo", caso.statusSaldo, ""},
 			} {
 				req := httptest.NewRequestWithContext(t.Context(), ruta.metodo, ruta.path, nil)
 				req.Header.Set("Authorization", "Bearer "+access)
@@ -350,9 +352,9 @@ func TestRequireAuthRechazaAccessVencidoAlteradoOAjeno(t *testing.T) {
 			}
 			r := chi.NewRouter()
 			r.Use(httpserver.RequireAuth(adaptador, httpserver.RutasDeDinero))
-			r.Get("/saldo", responderOk)
+			r.Get("/v1/saldo", responderOk)
 
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/saldo", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/saldo", nil)
 			req.Header.Set("Authorization", "Bearer "+token)
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
