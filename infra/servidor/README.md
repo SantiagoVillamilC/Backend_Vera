@@ -187,6 +187,7 @@ en `.gitignore`).
 | `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Implementado |
 | `45-redis.sh` | Instalar y configurar Redis en contenedor | SCRUM-100 | Implementado |
 | `60-api.sh` | Instalar y configurar el contenedor de la API | SCRUM-100 | Implementado |
+| `65-simuladores.sh` | Instalar los servicios simulados y el vhost de PSE | SCRUM-114 | Implementado |
 | `70-ci-deploy-key.sh` | Actualizar el command= forzado de la llave de deploy de CI | SCRUM-100 | Implementado |
 
 ### `imagen-fijada.sh`
@@ -532,15 +533,34 @@ propiedad frente a `30-nginx.sh`, y la verificación en vivo contra Let's
 Encrypt real y contra Azure, incluido el cutover de staging a producción)
 queda documentado en la bitácora técnica del proyecto.
 
-### `45-redis.sh`, `60-api.sh`, `70-ci-deploy-key.sh` (SCRUM-100)
+### `45-redis.sh`, `60-api.sh`, `65-simuladores.sh`, `70-ci-deploy-key.sh` (SCRUM-100, SCRUM-114)
 
-Dueños de `compose.redis.yaml`, `compose.api.yaml`, y del `command=`
-forzado de `authorized_keys` respectivamente. Cierran el hueco que
-`30-nginx.sh` ya documentaba: no existía ningún service `api`, así que el
-CD de SCRUM-50 fallaba con "no such service: api" (bitácora 2026-09-24).
-`60-api.sh` también fija la contraseña de `rol_api` (migración 0004 la
-crea `LOGIN` sin una), usa el tag flotante `:main` (`staging` y `main`
-comparten la misma VM, no hay segundo ambiente), y requiere `cmd/migrate
-up` ya corrido. `70-ci-deploy-key.sh` reemplaza la lista fija de `-f
-compose*.yaml` del `command=` por el mismo glob dinámico de
-`asegurar_servicio_compose`, y se omite si la llave no existe todavía.
+Dueños de `compose.redis.yaml`, `compose.api.yaml`, del compose de los
+simuladores y del `command=` forzado de `authorized_keys` respectivamente.
+Cierran el hueco que `30-nginx.sh` ya documentaba: no existía ningún service
+`api`, así que el CD de SCRUM-50 fallaba con "no such service: api" (bitácora
+2026-09-24). `60-api.sh` también fija la contraseña de `rol_api` (migración
+0004 la crea `LOGIN` sin una) y genera `infra-servidor/.env` con `IMAGEN_API`.
+
+**La rama desplegada es una etiqueta, no un archivo.** `cd.yml` publica un tag
+por rama (`dev`, `staging`, `main`) y `deploy-ci.sh` recibe la rama por
+`SSH_ORIGINAL_COMMAND`, valida que sea una de las tres y reescribe `IMAGEN_API`
+en `infra-servidor/.env` y `TAG` en `simuladores/.env` antes de hacer `pull`.
+Por eso `compose.api.yaml` referencia `${IMAGEN_API:?}` en vez de llevar el tag
+dentro: regenerar el compose para cambiar de rama era el paso manual que hacía
+imposible desplegar `dev`. Un push a `dev` construye la imagen pero no despliega
+(`if: github.ref_name != 'dev'`), porque `staging` y `main` comparten la misma
+VM y desplegar `dev` sería publicar en producción sin compuerta.
+
+`deploy-ci.sh` aplica las migraciones con `docker compose run --rm migrate`
+antes de `up -d api`: con `depends_on`, un `up -d` reusa el contenedor `migrate`
+ya terminado y no volvería a aplicarlas. `70-ci-deploy-key.sh` deja el
+`command=` apuntando a ese script, le fija dueño `root:root` y modo `700`, y se
+omite si la llave no existe todavía.
+
+`65-simuladores.sh` instala además el borde HTTP de PSE: copia
+`simuladores/pse-http.conf` como snippet, escribe el bloque de `:80`, emite el
+certificado de `DOMINIO_PSE` con el mismo certbot de `50-certbot.sh` si aún no
+existe, agrega el bloque de `:443` y recarga nginx. Es el único nombre público
+de los tres simuladores: el riel y el custodio se quedan en `127.0.0.1` porque
+`/control` no tiene autenticación.

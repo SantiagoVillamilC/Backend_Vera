@@ -12,6 +12,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/denylist"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -103,7 +104,7 @@ func TestEndpointsDeDispositivosYContextoDePuntaAPunta(t *testing.T) {
 	}
 	access2 := firmarAccessDeIntegracion(t, tokens, parteID, sesion2.FamiliaID, auth.ContextoUsuario, "")
 
-	r := NewRouter(pool, DependenciasAuth{
+	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: adaptadorJWTDePrueba{tokens: tokens, denylist: d},
 		Auth:      NuevoDispositivosHandler(servicio),
 		Refresh:   NuevoSesionHandler(servicio),
@@ -164,7 +165,7 @@ func TestEndpointsDeDispositivosYContextoDePuntaAPunta(t *testing.T) {
 	if claims.Contexto != empresaID || claims.Rol != "representante_legal" {
 		t.Fatalf("claims del access nuevo = %+v, quiero la empresa con rol", claims)
 	}
-	reqSonda := httptest.NewRequest(http.MethodGet, "/saldo", nil)
+	reqSonda := httptest.NewRequest(http.MethodGet, "/v1/saldo", nil)
 	reqSonda.Header.Set("Authorization", "Bearer "+activo.Data.AccessToken)
 	sonda, err := (adaptadorJWTDePrueba{tokens: tokens, denylist: d}).Identidad(reqSonda)
 	if err != nil {
@@ -213,7 +214,7 @@ func TestLogoutConRefreshRevocaLaFamiliaDePuntaAPunta(t *testing.T) {
 	access1 := firmarAccessDeIntegracion(t, tokens, parteID, sesion1.FamiliaID, auth.ContextoUsuario, "")
 	access2 := firmarAccessDeIntegracion(t, tokens, parteID, sesion2.FamiliaID, auth.ContextoUsuario, "")
 
-	r := NewRouter(pool, DependenciasAuth{
+	r := NewRouter(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: adaptadorJWTDePrueba{tokens: tokens, denylist: d},
 		Auth:      NuevoDispositivosHandler(servicio),
 		Refresh:   NuevoSesionHandler(servicio),

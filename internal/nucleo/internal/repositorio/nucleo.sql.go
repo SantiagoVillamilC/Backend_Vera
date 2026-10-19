@@ -8,21 +8,167 @@ package repositorio
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const ping = `-- name: Ping :one
-SELECT 1
+const gravamenRetenidoDeTransferencia = `-- name: GravamenRetenidoDeTransferencia :one
+SELECT COALESCE(SUM(-p.monto), 0)::bigint AS gravamen
+  FROM nucleo.posting p
+  JOIN nucleo.journal_entry j ON j.id = p.entry_id
+ WHERE j.transferencia_id = $1
+   AND j.tipo = $2
+   AND p.cuenta_id = $3
 `
 
-// Placeholder de la fase 0. sqlc no genera un Querier sin al menos una consulta, y el
-// esquema del núcleo todavía no tiene tablas. La primera unidad con consultas de negocio
-// (NF-A1-01) reemplaza este archivo completo.
-func (q *Queries) Ping(ctx context.Context) (int32, error) {
-	row := q.db.QueryRow(ctx, ping)
-	var column_1 int32
-	err := row.Scan(&column_1)
+type GravamenRetenidoDeTransferenciaParams struct {
+	TransferenciaID pgtype.UUID `json:"transferencia_id"`
+	Tipo            string      `json:"tipo"`
+	CuentaID        string      `json:"cuenta_id"`
+}
+
+func (q *Queries) GravamenRetenidoDeTransferencia(ctx context.Context, arg GravamenRetenidoDeTransferenciaParams) (int64, error) {
+	row := q.db.QueryRow(ctx, gravamenRetenidoDeTransferencia, arg.TransferenciaID, arg.Tipo, arg.CuentaID)
+	var gravamen int64
+	err := row.Scan(&gravamen)
 	if err != nil {
-		err = fmt.Errorf("query Ping: %w", err)
+		err = fmt.Errorf("query GravamenRetenidoDeTransferencia: %w", err)
 	}
-	return column_1, err
+	return gravamen, err
+}
+
+const insertarAsiento = `-- name: InsertarAsiento :one
+INSERT INTO nucleo.journal_entry (tipo, transferencia_id, deposito_id, ocurrido_en, descripcion)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
+`
+
+type InsertarAsientoParams struct {
+	Tipo            string             `json:"tipo"`
+	TransferenciaID pgtype.UUID        `json:"transferencia_id"`
+	DepositoID      pgtype.UUID        `json:"deposito_id"`
+	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
+	Descripcion     pgtype.Text        `json:"descripcion"`
+}
+
+func (q *Queries) InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error) {
+	row := q.db.QueryRow(ctx, insertarAsiento,
+		arg.Tipo,
+		arg.TransferenciaID,
+		arg.DepositoID,
+		arg.OcurridoEn,
+		arg.Descripcion,
+	)
+	var i JournalEntry
+	err := row.Scan(
+		&i.ID,
+		&i.Tipo,
+		&i.TransferenciaID,
+		&i.OcurridoEn,
+		&i.RegistradoEn,
+		&i.Descripcion,
+		&i.DepositoID,
+	)
+	if err != nil {
+		err = fmt.Errorf("query InsertarAsiento: %w", err)
+	}
+	return i, err
+}
+
+const insertarLinea = `-- name: InsertarLinea :one
+INSERT INTO nucleo.posting (entry_id, cuenta_id, monto, moneda)
+VALUES ($1, $2, $3, $4)
+RETURNING id, entry_id, cuenta_id, monto, moneda
+`
+
+type InsertarLineaParams struct {
+	EntryID  int64  `json:"entry_id"`
+	CuentaID string `json:"cuenta_id"`
+	Monto    int64  `json:"monto"`
+	Moneda   string `json:"moneda"`
+}
+
+func (q *Queries) InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error) {
+	row := q.db.QueryRow(ctx, insertarLinea,
+		arg.EntryID,
+		arg.CuentaID,
+		arg.Monto,
+		arg.Moneda,
+	)
+	var i Posting
+	err := row.Scan(
+		&i.ID,
+		&i.EntryID,
+		&i.CuentaID,
+		&i.Monto,
+		&i.Moneda,
+	)
+	if err != nil {
+		err = fmt.Errorf("query InsertarLinea: %w", err)
+	}
+	return i, err
+}
+
+const insertarSubcuentasDeUsuario = `-- name: InsertarSubcuentasDeUsuario :execrows
+INSERT INTO nucleo.cuenta (id, naturaleza, clase, titular_id)
+VALUES ($1, 'pasivo', 'usuario', $2),
+       ($3, 'pasivo', 'usuario', $2)
+ON CONFLICT (id) DO NOTHING
+`
+
+type InsertarSubcuentasDeUsuarioParams struct {
+	Disponible string      `json:"disponible"`
+	TitularID  pgtype.Text `json:"titular_id"`
+	Retenido   string      `json:"retenido"`
+}
+
+func (q *Queries) InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertarSubcuentasDeUsuario, arg.Disponible, arg.TitularID, arg.Retenido)
+	if err != nil {
+		return 0, fmt.Errorf("query InsertarSubcuentasDeUsuario: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
+const saldoDeCuenta = `-- name: SaldoDeCuenta :one
+SELECT COALESCE(SUM(p.monto), 0)::bigint AS saldo
+  FROM nucleo.posting p
+  JOIN nucleo.cuenta c ON c.id = p.cuenta_id
+ WHERE p.cuenta_id = $1
+   AND p.moneda = c.moneda
+`
+
+func (q *Queries) SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, error) {
+	row := q.db.QueryRow(ctx, saldoDeCuenta, cuentaID)
+	var saldo int64
+	err := row.Scan(&saldo)
+	if err != nil {
+		err = fmt.Errorf("query SaldoDeCuenta: %w", err)
+	}
+	return saldo, err
+}
+
+const saldoDeCuentaHasta = `-- name: SaldoDeCuentaHasta :one
+SELECT COALESCE(SUM(p.monto), 0)::bigint AS saldo
+  FROM nucleo.posting p
+  JOIN nucleo.journal_entry j ON j.id = p.entry_id
+  JOIN nucleo.cuenta c ON c.id = p.cuenta_id
+ WHERE p.cuenta_id = $1
+   AND p.moneda = c.moneda
+   AND j.ocurrido_en <= $2
+`
+
+type SaldoDeCuentaHastaParams struct {
+	CuentaID string             `json:"cuenta_id"`
+	CorteEn  pgtype.Timestamptz `json:"corte_en"`
+}
+
+func (q *Queries) SaldoDeCuentaHasta(ctx context.Context, arg SaldoDeCuentaHastaParams) (int64, error) {
+	row := q.db.QueryRow(ctx, saldoDeCuentaHasta, arg.CuentaID, arg.CorteEn)
+	var saldo int64
+	err := row.Scan(&saldo)
+	if err != nil {
+		err = fmt.Errorf("query SaldoDeCuentaHasta: %w", err)
+	}
+	return saldo, err
 }

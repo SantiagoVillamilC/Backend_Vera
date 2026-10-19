@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
 
@@ -42,7 +43,7 @@ func (contadoresCaidos) Bloqueada(context.Context, string) (bool, error) {
 
 // routerConReenvio arma el router con el handler de reenvío inyectado.
 func routerConReenvio(handler DesafiosHandler) http.Handler {
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		Desafios:  handler,
 	})

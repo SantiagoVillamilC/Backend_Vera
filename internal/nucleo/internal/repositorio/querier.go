@@ -6,13 +6,58 @@ package repositorio
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
-	// Placeholder de la fase 0. sqlc no genera un Querier sin al menos una consulta, y el
-	// esquema del núcleo todavía no tiene tablas. La primera unidad con consultas de negocio
-	// (NF-A1-01) reemplaza este archivo completo.
-	Ping(ctx context.Context) (int32, error)
+	AvanzarEstadoTransferencia(ctx context.Context, arg AvanzarEstadoTransferenciaParams) (Transferencia, error)
+	AvanzarVentanaOutbox(ctx context.Context, arg AvanzarVentanaOutboxParams) (int64, error)
+	BloquearCuentasOrdenadas(ctx context.Context, cuentas []string) ([]string, error)
+	BuscarDescuadresAbiertos(ctx context.Context, arg BuscarDescuadresAbiertosParams) ([]Descuadre, error)
+	ConfirmarDeposito(ctx context.Context, arg ConfirmarDepositoParams) (Deposito, error)
+	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
+	ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error)
+	ExtractoPorCorte(ctx context.Context, corteEn pgtype.Timestamptz) (ExtractoCustodio, error)
+	GravamenRetenidoDeTransferencia(ctx context.Context, arg GravamenRetenidoDeTransferenciaParams) (int64, error)
+	InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error)
+	InsertarCorridaConciliacion(ctx context.Context, ventanaHasta pgtype.Timestamptz) (ConciliacionCorrida, error)
+	InsertarDeposito(ctx context.Context, arg InsertarDepositoParams) (Deposito, error)
+	InsertarDescuadre(ctx context.Context, arg InsertarDescuadreParams) (Descuadre, error)
+	// Sin CAS posible (no hay fila de la contraparte que condicionar), así que el índice parcial
+	// descuadre_identidad_unico decide: si otra corrida ya ganó la carrera, no filas, sin abortar la
+	// transacción (HU-NF-08, criterio 10.3).
+	InsertarDescuadreSiNoHayAbierto(ctx context.Context, arg InsertarDescuadreSiNoHayAbiertoParams) (Descuadre, error)
+	InsertarExtractoCustodio(ctx context.Context, arg InsertarExtractoCustodioParams) error
+	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error)
+	InsertarOutbox(ctx context.Context, arg InsertarOutboxParams) (Outbox, error)
+	InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error)
+	InsertarTransferencia(ctx context.Context, arg InsertarTransferenciaParams) (Transferencia, error)
+	LeerAsientosDeTransferencia(ctx context.Context, transferenciaID pgtype.UUID) ([]JournalEntry, error)
+	LeerAsientosDeVentana(ctx context.Context, arg LeerAsientosDeVentanaParams) ([]JournalEntry, error)
+	LeerTransferenciasActivasDeVentana(ctx context.Context, arg LeerTransferenciasActivasDeVentanaParams) ([]LeerTransferenciasActivasDeVentanaRow, error)
+	LeerTransferenciasIndeterminadas(ctx context.Context) ([]Transferencia, error)
+	LineasDeMovimientos(ctx context.Context, anclas []int64) ([]LineasDeMovimientosRow, error)
+	MarcarOutboxDespachado(ctx context.Context, id int64) (int64, error)
+	ObtenerDeposito(ctx context.Context, id pgtype.UUID) (Deposito, error)
+	ObtenerDepositoPorIdempotencyKey(ctx context.Context, arg ObtenerDepositoPorIdempotencyKeyParams) (Deposito, error)
+	ObtenerDepositoPorReferencia(ctx context.Context, referencia string) (Deposito, error)
+	ObtenerOutbox(ctx context.Context, id int64) (Outbox, error)
+	ObtenerTitularDeCuenta(ctx context.Context, id string) (pgtype.Text, error)
+	ObtenerTransferencia(ctx context.Context, id pgtype.UUID) (Transferencia, error)
+	ObtenerTransferenciaConDespacho(ctx context.Context, id pgtype.UUID) (ObtenerTransferenciaConDespachoRow, error)
+	ObtenerTransferenciaPorIdempotencyKey(ctx context.Context, arg ObtenerTransferenciaPorIdempotencyKeyParams) (Transferencia, error)
+	PaginaDeAnclas(ctx context.Context, arg PaginaDeAnclasParams) ([]PaginaDeAnclasRow, error)
+	RechazarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
+	ReglasLimiteVigentes(ctx context.Context, arg ReglasLimiteVigentesParams) ([]ReglasLimiteVigentesRow, error)
+	ReintentarOutbox(ctx context.Context, arg ReintentarOutboxParams) (int32, error)
+	ResolverDescuadre(ctx context.Context, arg ResolverDescuadreParams) (int64, error)
+	SaldoDeCuenta(ctx context.Context, cuentaID string) (int64, error)
+	SaldoDeCuentaHasta(ctx context.Context, arg SaldoDeCuentaHastaParams) (int64, error)
+	SumaDebitoDelMes(ctx context.Context, arg SumaDebitoDelMesParams) (int64, error)
+	TomarOutboxPendientes(ctx context.Context, limite int32) ([]Outbox, error)
+	UltimaVentanaConciliada(ctx context.Context) (pgtype.Timestamptz, error)
+	ValorUVTDelAnio(ctx context.Context, anio int32) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

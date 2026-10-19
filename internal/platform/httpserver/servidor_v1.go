@@ -69,37 +69,100 @@ type CompaniesHandler interface {
 	CreateCompany(http.ResponseWriter, *http.Request)
 }
 
+// NucleoHandler agrupa las siete operaciones del núcleo que van al server generado. *nucleo.Handler
+// ya las implementa con esta misma firma, así que el adaptador es un pass-through delgado.
+// ConfirmarDeposito queda fuera a propósito: cuelga a mano bajo RequireCustodio en router.go.
+type NucleoHandler interface {
+	Saldo(http.ResponseWriter, *http.Request)
+	MontoMaximo(http.ResponseWriter, *http.Request)
+	Movimientos(http.ResponseWriter, *http.Request)
+	CrearDeposito(http.ResponseWriter, *http.Request)
+	Deposito(http.ResponseWriter, *http.Request)
+	Transferir(http.ResponseWriter, *http.Request)
+	TransferirInterbancaria(http.ResponseWriter, *http.Request)
+}
+
 // DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
 type DependenciasAuth struct {
-	Identidad    IdentidadDeLaPeticion
-	Auth         AuthHandler
-	KYC          KYCHandler
-	Consent      ConsentHandler
-	Redis        *redis.Client
-	CanalOTP     auth.CanalOTP
-	Contadores   auth.Contadores
-	Desafios     DesafiosHandler
-	Registro     RegistroHandler
-	Verificacion VerificacionHandler
-	Login        LoginHandler
-	Refresh      RefreshHandler
-	Recuperacion RecuperacionHandler
-	Firmador     *auth.TokensDeAcceso
-	Denylist     auth.RevocadorDeSesiones
-	Subcuentas   auth.AbridorDeSubcuentas
-	Recuperar2FA RecuperacionVerifyHandler
-	ResetClave   RecuperacionResetHandler
-	PhoneChange  PhoneChangeHandler
-	Companies    CompaniesHandler
+	Identidad     IdentidadDeLaPeticion
+	Auth          AuthHandler
+	KYC           KYCHandler
+	Consent       ConsentHandler
+	Redis         *redis.Client
+	CanalOTP      auth.CanalOTP
+	Contadores    auth.Contadores
+	Desafios      DesafiosHandler
+	Registro      RegistroHandler
+	Verificacion  VerificacionHandler
+	Login         LoginHandler
+	Refresh       RefreshHandler
+	Recuperacion  RecuperacionHandler
+	Firmador      *auth.TokensDeAcceso
+	Denylist      auth.RevocadorDeSesiones
+	Subcuentas    auth.AbridorDeSubcuentas
+	Recuperar2FA  RecuperacionVerifyHandler
+	ResetClave    RecuperacionResetHandler
+	PhoneChange   PhoneChangeHandler
+	Companies     CompaniesHandler
+	Destinatarios *DestinatariosHandler
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
 type servidorV1 struct {
-	auth        AuthHandler
-	kyc         KYCHandler
-	consent     ConsentHandler
-	phoneChange PhoneChangeHandler
-	companies   CompaniesHandler
+	auth          AuthHandler
+	kyc           KYCHandler
+	consent       ConsentHandler
+	phoneChange   PhoneChangeHandler
+	companies     CompaniesHandler
+	nucleo        NucleoHandler
+	destinatarios *DestinatariosHandler
+}
+
+func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request, _ api.ConsultarDestinatarioParams) {
+	if s.destinatarios == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.destinatarios.ConsultarDestinatario(w, r)
+}
+
+// Los metodos del asistente Vera aun no tienen handler: responden 501 dentro del envelope.
+// Los implementan las tarjetas de la epica del asistente.
+
+func (s servidorV1) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) ListarConversacionesVera(w http.ResponseWriter, r *http.Request, _ api.ListarConversacionesVeraParams) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) BorrarConversacionesVera(w http.ResponseWriter, r *http.Request) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) BorrarConversacionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _ api.ListarMensajesConversacionVeraParams) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) SolicitarCodigoAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) ConfirmarAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
+}
+
+func (s servidorV1) CancelarAccionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	sinImplementar(w, r)
 }
 
 var _ api.ServerInterface = servidorV1{}
@@ -211,4 +274,62 @@ func (s servidorV1) KycVerificacion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.kyc.KycVerificacion(w, r)
+}
+
+func (s servidorV1) Saldo(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Saldo(w, r)
+}
+
+func (s servidorV1) MontoMaximo(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.MontoMaximo(w, r)
+}
+
+// Movimientos descarta params: el handler ya lee limit y cursor directo de r.URL.Query().
+func (s servidorV1) Movimientos(w http.ResponseWriter, r *http.Request, _ api.MovimientosParams) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Movimientos(w, r)
+}
+
+func (s servidorV1) CrearDeposito(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.CrearDeposito(w, r)
+}
+
+// Deposito descarta id: el handler ya lo lee de chi.URLParam(r, "id").
+func (s servidorV1) Deposito(w http.ResponseWriter, r *http.Request, _ string) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Deposito(w, r)
+}
+
+func (s servidorV1) Transferir(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.Transferir(w, r)
+}
+
+func (s servidorV1) TransferirInterbancaria(w http.ResponseWriter, r *http.Request) {
+	if s.nucleo == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.nucleo.TransferirInterbancaria(w, r)
 }

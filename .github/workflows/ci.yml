@@ -61,3 +61,122 @@ jobs:
           else
             echo "::warning::No hay revisión base para comparar, se omite el lint."
           fi
+
+  # Las pruebas con el tag integration necesitan Postgres, Redis y el simulador de
+  # custodia reales. Sin las variables correctas el helper hace t.Skip y el job
+  # quedaría verde sin probar nada, por eso el último paso falla si aparece un
+  # skip que no sea el helper de subproceso conocido. Los servicios son efímeros
+  # y solo escuchan en el runner, y los secretos se generan aquí en cada corrida.
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: owner
+          POSTGRES_DB: vera
+          # Base efímera del runner sin contraseña literal en el repositorio.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U owner -d vera"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Generate secrets and environment
+        run: |
+          OWNER_PW="$(openssl rand -hex 32)"
+          API_PW="$(openssl rand -hex 32)"
+          echo "::add-mask::$OWNER_PW"
+          echo "::add-mask::$API_PW"
+          {
+            echo "OWNER_PW=$OWNER_PW"
+            echo "API_PW=$API_PW"
+            echo "DATABASE_URL=postgres://owner:$OWNER_PW@127.0.0.1:5432/vera?sslmode=disable"
+            echo "APP_DATABASE_URL=postgres://rol_api:$API_PW@127.0.0.1:5432/vera?sslmode=disable"
+            echo "REDIS_URL=redis://127.0.0.1:6379"
+            echo "SIMULADOR_CUSTODIA_URL=http://127.0.0.1:8099"
+          } >> "$GITHUB_ENV"
+
+      - name: Run migrations and set role passwords
+        run: |
+          go run ./cmd/migrate up
+          psql "postgres://owner@127.0.0.1:5432/vera?sslmode=disable" -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE owner WITH PASSWORD '$OWNER_PW'" \
+            -c "ALTER ROLE rol_api WITH PASSWORD '$API_PW'"
+
+      - name: Start custodian simulator
+        run: |
+          (cd servicios/simuladores && go build -o "$RUNNER_TEMP/simulador-custodia" ./cmd/simulador-custodia)
+          SIMULADOR_CUSTODIA_PORT=8099 SIMULADOR_CUSTODIA_DB="$RUNNER_TEMP/simulador-custodia.db" \
+            nohup "$RUNNER_TEMP/simulador-custodia" >"$RUNNER_TEMP/simulador-custodia.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null "$SIMULADOR_CUSTODIA_URL/extracto"; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/simulador-custodia.log"
+          echo "::error::El simulador de custodia no arrancó."
+          exit 1
+
+      # -p 1 porque los paquetes comparten la misma base y varias pruebas escriben
+      # tablas globales (ledger, outbox, UVT), así que en paralelo se pisarían.
+      - name: Integration tests
+        run: |
+          set -o pipefail
+          go test -json -tags integration -count=1 -p 1 ./... | tee "$RUNNER_TEMP/integration.json" \
+            | python3 -c '
+          import json, sys
+          for linea in sys.stdin:
+              try:
+                  e = json.loads(linea)
+              except ValueError:
+                  print(linea, end="")
+                  continue
+              if e.get("Action") == "output":
+                  print(e.get("Output", ""), end="")
+          '
+
+      # Un skip en un paquete con pruebas de integración casi siempre es una
+      # variable de entorno mal puesta. Solo se permite el helper de subproceso,
+      # que corre dentro de otra prueba y se omite por diseño en la corrida directa.
+      - name: Fail on unexpected skips
+        if: success()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          permitidos = {"TestProcesoQueMuereEnElDespacho"}
+          inesperados = []
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "integration.json")) as f:
+              for linea in f:
+                  try:
+                      e = json.loads(linea)
+                  except ValueError:
+                      continue
+                  if e.get("Action") == "skip" and e.get("Test") and e["Test"] not in permitidos:
+                      inesperados.append(e["Package"] + " " + e["Test"])
+          if inesperados:
+              print("Pruebas omitidas sin explicación:")
+              print("\n".join(inesperados))
+              raise SystemExit(1)
+          PY

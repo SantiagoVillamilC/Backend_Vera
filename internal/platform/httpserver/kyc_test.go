@@ -10,6 +10,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth/kyc"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
 // servicioKYCDePrueba permite fijar el estado y el error de verificación sin base de datos.
@@ -33,7 +34,7 @@ func (s *servicioKYCDePrueba) Verificar(_ context.Context, _, nivel, _ string) e
 
 // routerKYCDePrueba monta el router real con el handler de KYC sobre el servicio falso.
 func routerKYCDePrueba(servicio ServicioDeKYC) http.Handler {
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		KYC:       NuevoKYC(servicio),
 	})

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 )
@@ -60,7 +61,7 @@ func (s *servicioDeDispositivosFalso) ActivarContexto(context.Context, uuid.UUID
 
 // routerDeDispositivos monta el servidorV1 dentro del grupo autenticado con el servicio falso.
 func routerDeDispositivos(servicio ControlDeSesiones) http.Handler {
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},
 		Auth:      NuevoDispositivosHandler(servicio),
 	})

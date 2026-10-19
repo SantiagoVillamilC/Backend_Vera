@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/google/uuid"
 )
@@ -35,7 +36,7 @@ func (f *activadorDePrueba) ActivarCuenta(_ context.Context, celular, codigo str
 
 // routerConVerificacion arma el router completo con el handler de activacion inyectado.
 func routerConVerificacion(handler VerificacionHandler) http.Handler {
-	return NewRouter(nil, DependenciasAuth{
+	return NewRouter(nil, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{
 		Identidad:    auth.UsuarioDePrueba{},
 		Verificacion: handler,
 	})

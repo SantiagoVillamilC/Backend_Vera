@@ -2,7 +2,10 @@ name: CD
 
 on:
   push:
-    branches: [staging, main]
+    # dev publica su imagen para verificarla antes de promover, pero no
+    # despliega: staging y main comparten la misma VM, así que desplegar dev
+    # sería publicar en producción sin ninguna compuerta de por medio.
+    branches: [dev, staging, main]
 
 permissions:
   contents: read
@@ -53,6 +56,7 @@ jobs:
   deploy:
     name: Deploy on the VM
     needs: build-and-push
+    if: github.ref_name != 'dev'
     runs-on: ubuntu-latest
     steps:
       - name: Run the restricted deploy command over SSH
@@ -67,4 +71,4 @@ jobs:
           chmod 600 ~/.ssh/centinela_deploy
           ssh -i ~/.ssh/centinela_deploy -p "$DEPLOY_SSH_PORT" \
             -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST"
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" "$GITHUB_REF_NAME"

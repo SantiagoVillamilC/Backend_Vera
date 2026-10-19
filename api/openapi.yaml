@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Centinela API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Contrato del modulo de autenticacion. Es la fuente para el cliente Flutter y para los
     handlers generados con oapi-codegen. Toda respuesta usa el envelope
@@ -35,6 +35,14 @@ tags:
     description: Niveles de producto y verificacion.
   - name: consentimiento
     description: Autorizacion de datos y opt-in.
+  - name: nucleo
+    description: Saldo, movimientos, depositos y transferencias del nucleo financiero.
+  - name: custodio
+    description: >
+      Confirmacion del custodio simulado. Se excluye de la generacion (ver exclude-tags en
+      oapi-codegen.yaml) porque usa un token estatico, no el bearerAuth de un usuario.
+  - name: asistente
+    description: Asistente de IA Vera, chat de texto y voz.
 
 paths:
   /v1/auth/register:
@@ -58,11 +66,17 @@ paths:
                 $ref: "#/components/schemas/RegistroResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
         "409":
+          $ref: "#/components/responses/Error"
+        "413":
           $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -90,9 +104,13 @@ paths:
                 $ref: "#/components/schemas/VerificacionResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -103,6 +121,10 @@ paths:
     post:
       operationId: resendOtp
       summary: Reenvia el codigo de un desafio vigente.
+      description: >
+        El reenvio comparte con recovery/request el cupo de 5 codigos por hora por cuenta.
+        Ademas aplica una espera creciente entre envios. Al agotar el cupo responde 429
+        TooManyRequests y, si se pide antes de que termine la espera, 429 OtpResendCooldown.
       tags: [public, login]
       security: []
       requestBody:
@@ -120,9 +142,13 @@ paths:
                 $ref: "#/components/schemas/DesafioResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -154,9 +180,13 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -167,6 +197,11 @@ paths:
     post:
       operationId: refresh
       summary: Rota el refresh y entrega un access nuevo.
+      description: >
+        El access token vive 5 minutos. Cuando vence, el cliente lo renueva con este
+        endpoint presentando el refresh token. Cada llamada rota el refresh: el anterior
+        queda invalido y la respuesta trae el par nuevo. Reusar un refresh ya rotado,
+        fuera de la ventana de gracia, responde 401 RefreshReused y revoca la familia.
       tags: [public, sesion]
       security: []
       requestBody:
@@ -186,7 +221,13 @@ paths:
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -197,6 +238,10 @@ paths:
     post:
       operationId: recoveryRequest
       summary: Inicia la recuperacion. Responde igual exista o no la cuenta.
+      description: >
+        Comparte con otp/resend el cupo de 5 codigos por hora por cuenta, con espera
+        creciente entre envios. Al agotar el cupo responde 429 TooManyRequests. Con cupo
+        disponible la respuesta es la misma exista o no la cuenta.
       tags: [public, recuperacion]
       security: []
       requestBody:
@@ -214,9 +259,13 @@ paths:
                 $ref: "#/components/schemas/DesafioResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -246,9 +295,13 @@ paths:
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -276,7 +329,13 @@ paths:
                 $ref: "#/components/schemas/OkResponse"
         "400":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -301,7 +360,13 @@ paths:
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
@@ -317,6 +382,10 @@ paths:
         "204":
           description: Todas las sesiones cerradas.
         "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -334,6 +403,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/SesionesResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -357,6 +430,10 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
 
@@ -373,6 +450,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ContextosResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -401,7 +482,13 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -430,7 +517,15 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
 
   /v1/auth/phone/change/request:
@@ -457,7 +552,13 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -484,7 +585,13 @@ paths:
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -502,6 +609,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/KycEstadoResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -530,7 +641,13 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -548,6 +665,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsentsResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -574,7 +695,989 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
         "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/saldo:
+    get:
+      operationId: saldo
+      summary: Consulta el saldo disponible del usuario autenticado.
+      tags: [nucleo]
+      responses:
+        "200":
+          description: Monto disponible, la moneda y el instante del calculo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaldoResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/transferencias/maximo:
+    get:
+      operationId: montoMaximo
+      summary: Consulta el monto maximo que el usuario puede enviar sin quedarse sin saldo por el GMF.
+      tags: [nucleo]
+      responses:
+        "200":
+          description: Monto maximo enviable, la moneda y el instante del calculo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MontoMaximoResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/movimientos:
+    get:
+      operationId: movimientos
+      summary: Lista una pagina del historial del usuario autenticado, del movimiento mas nuevo al mas viejo.
+      tags: [nucleo]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: >
+            Tamano de pagina, de 1 a 100. Por defecto 50. El handler recorta a 100 un valor
+            mayor, no lo rechaza. Se tipa x-go-type string para que un valor no numerico
+            llegue al handler y salga como ValidationError, en vez de fallar antes en el
+            binding generado como BadRequest.
+          schema:
+            type: integer
+            x-go-type: string
+        - name: cursor
+          in: query
+          required: false
+          description: >
+            Ancla del ultimo movimiento de la pagina anterior. Mismo motivo de x-go-type
+            string que limit.
+          schema:
+            type: integer
+            format: int64
+            x-go-type: string
+      responses:
+        "200":
+          description: Pagina de movimientos, del mas nuevo al mas viejo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovimientosResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/depositos:
+    post:
+      operationId: crearDeposito
+      summary: Crea una intencion de deposito o devuelve la ya guardada para la misma clave de idempotencia.
+      tags: [nucleo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearDepositoRequest"
+      responses:
+        "200":
+          description: Intencion ya existente para la misma clave de idempotencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoConPagoResponse"
+        "201":
+          description: Intencion de deposito creada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoConPagoResponse"
+              example:
+                success: true
+                data:
+                  id: "123e4567-e89b-42d3-a456-426614174000"
+                  referencia: "dep-123e4567-e89b-42d3-a456-426614174000"
+                  monto: "150000"
+                  moneda: COP
+                  estado: pendiente
+                  creada_en: "2026-10-02T10:00:00Z"
+                  url_pago: "https://pse.veraapp.tech/pse?referencia=dep-123e4567-e89b-42d3-a456-426614174000&monto=150000"
+                error: null
+                meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/depositos/{id}:
+    get:
+      operationId: deposito
+      summary: Consulta el estado actual de una intencion de deposito del usuario autenticado.
+      tags: [nucleo]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: >
+            Se declara como texto simple, no como uuid con formato: un id malformado debe
+            seguir cayendo en el 404 NotFound que ya escribe el handler, no fallar antes en
+            el binding generado.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Intencion de deposito.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/destinatarios:
+    get:
+      operationId: consultarDestinatario
+      summary: Consulta el nombre visible de un destinatario interno por celular.
+      description: HU-NF-06 C15.1 a C15.4. Usa el celular verificado y respeta el enfriamiento tras cambio de numero. Limite por usuario configurable con DESTINATARIOS_LIMITE y DESTINATARIOS_VENTANA.
+      tags: [nucleo]
+      parameters:
+        - name: celular
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Nombre visible del destinatario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DestinatarioResponse"
+              example: {success: true, data: {nombre: "Laura R."}, error: null, meta: null}
+        "400":
+          description: Falta el celular.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: BadRequest, message: "A required parameter is missing.", details: [{field: celular, rule: required}]}, meta: null}
+        "401":
+          description: Sesion ausente o invalida.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: Unauthorized, message: "Missing or invalid token."}, meta: null}
+        "404":
+          description: Celular no resuelto, incluso durante el enfriamiento.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: RecipientNotFound, message: "The destination does not exist."}, meta: null}
+        "422":
+          description: El celular pertenece al usuario autenticado.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: SelfTransferNotAllowed, message: "You cannot send money to yourself."}, meta: null}
+        "429":
+          description: Limite de consultas por usuario excedido.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: TooManyRequests, message: "Too many recipient lookups."}, meta: null}
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          description: No se pudo verificar la sesion o contar la consulta.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+              example: {success: false, data: null, error: {code: AuthUnavailable, message: "Recipient lookup is temporarily unavailable."}, meta: null}
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/transferencias:
+    post:
+      operationId: transferir
+      summary: Envia dinero a otro usuario o devuelve el envio ya guardado para la misma clave de idempotencia.
+      tags: [nucleo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearTransferenciaRequest"
+      responses:
+        "200":
+          description: Envio ya existente para la misma clave de idempotencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferenciaResponse"
+        "201":
+          description: Envio creado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferenciaResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/transferencias/interbancarias:
+    post:
+      operationId: transferirInterbancaria
+      summary: Envia dinero por llave a otra entidad o devuelve el envio ya guardado para la misma clave de idempotencia.
+      tags: [nucleo]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearTransferenciaInterbancariaRequest"
+      responses:
+        "200":
+          description: Envio ya existente para la misma clave de idempotencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvioPorLlaveResponse"
+        "201":
+          description: Envio creado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvioPorLlaveResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/depositos/confirmaciones:
+    post:
+      operationId: confirmarDeposito
+      summary: Recibe la senal del custodio simulado sobre una intencion pendiente y la confirma o la rechaza.
+      description: >
+        Se cuelga a mano bajo RequireCustodio en el router, nunca bajo RequireAuth: usa el
+        token estatico del custodio simulado, no un JWT de usuario. El tag custodio esta
+        excluido de la generacion para que este metodo no aparezca en el ServerInterface ni
+        herede bearerAuth por estar dentro de servidorV1.
+      tags: [custodio]
+      security:
+        - custodioAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmarDepositoRequest"
+      responses:
+        "200":
+          description: Intencion confirmada o rechazada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositoResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/mensajes:
+    post:
+      operationId: enviarMensajeVera
+      summary: Envia un mensaje de texto al asistente y devuelve su respuesta.
+      tags: [asistente]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnviarMensajeVeraRequest"
+      responses:
+        "201":
+          description: Respuesta del asistente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RespuestaAsistenteResponse"
+              examples:
+                texto:
+                  value:
+                    success: true
+                    data:
+                      conversacion_id: "1f2e3d4c-0000-4000-8000-000000000001"
+                      mensaje_id: "1f2e3d4c-0000-4000-8000-000000000002"
+                      texto: "Tu saldo disponible es $1.250.000."
+                      creado_en: "2026-10-15T14:15:22-05:00"
+                    error: null
+                    meta: null
+                accion_pendiente:
+                  value:
+                    success: true
+                    data:
+                      conversacion_id: "1f2e3d4c-0000-4000-8000-000000000001"
+                      mensaje_id: "1f2e3d4c-0000-4000-8000-000000000003"
+                      texto: "Listo, deje preparada la transferencia a Laura R. por $150.000. Confirmala para enviarla."
+                      creado_en: "2026-10-15T14:16:00-05:00"
+                      accion_pendiente:
+                        id: "0a1b2c3d-0000-4000-8000-000000000009"
+                        estado: "pendiente"
+                        tipo: "transferencia_interna"
+                        destinatario:
+                          nombre: "Laura R."
+                          celular_parcial: "******4321"
+                        monto: "150000"
+                        moneda: "COP"
+                        requiere_codigo: true
+                        expira_en: "2026-10-15T14:21:00-05:00"
+                    error: null
+                    meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          description: El usuario no tiene consentimiento vigente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                consent_required:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "ConsentRequired"
+                      message: "Falta el consentimiento del asistente."
+                    meta: null
+        "404":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/mensajes/voz:
+    post:
+      operationId: enviarMensajeVozVera
+      summary: Envia un audio al asistente y devuelve la transcripcion y la respuesta.
+      tags: [asistente]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnviarAudioVeraRequest"
+      responses:
+        "201":
+          description: Respuesta del asistente con la transcripcion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RespuestaAsistenteResponse"
+              examples:
+                voz:
+                  value:
+                    success: true
+                    data:
+                      conversacion_id: "1f2e3d4c-0000-4000-8000-000000000001"
+                      mensaje_id: "1f2e3d4c-0000-4000-8000-000000000004"
+                      texto: "Tienes disponibles $1.250.000 en tu cuenta."
+                      transcripcion: "cuanto tengo disponible"
+                      creado_en: "2026-10-15T14:17:00-05:00"
+                    error: null
+                    meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          description: El usuario no tiene consentimiento vigente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                consent_required:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "ConsentRequired"
+                      message: "Falta el consentimiento del asistente."
+                    meta: null
+        "404":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          description: El audio no tiene voz reconocible.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                audio_not_understood:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "AudioNotUnderstood"
+                      message: "No entendi el audio, repite o escribe."
+                    meta: null
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/conversaciones:
+    get:
+      operationId: listarConversacionesVera
+      summary: Lista una pagina de las conversaciones del usuario.
+      tags: [asistente]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Tamano de pagina, de 1 a 100. Por defecto 50.
+          schema:
+            type: integer
+            x-go-type: string
+        - name: cursor
+          in: query
+          required: false
+          description: Ancla de la ultima conversacion de la pagina anterior.
+          schema:
+            type: integer
+            format: int64
+            x-go-type: string
+      responses:
+        "200":
+          description: Pagina de conversaciones, de la mas reciente a la mas antigua.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversacionesVeraResponse"
+              examples:
+                lista:
+                  value:
+                    success: true
+                    data:
+                      - id: "1f2e3d4c-0000-4000-8000-000000000001"
+                        titulo: "Consulta de saldo"
+                        ultima_actividad: "2026-10-15T14:16:00-05:00"
+                        creada_en: "2026-10-15T14:15:22-05:00"
+                      - id: "2a3b4c5d-0000-4000-8000-000000000002"
+                        titulo: "Transferencia a Laura"
+                        ultima_actividad: "2026-10-14T09:02:00-05:00"
+                        creada_en: "2026-10-14T09:00:00-05:00"
+                    error: null
+                    meta:
+                      limit: 50
+                      next_cursor: null
+                      has_more: false
+                vacia:
+                  value:
+                    success: true
+                    data: []
+                    error: null
+                    meta:
+                      limit: 50
+                      next_cursor: null
+                      has_more: false
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: borrarConversacionesVera
+      summary: Borra todas las conversaciones del usuario y cancela sus acciones pendientes.
+      tags: [asistente]
+      responses:
+        "204":
+          description: Conversaciones borradas.
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/conversaciones/{id}:
+    delete:
+      operationId: borrarConversacionVera
+      summary: Borra una conversacion del usuario y cancela sus acciones pendientes.
+      tags: [asistente]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Conversacion borrada.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/conversaciones/{id}/mensajes:
+    get:
+      operationId: listarMensajesConversacionVera
+      summary: Lista una pagina de los mensajes de una conversacion del usuario.
+      tags: [asistente]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          description: Tamano de pagina, de 1 a 100. Por defecto 50.
+          schema:
+            type: integer
+            x-go-type: string
+        - name: cursor
+          in: query
+          required: false
+          description: Ancla del ultimo mensaje de la pagina anterior.
+          schema:
+            type: integer
+            format: int64
+            x-go-type: string
+      responses:
+        "200":
+          description: Pagina de mensajes, del mas nuevo al mas viejo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensajesVeraResponse"
+              examples:
+                mensajes:
+                  value:
+                    success: true
+                    data:
+                      - id: "1f2e3d4c-0000-4000-8000-000000000002"
+                        rol: "usuario"
+                        canal: "texto"
+                        texto: "mandale 150 mil a Laura"
+                        creado_en: "2026-10-15T14:15:50-05:00"
+                      - id: "1f2e3d4c-0000-4000-8000-000000000003"
+                        rol: "vera"
+                        canal: "texto"
+                        texto: "Listo, deje preparada la transferencia a Laura R. por $150.000."
+                        creado_en: "2026-10-15T14:16:00-05:00"
+                        accion_pendiente:
+                          id: "0a1b2c3d-0000-4000-8000-000000000009"
+                          estado: "pendiente"
+                          tipo: "transferencia_interna"
+                          destinatario:
+                            nombre: "Laura R."
+                            celular_parcial: "******4321"
+                          monto: "150000"
+                          moneda: "COP"
+                          requiere_codigo: true
+                          expira_en: "2026-10-15T14:21:00-05:00"
+                    error: null
+                    meta:
+                      limit: 50
+                      next_cursor: null
+                      has_more: false
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/acciones/{id}/codigo:
+    post:
+      operationId: solicitarCodigoAccionVera
+      summary: Solicita el codigo de confirmacion de una accion pendiente.
+      tags: [asistente]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Desafio creado para el codigo, con su vigencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesafioResponse"
+              examples:
+                desafio:
+                  value:
+                    success: true
+                    data:
+                      challenge_id: "7b6a5c4d-0000-4000-8000-000000000007"
+                      expira_en_segundos: 300
+                      proposito: "confirmacion_transferencia"
+                    error: null
+                    meta: null
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: La accion no esta pendiente ni confirmada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                action_not_pending:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "ActionNotPending"
+                      message: "La accion ya no esta pendiente."
+                    meta: null
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/acciones/{id}/confirmar:
+    post:
+      operationId: confirmarAccionVera
+      summary: Confirma y ejecuta una accion pendiente.
+      description: >
+        Si la accion no esta pendiente responde 409 ActionNotPending. Si supero su vigencia
+        responde 410 ActionExpired. Si el monto o el dispositivo exigen codigo y no viene
+        valido, responde 403 SecondFactorRequired. Un 403 ConsentRequired ademas cancela la
+        accion, asi que el cliente debe refrescar la tarjeta al recibirlo.
+      tags: [asistente]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmarAccionVeraRequest"
+      responses:
+        "200":
+          description: Accion resuelta con su estado y la transferencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccionResueltaResponse"
+              examples:
+                confirmada:
+                  value:
+                    success: true
+                    data:
+                      accion_pendiente:
+                        id: "0a1b2c3d-0000-4000-8000-000000000009"
+                        estado: "confirmada"
+                        tipo: "transferencia_interna"
+                        destinatario:
+                          nombre: "Laura R."
+                          celular_parcial: "******4321"
+                        monto: "150000"
+                        moneda: "COP"
+                        requiere_codigo: true
+                        expira_en: "2026-10-15T14:21:00-05:00"
+                      transferencia:
+                        id: "9c8b7a6d-0000-4000-8000-000000000010"
+                        destino: "3001234321"
+                        monto: "150000"
+                        moneda: "COP"
+                        estado: "confirmada"
+                        creada_en: "2026-10-15T14:18:00-05:00"
+                        actualizada_en: "2026-10-15T14:18:05-05:00"
+                    error: null
+                    meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          description: Falta el codigo de confirmacion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                second_factor_required:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "SecondFactorRequired"
+                      message: "La operacion exige el codigo de confirmacion."
+                    meta: null
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: La accion no esta pendiente ni confirmada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                action_not_pending:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "ActionNotPending"
+                      message: "La accion ya no esta pendiente."
+                    meta: null
+        "410":
+          description: La accion supero su vigencia.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                action_expired:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "ActionExpired"
+                      message: "La accion pendiente supero su vigencia."
+                    meta: null
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          description: El saldo no alcanza.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                insufficient_funds:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "InsufficientFunds"
+                      message: "Saldo insuficiente para la transferencia."
+                    meta: null
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/vera/acciones/{id}/cancelar:
+    post:
+      operationId: cancelarAccionVera
+      summary: Cancela una accion pendiente.
+      tags: [asistente]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Accion cancelada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccionResueltaResponse"
+              examples:
+                cancelada:
+                  value:
+                    success: true
+                    data:
+                      accion_pendiente:
+                        id: "0a1b2c3d-0000-4000-8000-000000000009"
+                        estado: "cancelada"
+                        tipo: "transferencia_interna"
+                        destinatario:
+                          nombre: "Laura R."
+                          celular_parcial: "******4321"
+                        monto: "150000"
+                        moneda: "COP"
+                        requiere_codigo: true
+                        expira_en: "2026-10-15T14:21:00-05:00"
+                    error: null
+                    meta: null
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: La accion no esta pendiente ni confirmada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                action_not_pending:
+                  value:
+                    success: false
+                    data: null
+                    error:
+                      code: "ActionNotPending"
+                      message: "La accion ya no esta pendiente."
+                    meta: null
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -585,6 +1688,12 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    custodioAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Token estatico del custodio simulado (RequireCustodio), no un JWT de usuario. Distinto
+        de bearerAuth.
 
   responses:
     Error:
@@ -611,10 +1720,25 @@ components:
             ContextInvalid, ResetInvalid, SecondFactorRequired, KycRequired, ConsentRequired,
             DuplicateIdentifier, PhoneUnverified, OtpTooManyResends, PhoneChangeCooldown,
             TooManyRequests, NotImplemented, PayloadTooLarge (cuerpo mayor a 1 MiB),
+            RecipientNotFound (404, destino interno inexistente),
+            SelfTransferNotAllowed (422, destino interno propio),
             MethodNotAllowed (metodo no permitido), NotFound (recurso inexistente),
             AuthUnavailable (fail closed de Redis o del canal),
             OtpDeliveryFailed (el canal no entrego el codigo), Timeout (504),
             WhatsappUnicoCanal (409, revocar el opt-in de WhatsApp mientras sea el unico canal del OTP),
+            TargetNotAllowed (400, el saldo y el maximo solo responden por el usuario autenticado),
+            InsufficientFunds (422, saldo insuficiente), OperationLimitExceeded (422, el monto
+            supera el tope por operacion de un saldo bajo), MonthlyQuotaExceeded (422, cupo
+            mensual agotado), IdempotencyConflict (409, la clave de idempotencia se reuso con
+            otra peticion), DirectoryUnavailable (503, el directorio de llaves no responde),
+            DepositNotFound (404, la confirmacion del custodio apunta a un deposito inexistente),
+            ConfirmationConflict (409, la confirmacion no coincide con el deposito),
+            LateConfirmation (409, el deposito ya no esta pendiente),
+            NotReady (503, solo en GET /readyz cuando una dependencia no responde),
+            AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
+            AudioNotUnderstood (422, el audio no tiene voz reconocible),
+            ActionExpired (410, la accion pendiente supero su vigencia),
+            ActionNotPending (409, la accion no esta pendiente ni confirmada),
             InternalError (siempre generico). Los identificadores InvalidEmail, InvalidPhone,
             InvalidName, WeakPassword e InvalidNit ya no existen: los reemplaza
             ValidationError con details[{field, rule, param}].
@@ -700,9 +1824,9 @@ components:
           example: 300
         proposito:
           type: string
-          enum: [registro, login, recuperacion, cambio_numero, cambio_numero_viejo]
+          enum: [registro, login, recuperacion, cambio_numero, cambio_numero_viejo, confirmacion_transferencia]
           x-oapi-codegen-extra-tags:
-            validate: "required,oneof=registro login recuperacion cambio_numero cambio_numero_viejo"
+            validate: "required,oneof=registro login recuperacion cambio_numero cambio_numero_viejo confirmacion_transferencia"
 
     DesafioResponse:
       type: object
@@ -722,14 +1846,26 @@ components:
     Consentimiento:
       type: object
       required: [tipo, version_texto, aceptado]
+      description: >
+        Consentimiento que acompana al registro. En el alta de persona y de empresa son
+        obligatorios y deben venir aceptados (aceptado en true) tratamiento_datos y
+        whatsapp_optin, con la version de texto v1. Si falta alguno, viene sin aceptar o
+        trae una version inexistente, el registro responde 403 ConsentRequired. biometricos
+        es opcional.
       properties:
         tipo:
           type: string
-          enum: [tratamiento_datos, whatsapp_optin, biometricos]
+          enum: [tratamiento_datos, whatsapp_optin, biometricos, asistente_ia]
+          description: >
+            Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el
+            registro, biometricos y asistente_ia son opcionales.
           x-oapi-codegen-extra-tags:
-            validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos"
+            validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"
         version_texto:
           type: string
+          description: >
+            Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y
+            biometricos usan la version v1 hoy. asistente_ia usa la version que fije su tarjeta.
           x-oapi-codegen-extra-tags:
             validate: "required,max=64"
         aceptado:
@@ -760,6 +1896,10 @@ components:
             validate: "required,min=8,max=64"
         celular:
           type: string
+          description: >
+            Celular en formato E.164, validado con libphonenumber. Un numero con forma E.164
+            pero inexistente, por ejemplo +573061234567 (prefijos 306 a 308), responde 422
+            con la regla e164.
           x-go-type: string
           x-oapi-codegen-extra-tags:
             validate: "required,e164"
@@ -779,6 +1919,9 @@ components:
         consentimientos:
           type: array
           minItems: 1
+          description: >
+            Obligatorios tratamiento_datos y whatsapp_optin, ambos aceptados y con version_texto
+            v1. Sin ellos el registro responde 403 ConsentRequired.
           items:
             $ref: "#/components/schemas/Consentimiento"
           x-oapi-codegen-extra-tags:
@@ -815,6 +1958,10 @@ components:
             validate: "required,max=200"
         nit:
           type: string
+          description: >
+            NIT colombiano. Se valida el digito de verificacion DIAN (modulo 11). Acepta
+            puntos, guion y espacios, que se ignoran, y un NIT con digito incorrecto responde
+            422 con la regla nit.
           x-oapi-codegen-extra-tags:
             validate: "required,nit"
         correo:
@@ -832,7 +1979,10 @@ components:
             validate: "required,min=8,max=64"
         celular:
           type: string
-          description: Celular del representante legal, ancla del OTP.
+          description: >
+            Celular del representante legal, ancla del OTP. Formato E.164 validado con
+            libphonenumber. Un numero con forma E.164 pero inexistente, por ejemplo
+            +573061234567 (prefijos 306 a 308), responde 422 con la regla e164.
           x-go-type: string
           x-oapi-codegen-extra-tags:
             validate: "required,e164"
@@ -841,6 +1991,9 @@ components:
         consentimientos:
           type: array
           minItems: 1
+          description: >
+            Obligatorios tratamiento_datos y whatsapp_optin, ambos aceptados y con version_texto
+            v1. Sin ellos el registro responde 403 ConsentRequired.
           items:
             $ref: "#/components/schemas/Consentimiento"
           x-oapi-codegen-extra-tags:
@@ -1026,8 +2179,12 @@ components:
       properties:
         access_token:
           type: string
+          description: >
+            JWT de acceso. Vive 5 minutos. Al vencer se renueva con el refresh en POST
+            /v1/auth/refresh.
         refresh_token:
           type: string
+          description: Token de renovacion. Cada uso en POST /v1/auth/refresh lo rota por uno nuevo.
         usuario:
           $ref: "#/components/schemas/Usuario"
 
@@ -1061,8 +2218,12 @@ components:
       properties:
         access_token:
           type: string
+          description: >
+            JWT de acceso. Vive 5 minutos. Al vencer se renueva con el refresh en POST
+            /v1/auth/refresh.
         refresh_token:
           type: string
+          description: Refresh nuevo. El anterior queda invalido tras la rotacion.
 
     RefreshResponse:
       type: object
@@ -1163,6 +2324,7 @@ components:
       properties:
         access_token:
           type: string
+          description: JWT de acceso con el contexto elegido. Vive 5 minutos, como cualquier access.
         contexto:
           $ref: "#/components/schemas/Contexto"
 
@@ -1191,6 +2353,9 @@ components:
             validate: "required,max=200"
         nit:
           type: string
+          description: >
+            NIT colombiano. Se valida el digito de verificacion DIAN (modulo 11). Un NIT con
+            digito incorrecto responde 422 con la regla nit.
           x-oapi-codegen-extra-tags:
             validate: "required,nit"
 
@@ -1227,6 +2392,10 @@ components:
       properties:
         nuevo_celular:
           type: string
+          description: >
+            Celular nuevo en formato E.164, validado con libphonenumber. Un numero con forma
+            E.164 pero inexistente, por ejemplo +573061234567 (prefijos 306 a 308), responde
+            422 con la regla e164.
           x-go-type: string
           x-oapi-codegen-extra-tags:
             validate: "required,e164"
@@ -1367,9 +2536,9 @@ components:
       properties:
         tipo:
           type: string
-          enum: [tratamiento_datos, whatsapp_optin, biometricos]
+          enum: [tratamiento_datos, whatsapp_optin, biometricos, asistente_ia]
           x-oapi-codegen-extra-tags:
-            validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos"
+            validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"
         version_texto:
           type: string
           x-oapi-codegen-extra-tags:
@@ -1424,6 +2593,690 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Consent"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Destinatario:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          description: >
+            Nombre enmascarado. Persona, el primer nombre y la inicial del apellido con punto
+            (por ejemplo Laura R.). Para elegir el apellido, con 2 componentes en el nombre
+            completo se toma el ultimo y con 3 o mas se toma el penultimo. Empresa, la razon
+            social completa. Solo se resuelve un destino que cumpla la misma regla de la
+            transferencia: celular E.164 exacto de una persona activa y verificada.
+
+    DestinatarioResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Destinatario"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    MontoCalculado:
+      type: object
+      required: [monto, moneda, calculado_en]
+      description: >
+        Forma compartida de saldo y del monto maximo enviable: los dos son un monto en
+        centavos, la moneda y el instante en que se calcularon.
+      properties:
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          description: Monto en centavos. Viaja como texto porque Centavos se serializa como cadena JSON, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        calculado_en:
+          type: string
+          format: date-time
+
+    SaldoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/MontoCalculado"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    MontoMaximoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/MontoCalculado"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    LineaMovimiento:
+      type: object
+      required: [monto, motivo]
+      properties:
+        monto:
+          type: string
+          pattern: "^-?[0-9]+$"
+          description: >
+            Monto en centavos con el signo de la linea (a favor o en contra de la subcuenta
+            disponible). Viaja como texto por la misma razon que el resto de los montos.
+        motivo:
+          type: string
+          enum:
+            [
+              deposito,
+              transferencia_recibida,
+              envio,
+              gravamen,
+              devolucion,
+              devolucion_gravamen,
+            ]
+
+    Movimiento:
+      type: object
+      required: [entry_id, ocurrido_en, registrado_en, moneda, lineas]
+      properties:
+        entry_id:
+          type: integer
+          format: int64
+        ocurrido_en:
+          type: string
+          format: date-time
+        registrado_en:
+          type: string
+          format: date-time
+        moneda:
+          type: string
+          enum: [COP]
+        lineas:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineaMovimiento"
+
+    MovimientosResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Movimiento"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    CrearDepositoRequest:
+      type: object
+      required: [monto, idempotency_key]
+      properties:
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,gt=0"
+          description: Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        idempotency_key:
+          type: string
+          maxLength: 128
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=128"
+
+    Deposito:
+      type: object
+      required: [id, referencia, monto, moneda, estado, creada_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        referencia:
+          type: string
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+        moneda:
+          type: string
+          enum: [COP]
+        estado:
+          type: string
+          enum: [pendiente, confirmada, rechazada, expirada]
+        creada_en:
+          type: string
+          format: date-time
+
+    DepositoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Deposito"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    DepositoConPago:
+      allOf:
+        - $ref: "#/components/schemas/Deposito"
+        - type: object
+          required: [url_pago]
+          properties:
+            url_pago:
+              type: string
+              format: uri
+              description: URL del PSE simulado con referencia y monto en centavos (HU-NF-07 C23).
+
+    DepositoConPagoResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/DepositoConPago"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    ConfirmarDepositoRequest:
+      type: object
+      required: [referencia, estado]
+      description: >
+        Senal del custodio simulado. monto, ocurrido_en y cus solo son obligatorios cuando
+        estado es aprobado (validacion required_if que vive en el handler, no expresable en
+        JSON Schema puro).
+      properties:
+        referencia:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        estado:
+          type: string
+          enum: [aprobado, rechazado]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=aprobado rechazado"
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          description: Requerido y >= 0 si estado es aprobado.
+        moneda:
+          type: string
+          enum: [COP]
+        ocurrido_en:
+          type: string
+          format: date-time
+        cus:
+          type: string
+          maxLength: 128
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=128"
+
+    CrearTransferenciaRequest:
+      type: object
+      required: [destino, monto, idempotency_key]
+      properties:
+        destino:
+          type: string
+          maxLength: 320
+          description: >
+            Solo resuelve como UUID de una parte no cerrada o como celular E.164 exacto de una
+            persona activa y verificada. Cualquier otro valor responde 404 RecipientNotFound.
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=320"
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,gt=0"
+          description: Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: >
+            Clave de idempotencia del envio. La misma clave con el mismo cuerpo devuelve el
+            envio ya guardado con 200. La misma clave con otro cuerpo responde 409
+            IdempotencyConflict.
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=128"
+
+    Transferencia:
+      type: object
+      required: [id, destino, monto, moneda, estado, creada_en, actualizada_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        destino:
+          type: string
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+        moneda:
+          type: string
+          enum: [COP]
+        estado:
+          type: string
+          enum:
+            [
+              creada,
+              reservada,
+              despachada,
+              confirmada,
+              fallida,
+              indeterminada,
+              compensada,
+            ]
+        creada_en:
+          type: string
+          format: date-time
+        actualizada_en:
+          type: string
+          format: date-time
+
+    TransferenciaResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/Transferencia"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    CrearTransferenciaInterbancariaRequest:
+      type: object
+      required: [tipo_llave, llave, monto, idempotency_key]
+      properties:
+        tipo_llave:
+          type: string
+          description: >
+            Uno de cinco tipos de llave Bre-B, cada uno con la forma que debe cumplir llave.
+            documento, 6 a 10 digitos (^[0-9]{6,10}$). celular, celular colombiano de 10
+            digitos que empieza en 3 (^3[0-9]{9}$). correo, correo electronico
+            (^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$). alfanumerico, arroba y de 1 a
+            64 letras o digitos (^@[A-Za-z0-9]{1,64}$). comercio, de 6 a 20 letras o digitos
+            (^[A-Za-z0-9]{6,20}$). Un tipo desconocido o una llave que no cumple la forma de su
+            tipo responde 422.
+          x-oapi-codegen-extra-tags:
+            validate: "required"
+        llave:
+          type: string
+          maxLength: 320
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=320"
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          x-oapi-codegen-extra-tags:
+            validate: "required,gt=0"
+          description: Monto en centavos, entero positivo. Viaja como texto, nunca como numero.
+        moneda:
+          type: string
+          enum: [COP]
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: >
+            Clave de idempotencia del envio. La misma clave con el mismo cuerpo devuelve el
+            envio ya guardado con 200. La misma clave con otro cuerpo responde 409
+            IdempotencyConflict.
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=128"
+
+    EnvioPorLlave:
+      type: object
+      required: [id, tipo_llave, llave, monto, moneda, estado, creada_en, actualizada_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo_llave:
+          type: string
+        llave:
+          type: string
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+        moneda:
+          type: string
+          enum: [COP]
+        estado:
+          type: string
+          enum:
+            [
+              creada,
+              reservada,
+              despachada,
+              confirmada,
+              fallida,
+              indeterminada,
+              compensada,
+            ]
+        creada_en:
+          type: string
+          format: date-time
+        actualizada_en:
+          type: string
+          format: date-time
+
+    EnvioPorLlaveResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/EnvioPorLlave"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    EnviarMensajeVeraRequest:
+      type: object
+      required: [texto]
+      properties:
+        conversacion_id:
+          type: string
+          format: uuid
+          nullable: true
+        texto:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          x-oapi-codegen-extra-tags:
+            validate: "required,min=1,max=1000"
+
+    EnviarAudioVeraRequest:
+      type: object
+      required: [audio, formato]
+      properties:
+        conversacion_id:
+          type: string
+          format: uuid
+          nullable: true
+        audio:
+          type: string
+          maxLength: 960000
+          description: >
+            Audio del clip en base64. No puede superar los 700 KB decodificados ni los 60
+            segundos. El tope de longitud es 960000 caracteres en base64.
+          x-oapi-codegen-extra-tags:
+            validate: "required,max=960000"
+        formato:
+          type: string
+          enum: [m4a]
+          x-oapi-codegen-extra-tags:
+            validate: "required,oneof=m4a"
+
+    MensajeVera:
+      type: object
+      required: [id, rol, canal, texto, creado_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        rol:
+          type: string
+          enum: [usuario, vera]
+        canal:
+          type: string
+          enum: [texto, voz]
+        texto:
+          type: string
+        creado_en:
+          type: string
+          format: date-time
+        accion_pendiente:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AccionPendiente"
+
+    ConversacionVera:
+      type: object
+      required: [id, titulo, ultima_actividad, creada_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        titulo:
+          type: string
+          example: "Consulta de saldo"
+        ultima_actividad:
+          type: string
+          format: date-time
+        creada_en:
+          type: string
+          format: date-time
+
+    DestinatarioAccion:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          description: >
+            Nombre enmascarado del destinatario, o la llave enmascarada o la entidad para una
+            llave Bre-B.
+          example: "Laura R."
+        celular_parcial:
+          type: string
+          nullable: true
+          example: "******4321"
+
+    AccionPendiente:
+      type: object
+      required: [id, estado, tipo, monto, moneda, requiere_codigo, expira_en]
+      description: >
+        Tarjeta de confirmacion de una transferencia preparada por el asistente. La app la usa
+        tal cual y manda sobre el texto del modelo. Para tipo transferencia_interna viene
+        destinatario. Para transferencia_llave vienen llave y tipo_llave, y destinatario puede
+        venir con la entidad o en null.
+      properties:
+        id:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          enum: [pendiente, confirmada, cancelada, vencida, fallida]
+        tipo:
+          type: string
+          enum: [transferencia_interna, transferencia_llave]
+        destinatario:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/DestinatarioAccion"
+        llave:
+          type: string
+          nullable: true
+        tipo_llave:
+          type: string
+          nullable: true
+          enum: [documento, celular, correo, alfanumerico, comercio]
+        monto:
+          type: string
+          pattern: "^[0-9]+$"
+          example: "150000"
+        moneda:
+          type: string
+          enum: [COP]
+        requiere_codigo:
+          type: boolean
+        expira_en:
+          type: string
+          format: date-time
+
+    RespuestaAsistente:
+      type: object
+      required: [conversacion_id, mensaje_id, texto, creado_en]
+      properties:
+        conversacion_id:
+          type: string
+          format: uuid
+        mensaje_id:
+          type: string
+          format: uuid
+        texto:
+          type: string
+        transcripcion:
+          type: string
+          nullable: true
+          description: Solo en la ruta de voz.
+        creado_en:
+          type: string
+          format: date-time
+        accion_pendiente:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AccionPendiente"
+
+    RespuestaAsistenteResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/RespuestaAsistente"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    ConfirmarAccionVeraRequest:
+      type: object
+      properties:
+        desafio_id:
+          type: string
+          format: uuid
+          nullable: true
+        codigo:
+          type: string
+          nullable: true
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=10"
+        sin_verificacion_local:
+          type: boolean
+          default: false
+
+    AccionResuelta:
+      type: object
+      required: [accion_pendiente]
+      properties:
+        accion_pendiente:
+          $ref: "#/components/schemas/AccionPendiente"
+        transferencia:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Transferencia"
+
+    AccionResueltaResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/AccionResuelta"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    ConversacionesVeraResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversacionVera"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    MensajesVeraResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MensajeVera"
         error:
           type: object
           nullable: true
