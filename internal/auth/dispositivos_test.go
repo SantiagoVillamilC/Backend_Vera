@@ -50,6 +50,10 @@ func (f *filasDeSesionesFalsas) Values() ([]any, error)                       { 
 func (f *filasDeSesionesFalsas) RawValues() [][]byte                          { return nil }
 func (f *filasDeSesionesFalsas) Conn() *pgx.Conn                              { return nil }
 
+// TypeMap entró en la interfaz pgx.Rows con pgx v5.11; este fake solo compara
+// columnas por posición, así que el mapa por defecto alcanza.
+func (f *filasDeSesionesFalsas) TypeMap() *pgtype.Map { return pgtype.NewMap() }
+
 func (f *filasDeSesionesFalsas) Next() bool {
 	f.actual++
 	return f.actual <= len(f.sesiones)
