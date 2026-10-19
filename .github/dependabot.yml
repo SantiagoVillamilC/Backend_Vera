@@ -2,6 +2,9 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    # Sin target-branch, dependabot abre los PRs contra main, que es la rama
+    # por defecto; el flujo del repo es dev -> staging -> main.
+    target-branch: dev
     schedule:
       interval: weekly
     # Un solo PR por ecosistema: con siete abiertos a la vez, cada uno
@@ -14,6 +17,7 @@ updates:
 
   - package-ecosystem: gomod
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
     groups:
