@@ -4,7 +4,7 @@
 UPDATE asistente.conversacion c
 SET ciclo_token = @token, ciclo_expira_en = LEAST(@expira_en::timestamptz, clock_timestamp() + interval '45 seconds')
 WHERE c.id = @conversacion_id AND c.usuario_id = @usuario_id AND c.estado = 'activo'
-AND (c.ciclo_expira_en IS NULL OR c.ciclo_expira_en <= clock_timestamp())
+AND (c.ciclo_expira_en IS NULL OR c.ciclo_expira_en <= clock_timestamp() OR c.ciclo_token = @token)
 AND EXISTS (
     SELECT 1 FROM asistente.mensaje m
     WHERE m.id = @mensaje_id AND m.conversacion_id = c.id AND m.rol = 'usuario'

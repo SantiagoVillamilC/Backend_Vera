@@ -1291,6 +1291,7 @@ type APIError struct {
 	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
 	// LimitsUnavailable (503, falta configuracion vigente de limites, UVT, GMF o KYC),
 	// AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
+	// ConversationBusy (409, conversación con un turno en procesamiento),
 	// AudioNotUnderstood (422, el audio no tiene voz reconocible),
 	// ActionExpired (410, la accion pendiente supero su vigencia),
 	// ActionNotPending (409, la accion no esta pendiente ni confirmada),
@@ -1721,7 +1722,7 @@ type EnviarAudioVeraRequestFormato string
 // EnviarMensajeVeraRequest defines model for EnviarMensajeVeraRequest.
 type EnviarMensajeVeraRequest struct {
 	ConversacionId *openapi_types.UUID `json:"conversacion_id,omitempty"`
-	Texto          string              `json:"texto" validate:"required,min=1,max=1000"`
+	Texto          string              `json:"texto" validate:"required,min=1,max=1000,textoasistente"`
 }
 
 // EnvioPorLlave defines model for EnvioPorLlave.
@@ -2294,6 +2295,12 @@ type ListarMensajesConversacionVeraParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// EnviarMensajeVeraParams defines parameters for EnviarMensajeVera.
+type EnviarMensajeVeraParams struct {
+	// IdempotencyKey UUID único por envío; reutilizar con el mismo cuerpo en los reintentos.
+	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
+}
+
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
 type CreateCompanyJSONRequestBody = CrearEmpresaRequest
 
@@ -2584,7 +2591,7 @@ type ServerInterface interface {
 	ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ListarMensajesConversacionVeraParams)
 	// EnviarMensajeVera Envia un mensaje de texto al asistente y devuelve su respuesta.
 	// (POST /v1/vera/mensajes)
-	EnviarMensajeVera(w http.ResponseWriter, r *http.Request)
+	EnviarMensajeVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVeraParams)
 	// EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
 	// (POST /v1/vera/mensajes/voz)
 	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request)
@@ -2764,7 +2771,7 @@ func (_ Unimplemented) ListarMensajesConversacionVera(w http.ResponseWriter, r *
 
 // EnviarMensajeVera Envia un mensaje de texto al asistente y devuelve su respuesta.
 // (POST /v1/vera/mensajes)
-func (_ Unimplemented) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) EnviarMensajeVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVeraParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3393,8 +3400,35 @@ func (siw *ServerInterfaceWrapper) ListarMensajesConversacionVera(w http.Respons
 // EnviarMensajeVera operation middleware
 func (siw *ServerInterfaceWrapper) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EnviarMensajeVeraParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey openapi_types.UUID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.EnviarMensajeVera(w, r)
+		siw.Handler.EnviarMensajeVera(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

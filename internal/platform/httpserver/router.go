@@ -12,6 +12,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -28,6 +29,7 @@ var RutasDeDinero = []string{
 	http.MethodPost + " /v1/depositos",
 	http.MethodPost + " /v1/transferencias/interbancarias",
 	http.MethodGet + " /v1/destinatarios",
+	http.MethodPost + " /v1/vera/mensajes",
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
@@ -40,17 +42,23 @@ type LimitadorUsoVera interface {
 	Admitir(context.Context, copilot.CanalAsistente) error
 }
 
-// DependenciasVera reúne los puertos del asistente para la futura orquestación.
+// DependenciasVera reúne los puertos del asistente y su conversación por texto.
 type DependenciasVera struct {
 	Proveedor      copilot.ProveedorIA
 	Catalogo       *copilot.Catalogo
 	Consentimiento *copilot.ControlConsentimiento
 	Uso            LimitadorUsoVera
 	Orquestador    *copilot.Orquestador
+	Texto          ConversacionTextoVera
 }
 
-// NewRouterConVera recibe los puertos listos para la futura orquestación del chat.
-// Las rutas de mensajes y confirmación validan consentimiento antes del futuro orquestador (501).
+// ConversacionTextoVera procesa únicamente texto e IDs; construye el historial en el servidor.
+type ConversacionTextoVera interface {
+	EnviarTexto(context.Context, uuid.UUID, string, uuid.UUID) (copilot.RespuestaTexto, error)
+}
+
+// NewRouterConVera conecta el chat por texto y los controles del asistente.
+// Las rutas de voz y confirmación conservan su contrato pendiente de implementación.
 func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, vera DependenciasVera, pseURL ...string) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)
@@ -64,8 +72,8 @@ func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, auten
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
-		ExposedHeaders: []string{"Retry-After"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "Idempotency-Key"},
+		ExposedHeaders: []string{"Retry-After", "X-Conversacion-Id", "X-Mensaje-Usuario-Id"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))

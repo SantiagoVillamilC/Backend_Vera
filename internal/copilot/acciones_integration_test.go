@@ -121,7 +121,7 @@ func accionEnTransaccion(t *testing.T, expirada bool) (pgx.Tx, *repositorio.Quer
 	if _, err = tx.Exec(t.Context(), "INSERT INTO auth.partes(id,tipo) VALUES ($1,'persona')", u); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = tx.Exec(t.Context(), "INSERT INTO asistente.conversacion(id,usuario_id) VALUES ($1,$2)", c, u); err != nil {
+	if _, err = tx.Exec(t.Context(), "INSERT INTO asistente.conversacion(id,usuario_id,usuario_financiero_id) VALUES ($1,$2,$2::uuid::text)", c, u); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = tx.Exec(t.Context(), "INSERT INTO nucleo.cuenta(id,naturaleza,clase) VALUES ($1,'pasivo','prueba')", cuenta); err != nil {

@@ -1101,6 +1101,19 @@ paths:
       operationId: enviarMensajeVera
       summary: Envia un mensaje de texto al asistente y devuelve su respuesta.
       tags: [asistente]
+      description: >
+        Historial construido por el servidor. Plazo total de 45 segundos. Una clave
+        de idempotencia permite recuperar la misma respuesta al reintentar exactamente
+        el cuerpo original. Tras persistir la entrada, las cabeceras X-Conversacion-Id
+        y X-Mensaje-Usuario-Id permiten recuperar una solicitud incluso ante un 503/504.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: UUID único por envío; reutilizar con el mismo cuerpo en los reintentos.
       requestBody:
         required: true
         content:
@@ -1108,7 +1121,7 @@ paths:
             schema:
               $ref: "#/components/schemas/EnviarMensajeVeraRequest"
       responses:
-        "201":
+        "200":
           description: Respuesta del asistente.
           content:
             application/json:
@@ -1140,7 +1153,7 @@ paths:
                         destinatario:
                           nombre: "Laura R."
                           celular_parcial: "******4321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         requiere_codigo: true
                         expira_en: "2026-10-15T14:21:00-05:00"
@@ -1167,6 +1180,12 @@ paths:
                     meta: null
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          description: ConversationBusy o IdempotencyConflict; no se inicia otra ejecución.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "413":
           $ref: "#/components/responses/Error"
         "422":
@@ -1770,6 +1789,7 @@ components:
             NotReady (503, solo en GET /readyz cuando una dependencia no responde),
             LimitsUnavailable (503, falta configuracion vigente de limites, UVT, GMF o KYC),
             AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
+            ConversationBusy (409, conversación con un turno en procesamiento),
             AudioNotUnderstood (422, el audio no tiene voz reconocible),
             ActionExpired (410, la accion pendiente supero su vigencia),
             ActionNotPending (409, la accion no esta pendiente ni confirmada),
@@ -3101,6 +3121,7 @@ components:
 
     EnviarMensajeVeraRequest:
       type: object
+      additionalProperties: false
       required: [texto]
       properties:
         conversacion_id:
@@ -3112,7 +3133,7 @@ components:
           minLength: 1
           maxLength: 1000
           x-oapi-codegen-extra-tags:
-            validate: "required,min=1,max=1000"
+            validate: "required,min=1,max=1000,textoasistente"
 
     EnviarAudioVeraRequest:
       type: object

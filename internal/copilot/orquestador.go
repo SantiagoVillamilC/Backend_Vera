@@ -16,7 +16,7 @@ import (
 )
 
 // EntradaOrquestador referencia un mensaje de usuario ya persistido por el servidor.
-type EntradaOrquestador struct{ ConversacionID, MensajeID uuid.UUID }
+type EntradaOrquestador struct{ ConversacionID, MensajeID, ReservaToken uuid.UUID }
 
 // AccionOrquestador contiene exclusivamente datos releídos del almacenamiento del servidor.
 type AccionOrquestador struct {
@@ -44,6 +44,7 @@ type RegistroCiclo struct {
 	Modelo, VersionInstrucciones string
 	Latencia                     time.Duration
 	Final                        bool
+	AccionID                     uuid.UUID
 }
 
 // MemoriaCiclo valida titularidad y excluye ciclos simultáneos sobre la conversación.
@@ -271,6 +272,7 @@ func (o *Orquestador) finalizar(ctx context.Context, s SesionCiclo, r RegistroCi
 			return SalidaOrquestador{}, ErrCicloNoDisponible
 		}
 		salida.AccionPendiente = a
+		r.AccionID = accion
 	}
 	r.Final = true
 	// El protocolo conserva firmas para vueltas futuras; Salida sólo proyecta texto.

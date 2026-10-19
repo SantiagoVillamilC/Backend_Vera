@@ -50,6 +50,9 @@ func (m *MemoriaCicloPostgres) Abrir(ctx context.Context, e EntradaOrquestador) 
 		fin = plazo
 	}
 	s := &sesionPostgres{pool: m.pool, entrada: e, parte: uuidCiclo(parte), token: uuidCiclo(uuid.New())}
+	if e.ReservaToken != uuid.Nil {
+		s.token = uuidCiclo(e.ReservaToken)
+	}
 	_, err = EnTransaccionAsistente(ctx, m.pool, func(q *repositorio.Queries) (struct{}, error) {
 		_, err := q.AdquirirCiclo(ctx, repositorio.AdquirirCicloParams{Token: s.token, ExpiraEn: pgtype.Timestamptz{Time: fin, Valid: true}, ConversacionID: uuidCiclo(e.ConversacionID), UsuarioID: s.parte, MensajeID: uuidCiclo(e.MensajeID)})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -158,6 +161,9 @@ func (s *sesionPostgres) anexar(ctx context.Context, q *repositorio.Queries, t T
 	p := repositorio.AnexarMensajeParams{ConversacionID: uuidCiclo(s.entrada.ConversacionID), UsuarioID: s.parte, Rol: t.Rol, Canal: s.canal, Contenido: contenido, Metadatos: meta, NombreModelo: pgtype.Text{String: r.Modelo, Valid: true}, VersionInstrucciones: pgtype.Text{String: r.VersionInstrucciones, Valid: true}, TokensEntrada: pgtype.Int4{Int32: r.Respuesta.TokensEntrada, Valid: true}, TokensSalida: pgtype.Int4{Int32: r.Respuesta.TokensSalida, Valid: true}, LatenciaMs: pgtype.Int4{Int32: int32(min(max(r.Latencia.Milliseconds(), 0), int64(2147483647))), Valid: true}}
 	if final {
 		p.RespuestaA = uuidCiclo(s.entrada.MensajeID)
+		if r.AccionID != uuid.Nil {
+			p.AccionID = uuidCiclo(r.AccionID)
+		}
 	}
 	_, err = q.AnexarMensaje(ctx, p)
 	return err

@@ -16,7 +16,7 @@ const adquirirCiclo = `-- name: AdquirirCiclo :one
 UPDATE asistente.conversacion c
 SET ciclo_token = $1, ciclo_expira_en = LEAST($2::timestamptz, clock_timestamp() + interval '45 seconds')
 WHERE c.id = $3 AND c.usuario_id = $4 AND c.estado = 'activo'
-AND (c.ciclo_expira_en IS NULL OR c.ciclo_expira_en <= clock_timestamp())
+AND (c.ciclo_expira_en IS NULL OR c.ciclo_expira_en <= clock_timestamp() OR c.ciclo_token = $1)
 AND EXISTS (
     SELECT 1 FROM asistente.mensaje m
     WHERE m.id = $5 AND m.conversacion_id = c.id AND m.rol = 'usuario'
@@ -72,7 +72,7 @@ func (q *Queries) LiberarCiclo(ctx context.Context, arg LiberarCicloParams) erro
 }
 
 const mensajeDeCiclo = `-- name: MensajeDeCiclo :one
-SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en FROM asistente.mensaje m
+SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en, m.accion_id FROM asistente.mensaje m
 JOIN asistente.conversacion c ON c.id = m.conversacion_id
 WHERE m.id = $1 AND c.id = $2 AND c.usuario_id = $3 AND m.rol = 'usuario'
 `
@@ -101,6 +101,7 @@ func (q *Queries) MensajeDeCiclo(ctx context.Context, arg MensajeDeCicloParams) 
 		&i.Metadatos,
 		&i.RespuestaA,
 		&i.CreadaEn,
+		&i.AccionID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query MensajeDeCiclo: %w", err)
@@ -109,7 +110,7 @@ func (q *Queries) MensajeDeCiclo(ctx context.Context, arg MensajeDeCicloParams) 
 }
 
 const mensajesPublicosConversacion = `-- name: MensajesPublicosConversacion :many
-SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en FROM asistente.mensaje m
+SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en, m.accion_id FROM asistente.mensaje m
 JOIN asistente.conversacion c ON c.id = m.conversacion_id
 WHERE c.id = $1 AND c.usuario_id = $2
 AND m.rol IN ('usuario','asistente') AND (m.metadatos->>'interno') IS DISTINCT FROM 'true'
@@ -146,6 +147,7 @@ func (q *Queries) MensajesPublicosConversacion(ctx context.Context, arg Mensajes
 			&i.Metadatos,
 			&i.RespuestaA,
 			&i.CreadaEn,
+			&i.AccionID,
 		); err != nil {
 			return nil, fmt.Errorf("query MensajesPublicosConversacion: %w", err)
 		}

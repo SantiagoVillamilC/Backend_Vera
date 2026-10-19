@@ -47,16 +47,26 @@ type AsistenteLlamadaFuncion struct {
 	OcurridaEn           pgtype.Timestamptz `json:"ocurrida_en"`
 }
 
+type AsistenteSolicitudTexto struct {
+	UsuarioID      pgtype.UUID        `json:"usuario_id"`
+	Clave          pgtype.UUID        `json:"clave"`
+	ConversacionID pgtype.UUID        `json:"conversacion_id"`
+	MensajeID      pgtype.UUID        `json:"mensaje_id"`
+	Huella         []byte             `json:"huella"`
+	CreadaEn       pgtype.Timestamptz `json:"creada_en"`
+}
+
 type Conversacion struct {
-	ID               pgtype.UUID        `json:"id"`
-	UsuarioID        pgtype.UUID        `json:"usuario_id"`
-	Titulo           pgtype.Text        `json:"titulo"`
-	Estado           string             `json:"estado"`
-	CantidadMensajes int32              `json:"cantidad_mensajes"`
-	CreadaEn         pgtype.Timestamptz `json:"creada_en"`
-	UltimoMensajeEn  pgtype.Timestamptz `json:"ultimo_mensaje_en"`
-	CicloToken       pgtype.UUID        `json:"ciclo_token"`
-	CicloExpiraEn    pgtype.Timestamptz `json:"ciclo_expira_en"`
+	ID                  pgtype.UUID        `json:"id"`
+	UsuarioID           pgtype.UUID        `json:"usuario_id"`
+	Titulo              pgtype.Text        `json:"titulo"`
+	Estado              string             `json:"estado"`
+	CantidadMensajes    int32              `json:"cantidad_mensajes"`
+	CreadaEn            pgtype.Timestamptz `json:"creada_en"`
+	UltimoMensajeEn     pgtype.Timestamptz `json:"ultimo_mensaje_en"`
+	CicloToken          pgtype.UUID        `json:"ciclo_token"`
+	CicloExpiraEn       pgtype.Timestamptz `json:"ciclo_expira_en"`
+	UsuarioFinancieroID string             `json:"usuario_financiero_id"`
 }
 
 type Mensaje struct {
@@ -74,4 +84,5 @@ type Mensaje struct {
 	Metadatos            []byte             `json:"metadatos"`
 	RespuestaA           pgtype.UUID        `json:"respuesta_a"`
 	CreadaEn             pgtype.Timestamptz `json:"creada_en"`
+	AccionID             pgtype.UUID        `json:"accion_id"`
 }

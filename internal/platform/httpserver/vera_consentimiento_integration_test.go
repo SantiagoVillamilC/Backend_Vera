@@ -115,11 +115,11 @@ func TestVeraConsentimientoIntegracion(t *testing.T) {
 	if _, err := protegido.Generar(ctxUsuario, copilot.SolicitudIA{}); err != nil {
 		t.Fatal(err)
 	}
-	request(http.MethodPost, "/v1/vera/mensajes", `{}`, 501)
+	request(http.MethodPost, "/v1/vera/mensajes", `{"texto":"Hola"}`, 503)
 	crearAccion := func(titular uuid.UUID) uuid.UUID {
 		t.Helper()
 		var conversacion, accion uuid.UUID
-		if err := admin.QueryRow(ctx, "INSERT INTO asistente.conversacion(usuario_id) VALUES ($1) RETURNING id", titular).Scan(&conversacion); err != nil {
+		if err := admin.QueryRow(ctx, "INSERT INTO asistente.conversacion(usuario_id,usuario_financiero_id) VALUES ($1,$1::uuid::text) RETURNING id", titular).Scan(&conversacion); err != nil {
 			t.Fatal(err)
 		}
 		if err := admin.QueryRow(ctx, "INSERT INTO asistente.accion_pendiente(usuario_id,conversacion_id,tipo,destino,nombre_mostrado,monto,requiere_codigo,usuario_financiero_id) VALUES ($1,$2,'transferencia_interna','+573001234567','Laura R.',100,false,$1::uuid::text) RETURNING id", titular, conversacion).Scan(&accion); err != nil {

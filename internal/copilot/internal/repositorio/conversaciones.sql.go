@@ -16,18 +16,18 @@ const anexarMensaje = `-- name: AnexarMensaje :one
 WITH conversacion AS (
     UPDATE asistente.conversacion
     SET cantidad_mensajes = cantidad_mensajes + 1, ultimo_mensaje_en = clock_timestamp()
-    WHERE asistente.conversacion.id = $11 AND usuario_id = $12 AND estado = 'activo'
+    WHERE asistente.conversacion.id = $12 AND usuario_id = $13 AND estado = 'activo'
     AND ($1::text <> 'usuario' OR ciclo_expira_en IS NULL OR ciclo_expira_en <= clock_timestamp())
     RETURNING asistente.conversacion.id, asistente.conversacion.cantidad_mensajes
 )
 INSERT INTO asistente.mensaje (
     conversacion_id, numero_orden, rol, canal, contenido, nombre_modelo,
-    version_instrucciones, tokens_entrada, tokens_salida, latencia_ms, metadatos, respuesta_a
+    version_instrucciones, tokens_entrada, tokens_salida, latencia_ms, metadatos, respuesta_a,accion_id
 )
 SELECT id, cantidad_mensajes, $1, $2, $3, $4,
     $5, $6, $7,
-    $8, $9, $10
-FROM conversacion RETURNING id, conversacion_id, numero_orden, rol, canal, contenido, nombre_modelo, version_instrucciones, tokens_entrada, tokens_salida, latencia_ms, metadatos, respuesta_a, creada_en
+    $8, $9, $10,$11
+FROM conversacion RETURNING id, conversacion_id, numero_orden, rol, canal, contenido, nombre_modelo, version_instrucciones, tokens_entrada, tokens_salida, latencia_ms, metadatos, respuesta_a, creada_en, accion_id
 `
 
 type AnexarMensajeParams struct {
@@ -41,6 +41,7 @@ type AnexarMensajeParams struct {
 	LatenciaMs           pgtype.Int4 `json:"latencia_ms"`
 	Metadatos            []byte      `json:"metadatos"`
 	RespuestaA           pgtype.UUID `json:"respuesta_a"`
+	AccionID             pgtype.UUID `json:"accion_id"`
 	ConversacionID       pgtype.UUID `json:"conversacion_id"`
 	UsuarioID            pgtype.UUID `json:"usuario_id"`
 }
@@ -59,6 +60,7 @@ func (q *Queries) AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (M
 		arg.LatenciaMs,
 		arg.Metadatos,
 		arg.RespuestaA,
+		arg.AccionID,
 		arg.ConversacionID,
 		arg.UsuarioID,
 	)
@@ -78,6 +80,7 @@ func (q *Queries) AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (M
 		&i.Metadatos,
 		&i.RespuestaA,
 		&i.CreadaEn,
+		&i.AccionID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query AnexarMensaje: %w", err)
@@ -86,7 +89,7 @@ func (q *Queries) AnexarMensaje(ctx context.Context, arg AnexarMensajeParams) (M
 }
 
 const contextoConversacion = `-- name: ContextoConversacion :many
-SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en FROM asistente.mensaje m
+SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en, m.accion_id FROM asistente.mensaje m
 JOIN asistente.conversacion c ON c.id = m.conversacion_id
 WHERE c.id = $1 AND c.usuario_id = $2
 AND m.numero_orden >= (
@@ -130,6 +133,7 @@ func (q *Queries) ContextoConversacion(ctx context.Context, arg ContextoConversa
 			&i.Metadatos,
 			&i.RespuestaA,
 			&i.CreadaEn,
+			&i.AccionID,
 		); err != nil {
 			return nil, fmt.Errorf("query ContextoConversacion: %w", err)
 		}
@@ -142,17 +146,18 @@ func (q *Queries) ContextoConversacion(ctx context.Context, arg ContextoConversa
 }
 
 const crearConversacion = `-- name: CrearConversacion :one
-INSERT INTO asistente.conversacion (usuario_id, titulo)
-VALUES ($1, $2) RETURNING id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en, ciclo_token, ciclo_expira_en
+INSERT INTO asistente.conversacion (usuario_id, titulo,usuario_financiero_id)
+VALUES ($1::uuid, $2,COALESCE($3::text,$1::uuid::text)) RETURNING id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en, ciclo_token, ciclo_expira_en, usuario_financiero_id
 `
 
 type CrearConversacionParams struct {
-	UsuarioID pgtype.UUID `json:"usuario_id"`
-	Titulo    pgtype.Text `json:"titulo"`
+	UsuarioID           pgtype.UUID `json:"usuario_id"`
+	Titulo              pgtype.Text `json:"titulo"`
+	UsuarioFinancieroID pgtype.Text `json:"usuario_financiero_id"`
 }
 
 func (q *Queries) CrearConversacion(ctx context.Context, arg CrearConversacionParams) (Conversacion, error) {
-	row := q.db.QueryRow(ctx, crearConversacion, arg.UsuarioID, arg.Titulo)
+	row := q.db.QueryRow(ctx, crearConversacion, arg.UsuarioID, arg.Titulo, arg.UsuarioFinancieroID)
 	var i Conversacion
 	err := row.Scan(
 		&i.ID,
@@ -164,6 +169,7 @@ func (q *Queries) CrearConversacion(ctx context.Context, arg CrearConversacionPa
 		&i.UltimoMensajeEn,
 		&i.CicloToken,
 		&i.CicloExpiraEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query CrearConversacion: %w", err)
@@ -172,7 +178,7 @@ func (q *Queries) CrearConversacion(ctx context.Context, arg CrearConversacionPa
 }
 
 const mensajesSinRespuesta = `-- name: MensajesSinRespuesta :many
-SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en FROM asistente.mensaje m
+SELECT m.id, m.conversacion_id, m.numero_orden, m.rol, m.canal, m.contenido, m.nombre_modelo, m.version_instrucciones, m.tokens_entrada, m.tokens_salida, m.latencia_ms, m.metadatos, m.respuesta_a, m.creada_en, m.accion_id FROM asistente.mensaje m
 JOIN asistente.conversacion c ON c.id = m.conversacion_id
 WHERE c.id = $1 AND c.usuario_id = $2 AND m.rol = 'usuario'
 AND NOT EXISTS (SELECT 1 FROM asistente.mensaje r WHERE r.respuesta_a = m.id)
@@ -209,6 +215,7 @@ func (q *Queries) MensajesSinRespuesta(ctx context.Context, arg MensajesSinRespu
 			&i.Metadatos,
 			&i.RespuestaA,
 			&i.CreadaEn,
+			&i.AccionID,
 		); err != nil {
 			return nil, fmt.Errorf("query MensajesSinRespuesta: %w", err)
 		}
@@ -221,7 +228,7 @@ func (q *Queries) MensajesSinRespuesta(ctx context.Context, arg MensajesSinRespu
 }
 
 const obtenerConversacion = `-- name: ObtenerConversacion :one
-SELECT id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en, ciclo_token, ciclo_expira_en FROM asistente.conversacion WHERE id = $1 AND usuario_id = $2
+SELECT id, usuario_id, titulo, estado, cantidad_mensajes, creada_en, ultimo_mensaje_en, ciclo_token, ciclo_expira_en, usuario_financiero_id FROM asistente.conversacion WHERE id = $1 AND usuario_id = $2
 `
 
 type ObtenerConversacionParams struct {
@@ -242,6 +249,7 @@ func (q *Queries) ObtenerConversacion(ctx context.Context, arg ObtenerConversaci
 		&i.UltimoMensajeEn,
 		&i.CicloToken,
 		&i.CicloExpiraEn,
+		&i.UsuarioFinancieroID,
 	)
 	if err != nil {
 		err = fmt.Errorf("query ObtenerConversacion: %w", err)

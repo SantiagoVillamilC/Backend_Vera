@@ -1,6 +1,6 @@
 -- name: CrearConversacion :one
-INSERT INTO asistente.conversacion (usuario_id, titulo)
-VALUES (@usuario_id, sqlc.narg('titulo')) RETURNING *;
+INSERT INTO asistente.conversacion (usuario_id, titulo,usuario_financiero_id)
+VALUES (sqlc.arg('usuario_id')::uuid, sqlc.narg('titulo'),COALESCE(sqlc.narg('usuario_financiero_id')::text,sqlc.arg('usuario_id')::uuid::text)) RETURNING *;
 
 -- name: ObtenerConversacion :one
 SELECT * FROM asistente.conversacion WHERE id = @id AND usuario_id = @usuario_id;
@@ -17,11 +17,11 @@ WITH conversacion AS (
 )
 INSERT INTO asistente.mensaje (
     conversacion_id, numero_orden, rol, canal, contenido, nombre_modelo,
-    version_instrucciones, tokens_entrada, tokens_salida, latencia_ms, metadatos, respuesta_a
+    version_instrucciones, tokens_entrada, tokens_salida, latencia_ms, metadatos, respuesta_a,accion_id
 )
 SELECT id, cantidad_mensajes, @rol, @canal, @contenido, sqlc.narg('nombre_modelo'),
     sqlc.narg('version_instrucciones'), sqlc.narg('tokens_entrada'), sqlc.narg('tokens_salida'),
-    sqlc.narg('latencia_ms'), @metadatos, sqlc.narg('respuesta_a')
+    sqlc.narg('latencia_ms'), @metadatos, sqlc.narg('respuesta_a'),sqlc.narg('accion_id')
 FROM conversacion RETURNING *;
 
 -- Contexto de los últimos 20 turnos de usuario, incluyendo sus respuestas y funciones.

@@ -24,6 +24,8 @@ type Querier interface {
 	BloquearAccion(ctx context.Context, arg BloquearAccionParams) (AccionPendiente, error)
 	// Serializa el reemplazo de propuestas, también cuando todavía no existe ninguna.
 	BloquearConversacionParaAccion(ctx context.Context, arg BloquearConversacionParaAccionParams) (pgtype.UUID, error)
+	// Serializa únicamente la admisión en DB, nunca la llamada de red.
+	BloquearEntradaTexto(ctx context.Context, usuario string) error
 	CancelarAccion(ctx context.Context, arg CancelarAccionParams) (AccionPendiente, error)
 	// La cancelación y el INSERT siguiente deben compartir la transacción y el bloqueo.
 	CancelarPropuestaAnterior(ctx context.Context, arg CancelarPropuestaAnteriorParams) error
@@ -33,6 +35,7 @@ type Querier interface {
 	// Contexto de los últimos 20 turnos de usuario, incluyendo sus respuestas y funciones.
 	// Así el corte no deja resultados de herramienta sin el turno que los originó.
 	ContextoConversacion(ctx context.Context, arg ContextoConversacionParams) ([]Mensaje, error)
+	ConversacionParaTexto(ctx context.Context, arg ConversacionParaTextoParams) (Conversacion, error)
 	CrearAccion(ctx context.Context, arg CrearAccionParams) (AccionPendiente, error)
 	CrearConversacion(ctx context.Context, arg CrearConversacionParams) (Conversacion, error)
 	FallarAccion(ctx context.Context, arg FallarAccionParams) (AccionPendiente, error)
@@ -44,6 +47,11 @@ type Querier interface {
 	MensajesSinRespuesta(ctx context.Context, arg MensajesSinRespuestaParams) ([]Mensaje, error)
 	ObtenerAccion(ctx context.Context, arg ObtenerAccionParams) (AccionPendiente, error)
 	ObtenerConversacion(ctx context.Context, arg ObtenerConversacionParams) (Conversacion, error)
+	RegistrarSolicitudTexto(ctx context.Context, arg RegistrarSolicitudTextoParams) error
+	ReservarEntradaTexto(ctx context.Context, arg ReservarEntradaTextoParams) (int64, error)
+	RespuestaTextoPersistida(ctx context.Context, arg RespuestaTextoPersistidaParams) (Mensaje, error)
+	SolicitudTextoPorClave(ctx context.Context, arg SolicitudTextoPorClaveParams) (AsistenteSolicitudTexto, error)
+	UltimoUsuarioTexto(ctx context.Context, conversacionID pgtype.UUID) (UltimoUsuarioTextoRow, error)
 	ValidarCiclo(ctx context.Context, arg ValidarCicloParams) (pgtype.UUID, error)
 	VencerAccion(ctx context.Context, arg VencerAccionParams) (AccionPendiente, error)
 	// Base del barrido periódico de SCRUM-137: lotes pequeños y trabajadores sin bloqueo mutuo.

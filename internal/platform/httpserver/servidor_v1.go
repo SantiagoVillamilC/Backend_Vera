@@ -129,18 +129,8 @@ func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request
 	s.destinatarios.ConsultarDestinatario(w, r)
 }
 
-// Los metodos del asistente Vera aun no tienen handler: responden 501 dentro del envelope.
+// Los métodos restantes se implementan en las siguientes tarjetas del asistente.
 // Los implementan las tarjetas de la epica del asistente.
-
-func (s servidorV1) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
-	if !s.exigirConsentimientoVera(w, r, nil) {
-		return
-	}
-	if !s.exigirUsoVera(w, r, copilot.CanalTexto) {
-		return
-	}
-	sinImplementar(w, r)
-}
 
 func (s servidorV1) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
 	if !s.exigirConsentimientoVera(w, r, nil) {
