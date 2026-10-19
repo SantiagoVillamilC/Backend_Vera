@@ -57,7 +57,8 @@ docker compose up -d --build
   que no se pierde el saldo ni el extracto al migrar.
 - El PSE publica en `127.0.0.1:8091` mientras el PSE anterior ocupe el 8090. El vhost apunta
   al nombre del contenedor, no al puerto del host.
-- El vhost de `pse.veraapp.tech` está en `deploy/nginx/pse.veraapp.tech.conf` y exige
+- El vhost de `pse.veraapp.tech` vive en `infra/servidor/simuladores/pse-http.conf` (cuerpo del
+  bloque) y lo instalan `65-simuladores.sh` y sus dos bloques de `:80` y `:443`. Exige
   `proxy_set_header Host $host`, por la validación de `Origin`.
 
 ## Propiedad
