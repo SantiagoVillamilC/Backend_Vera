@@ -73,3 +73,10 @@ func TestSimuladoPorDefecto(t *testing.T) {
 		t.Fatal("respuesta compartida o vacía")
 	}
 }
+
+func TestAudioPorDefectoNoInventaTranscripcion(t *testing.T) {
+	r, err := Nuevo().Generar(t.Context(), copilot.SolicitudIA{SoloTranscripcion: true, Historial: []copilot.TurnoIA{{Rol: "usuario", Partes: []copilot.ParteIA{{Audio: &copilot.AudioIA{MIME: "audio/wav", Datos: []byte{1}}}}}}})
+	if err != nil || len(r.Turno.Partes) != 1 || r.Turno.Partes[0].Texto != `{"transcripcion":""}` {
+		t.Fatalf("%+v %v", r, err)
+	}
+}

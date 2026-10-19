@@ -150,6 +150,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("orquestador IA: %w", err)
 	}
+	textoIA := copilot.NuevoServicioTexto(pool, orquestadorIA)
+	vozIA := copilot.NuevoServicioVoz(textoIA, proveedorIA)
 	lectorOptIn := auth.NuevoLectorOptInDeConsentimientos(pool)
 	gestorDesafios, err := auth.NuevoGestorDesafios(pool, canal, auth.NuevoRegistradorEventos(pool), lectorOptIn, cfg.Auth.OTPPepper,
 		auth.ConRacionamiento(contadoresAuth, clavesContadores))
@@ -259,7 +261,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: copilot.NuevoServicioTexto(pool, orquestadorIA)}, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/redis/go-redis/v9"
@@ -131,16 +130,6 @@ func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request
 
 // Los métodos restantes se implementan en las siguientes tarjetas del asistente.
 // Los implementan las tarjetas de la epica del asistente.
-
-func (s servidorV1) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
-	if !s.exigirConsentimientoVera(w, r, nil) {
-		return
-	}
-	if !s.exigirUsoVera(w, r, copilot.CanalVoz) {
-		return
-	}
-	sinImplementar(w, r)
-}
 
 func (s servidorV1) ListarConversacionesVera(w http.ResponseWriter, r *http.Request, _ api.ListarConversacionesVeraParams) {
 	sinImplementar(w, r)

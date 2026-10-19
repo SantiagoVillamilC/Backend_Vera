@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -43,6 +45,7 @@ type TarjetaTexto struct {
 type RespuestaTexto struct {
 	ConversacionID, MensajeUsuarioID, MensajeID uuid.UUID
 	Texto                                       string
+	Transcripcion                               string
 	CreadoEn                                    time.Time
 	Accion                                      *TarjetaTexto
 }
@@ -65,6 +68,12 @@ type admisionTexto struct {
 
 // EnviarTexto reutiliza mensajes sin respuesta y claves HTTP, conservando una sola ejecución activa.
 func (s *ServicioTexto) EnviarTexto(ctx context.Context, conversacion uuid.UUID, texto string, clave uuid.UUID) (RespuestaTexto, error) {
+	id, _ := identidad.DeContexto(ctx)
+	huella := sha256.Sum256([]byte(id.UsuarioID + "\x00" + conversacion.String() + "\x00" + strings.TrimSpace(texto)))
+	return s.enviarMensaje(ctx, conversacion, texto, clave, CanalTexto, huella, [32]byte{})
+}
+
+func (s *ServicioTexto) enviarMensaje(ctx context.Context, conversacion uuid.UUID, texto string, clave uuid.UUID, canal CanalAsistente, huella, huellaAudio [32]byte) (RespuestaTexto, error) {
 	var salida RespuestaTexto
 	parte, err := parteDelAsistente(ctx)
 	id, ok := identidad.DeContexto(ctx)
@@ -72,13 +81,16 @@ func (s *ServicioTexto) EnviarTexto(ctx context.Context, conversacion uuid.UUID,
 		return salida, ErrConsentimientoAsistente
 	}
 	texto = strings.TrimSpace(texto)
-	if !utf8.ValidString(texto) || texto == "" || utf8.RuneCountInString(texto) > 1000 || strings.ContainsRune(texto, 0) {
+	maximo := 1000
+	if canal == CanalVoz {
+		maximo = 6000
+	}
+	if !utf8.ValidString(texto) || texto == "" || utf8.RuneCountInString(texto) > maximo || strings.ContainsRune(texto, 0) {
 		return salida, ErrSolicitudIA
 	}
 	if s == nil || s.pool == nil || s.procesador == nil {
 		return salida, ErrNoDisponibleIA
 	}
-	huella := sha256.Sum256([]byte(id.UsuarioID + "\x00" + conversacion.String() + "\x00" + texto))
 	a, err := EnTransaccionAsistente(ctx, s.pool, func(q *repositorio.Queries) (admisionTexto, error) {
 		if err := q.BloquearEntradaTexto(ctx, parte.String()); err != nil {
 			return admisionTexto{}, err
@@ -126,13 +138,21 @@ func (s *ServicioTexto) EnviarTexto(ctx context.Context, conversacion uuid.UUID,
 		}
 		if mensajeID == uuid.Nil {
 			previo, err := q.UltimoUsuarioTexto(ctx, conv.ID)
-			if err == nil && !previo.Respondido && previo.Contenido == texto {
+			coincide := previo.Canal == string(canal) && previo.Contenido == texto
+			if canal == CanalVoz {
+				coincide = previo.Canal == "voz" && coincideHuellaAudio(previo.Metadatos, huellaAudio)
+			}
+			if err == nil && !previo.Respondido && coincide {
 				mensajeID = uuid.UUID(previo.ID.Bytes)
 			} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return admisionTexto{}, err
 			}
 			if mensajeID == uuid.Nil {
-				m, err := q.AnexarMensaje(ctx, repositorio.AnexarMensajeParams{ConversacionID: conv.ID, UsuarioID: uuidCiclo(parte), Rol: "usuario", Canal: "texto", Contenido: texto, Metadatos: []byte(`{}`)})
+				meta := []byte(`{}`)
+				if canal == CanalVoz {
+					meta, _ = json.Marshal(map[string]string{"huella_audio": hex.EncodeToString(huellaAudio[:])})
+				}
+				m, err := q.AnexarMensaje(ctx, repositorio.AnexarMensajeParams{ConversacionID: conv.ID, UsuarioID: uuidCiclo(parte), Rol: "usuario", Canal: string(canal), Contenido: texto, Metadatos: meta})
 				if err != nil {
 					return admisionTexto{}, err
 				}
@@ -184,6 +204,13 @@ func (s *ServicioTexto) EnviarTexto(ctx context.Context, conversacion uuid.UUID,
 		r.MensajeID = uuid.UUID(m.ID.Bytes)
 		r.Texto = m.Contenido
 		r.CreadoEn = m.CreadaEn.Time
+		if canal == CanalVoz {
+			usuario, err := q.MensajeDeCiclo(ctx, repositorio.MensajeDeCicloParams{MensajeID: uuidCiclo(salida.MensajeUsuarioID), ConversacionID: m.ConversacionID, UsuarioID: uuidCiclo(parte)})
+			if err != nil {
+				return RespuestaTexto{}, err
+			}
+			r.Transcripcion = usuario.Contenido
+		}
 		if m.AccionID.Valid {
 			a, err := q.ObtenerAccion(ctx, repositorio.ObtenerAccionParams{ID: m.AccionID, UsuarioID: uuidCiclo(parte)})
 			if err != nil {

@@ -23,7 +23,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func TestVeraTextoIntegracion(t *testing.T) {
+func TestVeraTextoIntegracion(t *testing.T) { probarConversacionIntegrada(t, false) }
+func TestVeraVozIntegracion(t *testing.T)   { probarConversacionIntegrada(t, true) }
+
+func probarConversacionIntegrada(t *testing.T, voz bool) {
 	ctx := t.Context()
 	admin, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -63,16 +66,20 @@ func TestVeraTextoIntegracion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	uso, err := copilot.NuevoControlUso(contador, claves, presupuesto, copilot.LimitesUso{TextoHora: 20, TextoDia: 40, VozHora: 10, TokensDiarios: 100000, ReservaTokens: 1000})
+	uso, err := copilot.NuevoControlUso(contador, claves, presupuesto, copilot.LimitesUso{TextoHora: 20, TextoDia: 40, VozHora: 4, TokensDiarios: 100000, ReservaTokens: 1000})
 	if err != nil {
 		t.Fatal(err)
 	}
 	consent := auth.NuevoServicioDeConsentimientos(app)
 	control := copilot.NuevoControlConsentimiento(consent, copilot.NuevoCanceladorConsentimiento(app))
-	proveedor := control.ProtegerProveedor(uso.ProtegerProveedor(provsim.Nuevo(
-		provsim.Paso{Error: copilot.ErrNoDisponibleIA},
-		provsim.Paso{Respuesta: copilot.RespuestaIA{Turno: copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Texto: "Respuesta de integración."}}}}},
-	)))
+	pasos := []provsim.Paso{
+		{Error: copilot.ErrNoDisponibleIA},
+		{Respuesta: copilot.RespuestaIA{Turno: copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Texto: "Respuesta de integración."}}}}},
+	}
+	if voz {
+		pasos = append([]provsim.Paso{{Respuesta: copilot.RespuestaIA{Turno: copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Texto: `{"transcripcion":"Hola"}`}}}}}}, pasos...)
+	}
+	proveedor := control.ProtegerProveedor(uso.ProtegerProveedor(provsim.Nuevo(pasos...)))
 	catalogo, err := copilot.NuevoCatalogo(nil, nil, copilot.ConAuditoriaLlamadas(copilot.NuevaAuditoriaPostgres(app)))
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +89,13 @@ func TestVeraTextoIntegracion(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := identidad.Identidad{ParteID: parte.String(), UsuarioID: uuid.NewString(), Contexto: auth.ContextoUsuario}
-	router := NewRouterConVera(app, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: identidadDeContextoFijo{id: id}, Consent: NuevoConsentimientosHandler(consent)}, DependenciasVera{Consentimiento: control, Uso: uso, Texto: copilot.NuevoServicioTexto(app, orquestador)})
+	router := NewRouterConVera(app, nucleo.NewServicio(nil, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: identidadDeContextoFijo{id: id}, Consent: NuevoConsentimientosHandler(consent)}, DependenciasVera{Consentimiento: control, Uso: uso, Texto: copilot.NuevoServicioTexto(app, orquestador), Voz: copilot.NuevoServicioVoz(copilot.NuevoServicioTexto(app, orquestador), proveedor)})
+	path, body, otro := "/v1/vera/mensajes", `{"texto":"Hola"}`, `{"texto":"Otro"}`
+	if voz {
+		path = "/v1/vera/mensajes/voz"
+		body = cuerpoVozPrueba(t, "tono.wav")
+		otro = cuerpoVozPrueba(t, "tono.m4a")
+	}
 	clave := uuid.NewString()
 	request := func(path, body string, status int) *httptest.ResponseRecorder {
 		t.Helper()
@@ -95,14 +108,14 @@ func TestVeraTextoIntegracion(t *testing.T) {
 		}
 		return w
 	}
-	request("/v1/vera/mensajes", `{"texto":"Hola"}`, 403)
+	request(path, body, 403)
 	request("/v1/auth/consents", `{"tipo":"asistente_ia","version_texto":"v1","aceptado":true,"accion":"otorgar","metodo":"app"}`, 201)
-	w := request("/v1/vera/mensajes", `{"texto":"Hola"}`, 503)
+	w := request(path, body, 503)
 	conv, user := w.Header().Get("X-Conversacion-Id"), w.Header().Get("X-Mensaje-Usuario-Id")
 	if conv == "" || user == "" {
 		t.Fatal("no dejó identificadores para recuperar el envío")
 	}
-	w = request("/v1/vera/mensajes", `{"texto":"Hola"}`, 200)
+	w = request(path, body, 200)
 	var result struct {
 		Data api.RespuestaAsistente `json:"data"`
 	}
@@ -112,12 +125,18 @@ func TestVeraTextoIntegracion(t *testing.T) {
 	if result.Data.ConversacionId.String() != conv || result.Data.Texto != "Respuesta de integración." {
 		t.Fatal(w.Body)
 	}
+	if voz && (result.Data.Transcripcion == nil || *result.Data.Transcripcion != "Hola") {
+		t.Fatal(w.Body)
+	}
 	primera := w.Body.String()
-	w = request("/v1/vera/mensajes", `{"texto":"Hola"}`, 200)
+	w = request(path, body, 200)
 	if w.Body.String() != primera {
 		t.Fatal("replay diferente")
 	}
-	request("/v1/vera/mensajes", `{"texto":"Otro"}`, 409)
+	request(path, otro, 409)
+	if voz {
+		request(path, body, 429)
+	}
 	var total int
 	if err := admin.QueryRow(ctx, "SELECT count(*) FROM asistente.mensaje WHERE conversacion_id=$1", conv).Scan(&total); err != nil || total != 2 {
 		t.Fatalf("mensajes=%d %v", total, err)

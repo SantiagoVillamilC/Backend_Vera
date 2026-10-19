@@ -59,8 +59,15 @@ func (s servidorV1) EnviarMensajeVera(w http.ResponseWriter, r *http.Request, pa
 		errorTextoVera(w, err)
 		return
 	}
+	escribirRespuestaVera(w, salida)
+}
+
+func escribirRespuestaVera(w http.ResponseWriter, salida copilot.RespuestaTexto) {
 	zona := time.FixedZone("America/Bogota", -5*60*60)
 	respuesta := api.RespuestaAsistente{ConversacionId: salida.ConversacionID, MensajeId: salida.MensajeID, Texto: salida.Texto, CreadoEn: salida.CreadoEn.In(zona)}
+	if salida.Transcripcion != "" {
+		respuesta.Transcripcion = &salida.Transcripcion
+	}
 	if a := salida.Accion; a != nil {
 		nombre := a.Nombre
 		if a.Tipo == "transferencia_llave" && a.Entidad != "" {

@@ -1204,6 +1204,19 @@ paths:
       operationId: enviarMensajeVozVera
       summary: Envia un audio al asistente y devuelve la transcripcion y la respuesta.
       tags: [asistente]
+      description: >
+        Transcribe el audio en memoria, sin herramientas, y procesa la transcripción
+        con el mismo ciclo del chat. Plazo total de 45 segundos. Nunca conserva audio.
+        Idempotency-Key se reutiliza con el cuerpo original. Tras guardar el turno,
+        X-Conversacion-Id y X-Mensaje-Usuario-Id permiten recuperar fallos 503/504.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: UUID único por envío de voz; reutilizarlo sólo con el mismo audio y conversación.
       requestBody:
         required: true
         content:
@@ -1211,7 +1224,7 @@ paths:
             schema:
               $ref: "#/components/schemas/EnviarAudioVeraRequest"
       responses:
-        "201":
+        "200":
           description: Respuesta del asistente con la transcripcion.
           content:
             application/json:
@@ -1250,10 +1263,16 @@ paths:
                     meta: null
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          description: ConversationBusy o IdempotencyConflict.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "413":
           $ref: "#/components/responses/Error"
         "422":
-          description: El audio no tiene voz reconocible.
+          description: ValidationError con detalle de formato, base64, contenedor, tamaño o duración; AudioNotUnderstood si no hay voz.
           content:
             application/json:
               schema:
@@ -3137,6 +3156,7 @@ components:
 
     EnviarAudioVeraRequest:
       type: object
+      additionalProperties: false
       required: [audio, formato]
       properties:
         conversacion_id:
@@ -3147,15 +3167,15 @@ components:
           type: string
           maxLength: 960000
           description: >
-            Audio del clip en base64. No puede superar los 700 KB decodificados ni los 60
-            segundos. El tope de longitud es 960000 caracteres en base64.
+            Audio del clip en base64. No puede superar los 700 KiB decodificados ni los 60
+            segundos. WAV PCM/float o M4A AAC no fragmentado. El tope de longitud es 960000 caracteres en base64.
           x-oapi-codegen-extra-tags:
             validate: "required,max=960000"
         formato:
           type: string
-          enum: [m4a]
+          enum: [m4a, wav]
           x-oapi-codegen-extra-tags:
-            validate: "required,oneof=m4a"
+            validate: "required,oneof=m4a wav"
 
     MensajeVera:
       type: object

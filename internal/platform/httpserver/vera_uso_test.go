@@ -2,9 +2,11 @@ package httpserver
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -54,12 +56,17 @@ func TestVeraUsoHTTP(t *testing.T) {
 				canal := copilot.CanalTexto
 				if voz {
 					canal = copilot.CanalVoz
-					srv.EnviarMensajeVozVera(w, r)
+					clip, err := os.ReadFile("../../copilot/testdata/audio/tono.wav")
+					if err != nil {
+						t.Fatal(err)
+					}
+					r = httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"audio":"`+base64.StdEncoding.EncodeToString(clip)+`","formato":"wav"}`))
+					srv.EnviarMensajeVozVera(w, r, api.EnviarMensajeVozVeraParams{})
 				} else {
 					srv.EnviarMensajeVera(w, r, api.EnviarMensajeVeraParams{})
 				}
 				status := caso.status
-				if !voz && status == 501 {
+				if status == 501 {
 					status = 503
 				}
 				if w.Code != status || w.Header().Get("Retry-After") != caso.retry || uso.canal != canal || uso.llamadas != 1 {

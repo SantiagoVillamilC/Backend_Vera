@@ -13,9 +13,11 @@ type ProveedorIA interface {
 
 // SolicitudIA contiene únicamente los datos que el orquestador autoriza a enviar.
 type SolicitudIA struct {
-	Instrucciones string
-	Historial     []TurnoIA
-	Funciones     []FuncionIA
+	// SoloTranscripcion exige salida JSON sin herramientas; sólo lo fija el servidor.
+	SoloTranscripcion bool
+	Instrucciones     string
+	Historial         []TurnoIA
+	Funciones         []FuncionIA
 }
 
 // FuncionIA declara una herramienta; Parametros es un JSON Schema de tipo object.

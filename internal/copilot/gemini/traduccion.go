@@ -15,6 +15,13 @@ func traducirSolicitud(s copilot.SolicitudIA, temperatura float32) ([]*genai.Con
 		Temperature: &temperatura, CandidateCount: 1, MaxOutputTokens: 2048,
 		AutomaticContinuation: genai.Ptr(false),
 	}
+	if s.SoloTranscripcion {
+		if len(s.Funciones) != 0 {
+			return nil, nil, copilot.ErrSolicitudIA
+		}
+		cfg.ResponseMIMEType = "application/json"
+		cfg.ResponseJsonSchema = map[string]any{"type": "object", "properties": map[string]any{"transcripcion": map[string]any{"type": "string"}}, "required": []string{"transcripcion"}, "additionalProperties": false}
+	}
 	if s.Instrucciones != "" {
 		cfg.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: s.Instrucciones}}}
 	}

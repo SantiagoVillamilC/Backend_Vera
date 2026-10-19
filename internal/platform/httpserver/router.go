@@ -30,6 +30,7 @@ var RutasDeDinero = []string{
 	http.MethodPost + " /v1/transferencias/interbancarias",
 	http.MethodGet + " /v1/destinatarios",
 	http.MethodPost + " /v1/vera/mensajes",
+	http.MethodPost + " /v1/vera/mensajes/voz",
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
@@ -42,7 +43,7 @@ type LimitadorUsoVera interface {
 	Admitir(context.Context, copilot.CanalAsistente) error
 }
 
-// DependenciasVera reúne los puertos del asistente y su conversación por texto.
+// DependenciasVera reúne los puertos del asistente y sus conversaciones por texto y voz.
 type DependenciasVera struct {
 	Proveedor      copilot.ProveedorIA
 	Catalogo       *copilot.Catalogo
@@ -50,6 +51,12 @@ type DependenciasVera struct {
 	Uso            LimitadorUsoVera
 	Orquestador    *copilot.Orquestador
 	Texto          ConversacionTextoVera
+	Voz            ConversacionVozVera
+}
+
+// ConversacionVozVera recibe sólo un clip validado en memoria y referencias de la sesión.
+type ConversacionVozVera interface {
+	EnviarVoz(context.Context, uuid.UUID, *copilot.AudioIA, uuid.UUID) (copilot.RespuestaTexto, error)
 }
 
 // ConversacionTextoVera procesa únicamente texto e IDs; construye el historial en el servidor.
@@ -57,8 +64,8 @@ type ConversacionTextoVera interface {
 	EnviarTexto(context.Context, uuid.UUID, string, uuid.UUID) (copilot.RespuestaTexto, error)
 }
 
-// NewRouterConVera conecta el chat por texto y los controles del asistente.
-// Las rutas de voz y confirmación conservan su contrato pendiente de implementación.
+// NewRouterConVera conecta el chat por texto y voz con los controles del asistente.
+// Las rutas de confirmación conservan su contrato pendiente de implementación.
 func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, vera DependenciasVera, pseURL ...string) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)

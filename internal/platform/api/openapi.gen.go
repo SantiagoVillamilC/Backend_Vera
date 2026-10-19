@@ -558,12 +558,15 @@ func (e EmpresaCreadaResponseSuccess) Valid() bool {
 // Defines values for EnviarAudioVeraRequestFormato.
 const (
 	M4a EnviarAudioVeraRequestFormato = "m4a"
+	Wav EnviarAudioVeraRequestFormato = "wav"
 )
 
 // Valid indicates whether the value is a known member of the EnviarAudioVeraRequestFormato enum.
 func (e EnviarAudioVeraRequestFormato) Valid() bool {
 	switch e {
 	case M4a:
+		return true
+	case Wav:
 		return true
 	default:
 		return false
@@ -1710,10 +1713,10 @@ type EmpresaCreadaResponseSuccess bool
 
 // EnviarAudioVeraRequest defines model for EnviarAudioVeraRequest.
 type EnviarAudioVeraRequest struct {
-	// Audio Audio del clip en base64. No puede superar los 700 KB decodificados ni los 60 segundos. El tope de longitud es 960000 caracteres en base64.
+	// Audio Audio del clip en base64. No puede superar los 700 KiB decodificados ni los 60 segundos. WAV PCM/float o M4A AAC no fragmentado. El tope de longitud es 960000 caracteres en base64.
 	Audio          string                        `json:"audio" validate:"required,max=960000"`
 	ConversacionId *openapi_types.UUID           `json:"conversacion_id,omitempty"`
-	Formato        EnviarAudioVeraRequestFormato `json:"formato" validate:"required,oneof=m4a"`
+	Formato        EnviarAudioVeraRequestFormato `json:"formato" validate:"required,oneof=m4a wav"`
 }
 
 // EnviarAudioVeraRequestFormato defines model for EnviarAudioVeraRequest.Formato.
@@ -2301,6 +2304,12 @@ type EnviarMensajeVeraParams struct {
 	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
 }
 
+// EnviarMensajeVozVeraParams defines parameters for EnviarMensajeVozVera.
+type EnviarMensajeVozVeraParams struct {
+	// IdempotencyKey UUID único por envío de voz; reutilizarlo sólo con el mismo audio y conversación.
+	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
+}
+
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
 type CreateCompanyJSONRequestBody = CrearEmpresaRequest
 
@@ -2594,7 +2603,7 @@ type ServerInterface interface {
 	EnviarMensajeVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVeraParams)
 	// EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
 	// (POST /v1/vera/mensajes/voz)
-	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request)
+	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -2777,7 +2786,7 @@ func (_ Unimplemented) EnviarMensajeVera(w http.ResponseWriter, r *http.Request,
 
 // EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
 // (POST /v1/vera/mensajes/voz)
-func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3441,8 +3450,35 @@ func (siw *ServerInterfaceWrapper) EnviarMensajeVera(w http.ResponseWriter, r *h
 // EnviarMensajeVozVera operation middleware
 func (siw *ServerInterfaceWrapper) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EnviarMensajeVozVeraParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey openapi_types.UUID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.EnviarMensajeVozVera(w, r)
+		siw.Handler.EnviarMensajeVozVera(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

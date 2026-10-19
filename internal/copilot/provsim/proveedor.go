@@ -33,13 +33,21 @@ func Nuevo(pasos ...Paso) *Proveedor {
 }
 
 // Generar consume como máximo un paso y no consume ninguno si el contexto venció.
-func (p *Proveedor) Generar(ctx context.Context, _ copilot.SolicitudIA) (copilot.RespuestaIA, error) {
+func (p *Proveedor) Generar(ctx context.Context, s copilot.SolicitudIA) (copilot.RespuestaIA, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return copilot.RespuestaIA{}, err
 	}
 	if len(p.pasos) == 0 {
+		for _, turno := range s.Historial {
+			for _, parte := range turno.Partes {
+				if parte.Audio != nil {
+					// Sin guion no se inventa reconocimiento de voz.
+					return copilot.RespuestaIA{Turno: copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Texto: `{"transcripcion":""}`}}}}, nil
+				}
+			}
+		}
 		return copilot.RespuestaIA{Turno: copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Texto: "Modo simulado: no se ha consultado información financiera."}}}}, nil
 	}
 	if p.indice >= len(p.pasos) {
