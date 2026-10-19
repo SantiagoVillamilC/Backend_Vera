@@ -18,6 +18,9 @@ type Querier interface {
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
 	AsegurarEstadoKYC(ctx context.Context, arg AsegurarEstadoKYCParams) error
 	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
+	// Los IDs vienen exclusivamente de una página del historial propio o del resolvedor.
+	// La búsqueda usa el nombre visible (primer nombre e inicial), no apellidos privados.
+	BuscarDestinatariosPrevios(ctx context.Context, arg BuscarDestinatariosPreviosParams) ([]BuscarDestinatariosPreviosRow, error)
 	CodigosRespaldoPendientesDeCredencial(ctx context.Context, credencialID pgtype.UUID) ([]CodigosRespaldoPendientesDeCredencialRow, error)
 	ConsumirCodigoRespaldo(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
 	ConsumirTokenRestablecimiento(ctx context.Context, tokenHash []byte) (pgtype.UUID, error)

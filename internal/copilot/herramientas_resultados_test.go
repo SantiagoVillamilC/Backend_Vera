@@ -75,7 +75,7 @@ func TestResultadosAcotados(t *testing.T) {
 	}{
 		{"listar_movimientos", "movimientos", ArgumentosHerramienta{Limite: 2}, MovimientosHerramienta{Movimientos: movimientos}, 2},
 		{"resumir_movimientos", "grupos", ArgumentosHerramienta{AgruparPor: "contraparte"}, ResumenHerramienta{Grupos: grupos}, 10},
-		{"buscar_destinatario", "destinatarios", ArgumentosHerramienta{}, DestinatariosHerramienta{Destinatarios: destinatarios}, 20},
+		{"buscar_destinatario", "destinatarios", ArgumentosHerramienta{}, DestinatariosHerramienta{Destinatarios: destinatarios}, 5},
 	} {
 		b, err := serializarDatos(caso.nombre, caso.args, caso.datos)
 		if err != nil {
@@ -92,10 +92,10 @@ func TestResultadosAcotados(t *testing.T) {
 		}
 	}
 	for i := range destinatarios {
-		destinatarios[i].Referencia = strings.Repeat("a", 1024)
+		destinatarios[i].Referencia = strings.Repeat("a", 1025)
 	}
 	if _, err := serializarDatos("buscar_destinatario", ArgumentosHerramienta{}, DestinatariosHerramienta{Destinatarios: destinatarios}); err == nil {
-		t.Fatal("aceptó resultado mayor a 16 KiB")
+		t.Fatal("aceptó una referencia excesiva")
 	}
 	b, err := serializarDatos("listar_movimientos", ArgumentosHerramienta{Limite: 20}, MovimientosHerramienta{})
 	if err != nil || !bytes.Contains(b, []byte(`"movimientos":[]`)) {

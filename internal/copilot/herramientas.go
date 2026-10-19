@@ -159,14 +159,16 @@ func (e ErrorHerramienta) Error() string { return string(e) }
 
 // Códigos públicos permitidos en los resultados de herramientas.
 const (
-	ErrHerramientaNoEncontrado ErrorHerramienta = "NotFound"
-	ErrHerramientaLimite       ErrorHerramienta = "TooManyRequests"
-	ErrHerramientaValidacion   ErrorHerramienta = "ValidationError"
-	ErrHerramientaNoDisponible ErrorHerramienta = "FunctionUnavailable"
+	ErrHerramientaNoEncontrado             ErrorHerramienta = "NotFound"
+	ErrHerramientaLimite                   ErrorHerramienta = "TooManyRequests"
+	ErrHerramientaValidacion               ErrorHerramienta = "ValidationError"
+	ErrHerramientaNoDisponible             ErrorHerramienta = "FunctionUnavailable"
+	ErrHerramientaDestinatarioNoEncontrado ErrorHerramienta = "RecipientNotFound"
+	ErrHerramientaDestinoPropio            ErrorHerramienta = "SelfTransferNotAllowed"
 )
 
 func codigoErrorHerramienta(err error) string {
-	for _, permitido := range []ErrorHerramienta{ErrHerramientaNoEncontrado, ErrHerramientaLimite, ErrHerramientaValidacion, ErrHerramientaNoDisponible} {
+	for _, permitido := range []ErrorHerramienta{ErrHerramientaNoEncontrado, ErrHerramientaLimite, ErrHerramientaValidacion, ErrHerramientaNoDisponible, ErrHerramientaDestinatarioNoEncontrado, ErrHerramientaDestinoPropio} {
 		if errors.Is(err, permitido) {
 			return string(permitido)
 		}

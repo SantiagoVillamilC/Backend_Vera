@@ -19,6 +19,8 @@ type Querier interface {
 	BloquearCuentasOrdenadas(ctx context.Context, cuentas []string) ([]string, error)
 	BuscarDescuadresAbiertos(ctx context.Context, arg BuscarDescuadresAbiertosParams) ([]Descuadre, error)
 	ConfirmarDeposito(ctx context.Context, arg ConfirmarDepositoParams) (Deposito, error)
+	// El receptor sale del asiento liquidado, nunca de resolver hoy una llave antigua.
+	DestinatariosPrevios(ctx context.Context, arg DestinatariosPreviosParams) ([]pgtype.Text, error)
 	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error)
 	ExtractoPorCorte(ctx context.Context, corteEn pgtype.Timestamptz) (ExtractoCustodio, error)

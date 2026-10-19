@@ -26,7 +26,7 @@ otro integrante, conforme a la HU.
 | `consultar_limites` | lectura | `{}` | Conectado al desglose del núcleo en SCRUM-126 |
 | `listar_movimientos` | lectura | `desde`, `hasta`; opcionales `tipo`, `limite` | Conectado al núcleo en SCRUM-127 |
 | `resumir_movimientos` | lectura | `desde`, `hasta`, `agrupar_por` | Conectado al núcleo en SCRUM-127 |
-| `buscar_destinatario` | lectura | Exactamente uno: `celular` o `nombre` | Pendiente SCRUM-128 |
+| `buscar_destinatario` | lectura | Exactamente uno: `celular` o `nombre` | Conectado a auth e historial propio en SCRUM-128 |
 | `consultar_transferencia` | lectura | `transferencia_id` | Conectado al núcleo en esta HU |
 | `preparar_transferencia` | preparación | `monto_pesos` y exactamente uno: `destinatario_ref`, `celular` o `llave_breb` | Pendiente SCRUM-131 |
 
@@ -54,7 +54,7 @@ implementar sus historias, incluido el consentimiento.
 - `transferencia_id`: UUID canónico no nulo. El núcleo verifica titularidad; el
   adaptador la vuelve a comprobar y proyecta sólo estado, monto y fechas.
 - `destinatario_ref`: 16–1024 caracteres de token (`A-Z`, `a-z`, `0-9`, `_`, `-`,
-  `.`). SCRUM-128 verificará firma, vigencia y vinculación a usuario/conversación.
+  `.`). SCRUM-128 cifra y autentica las referencias, con vigencia de 15 minutos y vinculación a usuario/conversación.
   `llave_breb`: 3–100 caracteres, no sólo espacios; su resolución es SCRUM-131.
 - `monto_pesos`: string de dígitos, positivo, sin separadores, decimales, signo ni
   ceros iniciales. Máximo `92233720368547758`; se multiplica por 100 después de
@@ -78,7 +78,8 @@ explícita. No admite mapas arbitrarios, entidades del núcleo ni DTOs de auth.
 - Nombres: iniciales enmascaradas (por ejemplo `L*** R***`), máximo dos componentes.
   Celulares: sólo los últimos tres dígitos. Es una proyección más restrictiva que
   la usada por auth y se limita a datos enviados al proveedor externo.
-- Listas: máximo 20; movimientos respetan además el límite solicitado y entregan `total`.
+- Listas de movimientos: máximo 20, respetan además el límite solicitado y entregan `total`.
+  Destinatarios: máximo 5 coincidencias.
   Los resúmenes muestran máximo 10 grupos, ordenados por entradas más salidas.
   Si se recorta una lista, `hay_mas=true`. Las listas vacías se serializan como `[]`.
 - Resultado completo: máximo 16 KiB; si excede ese tamaño, se rechaza íntegramente.

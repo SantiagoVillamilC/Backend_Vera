@@ -161,14 +161,14 @@ func serializarDatos(nombre string, args ArgumentosHerramienta, datos DatosHerra
 		if nombre != "buscar_destinatario" {
 			return nil, ErrHerramientaValidacion
 		}
-		filas := make([]map[string]any, 0, min(len(d.Destinatarios), 20))
-		for _, dest := range d.Destinatarios[:min(len(d.Destinatarios), 20)] {
+		filas := make([]map[string]any, 0, min(len(d.Destinatarios), 5))
+		for _, dest := range d.Destinatarios[:min(len(d.Destinatarios), 5)] {
 			if !referenciaValida(dest.Referencia) {
 				return nil, ErrHerramientaValidacion
 			}
 			filas = append(filas, map[string]any{"nombre": nombreParaModelo(dest.Nombre), "celular": celularParaModelo(dest.Celular), "destinatario_ref": dest.Referencia})
 		}
-		vista = map[string]any{"destinatarios": filas, "hay_mas": d.HayMas || len(d.Destinatarios) > 20}
+		vista = map[string]any{"destinatarios": filas, "hay_mas": d.HayMas || len(d.Destinatarios) > 5}
 	case TransferenciaHerramienta:
 		if nombre != "consultar_transferencia" || !estadoTransferenciaValido(d.Estado) || d.CreadaEn.IsZero() || d.ActualizadaEn.IsZero() {
 			return nil, ErrHerramientaValidacion

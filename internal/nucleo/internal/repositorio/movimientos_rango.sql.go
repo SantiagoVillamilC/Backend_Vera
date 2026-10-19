@@ -16,6 +16,7 @@ const apuntesDePeriodo = `-- name: ApuntesDePeriodo :many
 WITH entradas AS MATERIALIZED (
     SELECT DISTINCT p.entry_id, p.ocurrido_en
     FROM nucleo.posting p
+    JOIN nucleo.cuenta propia ON propia.id = p.cuenta_id AND propia.moneda = p.moneda
     WHERE p.cuenta_id = $1::text AND p.moneda = 'COP'
     AND p.ocurrido_en >= $2::timestamptz AND p.ocurrido_en < $3::timestamptz
     AND ($4::timestamptz IS NULL

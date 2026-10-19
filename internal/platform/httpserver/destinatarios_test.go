@@ -129,3 +129,26 @@ func TestHU_NF_06_C15_1_RutaDeConsulta(t *testing.T) {
 }
 
 func contains(s, sub string) bool { return strings.Contains(s, sub) }
+
+func TestDestinatariosPresupuestoCompartidoConAsistente(t *testing.T) {
+	claves, _ := auth.NuevasClaves([]byte("01234567890123456789012345678901"))
+	contador := &contadorDestinoFalso{}
+	consulta := &consultadorDestinoFalso{nombre: "Laura R.", existe: true}
+	h := NuevoDestinatariosHandler(consulta, contador, claves, 2, time.Hour)
+	limiteIA := auth.NuevoLimiteDestinatarios(contador, claves, 2, time.Hour)
+	if err := limiteIA.Exigir(t.Context(), "usuario-1"); err != nil {
+		t.Fatal(err)
+	}
+	if rec := pedirDestino(t, http.HandlerFunc(h.ConsultarDestinatario), "3001234567", "usuario-1"); rec.Code != 200 {
+		t.Fatalf("HTTP: %d", rec.Code)
+	}
+	if err := limiteIA.Exigir(t.Context(), "usuario-1"); !errors.Is(err, auth.ErrConsultaDestinatariosLimitada) {
+		t.Fatalf("IA ignoró HTTP: %v", err)
+	}
+	if rec := pedirDestino(t, http.HandlerFunc(h.ConsultarDestinatario), "3001234567", "usuario-1"); rec.Code != 429 {
+		t.Fatalf("HTTP ignoró IA: %d", rec.Code)
+	}
+	if consulta.llamadas != 1 {
+		t.Fatal("consultó después de agotar el presupuesto")
+	}
+}

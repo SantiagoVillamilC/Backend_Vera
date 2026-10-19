@@ -96,17 +96,6 @@ func run() error {
 		}),
 	)
 
-	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
-		"consultar_saldo":         copilot.ConsultaSaldoIA(servicio),
-		"consultar_limites":       copilot.ConsultaLimitesIA(servicio),
-		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
-		"resumir_movimientos":     copilot.ResumenMovimientosIA(servicio, resolutorDestino),
-		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
-	}, slog.Default())
-	if err != nil {
-		return fmt.Errorf("catálogo IA: %w", err)
-	}
-
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
 	canal, err := canalOTP(cfg)
@@ -121,6 +110,23 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("claves de contadores: %w", err)
 	}
+	referenciasDestinatario, err := copilot.NuevasReferenciasDestinatario(cfg.Auth.ContadoresPepper)
+	if err != nil {
+		return fmt.Errorf("referencias de destinatario: %w", err)
+	}
+
+	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
+		"buscar_destinatario":     copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, auth.NuevoLimiteDestinatarios(contadoresAuth, clavesContadores, cfg.Auth.DestinatariosLimite, cfg.Auth.DestinatariosVentana), referenciasDestinatario),
+		"consultar_saldo":         copilot.ConsultaSaldoIA(servicio),
+		"consultar_limites":       copilot.ConsultaLimitesIA(servicio),
+		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
+		"resumir_movimientos":     copilot.ResumenMovimientosIA(servicio, resolutorDestino),
+		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
+	}, slog.Default())
+	if err != nil {
+		return fmt.Errorf("catálogo IA: %w", err)
+	}
+
 	presupuestoIA, err := copilot.NuevoPresupuestoRedis(clienteRedisAuth)
 	if err != nil {
 		return fmt.Errorf("presupuesto IA: %w", err)
