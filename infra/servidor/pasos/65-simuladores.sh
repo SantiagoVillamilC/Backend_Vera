@@ -73,7 +73,8 @@ fi
 
 # Borde HTTP de PSE. Es el único de los tres con nombre público: el navegador
 # del usuario tiene que abrir la página de pago. Las locaciones viven en un
-# snippet para que los bloques de :80 y :443 compartan el mismo cuerpo.
+# snippet que solo incluye el bloque de :443; el de :80 sirve el desafío ACME y
+# redirige, para que la página donde se autoriza el pago nunca viaje en claro.
 DIRECTORIO_NGINX="${DIRECTORIO_SCRIPT}/nginx"
 ARCHIVO_SNIPPET_PSE="${DIRECTORIO_NGINX}/snippets/pse-http.conf"
 ARCHIVO_PSE_HTTP="${DIRECTORIO_NGINX}/conf.d/pse.conf"
@@ -92,19 +93,65 @@ asegurar_directorio "${DIRECTORIO_NGINX}/webroot"
 
 cambios_antes_borde="$(resumen_cambios)"
 
+recargar_nginx() {
+  if docker inspect centinela-nginx >/dev/null 2>&1; then
+    # 30-nginx.sh no vuelve a correr entre este paso y el anterior, así que el
+    # vhost nuevo entra con una recarga explícita del contenedor que ya corre.
+    docker kill -s HUP centinela-nginx >/dev/null
+  fi
+}
+
 asegurar_archivo_con_contenido "${ARCHIVO_SNIPPET_PSE}" "$(cat "${ARCHIVO_PLANTILLA_PSE}")"
 
-contenido_pse_http="$(cat <<EOF
+# El :80 nunca incluye el snippet del proxy: sirve el desafío ACME (si no,
+# "certbot renew" falla, porque el webroot vive detrás de este bloque) y, con
+# el certificado ya emitido, redirige todo a HTTPS. Mientras no haya
+# certificado, sí proxya, para que el flujo funcione en HTTP antes de la
+# primera emisión.
+escribir_pse_http() {
+  local contenido
+
+  if [[ -f "${ARCHIVO_FULLCHAIN_PSE}" ]]; then
+    contenido="$(cat <<EOF
 # infra/servidor/nginx/conf.d/pse.conf (generado por 65-simuladores.sh, no editar a mano)
 server {
     listen 80;
     server_name ${DOMINIO_PSE};
 
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+EOF
+)"
+  else
+    contenido="$(cat <<EOF
+# infra/servidor/nginx/conf.d/pse.conf (generado por 65-simuladores.sh, no editar a mano)
+server {
+    listen 80;
+    server_name ${DOMINIO_PSE};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
     include /etc/nginx/snippets/pse-http.conf;
 }
 EOF
 )"
-asegurar_archivo_con_contenido "${ARCHIVO_PSE_HTTP}" "${contenido_pse_http}"
+  fi
+
+  asegurar_archivo_con_contenido "${ARCHIVO_PSE_HTTP}" "${contenido}"
+}
+
+escribir_pse_http
+# La recarga va antes de certbot: el desafío tiene que estar servido cuando
+# Let's Encrypt lo pida.
+recargar_nginx
 
 if [[ -f "${ARCHIVO_FULLCHAIN_PSE}" ]]; then
   info "El certificado de ${DOMINIO_PSE} ya existe en ${ARCHIVO_FULLCHAIN_PSE}: no se reemite."
@@ -143,16 +190,18 @@ server {
     ssl_certificate /etc/letsencrypt/live/${DOMINIO_PSE}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${DOMINIO_PSE}/privkey.pem;
 
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
     include /etc/nginx/snippets/pse-http.conf;
 }
 EOF
 )"
   asegurar_archivo_con_contenido "${ARCHIVO_PSE_TLS}" "${contenido_pse_tls}"
+  # Con el certificado emitido, el :80 deja de proxear y pasa a redirigir.
+  escribir_pse_http
 fi
 
-if [[ "$(resumen_cambios)" != "${cambios_antes_borde}" ]] && docker inspect centinela-nginx >/dev/null 2>&1; then
-  # 30-nginx.sh no vuelve a correr entre este paso y el anterior, así que el
-  # vhost nuevo entra con una recarga explícita del contenedor que ya corre.
-  docker kill -s HUP centinela-nginx >/dev/null
+if [[ "$(resumen_cambios)" != "${cambios_antes_borde}" ]]; then
+  recargar_nginx
   info "nginx recargado para tomar el vhost de ${DOMINIO_PSE}."
 fi
