@@ -103,10 +103,16 @@ func (s *ControlAcciones) conAccion(ctx context.Context, id uuid.UUID, fn func(p
 	}
 	q := repositorio.New(tx)
 	c, err := q.BloquearConversacionConfirmacion(ctx, repositorio.BloquearConversacionConfirmacionParams{ID: a.ConversacionID, UsuarioID: a.UsuarioID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return resultadoAccion{}, ErrAccionNoEncontrada
+	}
 	if err != nil {
 		return resultadoAccion{}, err
 	}
 	a, err = q.BloquearAccion(ctx, repositorio.BloquearAccionParams{ID: a.ID, UsuarioID: a.UsuarioID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return resultadoAccion{}, ErrAccionNoEncontrada
+	}
 	if err != nil {
 		return resultadoAccion{}, err
 	}

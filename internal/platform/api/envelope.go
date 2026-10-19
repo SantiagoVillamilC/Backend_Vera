@@ -11,16 +11,24 @@ import (
 )
 
 // Envelope es la forma única de toda respuesta; las cuatro claves siempre se serializan.
-type Envelope[T any] struct {
+type Envelope[T any] = EnvelopeConMeta[T, Meta]
+
+// EnvelopeConMeta conserva las cuatro claves con metadata tipada según el contrato de la ruta.
+type EnvelopeConMeta[T, M any] struct {
 	Success bool      `json:"success"`
 	Data    T         `json:"data"`
 	Error   *APIError `json:"error"`
-	Meta    *Meta     `json:"meta"`
+	Meta    *M        `json:"meta"`
 }
 
 // WriteData responde con un envelope exitoso. meta se deja en nil salvo en listados.
 func WriteData[T any](w http.ResponseWriter, status int, data T, meta *Meta) {
 	writeJSON(w, status, Envelope[T]{Success: true, Data: data, Meta: meta})
+}
+
+// WriteDataConCursor usa la metadata generada del historial sin alterar el cursor del núcleo.
+func WriteDataConCursor[T any](w http.ResponseWriter, status int, data T, meta *MetaHistorialVera) {
+	writeJSON(w, status, EnvelopeConMeta[T, MetaHistorialVera]{Success: true, Data: data, Meta: meta})
 }
 
 // WriteError responde con un envelope de error a partir de sus piezas.

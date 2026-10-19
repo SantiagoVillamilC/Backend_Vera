@@ -1516,7 +1516,7 @@ type ConversacionVera struct {
 type ConversacionesVeraResponse struct {
 	Data    []ConversacionVera                `json:"data"`
 	Error   *map[string]interface{}           `json:"error"`
-	Meta    *Meta                             `json:"meta"`
+	Meta    MetaHistorialVera                 `json:"meta"`
 	Success ConversacionesVeraResponseSuccess `json:"success"`
 }
 
@@ -1860,7 +1860,7 @@ type MensajeVeraRol string
 type MensajesVeraResponse struct {
 	Data    []MensajeVera               `json:"data"`
 	Error   *map[string]interface{}     `json:"error"`
-	Meta    *Meta                       `json:"meta"`
+	Meta    MetaHistorialVera           `json:"meta"`
 	Success MensajesVeraResponseSuccess `json:"success"`
 }
 
@@ -1872,6 +1872,15 @@ type Meta struct {
 	HasMore    bool   `json:"has_more"`
 	Limit      int    `json:"limit"`
 	NextCursor *int64 `json:"next_cursor"`
+}
+
+// MetaHistorialVera defines model for MetaHistorialVera.
+type MetaHistorialVera struct {
+	HasMore bool `json:"has_more"`
+	Limit   int  `json:"limit"`
+
+	// NextCursor Cursor opaco; no se interpreta en el cliente.
+	NextCursor *string `json:"next_cursor"`
 }
 
 // MontoCalculado Forma compartida de saldo y del monto maximo enviable: los dos son un monto en centavos, la moneda y el instante en que se calcularon.
@@ -2288,7 +2297,7 @@ type ListarConversacionesVeraParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50.
 	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Ancla de la ultima conversacion de la pagina anterior.
+	// Cursor Cursor opaco devuelto por meta.next_cursor, ligado al contexto activo.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
@@ -2297,7 +2306,7 @@ type ListarMensajesConversacionVeraParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50.
 	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Ancla del ultimo mensaje de la pagina anterior.
+	// Cursor Cursor opaco devuelto por meta.next_cursor, ligado a esta conversacion.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
@@ -3312,7 +3321,7 @@ func (siw *ServerInterfaceWrapper) ListarConversacionesVera(w http.ResponseWrite
 
 	// ------------- Optional query parameter "cursor" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -3393,7 +3402,7 @@ func (siw *ServerInterfaceWrapper) ListarMensajesConversacionVera(w http.Respons
 
 	// ------------- Optional query parameter "cursor" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {

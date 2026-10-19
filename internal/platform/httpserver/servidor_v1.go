@@ -109,7 +109,7 @@ type DependenciasAuth struct {
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
 type servidorV1 struct {
-	// Vera queda reservado al orquestador; los stubs nunca invocan sus dependencias.
+	// Vera reúne los servicios del asistente autenticado.
 	Vera          DependenciasVera
 	auth          AuthHandler
 	kyc           KYCHandler
@@ -126,25 +126,6 @@ func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.destinatarios.ConsultarDestinatario(w, r)
-}
-
-// Los métodos restantes se implementan en las siguientes tarjetas del asistente.
-// Los implementan las tarjetas de la epica del asistente.
-
-func (s servidorV1) ListarConversacionesVera(w http.ResponseWriter, r *http.Request, _ api.ListarConversacionesVeraParams) {
-	sinImplementar(w, r)
-}
-
-func (s servidorV1) BorrarConversacionesVera(w http.ResponseWriter, r *http.Request) {
-	sinImplementar(w, r)
-}
-
-func (s servidorV1) BorrarConversacionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
-	sinImplementar(w, r)
-}
-
-func (s servidorV1) ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _ api.ListarMensajesConversacionVeraParams) {
-	sinImplementar(w, r)
 }
 
 var _ api.ServerInterface = servidorV1{}

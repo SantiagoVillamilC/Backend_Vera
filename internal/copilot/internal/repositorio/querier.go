@@ -28,6 +28,10 @@ type Querier interface {
 	BloquearConversacionParaAccion(ctx context.Context, arg BloquearConversacionParaAccionParams) (pgtype.UUID, error)
 	// Serializa únicamente la admisión en DB, nunca la llamada de red.
 	BloquearEntradaTexto(ctx context.Context, usuario string) error
+	// Mismo orden de candados que confirmación y expiración. El DELETE dispara la cancelación.
+	BloquearHistorialParaBorrar(ctx context.Context, arg BloquearHistorialParaBorrarParams) ([]pgtype.UUID, error)
+	BorrarConversacionDeHistorial(ctx context.Context, arg BorrarConversacionDeHistorialParams) (int64, error)
+	BorrarConversacionPorRetencion(ctx context.Context, id pgtype.UUID) error
 	CancelarAccion(ctx context.Context, arg CancelarAccionParams) (AccionPendiente, error)
 	// La cancelación y el INSERT siguiente deben compartir la transacción y el bloqueo.
 	CancelarPropuestaAnterior(ctx context.Context, arg CancelarPropuestaAnteriorParams) error
@@ -37,15 +41,19 @@ type Querier interface {
 	// Contexto de los últimos 20 turnos de usuario, incluyendo sus respuestas y funciones.
 	// Así el corte no deja resultados de herramienta sin el turno que los originó.
 	ContextoConversacion(ctx context.Context, arg ContextoConversacionParams) ([]Mensaje, error)
+	ConversacionDeHistorial(ctx context.Context, arg ConversacionDeHistorialParams) (Conversacion, error)
 	ConversacionParaTexto(ctx context.Context, arg ConversacionParaTextoParams) (Conversacion, error)
 	// Barrido con el mismo orden de candados que las confirmaciones.
 	ConversacionesConAccionesVencidas(ctx context.Context, limite int32) ([]Conversacion, error)
+	ConversacionesParaRetencion(ctx context.Context, corte pgtype.Timestamptz) ([]pgtype.UUID, error)
 	CrearAccion(ctx context.Context, arg CrearAccionParams) (AccionPendiente, error)
 	CrearConversacion(ctx context.Context, arg CrearConversacionParams) (Conversacion, error)
 	// El cliente sólo puede elevar el segundo factor; nunca rebajarlo.
 	ElevarCodigoAccion(ctx context.Context, arg ElevarCodigoAccionParams) (AccionPendiente, error)
 	FallarAccion(ctx context.Context, arg FallarAccionParams) (AccionPendiente, error)
 	LiberarCiclo(ctx context.Context, arg LiberarCicloParams) error
+	ListarHistorialConversaciones(ctx context.Context, arg ListarHistorialConversacionesParams) ([]Conversacion, error)
+	ListarHistorialMensajes(ctx context.Context, arg ListarHistorialMensajesParams) ([]Mensaje, error)
 	MensajeDeCiclo(ctx context.Context, arg MensajeDeCicloParams) (Mensaje, error)
 	// Nunca exponer los turnos de function calling al historial de la aplicación.
 	MensajesPublicosConversacion(ctx context.Context, arg MensajesPublicosConversacionParams) ([]Mensaje, error)

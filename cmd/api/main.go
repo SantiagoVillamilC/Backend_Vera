@@ -152,6 +152,10 @@ func run() error {
 	}
 	textoIA := copilot.NuevoServicioTexto(pool, orquestadorIA)
 	vozIA := copilot.NuevoServicioVoz(textoIA, proveedorIA)
+	historialIA, err := copilot.NuevoServicioHistorial(pool, cfg.Vera.RetencionDias)
+	if err != nil {
+		return fmt.Errorf("historial IA: %w", err)
+	}
 	lectorOptIn := auth.NuevoLectorOptInDeConsentimientos(pool)
 	gestorDesafios, err := auth.NuevoGestorDesafios(pool, canal, auth.NuevoRegistradorEventos(pool), lectorOptIn, cfg.Auth.OTPPepper,
 		auth.ConRacionamiento(contadoresAuth, clavesContadores))
@@ -255,7 +259,7 @@ func run() error {
 		ConciliationWindow:   cfg.ConciliationWindow,
 		ExpirationInterval:   cfg.ExpirationInterval,
 		ExpirationTTL:        cfg.ExpirationTTL,
-	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox, copilot.OpcionExpiracionAcciones(accionesIA))
+	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox, copilot.OpcionExpiracionAcciones(accionesIA), copilot.OpcionRetencionHistorial(historialIA))
 	if err != nil {
 		return fmt.Errorf("river: %w", err)
 	}
@@ -265,7 +269,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA}, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA, Historial: historialIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

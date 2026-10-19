@@ -1299,6 +1299,7 @@ paths:
     get:
       operationId: listarConversacionesVera
       summary: Lista una pagina de las conversaciones del usuario.
+      description: Historial del actor y contexto financiero activos. Disponible sin consentimiento de IA.
       tags: [asistente]
       parameters:
         - name: limit
@@ -1311,11 +1312,10 @@ paths:
         - name: cursor
           in: query
           required: false
-          description: Ancla de la ultima conversacion de la pagina anterior.
+          description: Cursor opaco devuelto por meta.next_cursor, ligado al contexto activo.
           schema:
-            type: integer
-            format: int64
-            x-go-type: string
+            type: string
+            maxLength: 512
       responses:
         "200":
           description: Pagina de conversaciones, de la mas reciente a la mas antigua.
@@ -1358,11 +1358,14 @@ paths:
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
     delete:
       operationId: borrarConversacionesVera
       summary: Borra todas las conversaciones del usuario y cancela sus acciones pendientes.
+      description: Borra el historial del contexto financiero activo. Conserva auditoria minima y transferencias.
       tags: [asistente]
       responses:
         "204":
@@ -1372,6 +1375,8 @@ paths:
         "429":
           $ref: "#/components/responses/Error"
         "500":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -1399,6 +1404,8 @@ paths:
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
 
@@ -1424,11 +1431,10 @@ paths:
         - name: cursor
           in: query
           required: false
-          description: Ancla del ultimo mensaje de la pagina anterior.
+          description: Cursor opaco devuelto por meta.next_cursor, ligado a esta conversacion.
           schema:
-            type: integer
-            format: int64
-            x-go-type: string
+            type: string
+            maxLength: 512
       responses:
         "200":
           description: Pagina de mensajes, del mas nuevo al mas viejo.
@@ -1476,6 +1482,8 @@ paths:
         "429":
           $ref: "#/components/responses/Error"
         "500":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -3404,6 +3412,21 @@ components:
           type: object
           nullable: true
 
+    MetaHistorialVera:
+      type: object
+      required: [limit, next_cursor, has_more]
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor opaco; no se interpreta en el cliente.
+        has_more:
+          type: boolean
+
     ConversacionesVeraResponse:
       type: object
       required: [success, data, error, meta]
@@ -3419,7 +3442,7 @@ components:
           type: object
           nullable: true
         meta:
-          $ref: "#/components/schemas/Meta"
+          $ref: "#/components/schemas/MetaHistorialVera"
 
     MensajesVeraResponse:
       type: object
@@ -3436,4 +3459,4 @@ components:
           type: object
           nullable: true
         meta:
-          $ref: "#/components/schemas/Meta"
+          $ref: "#/components/schemas/MetaHistorialVera"

@@ -103,4 +103,28 @@ func TestMigracionAsistenteReversible(t *testing.T) {
 	if err := db.QueryRowContext(t.Context(), "SELECT to_regclass('auth.partes') IS NOT NULL").Scan(&existeAuth); err != nil || !existeAuth {
 		t.Fatalf("auth afectado: %v", err)
 	}
+	// Una reversión conserva auditoría cuyo historial ya fue borrado por retención.
+	conv, msg, llamada := uuid.New(), uuid.New(), uuid.New()
+	for _, dato := range []struct {
+		sql  string
+		args []any
+	}{
+		{"INSERT INTO asistente.conversacion(id,usuario_id,usuario_financiero_id) VALUES($1,$2,$3)", []any{conv, parteLegacy, parteLegacy.String()}},
+		{"INSERT INTO asistente.mensaje(id,conversacion_id,numero_orden,rol,canal,contenido) VALUES($1,$2,1,'usuario','texto','contenido borrable')", []any{msg, conv}},
+		{"INSERT INTO asistente.llamada_funcion(llamada_id,fase,usuario_id,conversacion_id,mensaje_id,funcion,argumentos_saneados,resultado,duracion_ms,request_id,version_instrucciones) VALUES($1,'inicio',$2,$3,$4,'consultar_saldo','{}','InProgress',0,'prueba','prueba')", []any{llamada, parteLegacy, conv, msg}},
+		{"DELETE FROM asistente.conversacion WHERE id=$1", []any{conv}},
+	} {
+		if _, err := db.ExecContext(t.Context(), dato.sql, dato.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, comando := range []string{"down", "up"} {
+		if err := correrAsistente(t.Context(), db, comando); err != nil {
+			t.Fatalf("auditoría huérfana %s: %v", comando, err)
+		}
+	}
+	var eventos int
+	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM asistente.llamada_funcion WHERE llamada_id=$1 AND conversacion_id=$2 AND mensaje_id=$3", llamada, conv, msg).Scan(&eventos); err != nil || eventos != 1 {
+		t.Fatalf("auditoría borrada por rollback: %d %v", eventos, err)
+	}
 }

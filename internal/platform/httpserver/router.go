@@ -35,6 +35,10 @@ var RutasDeDinero = []string{
 	http.MethodPost + " /v1/vera/acciones/{id}/codigo",
 	http.MethodPost + " /v1/vera/acciones/{id}/confirmar",
 	http.MethodPost + " /v1/vera/acciones/{id}/cancelar",
+	http.MethodGet + " /v1/vera/conversaciones",
+	http.MethodGet + " /v1/vera/conversaciones/{id}/mensajes",
+	http.MethodDelete + " /v1/vera/conversaciones",
+	http.MethodDelete + " /v1/vera/conversaciones/{id}",
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
@@ -57,6 +61,15 @@ type DependenciasVera struct {
 	Texto          ConversacionTextoVera
 	Voz            ConversacionVozVera
 	Acciones       ControlAccionesVera
+	Historial      HistorialVera
+}
+
+// HistorialVera consulta y elimina conversaciones dentro de la identidad del servidor.
+type HistorialVera interface {
+	ListarConversaciones(context.Context, copilot.ConsultaHistorial) (copilot.PaginaHistorial[copilot.ConversacionHistorial], error)
+	ListarMensajes(context.Context, uuid.UUID, copilot.ConsultaHistorial) (copilot.PaginaHistorial[copilot.MensajeHistorial], error)
+	BorrarConversacion(context.Context, uuid.UUID) error
+	BorrarConversaciones(context.Context) error
 }
 
 // ControlAccionesVera sólo está disponible para las rutas de confirmación explícita.

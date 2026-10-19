@@ -18,13 +18,14 @@ import (
 
 // ConfigVera selecciona el proveedor sin exponer credenciales en logs.
 type ConfigVera struct {
-	Proveedor   string
-	APIKey      string
-	Modelo      string
-	Timeout     time.Duration
-	Temperatura float32
-	Limites     copilot.LimitesUso
-	Preparacion copilot.ConfigPreparacion
+	Proveedor     string
+	APIKey        string
+	Modelo        string
+	Timeout       time.Duration
+	Temperatura   float32
+	Limites       copilot.LimitesUso
+	Preparacion   copilot.ConfigPreparacion
+	RetencionDias int
 }
 
 func cargarConfigVera() (ConfigVera, []error) {
@@ -64,6 +65,10 @@ func cargarConfigVera() (ConfigVera, []error) {
 	c.Preparacion.LlavesHabilitadas, err = strconv.ParseBool(envOr("VERA_LLAVES_HABILITADAS", "false"))
 	if err != nil {
 		errs = append(errs, errors.New("VERA_LLAVES_HABILITADAS debe ser un booleano"))
+	}
+	c.RetencionDias, err = strconv.Atoi(envOr("VERA_RETENCION_DIAS", "30"))
+	if err != nil || c.RetencionDias < 1 || c.RetencionDias > 36500 {
+		errs = append(errs, errors.New("VERA_RETENCION_DIAS debe ser un entero de 1 a 36500"))
 	}
 	return c, errs
 }
