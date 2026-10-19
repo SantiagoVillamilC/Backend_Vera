@@ -46,7 +46,7 @@ jobs:
             type=ref,event=branch
             type=sha,prefix=${{ github.ref_name }}-
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: servicios/simuladores
           file: servicios/simuladores/deploy/Dockerfile
