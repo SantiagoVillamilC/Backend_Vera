@@ -42,6 +42,26 @@ jobs:
       - name: Test
         run: go test -race -count=1 ./...
 
+      # Sin Gemini, PostgreSQL ni Redis. Cualquier caso fallido devuelve exit 1.
+      - name: Vera deterministic behavior cases
+        run: |
+          estado=0
+          go run ./cmd/evaluar-vera > "$RUNNER_TEMP/vera-simulado.json" || estado=$?
+          python3 - <<'PY'
+          import json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "vera-simulado.json")) as f:
+              informe = json.load(f)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as resumen:
+              resumen.write("### Vera — casos deterministas\n\n")
+              resumen.write(f"{informe['correctos']}/{informe['total']} casos aprobados.\n\n")
+              resumen.write(f"Casos: `{informe['version_casos']}`. Instrucciones: `{informe['version_instrucciones']}`.\n")
+              resumen.write(f"SHA-256 del conjunto: `{informe['casos_sha256']}`.\n\n")
+              for caso in informe["resultados"]:
+                  if not caso["aprobado"]:
+                      resumen.write(f"- `{caso['id']}`: {', '.join(caso['fallos'])}\n")
+          PY
+          exit "$estado"
+
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1
 

@@ -75,16 +75,31 @@ type Orquestador struct {
 	plazo        time.Duration
 }
 
+// OpcionOrquestador configura dependencias del ciclo antes de atender solicitudes.
+type OpcionOrquestador func(*Orquestador)
+
+// ConRelojOrquestador permite fijar la fecha de referencia de las evaluaciones.
+func ConRelojOrquestador(ahora func() time.Time) OpcionOrquestador {
+	return func(o *Orquestador) { o.ahora = ahora }
+}
+
 // NuevoOrquestador fija los topes de la HU: cinco vueltas, ocho funciones y 45 segundos.
 // El proveedor debe venir decorado con el presupuesto de tokens compartido.
-func NuevoOrquestador(p ProveedorIA, c *Catalogo, m MemoriaCiclo, a AutorizacionCiclo, modelo string, logger *slog.Logger) (*Orquestador, error) {
+func NuevoOrquestador(p ProveedorIA, c *Catalogo, m MemoriaCiclo, a AutorizacionCiclo, modelo string, logger *slog.Logger, opciones ...OpcionOrquestador) (*Orquestador, error) {
 	if p == nil || c == nil || m == nil || a == nil || strings.TrimSpace(modelo) == "" || len(modelo) > 120 {
 		return nil, errors.New("asistente: configuración de orquestación incompleta")
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Orquestador{proveedor: p, catalogo: c, memoria: m, autorizacion: a, modelo: modelo, logger: logger, ahora: time.Now, plazo: 45 * time.Second}, nil
+	o := &Orquestador{proveedor: p, catalogo: c, memoria: m, autorizacion: a, modelo: modelo, logger: logger, ahora: time.Now, plazo: 45 * time.Second}
+	for _, opcion := range opciones {
+		opcion(o)
+	}
+	if o.ahora == nil {
+		return nil, errors.New("asistente: reloj de orquestación ausente")
+	}
+	return o, nil
 }
 
 type claveConversacionCiclo struct{}
