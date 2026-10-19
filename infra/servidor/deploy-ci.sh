@@ -9,13 +9,17 @@
 #
 # staging y main comparten esta misma VM: la rama desplegada es únicamente la
 # etiqueta de la imagen, que este script reescribe en los dos .env.
+#
+# Corre como root: los .env y los directorios donde viven son root:root, y
+# escribir la etiqueta como centinela no fallaba con error sino en silencio
+# (el "[[ ! -f ]]" da verdadero cuando falta permiso de lectura).
 set -euo pipefail
 
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGISTRO="ghcr.io/santiagovillamilc/backend_vera"
 DIRECTORIO_SIMULADORES="/opt/centinela/simuladores"
 
-rama="${SSH_ORIGINAL_COMMAND:-}"
+rama="${1:-${SSH_ORIGINAL_COMMAND:-}}"
 case "${rama}" in
   dev | staging | main) ;;
   *)
@@ -24,13 +28,18 @@ case "${rama}" in
     ;;
 esac
 
-# Reescribe VAR=valor sin tocar el resto del archivo. Los .env los generan
-# 60-api.sh y 65-simuladores.sh; si no existen, el paso correspondiente no ha
-# corrido y no hay nada que desplegar.
+if [[ "${EUID}" -ne 0 ]]; then
+  # SSH_ORIGINAL_COMMAND no sobrevive a sudo (env_reset), así que la rama ya
+  # validada viaja como argumento y el script vuelve a validarla arriba.
+  exec sudo -- "${BASH_SOURCE[0]}" "${rama}"
+fi
+
+# Reescribe VAR=valor sin tocar el resto del archivo.
 fijar_variable() {
   local archivo="$1" variable="$2" valor="$3"
 
   if [[ ! -f "${archivo}" ]]; then
+    printf 'deploy-ci: no existe %s; el paso que lo genera no ha corrido.\n' "${archivo}" >&2
     return 0
   fi
 
@@ -63,7 +72,7 @@ esperar_sano() {
   local contenedor="$1" intentos=0
 
   while [[ "${intentos}" -lt 45 ]]; do
-    if [[ "$(sudo docker inspect -f '{{.State.Health.Status}}' "${contenedor}" 2>/dev/null)" == "healthy" ]]; then
+    if [[ "$(docker inspect -f '{{.State.Health.Status}}' "${contenedor}" 2>/dev/null)" == "healthy" ]]; then
       printf 'deploy-ci: %s healthy.\n' "${contenedor}"
       return 0
     fi
@@ -77,21 +86,21 @@ esperar_sano() {
 
 printf 'deploy-ci: desplegando la rama %s (%s).\n' "${rama}" "${REGISTRO}:${rama}"
 
-sudo docker compose "${banderas_compose[@]}" pull migrate api
+docker compose "${banderas_compose[@]}" pull migrate api
 
 # Las migraciones corren como servicio de un solo uso antes de que la API
 # nueva arranque: "up -d api" reusa el contenedor migrate ya terminado y no
 # volvería a aplicarlas. Si fallan, el "set -e" corta aquí y la API vigente
 # sigue sirviendo.
-sudo docker compose "${banderas_compose[@]}" run --rm migrate
+docker compose "${banderas_compose[@]}" run --rm migrate
 
-sudo docker compose "${banderas_compose[@]}" up -d api
+docker compose "${banderas_compose[@]}" up -d api
 esperar_sano centinela-api
 
 if [[ -d "${DIRECTORIO_SIMULADORES}" ]]; then
-  # El directorio es 700 porque su .env lleva CUSTODIO_TOKEN: centinela no
-  # puede entrar, así que todo el bloque corre bajo sudo.
-  sudo bash -c "cd ${DIRECTORIO_SIMULADORES} && docker compose pull && docker compose up -d"
+  cd "${DIRECTORIO_SIMULADORES}"
+  docker compose pull
+  docker compose up -d
   for contenedor in vera-simulador-riel vera-simulador-custodia vera-simulador-pse; do
     esperar_sano "${contenedor}"
   done
