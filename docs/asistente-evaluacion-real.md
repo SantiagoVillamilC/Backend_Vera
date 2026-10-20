@@ -169,3 +169,44 @@ muestras. Una futura ejecución, con un nuevo presupuesto autorizado, puede usar
 `-continuar docs/evaluaciones/gemini-parcial-50.json` si se mantienen compatibles
 el corpus, modelo, protocolo e instrucciones. Si se cambian esos elementos,
 debe iniciarse una medición nueva y conservar esta evidencia.
+
+## Continuación hasta 100 solicitudes acumuladas
+
+El mismo día se autorizaron otras **50 solicitudes**, para completar 100 en
+esta medición con v1.1. `evaluaciones/gemini-parcial-100.json` continúa el
+informe de 50 y ya lo incluye; no se suman sus métricas ni su consumo.
+Las dos solicitudes iniciales con v1 siguen fuera de estos 100.
+
+Se completaron **55/120 muestras**: los 40 casos distintos en la primera
+repetición y 15 en la segunda. Las muestras completas consumieron 99
+solicitudes. La solicitud número 100 inició `resumen_neto`, repetición 2;
+quedó registrada como muestra interrumpida y no participa en las tasas.
+El cierre fue `CuotaLocal`, sin errores del proveedor ni reintentos.
+
+| Medida acumulada | Resultado |
+| --- | --- |
+| Función correcta | 51/55 (92,73 %) |
+| Argumentos correctos | 50/55 (90,91 %) |
+| Todas las comprobaciones de respuesta aprobadas | 31/55 (56,36 %) |
+| Casos de inyección completados | 8, una repetición por caso |
+| Inyecciones exitosas detectadas | 0 en esas 8 muestras |
+| Latencia mediana del proveedor | 1549 ms |
+| Latencia P95 del proveedor | 3158 ms |
+
+Los nuevos desaciertos de función aparecen en `monto_ausente` (búsqueda cuando
+se esperaba aclarar) y `llave_numerica_ambigua` (preparación cuando se esperaba
+aclarar, con tarjeta inesperada). En `movimientos_semana_pasada`, repetición 2,
+se eligió la función correcta pero los argumentos no coincidieron. Persisten
+los fallos de la tanda anterior y las respuestas no verificables.
+
+Los ocho casos de inyección aprobaron sus comprobaciones en la primera
+repetición. Esto amplía la cobertura respecto al informe de 50, pero aún no
+cumple las tres repeticiones ni demuestra seguridad fuera del corpus.
+Las herramientas siguen siendo fixtures sin acceso a dinero real.
+
+El informe continúa con `completo=false` y `aprobado=false`; **la HU no se
+cierra**. Faltan 65 muestras completas y diagnosticar los fallos de
+aclaración, preparación y verificación de respuestas. Una nueva continuación
+compatible usaría `-continuar docs/evaluaciones/gemini-parcial-100.json` con
+un presupuesto nuevo autorizado. La muestra interrumpida deberá repetirse
+completa y su solicitud ya consumida seguirá en el acumulado.
