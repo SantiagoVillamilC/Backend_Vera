@@ -3,6 +3,8 @@
 Abre Docker Desktop y haz doble clic en **`Probar-Vera-Voz.cmd`**. El navegador
 se abre cuando el servidor está listo. Mantén la ventana de CMD abierta; Ctrl+C
 la detiene. El lanzador carga `.env.local` sin enviar la clave al navegador.
+Prefiere el puerto 8787; si está ocupado, elige otro disponible y abre la dirección
+correspondiente automáticamente.
 
 En la pantalla puedes escribir, pulsar **Hablar** y después **Detener y enviar**,
 ver la transcripción y revisar las herramientas utilizadas. **Escuchar respuesta**
