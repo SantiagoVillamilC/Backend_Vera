@@ -44,6 +44,12 @@ func PrimerCorte() Escalones {
 	return Escalones{EscalonMemoria: {}, EscalonInterna: {}}
 }
 
+// PrimerCorteConClasificador enciende el escalón 6 sobre el primer corte y deja apagados MCC,
+// catálogo y léxico, para que el cambio de despliegue sea mínimo y reversible.
+func PrimerCorteConClasificador() Escalones {
+	return Escalones{EscalonMemoria: {}, EscalonInterna: {}, EscalonClasificador: {}}
+}
+
 // TodosLosEscalones activa la cascada completa, incluido el clasificador local o el LLM.
 func TodosLosEscalones() Escalones {
 	return Escalones{
@@ -69,6 +75,18 @@ type Entrada struct {
 	MID              string
 }
 
+// Los orígenes de una fila, los mismos códigos que admite el CHECK de la migración 0023.
+const (
+	OrigenMemoria      = "memoria"
+	OrigenInterna      = "contraparte_interna"
+	OrigenMCC          = "mcc"
+	OrigenCatalogo     = "catalogo"
+	OrigenLexico       = "lexico"
+	OrigenTFIDF        = "tfidf"
+	OrigenLLM          = "llm"
+	OrigenSinCategoria = "sin_categoria"
+)
+
 // Recursos son las tablas que la cascada consulta.
 type Recursos struct {
 	Memoria         map[string]Categoria
@@ -76,6 +94,7 @@ type Recursos struct {
 	CatalogoNombres map[string]Categoria
 	Lexico          []ParLexico
 	CacheLLM        map[string]Categoria
+	Clasificador    *Modelo
 }
 
 // Decision es el resultado de la cascada. La categoría vacía significa que ningún escalón decidió.
@@ -83,6 +102,7 @@ type Decision struct {
 	Categoria    Categoria
 	Escalon      int
 	PendienteLLM bool
+	Origen       string
 }
 
 // Decidir recorre la cascada en el orden del canal y devuelve la primera categoría válida.
@@ -99,14 +119,14 @@ func Decidir(entrada Entrada, recursos Recursos, escalones Escalones) Decision {
 		}
 		for _, clave := range claves {
 			if categoria, encontrada := buscarCategoria(recursos.Memoria, clave); encontrada {
-				return Decision{Categoria: categoria, Escalon: EscalonMemoria}
+				return Decision{Categoria: categoria, Escalon: EscalonMemoria, Origen: OrigenMemoria}
 			}
 		}
 	}
 
 	if escalones.Contiene(EscalonInterna) {
 		if categoria := categoriaVisible(entrada.CategoriaInterna); categoria != "" {
-			return Decision{Categoria: categoria, Escalon: EscalonInterna}
+			return Decision{Categoria: categoria, Escalon: EscalonInterna, Origen: OrigenInterna}
 		}
 	}
 
@@ -114,40 +134,56 @@ func Decidir(entrada Entrada, recursos Recursos, escalones Escalones) Decision {
 	if soloLlave {
 		if escalones.Contiene(EscalonCatalogo) && entrada.TipoDestino != DestinoPersona {
 			if categoria, encontrada := buscarCategoria(recursos.CatalogoLlaves, entrada.Llave); encontrada {
-				return Decision{Categoria: categoria, Escalon: EscalonCatalogo}
+				return Decision{Categoria: categoria, Escalon: EscalonCatalogo, Origen: OrigenCatalogo}
 			}
 		}
-		return Decision{Escalon: EscalonSinCategoria}
+		return Decision{Escalon: EscalonSinCategoria, Origen: OrigenSinCategoria}
 	}
 
 	if escalones.Contiene(EscalonMCC) {
 		if categoria, resuelta := CategoriaPorMCC(entrada.MCC); resuelta {
-			return Decision{Categoria: categoria, Escalon: EscalonMCC}
+			return Decision{Categoria: categoria, Escalon: EscalonMCC, Origen: OrigenMCC}
 		}
 	}
 
 	if escalones.Contiene(EscalonCatalogo) {
 		if categoria, encontrada := buscarCategoria(recursos.CatalogoLlaves, entrada.Llave); encontrada {
-			return Decision{Categoria: categoria, Escalon: EscalonCatalogo}
+			return Decision{Categoria: categoria, Escalon: EscalonCatalogo, Origen: OrigenCatalogo}
 		}
 		if categoria, encontrada := buscarCategoria(recursos.CatalogoNombres, nombre); encontrada {
-			return Decision{Categoria: categoria, Escalon: EscalonCatalogo}
+			return Decision{Categoria: categoria, Escalon: EscalonCatalogo, Origen: OrigenCatalogo}
 		}
 	}
 
 	if escalones.Contiene(EscalonLexico) {
 		if categoria, decidida := porLexico(recursos.Lexico, entrada.Nombre); decidida {
-			return Decision{Categoria: categoria, Escalon: EscalonLexico}
+			return Decision{Categoria: categoria, Escalon: EscalonLexico, Origen: OrigenLexico}
 		}
 	}
 
 	if !escalones.Contiene(EscalonClasificador) || entrada.TipoDestino != DestinoComercio || nombre == "" {
-		return Decision{Escalon: EscalonSinCategoria}
+		return Decision{Escalon: EscalonSinCategoria, Origen: OrigenSinCategoria}
 	}
 	if categoria, encontrada := buscarCategoria(recursos.CacheLLM, nombre+"|"+entrada.Llave); encontrada {
-		return Decision{Categoria: categoria, Escalon: EscalonClasificador}
+		return Decision{Categoria: categoria, Escalon: EscalonClasificador, Origen: OrigenLLM}
+	}
+	if recursos.Clasificador != nil {
+		if categoria, decidida := Predecir(recursos.Clasificador, nombre, mccCategoriaDe(entrada.MCC)); decidida {
+			if EsCategoriaVisible(categoria) {
+				return Decision{Categoria: categoria, Escalon: EscalonClasificador, Origen: OrigenTFIDF}
+			}
+		}
 	}
 	return Decision{Escalon: EscalonClasificador, PendienteLLM: true}
+}
+
+// mccCategoriaDe traduce el código de MCC a la categoría que el modelo conoce como token.
+func mccCategoriaDe(mcc string) string {
+	categoria, resuelta := CategoriaPorMCC(mcc)
+	if !resuelta {
+		return ""
+	}
+	return string(categoria)
 }
 
 func categoriaVisible(codigo string) Categoria {

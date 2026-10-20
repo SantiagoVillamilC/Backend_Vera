@@ -11,12 +11,25 @@ import (
 
 // Servicio expone el catálogo y el cursor del lote de enriquecimiento.
 type Servicio struct {
-	pool abridorDeTransacciones
+	pool         abridorDeTransacciones
+	clasificador *Modelo
+}
+
+// OpcionServicio ajusta el servicio al construirlo.
+type OpcionServicio func(*Servicio)
+
+// ConClasificador enciende el escalón 6 con el modelo cargado.
+func ConClasificador(modelo *Modelo) OpcionServicio {
+	return func(s *Servicio) { s.clasificador = modelo }
 }
 
 // NuevoServicio arma el servicio sobre el pool de la aplicación.
-func NuevoServicio(pool *pgxpool.Pool) *Servicio {
-	return &Servicio{pool: poolDeInteligencia{pool: pool}}
+func NuevoServicio(pool *pgxpool.Pool, opciones ...OpcionServicio) *Servicio {
+	servicio := &Servicio{pool: poolDeInteligencia{pool: pool}}
+	for _, opcion := range opciones {
+		opcion(servicio)
+	}
+	return servicio
 }
 
 // Categorias devuelve el catálogo sembrado, en el orden firmado.

@@ -114,7 +114,7 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 						memorias[efecto.UsuarioID] = memoria
 					}
 					contraparte := ResolverContraparte(grupo.apuntes, efecto.UsuarioID, nombres)
-					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, &resultado); err != nil {
+					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, s.clasificador, &resultado); err != nil {
 						return Resultado{}, err
 					}
 				}
@@ -408,7 +408,8 @@ func memoriaDeUsuario(ctx context.Context, q *repositorio.Queries, usuarioID str
 }
 
 func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, efecto Efecto,
-	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, resultado *Resultado) error {
+	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, clasificador *Modelo,
+	resultado *Resultado) error {
 	monto, valido := Absoluto(efecto.Neto)
 	if !valido {
 		return errors.New("inteligencia: el monto del movimiento no cabe en int64")
@@ -439,17 +440,21 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		TipoDestino:      contraparte.Tipo,
 		CategoriaInterna: string(contraparte.CategoriaInterna),
 	}
-	decision := Decidir(entrada, Recursos{Memoria: Proyectar(memoria, efecto.UsuarioID, destino)}, PrimerCorte())
+	decision := Decidir(entrada, Recursos{
+		Memoria:      Proyectar(memoria, efecto.UsuarioID, destino),
+		Clasificador: clasificador,
+	}, escalonesDelLote(clasificador))
 	categoria := decision.Categoria
 	if categoria == "" {
 		categoria = SinCategoria
 	}
-	origen := "sin_categoria"
-	switch decision.Escalon {
-	case EscalonMemoria:
-		origen = "memoria"
-	case EscalonInterna:
-		origen = "contraparte_interna"
+	origen := decision.Origen
+	if origen == "" {
+		origen = OrigenSinCategoria
+	}
+	versionModelo := VersionModelo
+	if origen == OrigenTFIDF && clasificador != nil {
+		versionModelo = clasificador.VersionModelo()
 	}
 	comercioNombre := ""
 	nombreVisible := contraparte.Texto
@@ -480,7 +485,7 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		ComercioMid:                  pgtype.Text{String: destinoPersistido.MID, Valid: destinoPersistido.MID != ""},
 		ComercioNombre:               pgtype.Text{String: comercioNombre, Valid: comercioNombre != ""},
 		Mcc:                          pgtype.Text{},
-		VersionModelo:                VersionModelo,
+		VersionModelo:                versionModelo,
 		TipoDestino:                  pgtype.Text{String: string(destinoPersistido.Tipo), Valid: destinoPersistido.Tipo != ""},
 		ContraparteLlave:             pgtype.Text{String: destinoPersistido.Llave, Valid: destinoPersistido.Llave != ""},
 		ContraparteNombreNormalizado: pgtype.Text{String: destinoPersistido.NombreNormalizado, Valid: destinoPersistido.NombreNormalizado != ""},
@@ -506,4 +511,12 @@ func intentarBloqueo(ctx context.Context, tx transaccionDeInteligencia) (bool, e
 		return false, fmt.Errorf("inteligencia: tomar el candado del lote: %w", err)
 	}
 	return bloqueado, nil
+}
+
+// escalonesDelLote es el punto único donde el lote decide si el clasificador entra o no.
+func escalonesDelLote(clasificador *Modelo) Escalones {
+	if clasificador == nil {
+		return PrimerCorte()
+	}
+	return PrimerCorteConClasificador()
 }

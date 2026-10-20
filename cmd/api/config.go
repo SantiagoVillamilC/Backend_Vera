@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
@@ -37,6 +38,7 @@ type Config struct {
 	ExpirationInterval      time.Duration
 	ExpirationTTL           time.Duration
 	EnriquecimientoInterval time.Duration
+	Clasificador            inteligencia.ModoClasificador
 	A6PosicionLiquidacion   nucleo.Centavos
 	A6PrefondeoActivo       bool
 	Auth                    ConfigAuth
@@ -148,6 +150,11 @@ func LoadConfig() (*Config, error) {
 	if errDuracion != nil {
 		errs = append(errs, errDuracion)
 	}
+	var errClasificador error
+	cfg.Clasificador, errClasificador = inteligencia.InterpretarModoClasificador(os.Getenv("CLASIFICADOR"))
+	if errClasificador != nil {
+		errs = append(errs, errClasificador)
+	}
 	var errA6 error
 	cfg.A6PosicionLiquidacion, errA6 = centavosOr("A6_POSICION_LIQUIDACION_CENTAVOS", "0")
 	if errA6 != nil {
@@ -217,6 +224,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("expiration_ttl", c.ExpirationTTL.String()),
 		slog.String("expiration_interval", c.ExpirationInterval.String()),
 		slog.String("enriquecimiento_interval", c.EnriquecimientoInterval.String()),
+		slog.String("clasificador", string(c.Clasificador)),
 		slog.Bool("a6_prefondeo_activo", c.A6PrefondeoActivo),
 		slog.String("a6_posicion_liquidacion_centavos", strconv.FormatInt(c.A6PosicionLiquidacion.Int64(), 10)),
 		slog.String("a6_posicion_liquidacion_cop", c.A6PosicionLiquidacion.PresentarUnidadesMayores()),

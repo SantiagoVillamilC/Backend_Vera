@@ -89,7 +89,15 @@ func run() error {
 			Tope:   cfg.OutboxBackoffMax,
 		}),
 	)
-	servicioInteligencia := inteligencia.NuevoServicio(pool)
+	modeloClasificador, err := modeloDelClasificador(cfg)
+	if err != nil {
+		return err
+	}
+	var opcionesInteligencia []inteligencia.OpcionServicio
+	if modeloClasificador != nil {
+		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConClasificador(modeloClasificador))
+	}
+	servicioInteligencia := inteligencia.NuevoServicio(pool, opcionesInteligencia...)
 	handlerInteligencia := inteligencia.NuevoHandler(servicioInteligencia)
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.

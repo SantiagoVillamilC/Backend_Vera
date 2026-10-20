@@ -44,7 +44,19 @@ func run() error {
 		return fmt.Errorf("abrir pool: %w", err)
 	}
 	defer pool.Close()
-	servicio := inteligencia.NuevoServicio(pool)
+	modo, err := inteligencia.InterpretarModoClasificador(os.Getenv("CLASIFICADOR"))
+	if err != nil {
+		return err
+	}
+	var opciones []inteligencia.OpcionServicio
+	if modo == inteligencia.ModoClasificadorTFIDF {
+		modelo, err := inteligencia.ModeloTFIDFEmbebido()
+		if err != nil {
+			return fmt.Errorf("clasificador: %w", err)
+		}
+		opciones = append(opciones, inteligencia.ConClasificador(modelo))
+	}
+	servicio := inteligencia.NuevoServicio(pool, opciones...)
 	switch os.Args[1] {
 	case "lote":
 		resultado, err := servicio.Enriquecer(ctx, limite)
