@@ -1,6 +1,8 @@
+import {errorDelSobre} from './sesion.mjs';
+
 // Lee envelopes NDJSON aunque la red divida una línea o un carácter UTF-8.
 export async function leerVozFlujo(respuesta, recibir) {
-  if (!respuesta.ok) { const e = await respuesta.json(); throw new Error(e.error?.message || 'No se pudo generar la voz.'); }
+  if (!respuesta.ok) { let e; try { e = await respuesta.json(); } catch { throw errorDelSobre(null); } throw errorDelSobre(e, respuesta.headers.get('Retry-After')); }
   if (!respuesta.body) throw new Error('El navegador no permite recibir audio en streaming.');
   const lector = respuesta.body.getReader(), decodificador = new TextDecoder();
   let pendiente = '', fin = false, total = 0;
@@ -8,7 +10,7 @@ export async function leerVozFlujo(respuesta, recibir) {
     if (!linea.trim()) return;
     if (fin) throw new Error('Llegaron datos después del final de la voz.');
     const sobre = JSON.parse(linea);
-    if (!sobre.success) throw new Error(sobre.error?.message || 'La voz se interrumpió.');
+    if (!sobre.success) throw errorDelSobre(sobre);
     if (sobre.data.tipo === 'fin') fin = true;
     await recibir(sobre.data);
   };

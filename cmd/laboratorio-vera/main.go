@@ -58,7 +58,7 @@ func run() error {
 		if !*confirmado || modelo == "" || os.Getenv("CI") != "" {
 			return errors.New("configura VERA_MODELO y confirma Free Tier; el modo real no se ejecuta en CI")
 		}
-		p, err = gemini.Nuevo(ctx, gemini.Config{APIKey: os.Getenv("GEMINI_API_KEY"), Modelo: modelo, Timeout: 20 * time.Second, SinReintentos: true}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		p, err = gemini.Nuevo(ctx, gemini.Config{APIKey: os.Getenv("GEMINI_API_KEY"), Modelo: modelo, Timeout: 25 * time.Second, TemperaturaPredeterminada: true, SinReintentos: true}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err != nil {
 			return errors.New("no se pudo configurar Gemini; revisa GEMINI_API_KEY y VERA_MODELO sin compartir la clave")
 		}
@@ -89,7 +89,7 @@ func run() error {
 	if err != nil {
 		return errors.New("no se pudo iniciar la sesión del laboratorio")
 	}
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: time.Minute, BaseContext: func(net.Listener) context.Context { return ctx }}
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 95 * time.Second, IdleTimeout: time.Minute, BaseContext: func(net.Listener) context.Context { return ctx }}
 	_, _ = fmt.Fprintf(os.Stdout, "\nVERA | Laboratorio local de texto y voz\nDatos financieros ficticios. Máximo %d llamadas por sesión.\nAbre este enlace completo:\nhttp://localhost:%s/#token=%s\n\nMantén esta ventana abierta. Ctrl+C para cerrar.\n", *maximo, puerto, token)
 	fin := make(chan error, 1)
 	go func() { fin <- srv.Serve(l) }()

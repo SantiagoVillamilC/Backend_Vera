@@ -142,7 +142,7 @@ func TestErroresYReintentos(t *testing.T) {
 		{"clave400", 400, `{"error":{"code":400,"details":[{"reason":"API_KEY_INVALID"}]}}`, copilot.ErrCredencialesIA, 1},
 		{"solicitud", 400, "", copilot.ErrSolicitudIA, 1},
 		{"modelo", 404, "", copilot.ErrSolicitudIA, 1},
-		{"limite", 429, "", copilot.ErrLimiteIA, 3},
+		{"limite", 429, "", copilot.ErrLimiteIA, 1},
 		{"timeout", 408, "", copilot.ErrTimeoutIA, 3},
 		{"servidor", 503, "", copilot.ErrNoDisponibleIA, 3},
 		{"seguridad", 200, `{"promptFeedback":{"blockReason":"SAFETY"}}`, copilot.ErrBloqueoIA, 1},

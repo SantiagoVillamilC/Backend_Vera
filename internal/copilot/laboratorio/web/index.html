@@ -13,12 +13,15 @@
 </div>
 <div class="entrada">
 <p id="estado" role="status" aria-live="polite">Preparando la sesión…</p><p id="error" class="error" role="alert" hidden></p>
+<p id="espera" class="nota" hidden></p>
+<div class="controles"><button id="reintentar" class="secundario" hidden>Reintentar respuesta</button><button id="cancelar" class="texto" hidden>Cancelar consulta</button></div>
 <div id="transcripcion" class="transcripcion" hidden><strong>Lo que entendió Vera</strong><p id="texto-transcripcion"></p></div>
 <audio id="clip" controls hidden aria-label="Tu grabación"></audio>
 <form id="formulario"><label for="pregunta">Tu pregunta</label><div class="fila-pregunta"><textarea id="pregunta" rows="2" maxlength="2000" placeholder="Por ejemplo: ¿cuánto puedo enviar?" disabled></textarea><button id="enviar" class="primario" disabled>Enviar</button></div></form>
 <div class="controles"><button id="microfono" class="microfono" disabled><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg><span id="texto-microfono">Hablar</span><span id="reloj" hidden>00:00</span></button><span class="nota" id="nota-audio">Hasta 20 s · al detener, se envía a Gemini</span></div>
 <div class="lectura"><button id="escuchar" class="secundario" disabled>Escuchar respuesta</button><button id="silenciar" class="texto" disabled>Detener voz</button><label class="automatica"><input id="automatica" type="checkbox" checked> Leer automáticamente</label><label class="voz">Voz<select id="voz" aria-label="Voz para leer las respuestas"><option value="gemini:Aoede">Aoede · natural</option><option value="gemini:Kore">Kore · firme</option><option value="gemini:Puck">Puck · animada</option><option value="navegador">Voz del navegador</option></select></label></div>
 <p id="nota-voz" class="nota" role="status">Voz natural · Gemini. Generar audio utiliza una llamada; repetir la misma voz reutiliza el audio.</p>
+<label class="automatica"><input id="respaldo" type="checkbox" checked> Usar voz del navegador si falla la voz natural</label>
 <p id="tiempos" class="nota" aria-label="Tiempos del último turno" hidden></p>
 </div>
 </section>

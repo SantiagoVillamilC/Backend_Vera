@@ -75,6 +75,17 @@ func (v *Voz) solicitarVoz(ctx context.Context, texto, voz string, flujo bool) (
 		return nil, seguro
 	}
 	if r.StatusCode != http.StatusOK {
+		if r.StatusCode == http.StatusTooManyRequests {
+			b, _ := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+			_ = r.Body.Close()
+			var respuesta struct {
+				Error struct {
+					Details []map[string]any `json:"details"`
+				} `json:"error"`
+			}
+			_ = json.Unmarshal(b, &respuesta)
+			return nil, limiteProveedor(respuesta.Error.Details)
+		}
 		_ = r.Body.Close()
 		_, seguro := clasificar(genai.APIError{Code: r.StatusCode})
 		return nil, seguro

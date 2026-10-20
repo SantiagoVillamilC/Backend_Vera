@@ -35,6 +35,7 @@ type SalidaOrquestador struct {
 	Vueltas, Llamadas           int
 	Limitado                    bool
 	AccionPendiente             *AccionOrquestador
+	RespuestaDelBackend         bool
 }
 
 // RegistroCiclo persiste un turno del modelo y sus resultados como un bloque atómico.
@@ -65,14 +66,15 @@ type AutorizacionCiclo interface{ Exigir(context.Context) error }
 
 // Orquestador coordina el proveedor y el catálogo; nunca ejecuta dinero.
 type Orquestador struct {
-	proveedor    ProveedorIA
-	catalogo     *Catalogo
-	memoria      MemoriaCiclo
-	autorizacion AutorizacionCiclo
-	modelo       string
-	logger       *slog.Logger
-	ahora        func() time.Time
-	plazo        time.Duration
+	proveedor            ProveedorIA
+	catalogo             *Catalogo
+	memoria              MemoriaCiclo
+	autorizacion         AutorizacionCiclo
+	modelo               string
+	logger               *slog.Logger
+	ahora                func() time.Time
+	plazo                time.Duration
+	confirmacionServidor bool
 }
 
 // OpcionOrquestador configura dependencias del ciclo antes de atender solicitudes.
@@ -81,6 +83,12 @@ type OpcionOrquestador func(*Orquestador)
 // ConRelojOrquestador permite fijar la fecha de referencia de las evaluaciones.
 func ConRelojOrquestador(ahora func() time.Time) OpcionOrquestador {
 	return func(o *Orquestador) { o.ahora = ahora }
+}
+
+// ConConfirmacionPreparacionServidor cierra una preparación válida con texto
+// del backend, sin pedir al modelo que vuelva a interpretar una acción ya creada.
+func ConConfirmacionPreparacionServidor() OpcionOrquestador {
+	return func(o *Orquestador) { o.confirmacionServidor = true }
 }
 
 // NuevoOrquestador fija los topes de la HU: cinco vueltas, ocho funciones y 45 segundos.
@@ -216,6 +224,22 @@ func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (resp
 			}
 		}
 		historial = append(historial, turno)
+		if o.confirmacionServidor && accionID != uuid.Nil {
+			if err := o.autorizacion.Exigir(ctx); err != nil {
+				return SalidaOrquestador{}, err
+			}
+			a, err := sesion.Accion(ctx, accionID)
+			if err != nil {
+				return SalidaOrquestador{}, err
+			}
+			if a == nil || a.ID != accionID || a.Monto <= 0 || !a.ExpiraEn.After(o.ahora()) {
+				return SalidaOrquestador{}, ErrCicloNoDisponible
+			}
+			salida.Texto = "Preparé una propuesta por " + a.Monto.PresentarUnidadesMayores() + " COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero."
+			salida.RespuestaDelBackend = true
+			final := RegistroCiclo{Respuesta: RespuestaIA{Turno: TurnoIA{Rol: "asistente", Partes: []ParteIA{{Texto: salida.Texto}}}}, Modelo: "backend/confirmacion-preparacion-v1", VersionInstrucciones: VersionInstruccionesVera}
+			return o.finalizar(ctx, sesion, final, salida, accionID)
+		}
 	}
 	return SalidaOrquestador{}, ErrRespuestaIA
 }

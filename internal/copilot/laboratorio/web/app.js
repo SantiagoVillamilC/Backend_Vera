@@ -1,12 +1,14 @@
 import {pcmAWav} from '/audio.mjs';
 import {leerVozFlujo, wavPCM, ReproductorPCM} from '/voz-flujo.mjs';
+import {ErrorLaboratorio, errorDelSobre, conPlazo, LimitesSesion} from '/sesion.mjs';
 
 const $ = (id) => document.getElementById(id);
 let token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
 try { token ||= sessionStorage.getItem('vera-lab-token') || ''; if (token) sessionStorage.setItem('vera-lab-token', token); } catch { /* El enlace con token sigue funcionando sin almacenamiento. */ }
 history.replaceState(null, '', location.pathname);
 let ocupada = true, grabando = false, grabacion = null, ultimoTexto = '', clipURL = '', demo = false, voces = [];
-let detenidoPorCuota = false;
+const limites = new LimitesSesion();
+let turnoActivo = null, preguntaPendiente = '', audioParcial = false;
 let vozNatural = false, peticionVoz = null, audioVoz = null, vozURL = '', cacheVoz = '', vozElegida = '';
 let vozFlujo = false, contextoSalida = null, reproductorVoz = null, tiempos = {};
 const hayVoz = 'speechSynthesis' in window;
@@ -14,12 +16,20 @@ function estado(s) { $('estado').textContent = s; }
 function fallo(s = '') { $('error').textContent = s; $('error').hidden = !s; }
 function controles(b) {
   ocupada = b;
-  for (const id of ['enviar', 'pregunta', 'nueva', 'ejemplo']) $(id).disabled = b || detenidoPorCuota;
-  $('microfono').disabled = (b && !grabando) || detenidoPorCuota || !navigator.mediaDevices?.getUserMedia || !window.AudioWorkletNode;
+  for (const id of ['enviar', 'pregunta', 'ejemplo']) $(id).disabled = b || limites.bloqueada();
+  $('nueva').disabled = b;
+  $('microfono').disabled = (b && !grabando) || limites.bloqueada() || !navigator.mediaDevices?.getUserMedia || !window.AudioWorkletNode;
   $('escuchar').disabled = b || !ultimoTexto || (!vozNatural && !hayVoz);
   $('voz').disabled = b;
+  $('reintentar').hidden = !preguntaPendiente;
+  $('reintentar').disabled = b || limites.bloqueada();
+  $('cancelar').hidden = !b || grabando || (!turnoActivo && !peticionVoz);
+  const chat = limites.esperaChat(), voz = limites.esperaVoz();
+  $('espera').hidden = !chat && !voz;
+  $('espera').textContent = [chat ? `Chat disponible para reintentar en ${chat} s.` : '', voz ? `Voz natural disponible para reintentar en ${voz} s. La voz del navegador sigue disponible.` : ''].filter(Boolean).join(' ');
 }
 function actualizar(e) {
+  limites.actualizar(e);
   $('modo').textContent = e.demo ? 'Demo local · sin cuota' : 'Gemini · datos ficticios';
   $('cuota').textContent = `${e.usadas}/${e.maximo} llamadas${e.demo ? ' simuladas' : ''}`;
   $('modelo').textContent = `Modelo: ${e.modelo}`; $('version').textContent = `Instrucciones: ${e.version}`;
@@ -33,21 +43,22 @@ function actualizar(e) {
   $('nota-audio').textContent = demo ? 'Hasta 20 s · prueba local, sin enviar a Google' : 'Hasta 20 s · al detener, se envía a Gemini';
   $('pregunta').readOnly = demo;
   if (demo) $('pregunta').value = '¿Cuánto tengo?';
-  if (e.usadas >= e.maximo) { detenidoPorCuota = true; estado('Límite de sesión alcanzado. Reinicia el laboratorio para otra sesión.'); }
+  if (e.usadas >= e.maximo) estado('Límite local de sesión alcanzado. El texto y la voz del navegador siguen disponibles.');
 }
 async function api(ruta, opciones = {}) {
-  const r = await fetch(ruta, {...opciones, headers: {'X-Vera-Token': token, ...opciones.headers}});
-  const sobre = await r.json();
-  if (!r.ok || !sobre.success) {
-    if (ruta !== '/api/voz' && ['SessionLimit', 'ProviderLimit', 'InvalidCredentials'].includes(sobre.error?.code)) detenidoPorCuota = true;
-    throw new Error(sobre.error?.message || 'No se pudo completar la consulta.');
-  }
-  return sobre.data;
+  try {
+    return await conPlazo(async (signal) => {
+      const r = await fetch(ruta, {...opciones, signal, headers: {'X-Vera-Token': token, ...opciones.headers}});
+      let sobre; try { sobre = await r.json(); } catch { throw new ErrorLaboratorio('El servidor no devolvió una respuesta válida. Puedes volver a intentar.'); }
+      if (!r.ok || !sobre.success) throw errorDelSobre(sobre, r.headers.get('Retry-After'));
+      return sobre.data;
+    }, opciones.signal || turnoActivo?.signal, ruta === '/api/estado' ? 4000 : 90000);
+  } catch (e) { if (e instanceof TypeError) e = new ErrorLaboratorio('No se pudo conectar al laboratorio. Comprueba que la consola siga abierta.'); limites.registrar(e, ruta.startsWith('/api/voz')); throw e; }
 }
-function mensaje(rol, texto) {
+function mensaje(rol, texto, backend = false) {
   $('bienvenida').hidden = true;
   const bloque = document.createElement('article'); bloque.className = `mensaje ${rol}`;
-  const titulo = document.createElement('strong'); titulo.textContent = rol === 'usuario' ? 'TÚ' : 'VERA';
+  const titulo = document.createElement('strong'); titulo.textContent = rol === 'usuario' ? 'TÚ' : backend ? 'VERA · CONFIRMACIÓN DEL BACKEND' : 'VERA';
   const cuerpo = document.createElement('p'); cuerpo.textContent = texto;
   bloque.append(titulo, cuerpo); $('mensajes').append(bloque); $('mensajes').scrollTop = $('mensajes').scrollHeight;
 }
@@ -88,12 +99,14 @@ async function recibirVoz(voz, solicitud) {
   const inicio = performance.now(), partes = [];
   let primera = true, recibioFin = false;
   reproductorVoz = new ReproductorPCM(contextoSalida, () => { $('silenciar').disabled = true; if (!ocupada && !grabando) estado('Listo. Puedes continuar o volver a escuchar la respuesta.'); });
-  const r = await fetch('/api/voz/flujo', {method: 'POST', headers: {'X-Vera-Token': token, 'Content-Type': 'text/plain'}, body: voz, signal: solicitud.signal});
+  await conPlazo(async (signal) => {
+  const r = await fetch('/api/voz/flujo', {method: 'POST', headers: {'X-Vera-Token': token, 'Content-Type': 'text/plain'}, body: voz, signal});
   await leerVozFlujo(r, async (e) => {
     if (solicitud.signal.aborted) throw new DOMException('Voz detenida', 'AbortError');
     if (e.tipo === 'audio') {
       const bytes = Uint8Array.from(atob(e.pcm), (c) => c.charCodeAt(0)); partes.push(bytes);
       reproductorVoz.agregar(bytes);
+      audioParcial = true;
       if (primera) { primera = false; medir('Primera voz', inicio); estado('Vera está respondiendo mientras llega el resto del audio.'); }
     } else if (e.tipo === 'wav') {
       conservarAudio(Uint8Array.from(atob(e.audio), (c) => c.charCodeAt(0)), voz);
@@ -102,19 +115,21 @@ async function recibirVoz(voz, solicitud) {
       actualizar(e.estado); recibioFin = true;
     }
   });
+  }, solicitud.signal, 55000);
   if (!recibioFin || primera) throw new Error('La voz no se completó.');
   if (partes.length) { conservarAudio(wavPCM(partes), voz); reproductorVoz.finalizar(); }
 }
 async function escuchar() {
   if (!ultimoTexto || ocupada) return;
-  detenerVoz(); fallo();
+  detenerVoz(); fallo(); audioParcial = false;
   if (vozNatural && $('voz').value.startsWith('gemini:')) {
-    controles(true); $('silenciar').disabled = false;
     const solicitud = new AbortController(); peticionVoz = solicitud;
+    controles(true); $('silenciar').disabled = false;
     let completa = false;
     try {
       const voz = $('voz').value.slice(7);
       if (cacheVoz !== ultimoTexto || vozElegida !== voz || !audioVoz) {
+        if (limites.agotada || limites.credenciales || limites.vozNoDisponible || limites.esperaVoz()) throw new ErrorLaboratorio('La voz natural no está disponible ahora; no se consumió otra llamada.', 'VoiceUnavailable');
         estado('Generando la voz natural de Vera…');
         if (vozFlujo) { await recibirVoz(voz, solicitud); completa = true; return; }
         const inicioVoz = performance.now();
@@ -127,13 +142,21 @@ async function escuchar() {
       await audioVoz.play(); estado('Vera está respondiendo. Puedes detener la voz o continuar.');
       completa = true;
     } catch (e) {
+      limites.registrar(e, true);
       reproductorVoz?.detener(); reproductorVoz = null;
       if (e.name !== 'AbortError') fallo(e.name === 'NotAllowedError' ? 'Tu navegador requiere un clic para reproducir. Pulsa Escuchar respuesta; el audio ya está generado.' : `${e.message} La respuesta escrita sigue disponible. Puedes elegir Voz del navegador.`);
       estado('La respuesta escrita está lista. Puedes volver a escuchar o continuar.');
       $('silenciar').disabled = true;
+      if (e.name !== 'AbortError' && e.name !== 'NotAllowedError' && !audioParcial && $('respaldo').checked && hayVoz) {
+        leerNavegador();
+        estado('La voz natural no está disponible. Vera está leyendo con la voz del navegador.');
+      }
     } finally { peticionVoz = null; if (!completa) await refrescarConsumo(); controles(false); }
     return;
   }
+  leerNavegador();
+}
+function leerNavegador() {
   if (!hayVoz) { fallo('Este navegador no ofrece síntesis de voz local.'); return; }
   const frase = new SpeechSynthesisUtterance(ultimoTexto); frase.lang = 'es-CO';
   frase.voice = voces.find((v) => v.voiceURI === $('voz').value) || voces.find((v) => v.lang.startsWith('es')) || null;
@@ -151,13 +174,15 @@ function cargarVoces() {
   if (previa.startsWith('gemini:') || previa === 'navegador') $('voz').value = previa;
   else if (preferida) $('voz').value = preferida.voiceURI;
 }
-async function preguntar(texto) {
-  mensaje('usuario', texto); $('eventos').replaceChildren(); $('cantidad-traza').textContent = 'Consultando…';
+async function preguntar(texto, reintento = false) {
+  preguntaPendiente = texto;
+  if (!reintento) mensaje('usuario', texto); $('eventos').replaceChildren(); $('cantidad-traza').textContent = 'Consultando…';
   estado('Vera está consultando.');
   const inicioRespuesta = performance.now();
   const datos = await api('/api/preguntar', {method: 'POST', headers: {'Content-Type': 'text/plain; charset=utf-8'}, body: texto});
   medir('Respuesta', inicioRespuesta);
-  actualizar(datos.estado); traza(datos.eventos); mensaje('vera', datos.texto); ultimoTexto = datos.texto;
+  actualizar(datos.estado); traza(datos.eventos); mensaje('vera', datos.texto, datos.respuesta_del_backend); ultimoTexto = datos.texto;
+  preguntaPendiente = '';
   if (datos.accion_pendiente) {
     const a = datos.accion_pendiente, tarjeta = document.createElement('div'); tarjeta.className = 'tarjeta';
     const titulo = document.createElement('strong'); titulo.textContent = 'Propuesta simulada';
@@ -165,21 +190,24 @@ async function preguntar(texto) {
     const nota = document.createElement('p'); nota.textContent = 'Pendiente de confirmación en la app. No se ejecutó dinero.';
     tarjeta.append(titulo, p, nota); $('mensajes').append(tarjeta);
   }
-  if (!detenidoPorCuota) estado('Listo. Puedes continuar la conversación.');
+  if (!limites.bloqueada()) estado('Listo. Puedes continuar la conversación.');
 }
-async function enviarTexto(texto) {
-  if (ocupada || !texto.trim()) return;
-  controles(true); fallo(); limpiarVoz(); ultimoTexto = '';
+async function enviarTexto(texto, reintento = false) {
+  if (ocupada || limites.bloqueada() || !texto.trim()) return;
+  turnoActivo = new AbortController(); controles(true); fallo(); limpiarVoz(); ultimoTexto = '';
+  if (!reintento) $('transcripcion').hidden = true;
   nuevoTiempo(); prepararSalida();
   let respondio = false;
-  try { await preguntar(demo ? '¿Cuánto tengo?' : texto.trim()); respondio = true; if (!demo) $('pregunta').value = ''; }
-  catch (e) { fallo(e.message); estado('La consulta no se completó.'); }
-  finally { if (!respondio) await refrescarConsumo(); controles(false); if (respondio && $('automatica').checked && !detenidoPorCuota) await escuchar(); }
+  try { await preguntar(demo ? '¿Cuánto tengo?' : texto.trim(), reintento); respondio = true; if (!demo) $('pregunta').value = ''; }
+  catch (e) { $('cantidad-traza').textContent = 'Turno incompleto'; if (e.name !== 'AbortError') fallo(e.message); estado(e.name === 'AbortError' ? 'Consulta cancelada. Puedes reintentar la respuesta.' : 'La consulta no se completó. Puedes reintentar la respuesta.'); }
+  finally { turnoActivo = null; if (!respondio) await refrescarConsumo(); controles(false); if (respondio && $('automatica').checked) await escuchar(); }
 }
 async function refrescarConsumo() { try { actualizar(await api('/api/estado')); } catch { /* Conserva el error original si el servidor se desconectó. */ } }
 $('formulario').addEventListener('submit', (e) => { e.preventDefault(); enviarTexto($('pregunta').value); });
 $('pregunta').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarTexto($('pregunta').value); } });
 $('ejemplo').addEventListener('click', () => enviarTexto('¿Cuánto tengo disponible?'));
+$('reintentar').addEventListener('click', () => enviarTexto(preguntaPendiente, true));
+$('cancelar').addEventListener('click', () => { turnoActivo?.abort(); detenerVoz(); estado('Cancelando la consulta…'); });
 $('escuchar').addEventListener('click', escuchar); $('silenciar').addEventListener('click', () => { detenerVoz(); estado('Voz detenida. La respuesta escrita sigue disponible.'); });
 $('nueva').addEventListener('click', async () => {
   if (ocupada) return; controles(true); fallo(); limpiarVoz();
@@ -189,12 +217,14 @@ $('nueva').addEventListener('click', async () => {
     $('eventos').replaceChildren(); $('cantidad-traza').textContent = 'Sin llamadas'; $('transcripcion').hidden = true;
     $('clip').hidden = true; if (clipURL) URL.revokeObjectURL(clipURL); clipURL = ''; ultimoTexto = '';
     nuevoTiempo();
-    estado(detenidoPorCuota ? 'El límite de solicitudes se conserva.' : 'Conversación nueva. El consumo de solicitudes se conserva.');
+    preguntaPendiente = '';
+    estado('Conversación nueva. El consumo y las esperas de cuota se conservan.');
   } catch (e) { fallo(e.message); } finally { controles(false); }
 });
 async function detenerGrabacion() {
   const g = grabacion; if (!g || !grabando) return;
   grabando = false; controles(true); clearInterval(g.temporizador); clearTimeout(g.limite);
+  turnoActivo = new AbortController(); controles(true);
   $('reloj').hidden = true; $('microfono').classList.remove('activo'); $('texto-microfono').textContent = 'Hablar'; $('estado').classList.remove('grabando');
   let respondio = false;
   let transcrito = false;
@@ -208,15 +238,17 @@ async function detenerGrabacion() {
     const datos = await api('/api/transcribir', {method: 'POST', headers: {'Content-Type': 'audio/wav'}, body: blob});
     medir('Transcripción', inicioTranscripcion);
     actualizar(datos.estado); $('texto-transcripcion').textContent = datos.transcripcion; $('transcripcion').hidden = false;
+    $('pregunta').value = datos.transcripcion;
     transcrito = true;
     await preguntar(datos.transcripcion);
     respondio = true;
-  } catch (e) { fallo(e.message); estado(transcrito ? 'Tu audio se transcribió correctamente. No se pudo generar la respuesta de Vera.' : 'No se pudo transcribir el audio. Puedes escribir o grabar otra vez.'); }
-  finally { g.stream.getTracks().forEach((t) => t.stop()); if (g.contexto.state !== 'closed') await g.contexto.close(); grabacion = null; if (!respondio) await refrescarConsumo(); controles(false); if (respondio && $('automatica').checked && !detenidoPorCuota) await escuchar(); }
+  } catch (e) { $('cantidad-traza').textContent = 'Turno incompleto'; if (e.name !== 'AbortError') fallo(e.message); estado(e.name === 'AbortError' ? 'Consulta cancelada.' : transcrito ? 'Tu audio se transcribió correctamente. Puedes reintentar sólo la respuesta.' : 'No se pudo transcribir el audio. Puedes escribir o grabar otra vez.'); }
+  finally { turnoActivo = null; g.stream.getTracks().forEach((t) => t.stop()); if (g.contexto.state !== 'closed') await g.contexto.close(); grabacion = null; if (!respondio) await refrescarConsumo(); controles(false); if (respondio && $('automatica').checked) await escuchar(); }
 }
 $('microfono').addEventListener('click', async () => {
   if (grabando) { await detenerGrabacion(); return; } if (ocupada) return;
   controles(true); fallo(); limpiarVoz(); ultimoTexto = ''; estado('Permite el micrófono en tu navegador.');
+  preguntaPendiente = '';
   nuevoTiempo(); prepararSalida();
   let stream, contexto;
   try {
@@ -234,7 +266,8 @@ $('microfono').addEventListener('click', async () => {
     fallo(e.name === 'NotAllowedError' ? 'No se concedió acceso al micrófono. Habilítalo en el navegador o escribe tu pregunta.' : 'No se pudo iniciar el micrófono. Comprueba el dispositivo y abre esta página desde localhost.'); estado('Puedes continuar escribiendo.'); controles(false);
   }
 });
-window.addEventListener('pagehide', () => { limpiarVoz(); contextoSalida?.close(); if (clipURL) URL.revokeObjectURL(clipURL); if (grabacion) { clearTimeout(grabacion.limite); clearInterval(grabacion.temporizador); grabacion.stream.getTracks().forEach((t) => t.stop()); grabacion.contexto.close(); } });
+const relojCuota = setInterval(() => controles(ocupada), 1000);
+window.addEventListener('pagehide', () => { clearInterval(relojCuota); turnoActivo?.abort(); limpiarVoz(); contextoSalida?.close(); if (clipURL) URL.revokeObjectURL(clipURL); if (grabacion) { clearTimeout(grabacion.limite); clearInterval(grabacion.temporizador); grabacion.stream.getTracks().forEach((t) => t.stop()); grabacion.contexto.close(); } });
 cargarVoces(); if (hayVoz) speechSynthesis.addEventListener('voiceschanged', cargarVoces);
 try { actualizar(await api('/api/estado')); estado('Listo. Escribe o pulsa «Hablar».'); controles(false); }
 catch (e) { fallo(e.message || 'No se pudo conectar. Abre el enlace completo del lanzador.'); estado('Sesión sin conectar.'); }

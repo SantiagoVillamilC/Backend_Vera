@@ -42,8 +42,11 @@ ocurre después de mostrar el texto. Repetir la última respuesta con la misma
 voz reutiliza el audio en memoria; cambiar la voz vuelve a generarlo. La demo
 usa únicamente la voz del navegador y no consume Google.
 El navegador muestra el consumo; «Nueva conversación» borra el
-contexto pero conserva ese contador. No hay reintentos automáticos ni cambio
-de modelo. Para un límite distinto: `Probar-Vera-Voz.cmd -MaxSolicitudes 10`.
+contexto pero conserva ese contador y las esperas por cuota de Google. Ante
+timeout o indisponibilidad hay como máximo un reintento automático, contado
+como otra solicitud. No se reintentan automáticamente cuota, credenciales ni
+bloqueos; tampoco audio que ya comenzó a reproducirse. No hay cambio de modelo.
+Para un límite distinto: `Probar-Vera-Voz.cmd -MaxSolicitudes 10`.
 
 El audio y el historial permanecen en memoria. Los bytes de audio recibidos se
 limpian después de transcribir; el navegador conserva la última grabación para
@@ -142,8 +145,10 @@ texto de la última respuesta en el servidor. No acepta texto arbitrario ni
 invoca herramientas. `SintetizadorVoz` separa esta capacidad del proveedor del
 chat. Su adaptador usa `POST /v1beta/interactions`, la misma `GEMINI_API_KEY`,
 el modelo fijo `gemini-3.8-flash-lite-tts` y `speech_metadata.style` separado del texto
-literal. Devuelve WAV PCM mono de 24 kHz y 16 bits. Hay timeout de 45 segundos,
-límites de respuesta y una sola solicitud, sin reintentos ni cambios de modelo.
+literal. Devuelve WAV PCM mono de 24 kHz y 16 bits. El adaptador tiene timeout de
+45 segundos, límites de respuesta y una sola solicitud por intento. El control
+del laboratorio puede reintentar una vez un fallo transitorio antes del primer
+PCM, siempre dentro del plazo global y del presupuesto de sesión.
 
 El adaptador también ofrece `SintetizarFlujo`: una solicitud SSE a Google con
 `stream=true` y salida PCM16 mono de 24 kHz. `/api/voz/flujo` retransmite los
@@ -155,9 +160,11 @@ Al completar la transmisión se construye un WAV para repetir la respuesta.
 El endpoint WAV anterior se conserva como alternativa compatible.
 
 El servidor y el navegador conservan sólo el último audio y la voz seleccionada.
-Cambiar de turno o reiniciar la conversación limpia esa caché. Si TTS falla,
-la respuesta escrita permanece y el usuario puede elegir explícitamente
-`SpeechSynthesis`, cuya disponibilidad depende del navegador y del sistema.
+Cambiar de turno o reiniciar la conversación limpia esa caché. Si TTS falla
+antes de reproducir audio, la respuesta escrita permanece y la opción «Usar voz
+del navegador si falla la voz natural» activa `SpeechSynthesis`, sin otra llamada
+a Gemini. Se puede desmarcar. Un audio interrumpido a mitad no se repite
+automáticamente. La disponibilidad de la lectura depende del navegador y del sistema.
 La aplicación no afirma que todas esas voces funcionen sin conexión. Si el
 navegador bloquea la reproducción automática, «Escuchar respuesta» reproduce
 el audio ya generado sin consumir otra llamada.
@@ -208,6 +215,52 @@ Referencias del navegador:
 [SpeechSynthesis](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis).
 
 ## Alcance y verificaciones
+
+### Recuperación y revisión del flujo
+
+- Un 429 conserva únicamente la dimensión pública de cuota y `RetryInfo` de
+  Google. Se diferencia minuto, día o dimensión desconocida. Chat/transcripción
+  y TTS mantienen pausas independientes; una petición durante la pausa no llega
+  al proveedor ni consume una reserva. El corte diario se calcula en
+  `America/Los_Angeles`, incluido horario de verano. Una espera sugerida no
+  garantiza que Google conceda capacidad al terminar.
+- El navegador deja de bloquear toda la sesión por un 429 temporal. Muestra
+  una cuenta regresiva y vuelve a habilitar el reintento manual. Agotar las 20
+  llamadas locales sigue siendo un límite distinto. Nueva conversación no
+  reinicia ninguno de esos presupuestos.
+- «Reintentar respuesta» conserva la pregunta o transcripción después de un
+  fallo sin volver a grabar ni transcribir. El historial y la acción del sandbox
+  se restauran si el turno falla. Los reintentos de red sólo repiten generación
+  de modelo, no las funciones ya ejecutadas en esa vuelta.
+- «Cancelar consulta» aborta la petición y los buffers de voz. El cliente tiene
+  un plazo para conexión y lectura del cuerpo completo. El orquestador conserva
+  su tope de 45 segundos; HTTP reserva margen para devolver un error legible.
+- El perfil interactivo utiliza la temperatura predeterminada de Gemini, no
+  fuerza cero. No añade el marcador privado del evaluador por lotes. La línea
+  base por lotes conserva su protocolo y su marcador. Los filtros de contenido
+  y la defensa contra filtración de instrucciones siguen activos.
+- Al crear una propuesta válida, el laboratorio cierra con una plantilla del
+  backend: relee acción, monto y vencimiento desde el servidor y exige confirmar
+  en la tarjeta. No vuelve al modelo para redactar esa confirmación. La interfaz
+  identifica «CONFIRMACIÓN DEL BACKEND» y sigue sin ejecutar dinero. Es una
+  opción del orquestador habilitada por el perfil del laboratorio; el resto de
+  integraciones conserva su configuración actual.
+
+En la revisión real del 20 de octubre se verificaron audio sintético →
+transcripción → respuesta → voz, saldo, límites, movimientos y resumen. Se
+reprodujo un `ProviderSafety` después de preparar: la búsqueda y la preparación
+habían terminado, pero falló la redacción del modelo. La corrección se verificó
+con otra preparación real de sandbox: dos llamadas, tarjeta y texto calculado
+por el backend, sin ejecutar dinero. Total de la revisión y confirmación: 17
+solicitudes. Evidencia: `docs/evaluaciones/revision-flujo.json` conserva el fallo
+inicial y `docs/evaluaciones/revision-preparacion.json` el resultado corregido.
+
+Hay pruebas sin red de cuota minuto/día, expiración del cooldown, aislamiento de
+voz/chat, cancelación, presupuesto de reintentos, protección de instrucciones,
+descarte de audio parcial y confirmación de propuesta sin otra llamada al
+modelo. En navegador se simularon cuota temporal, bloqueo, cancelación y fallo
+transitorio para comprobar controles y lectura de respaldo. Esta revisión no
+garantiza disponibilidad de Google ni sustituye la línea base de calidad.
 
 Los bloqueos se diagnostican por origen: filtro de entrada de Google
 (`ProviderInput`), filtro de salida (`ProviderSafety`), reproducción de contenido

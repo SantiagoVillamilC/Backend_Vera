@@ -64,13 +64,14 @@ Panel principal suavemente redondeado; botones y tarjeta de propuesta comparten 
 
 ## Components
 
-- **Sesión:** modo demo o Gemini, consumo acumulado y límite. Nueva conversación borra el diálogo, pero conserva el consumo. Al agotarse la cuota se deshabilita la entrada; no hay reintento automático.
+- **Sesión:** modo demo o Gemini, consumo acumulado y límite. Nueva conversación borra el diálogo, pero conserva consumo y pausas. La cuota temporal muestra espera y libera el reintento sin reiniciar; la cuota de voz no bloquea el chat. El límite local de sesión sigue deshabilitando nuevas solicitudes. Un fallo transitorio admite un reintento contado; contenido bloqueado, credenciales y cuota no se reenvían automáticamente.
 - **Texto:** etiqueta visible, máximo de 2000 caracteres; Enter envía y Shift+Enter introduce una línea. Durante consultas los controles de entrada quedan deshabilitados.
 - **Grabación:** permiso del navegador → grabación con contador y botón «Detener y enviar» → transcripción → consulta → respuesta. Se detiene a los 20 segundos y envía automáticamente. El clip queda reproducible y la transcripción visible. Los errores permiten volver a escribir o grabar, salvo un bloqueo de cuota o credenciales.
 - **Lectura:** Gemini 3.8 Flash-Lite TTS, Aoede inicial y alternativas Kore/Puck; voz del navegador como opción explícita. Lectura automática activada inicialmente, generación con estado visible, botones para escuchar y detener. El texto aparece antes que el audio y permanece ante errores; repetir la última voz reutiliza audio en memoria. La nota informa consumo y el modo demo distingue la voz del navegador. Si el navegador bloquea autoplay, se indica pulsar Escuchar sin generar de nuevo.
 - **Traza:** detalles desplegables, abiertos al recibirlos, para función y argumentos o resultado del backend. Se reemplaza en cada turno; no es una transmisión de eventos en vivo. La propuesta de transferencia informa que es simulada y no ejecuta dinero.
 - **Accesibilidad:** documento en español, formulario etiquetado, log y estado con anuncios corteses, errores con `role="alert"`, foco cian visible y controles nativos de audio y desplegables. El estado no depende sólo del color. Son mecanismos presentes en el código, sin afirmar auditoría con lector de pantalla.
 - **Respuesta progresiva:** los estados distinguen generación y reproducción mientras llegan fragmentos. Se muestran los tiempos de transcripción, respuesta y primer audio sin bloquear el texto. Detener cancela la solicitud y los buffers de audio; únicamente un turno completo se conserva para repetir. La nota de tiempos no anuncia cada fragmento al lector de pantalla.
+- **Recuperación:** Reintentar respuesta conserva la pregunta y transcripción; no añade un segundo mensaje del usuario al historial visible. Cancelar consulta aparece durante la espera. La lectura del navegador puede respaldar la voz natural mediante una opción visible, activada inicialmente, sin ocultar el fallo original. Una propuesta validada se etiqueta como confirmación del backend y se acompaña de la tarjeta pendiente, sin afirmar ejecución de dinero.
 
 ## Do's and Don'ts
 

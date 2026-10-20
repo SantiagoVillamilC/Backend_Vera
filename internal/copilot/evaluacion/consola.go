@@ -25,14 +25,17 @@ type EventoConsola struct {
 // Consola mantiene una conversación local con herramientas financieras ficticias.
 // No es un servicio de producción ni tiene un puerto para ejecutar dinero.
 type Consola struct {
-	presupuesto *proveedorMedido
-	memoria     *memoriaConsola
-	modelo      string
-	ahora       func() time.Time
+	presupuesto         *proveedorMedido
+	memoria             *memoriaConsola
+	modelo              string
+	ahora               func() time.Time
+	proveedor           copilot.ProveedorIA
+	recuperar           bool
+	pausaChat, pausaVoz pausaProveedor
 }
 
 // NuevaConsola comparte el límite entre preguntas, incluso después de /nuevo.
-func NuevaConsola(cfg ConfigReal, p copilot.ProveedorIA, observar func(EventoConsola), ahora func() time.Time) (*Consola, error) {
+func NuevaConsola(cfg ConfigReal, p copilot.ProveedorIA, observar func(EventoConsola), ahora func() time.Time, opciones ...OpcionConsola) (*Consola, error) {
 	if err := validarConfigReal(cfg); err != nil {
 		return nil, err
 	}
@@ -43,7 +46,12 @@ func NuevaConsola(cfg ConfigReal, p copilot.ProveedorIA, observar func(EventoCon
 		observar = func(EventoConsola) {}
 	}
 	m := &memoriaConsola{memoriaEscenario: &memoriaEscenario{}, observar: observar}
-	return &Consola{presupuesto: &proveedorMedido{interno: proveedorConsola{p, observar}, max: cfg.MaxSolicitudes, intervalo: cfg.Intervalo}, memoria: m, modelo: cfg.Modelo, ahora: ahora}, nil
+	c := &Consola{presupuesto: &proveedorMedido{interno: proveedorConsola{p, observar}, max: cfg.MaxSolicitudes, intervalo: cfg.Intervalo, sinMarcador: true}, memoria: m, modelo: cfg.Modelo, ahora: ahora}
+	for _, opcion := range opciones {
+		opcion(c)
+	}
+	c.proveedor = proveedorConRecuperacion{c}
+	return c, nil
 }
 
 // Consumo informa solicitudes al proveedor, no mensajes escritos por el usuario.
@@ -51,7 +59,7 @@ func (c *Consola) Consumo() (int, int) { return c.presupuesto.solicitudes, c.pre
 
 // Transcribir comparte con el chat el presupuesto de solicitudes del laboratorio.
 func (c *Consola) Transcribir(ctx context.Context, audio *copilot.AudioIA) (string, error) {
-	return copilot.TranscribirAudio(ctx, c.presupuesto, audio)
+	return copilot.TranscribirAudio(ctx, c.proveedor, audio)
 }
 
 // Sintetizar reserva una llamada del mismo presupuesto antes de generar voz.
@@ -60,10 +68,7 @@ func (c *Consola) Sintetizar(ctx context.Context, p copilot.SintetizadorVoz, tex
 	if p == nil {
 		return nil, copilot.ErrNoDisponibleIA
 	}
-	if err := c.presupuesto.reservar(ctx); err != nil {
-		return nil, err
-	}
-	return p.Sintetizar(ctx, texto, voz)
+	return c.sintetizarControlado(ctx, func() ([]byte, error) { return p.Sintetizar(ctx, texto, voz) }, nil)
 }
 
 // SintetizarFlujo cuenta toda la transmisión como una sola llamada del presupuesto común.
@@ -71,10 +76,10 @@ func (c *Consola) SintetizarFlujo(ctx context.Context, p copilot.SintetizadorVoz
 	if p == nil {
 		return nil, copilot.ErrNoDisponibleIA
 	}
-	if err := c.presupuesto.reservar(ctx); err != nil {
-		return nil, err
-	}
-	return p.SintetizarFlujo(ctx, texto, voz, recibir)
+	emitido := false
+	return c.sintetizarControlado(ctx, func() ([]byte, error) {
+		return p.SintetizarFlujo(ctx, texto, voz, func(b []byte) error { emitido = emitido || len(b) > 0; return recibir(b) })
+	}, &emitido)
 }
 
 // NuevaConversacion borra el contexto sintético sin restablecer la cuota.
@@ -96,18 +101,22 @@ func (c *Consola) Preguntar(ctx context.Context, pregunta string) (copilot.Salid
 	if err != nil {
 		return copilot.SalidaOrquestador{}, err
 	}
-	o, err := copilot.NuevoOrquestador(c.presupuesto, catalogo, c.memoria, autorizacionEscenario{}, c.modelo, logger, copilot.ConRelojOrquestador(c.ahora))
+	opciones := []copilot.OpcionOrquestador{copilot.ConRelojOrquestador(c.ahora)}
+	if c.recuperar {
+		opciones = append(opciones, copilot.ConConfirmacionPreparacionServidor())
+	}
+	o, err := copilot.NuevoOrquestador(c.proveedor, catalogo, c.memoria, autorizacionEscenario{}, c.modelo, logger, opciones...)
 	if err != nil {
 		return copilot.SalidaOrquestador{}, err
 	}
 	inicio := len(c.memoria.historial)
-	accionAnterior := c.memoria.accion
+	estadoAnterior := *c.memoria.memoriaEscenario
 	c.memoria.historial = append(c.memoria.historial, copilot.TurnoIA{Rol: "usuario", Partes: []copilot.ParteIA{{Texto: pregunta}}})
 	ctx = identidad.ConIdentidad(ctx, identidad.Identidad{ParteID: parteEscenario.String(), UsuarioID: usuarioEscenario.String()})
 	salida, err := o.Responder(ctx, copilot.EntradaOrquestador{ConversacionID: conversacionEscenario, MensajeID: uuid.New()})
 	if err != nil {
 		c.memoria.historial = c.memoria.historial[:inicio]
-		c.memoria.accion = accionAnterior
+		*c.memoria.memoriaEscenario = estadoAnterior
 	}
 	return salida, err
 }

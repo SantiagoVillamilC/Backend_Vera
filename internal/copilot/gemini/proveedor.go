@@ -22,6 +22,8 @@ type Config struct {
 	Modelo      string
 	Timeout     time.Duration
 	Temperatura float32
+	// TemperaturaPredeterminada omite el parámetro para respetar el valor recomendado del modelo.
+	TemperaturaPredeterminada bool
 	// SinReintentos permite que el evaluador limite cada solicitud HTTP de cuota.
 	SinReintentos bool
 }
@@ -68,6 +70,9 @@ func (p *Proveedor) Generar(ctx context.Context, solicitud copilot.SolicitudIA) 
 	contenidos, config, err := traducirSolicitud(solicitud, p.cfg.Temperatura)
 	if err != nil {
 		return copilot.RespuestaIA{}, err
+	}
+	if p.cfg.TemperaturaPredeterminada {
+		config.Temperature = nil
 	}
 	intentos := 3
 	if p.cfg.SinReintentos {
@@ -127,7 +132,7 @@ func clasificar(err error) (bool, error) {
 			}
 			return false, copilot.ErrSolicitudIA
 		case apiErr.Code == http.StatusTooManyRequests:
-			return true, copilot.ErrLimiteIA
+			return false, limiteProveedor(apiErr.Details)
 		case apiErr.Code == http.StatusRequestTimeout:
 			return true, copilot.ErrTimeoutIA
 		case apiErr.Code >= 500 && apiErr.Code <= 599:

@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"mime"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +35,8 @@ type estado struct {
 	Demo       bool   `json:"demo"`
 	VozNatural bool   `json:"voz_natural"`
 	VozFlujo   bool   `json:"voz_flujo"`
+	EsperaChat int    `json:"espera_chat_segundos"`
+	EsperaVoz  int    `json:"espera_voz_segundos"`
 }
 
 type tarjeta struct {
@@ -42,10 +46,11 @@ type tarjeta struct {
 }
 
 type turno struct {
-	Texto   string                     `json:"texto"`
-	Eventos []evaluacion.EventoConsola `json:"eventos"`
-	Accion  *tarjeta                   `json:"accion_pendiente"`
-	Estado  estado                     `json:"estado"`
+	Texto               string                     `json:"texto"`
+	Eventos             []evaluacion.EventoConsola `json:"eventos"`
+	Accion              *tarjeta                   `json:"accion_pendiente"`
+	Estado              estado                     `json:"estado"`
+	RespuestaDelBackend bool                       `json:"respuesta_del_backend"`
 }
 
 type servidor struct {
@@ -67,20 +72,20 @@ func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string,
 		return nil, errors.New("laboratorio: host y token obligatorios")
 	}
 	s := &servidor{modelo: cfg.Modelo, token: token, puerto: puerto, demo: demo, voz: voz}
-	s.consola, err = evaluacion.NuevaConsola(cfg, p, func(e evaluacion.EventoConsola) { s.eventos = append(s.eventos, e) }, time.Now)
+	s.consola, err = evaluacion.NuevaConsola(cfg, p, func(e evaluacion.EventoConsola) { s.eventos = append(s.eventos, e) }, time.Now, evaluacion.ConRecuperacion())
 	if err != nil {
 		return nil, err
 	}
 	r := chi.NewRouter()
 	r.Use(s.proteger)
-	for ruta, nombre := range map[string]string{"/": "index.html", "/app.js": "app.js", "/audio.mjs": "audio.mjs", "/voz-flujo.mjs": "voz-flujo.mjs", "/grabador.js": "grabador.js", "/estilos.css": "estilos.css"} {
+	for ruta, nombre := range map[string]string{"/": "index.html", "/app.js": "app.js", "/audio.mjs": "audio.mjs", "/voz-flujo.mjs": "voz-flujo.mjs", "/sesion.mjs": "sesion.mjs", "/grabador.js": "grabador.js", "/estilos.css": "estilos.css"} {
 		r.Get(ruta, func(w http.ResponseWriter, _ *http.Request) {
 			b, err := archivos.ReadFile("web/" + nombre)
 			if err != nil {
 				api.WriteError(w, 500, "InternalError", "No se pudo abrir la interfaz.", nil)
 				return
 			}
-			content := map[string]string{"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "audio.mjs": "text/javascript; charset=utf-8", "voz-flujo.mjs": "text/javascript; charset=utf-8", "grabador.js": "text/javascript; charset=utf-8", "estilos.css": "text/css; charset=utf-8"}
+			content := map[string]string{"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "audio.mjs": "text/javascript; charset=utf-8", "voz-flujo.mjs": "text/javascript; charset=utf-8", "sesion.mjs": "text/javascript; charset=utf-8", "grabador.js": "text/javascript; charset=utf-8", "estilos.css": "text/css; charset=utf-8"}
 			w.Header().Set("Content-Type", content[nombre])
 			_, _ = w.Write(b)
 		})
@@ -126,8 +131,9 @@ func (s *servidor) proteger(next http.Handler) http.Handler {
 
 func (s *servidor) estado() estado {
 	u, m := s.consola.Consumo()
+	chat, voz := s.consola.Esperas()
 	_, flujo := s.voz.(copilot.SintetizadorVozFlujo)
-	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil, VozFlujo: flujo}
+	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil, VozFlujo: flujo, EsperaChat: chat, EsperaVoz: voz}
 }
 
 func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +142,14 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.mu.Unlock()
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	plazo := 75 * time.Second
+	if r.URL.Path == "/api/transcribir" {
+		plazo = 35 * time.Second
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/voz") {
+		plazo = 50 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), plazo)
 	defer cancel()
 	switch r.URL.Path {
 	case "/api/estado":
@@ -196,7 +209,7 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 			accion = &tarjeta{a.Monto.PresentarUnidadesMayores() + " COP", a.NombreMostrado, a.RequiereCodigo}
 		}
 		s.ultimoTexto = respuesta.Texto
-		api.WriteData(w, 200, turno{respuesta.Texto, s.eventos, accion, s.estado()}, nil)
+		api.WriteData(w, 200, turno{respuesta.Texto, s.eventos, accion, s.estado(), respuesta.RespuestaDelBackend}, nil)
 	}
 }
 
@@ -244,6 +257,25 @@ func (s *servidor) sintetizar(ctx context.Context, w http.ResponseWriter, r *htt
 }
 
 func (s *servidor) error(w http.ResponseWriter, err error) {
+	var limite *copilot.ErrorLimiteIA
+	if errors.As(err, &limite) {
+		espera := int(math.Ceil(limite.ReintentarEn.Seconds()))
+		if espera < 1 || espera > 86400 {
+			espera = 60
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(espera))
+		codigo, mensaje := "ProviderLimit", "Google limitó temporalmente las solicitudes. Espera antes de volver a intentarlo."
+		if limite.Clase == copilot.LimiteDia {
+			codigo = "ProviderDailyLimit"
+			mensaje = "Google agotó la cuota diaria de este modelo. Se renueva a medianoche del Pacífico."
+		}
+		if limite.Clase == copilot.LimiteMinuto {
+			codigo = "ProviderMinuteLimit"
+			mensaje = "Google alcanzó el límite por minuto. La entrada se habilitará al terminar la espera."
+		}
+		api.WriteError(w, 429, codigo, mensaje, nil)
+		return
+	}
 	var bloqueo *copilot.ErrorBloqueo
 	if errors.As(err, &bloqueo) {
 		mensaje := "La respuesta se detuvo por una regla de contenido."
@@ -280,8 +312,8 @@ func (s *servidor) error(w http.ResponseWriter, err error) {
 		{copilot.ErrAudioNoEntendido, 422, "AudioNotUnderstood", "No entendí el audio. Prueba de nuevo o escribe tu pregunta."},
 		{copilot.ErrBloqueoIA, 422, "ResponseBlocked", "La respuesta fue bloqueada por seguridad."},
 		{copilot.ErrSolicitudIA, 422, "ValidationError", "La pregunta o solicitud no es válida."},
-		{copilot.ErrTimeoutIA, 504, "Timeout", "La consulta tardó demasiado. No se reintentó."},
-		{context.DeadlineExceeded, 504, "Timeout", "Se agotó el tiempo de espera. No se reintentó."},
+		{copilot.ErrTimeoutIA, 504, "Timeout", "La consulta tardó demasiado. Puedes reintentar el paso pendiente."},
+		{context.DeadlineExceeded, 504, "Timeout", "Se agotó el tiempo de espera. Puedes reintentar el paso pendiente."},
 	} {
 		if errors.Is(err, e.err) {
 			api.WriteError(w, e.status, e.code, e.msg, nil)
