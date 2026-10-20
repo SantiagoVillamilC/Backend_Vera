@@ -310,10 +310,28 @@ si sus criterios fueran v2. No se han obtenido nuevas métricas reales de las
 correcciones: la revisión automática de permisos rechazó las ocho solicitudes
 de diagnóstico por requerir autorización adicional para consumir cuota. No se
 consumieron solicitudes tras ese rechazo. La siguiente validación es una nueva
-corrida completa de 40 casos por tres repeticiones con v2 e instrucciones v5.
+corrida completa de 40 casos por tres repeticiones con v2 e instrucciones vigentes.
 
 Verificación local: suite completa con `-race`, `go vet`, lint sin incidencias
 nuevas y gate de generación sin cambios. El conjunto simulado conserva
 **52/52 casos aprobados**; la evidencia está en
 `evaluaciones/simulado-correcciones-v5.json`. Este resultado no sustituye la
 validación del comportamiento de Gemini ni permite cerrar todavía la HU.
+
+## Consola para pruebas manuales
+
+`Probar-Vera.cmd` abre una conversación interactiva con Gemini y herramientas
+financieras ficticias. Muestra función y argumentos, resultado validado del
+catálogo y respuesta final del modelo, manteniendo contexto y un límite de
+20 solicitudes por sesión. La [guía de consola](asistente-consola.md) explica
+los comandos y una demo que no consume cuota.
+
+La vista del resultado confirmó que el campo `pesos` ya incluye `COP`. Las
+instrucciones v6 corrigen la indicación de añadir la moneda de nuevo. Se conserva
+la evidencia histórica v5. La salida `evaluaciones/consola-demo.txt` corresponde
+a un proveedor simulado; no es una nueva medición de Gemini.
+
+La nueva evaluación real de hasta 300 solicitudes sigue pendiente de
+autorización explícita de ese consumo: la revisión automática interpretó el
+pedido de ejecutar pruebas como referido a la consola y rechazó esa corrida.
+Las pruebas de la consola y la demo se ejecutan localmente, sin cuota.

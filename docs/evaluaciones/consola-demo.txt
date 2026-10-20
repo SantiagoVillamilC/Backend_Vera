@@ -1,0 +1,38 @@
+
+============================================================
+ VERA | Consola de pruebas
+============================================================
+Modelo: demo simulada
+Datos: FICTICIOS. No consulta tu cuenta ni ejecuta dinero.
+Instrucciones: vera-2026-10-20-v6
+DEMO SIMULADA: no llama a Gemini.
+
+/ayuda: ejemplos  /nuevo: borrar contexto  /cuota  /salir
+
+Tú > ¿Cuánto tengo?
+
+[ DEMO ] Ejecutando el ejemplo local...
+
+[ FUNCIÓN ELEGIDA | argumentos ] "consultar_saldo"
+{}
+
+[ BACKEND DE PRUEBA | resultado ] "consultar_saldo"
+{
+  "datos": {
+    "disponible": {
+      "centavos": "12000000",
+      "pesos": "120000.00 COP"
+    },
+    "moneda": "COP",
+    "retenido": {
+      "centavos": "500000",
+      "pesos": "5000.00 COP"
+    }
+  }
+}
+
+[ VERA | respuesta final ]
+Tu saldo disponible es 120000.00 COP. Tienes 5000.00 COP retenidos.
+
+[ RESUMEN ] 1 función(es) | 2 vuelta(s) | 0.0 s
+Solicitudes de la sesión: 2/2
