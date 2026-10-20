@@ -2,6 +2,7 @@ package laboratorio
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestLaboratorioAutorizaYTrazaSinRed(t *testing.T) {
-	h, err := Nuevo(evaluacion.ConfigReal{Modelo: "demo", Repeticiones: 1, MaxSolicitudes: 5, NivelGratuitoConfirmado: true}, ProveedorDemo{}, "token-prueba", "localhost:8787", true)
+	h, err := Nuevo(evaluacion.ConfigReal{Modelo: "demo", Repeticiones: 1, MaxSolicitudes: 5, NivelGratuitoConfirmado: true}, ProveedorDemo{}, "token-prueba", "localhost:8787", true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +45,62 @@ func TestLaboratorioAutorizaYTrazaSinRed(t *testing.T) {
 	}
 }
 
+type vozPrueba struct {
+	llamadas int
+	textos   []string
+}
+
+func (v *vozPrueba) Sintetizar(_ context.Context, texto, _ string) ([]byte, error) {
+	v.llamadas++
+	v.textos = append(v.textos, texto)
+	return wavPrueba(), nil
+}
+
+func TestVozUsaUltimaRespuestaCacheYCuotaComun(t *testing.T) {
+	v := &vozPrueba{}
+	h, err := Nuevo(evaluacion.ConfigReal{Modelo: "demo", Repeticiones: 1, MaxSolicitudes: 3, NivelGratuitoConfirmado: true}, ProveedorDemo{}, "token-prueba", "localhost:8787", false, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peticion := func(ruta, texto string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost:8787"+ruta, strings.NewReader(texto))
+		r.Header.Set("X-Vera-Token", "token-prueba")
+		r.Header.Set("Content-Type", "text/plain")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := peticion("/api/voz", "Aoede"); w.Code != 422 || v.llamadas != 0 {
+		t.Fatal("generó voz sin respuesta")
+	}
+	if w := peticion("/api/preguntar", "¿Cuánto tengo?"); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	if w := peticion("/api/voz", "texto arbitrario"); w.Code != 422 || v.llamadas != 0 {
+		t.Fatal("aceptó texto arbitrario")
+	}
+	for range 2 {
+		if w := peticion("/api/voz", "Aoede"); w.Code != 200 || !strings.Contains(w.Body.String(), `"usadas":3`) {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	if v.llamadas != 1 || !strings.Contains(v.textos[0], "120000.00 COP") {
+		t.Fatal("no reutilizó la voz o alteró la respuesta", v)
+	}
+	if w := peticion("/api/voz", "Puck"); w.Code != 429 || v.llamadas != 1 {
+		t.Fatal("no respetó el presupuesto")
+	}
+	if w := peticion("/api/nueva", ""); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	if w := peticion("/api/voz", "Aoede"); w.Code != 422 || v.llamadas != 1 {
+		t.Fatal("conservó audio de la conversación anterior")
+	}
+}
+
 func TestAudioComparteCuotaYRechazaBytesInvalidos(t *testing.T) {
-	h, err := Nuevo(evaluacion.ConfigReal{Modelo: "demo", Repeticiones: 1, MaxSolicitudes: 3, NivelGratuitoConfirmado: true}, ProveedorDemo{}, "token-prueba", "localhost:8787", true)
+	h, err := Nuevo(evaluacion.ConfigReal{Modelo: "demo", Repeticiones: 1, MaxSolicitudes: 3, NivelGratuitoConfirmado: true}, ProveedorDemo{}, "token-prueba", "localhost:8787", true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

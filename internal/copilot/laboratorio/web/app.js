@@ -6,6 +6,7 @@ try { token ||= sessionStorage.getItem('vera-lab-token') || ''; if (token) sessi
 history.replaceState(null, '', location.pathname);
 let ocupada = true, grabando = false, grabacion = null, ultimoTexto = '', clipURL = '', demo = false, voces = [];
 let detenidoPorCuota = false;
+let vozNatural = false, peticionVoz = null, audioVoz = null, vozURL = '', cacheVoz = '', vozElegida = '';
 const hayVoz = 'speechSynthesis' in window;
 function estado(s) { $('estado').textContent = s; }
 function fallo(s = '') { $('error').textContent = s; $('error').hidden = !s; }
@@ -13,13 +14,18 @@ function controles(b) {
   ocupada = b;
   for (const id of ['enviar', 'pregunta', 'nueva', 'ejemplo']) $(id).disabled = b || detenidoPorCuota;
   $('microfono').disabled = (b && !grabando) || detenidoPorCuota || !navigator.mediaDevices?.getUserMedia || !window.AudioWorkletNode;
-  $('escuchar').disabled = b || !ultimoTexto || !hayVoz;
+  $('escuchar').disabled = b || !ultimoTexto || (!vozNatural && !hayVoz);
+  $('voz').disabled = b;
 }
 function actualizar(e) {
   $('modo').textContent = e.demo ? 'Demo local · sin cuota' : 'Gemini · datos ficticios';
   $('cuota').textContent = `${e.usadas}/${e.maximo} llamadas${e.demo ? ' simuladas' : ''}`;
   $('modelo').textContent = `Modelo: ${e.modelo}`; $('version').textContent = `Instrucciones: ${e.version}`;
   demo = e.demo;
+  vozNatural = e.voz_natural;
+  for (const opcion of $('voz').options) if (opcion.value.startsWith('gemini:')) opcion.disabled = !vozNatural;
+  if (!vozNatural && $('voz').value.startsWith('gemini:')) $('voz').value = 'navegador';
+  $('nota-voz').textContent = vozNatural ? 'Voz natural · Gemini. Generar audio utiliza una llamada; repetir la misma voz reutiliza el audio.' : 'Demo: voz del navegador. La voz natural de Gemini está disponible al iniciar sin -Demo.';
   if (demo) $('aviso').textContent = 'Demo sin llamadas a Google. La pregunta y la transcripción de ejemplo son fijas: «¿Cuánto tengo?». Puedes probar también la grabación.';
   $('nota-audio').textContent = demo ? 'Hasta 20 s · prueba local, sin enviar a Google' : 'Hasta 20 s · al detener, se envía a Gemini';
   $('pregunta').readOnly = demo;
@@ -30,7 +36,7 @@ async function api(ruta, opciones = {}) {
   const r = await fetch(ruta, {...opciones, headers: {'X-Vera-Token': token, ...opciones.headers}});
   const sobre = await r.json();
   if (!r.ok || !sobre.success) {
-    if (['SessionLimit', 'ProviderLimit', 'InvalidCredentials'].includes(sobre.error?.code)) detenidoPorCuota = true;
+    if (ruta !== '/api/voz' && ['SessionLimit', 'ProviderLimit', 'InvalidCredentials'].includes(sobre.error?.code)) detenidoPorCuota = true;
     throw new Error(sobre.error?.message || 'No se pudo completar la consulta.');
   }
   return sobre.data;
@@ -54,23 +60,52 @@ function traza(eventos) {
     bloque.append(titulo, pre); $('eventos').append(bloque);
   }
 }
-function detenerVoz() { if (hayVoz) speechSynthesis.cancel(); $('silenciar').disabled = true; }
-function escuchar() {
-  if (!hayVoz || !ultimoTexto || ocupada) return;
-  detenerVoz(); const frase = new SpeechSynthesisUtterance(ultimoTexto); frase.lang = 'es-CO';
-  frase.voice = voces.find((v) => v.voiceURI === $('voz').value) || null;
+function detenerVoz() { peticionVoz?.abort(); if (audioVoz) { audioVoz.pause(); audioVoz.currentTime = 0; } if (hayVoz) speechSynthesis.cancel(); $('silenciar').disabled = true; }
+function limpiarVoz() { detenerVoz(); if (vozURL) URL.revokeObjectURL(vozURL); vozURL = ''; audioVoz = null; cacheVoz = ''; vozElegida = ''; }
+async function escuchar() {
+  if (!ultimoTexto || ocupada) return;
+  detenerVoz(); fallo();
+  if (vozNatural && $('voz').value.startsWith('gemini:')) {
+    controles(true); $('silenciar').disabled = false;
+    const solicitud = new AbortController(); peticionVoz = solicitud;
+    try {
+      const voz = $('voz').value.slice(7);
+      if (cacheVoz !== ultimoTexto || vozElegida !== voz || !audioVoz) {
+        estado('Generando la voz natural de Vera…');
+        const datos = await api('/api/voz', {method: 'POST', headers: {'Content-Type': 'text/plain'}, body: voz, signal: solicitud.signal});
+        actualizar(datos.estado);
+        const bytes = Uint8Array.from(atob(datos.audio), (c) => c.charCodeAt(0));
+        if (vozURL) URL.revokeObjectURL(vozURL);
+        vozURL = URL.createObjectURL(new Blob([bytes], {type: datos.mime}));
+        audioVoz = new Audio(vozURL); cacheVoz = ultimoTexto; vozElegida = voz;
+        audioVoz.onended = () => { $('silenciar').disabled = true; if (!ocupada && !grabando) estado('Listo. Puedes continuar o volver a escuchar la respuesta.'); };
+        audioVoz.onerror = () => { $('silenciar').disabled = true; fallo('No se pudo reproducir el audio. Puedes volver a pulsar Escuchar respuesta.'); };
+      }
+      if (solicitud.signal.aborted) return;
+      await audioVoz.play(); estado('Vera está respondiendo. Puedes detener la voz o continuar.');
+    } catch (e) {
+      if (e.name !== 'AbortError') fallo(e.name === 'NotAllowedError' ? 'Tu navegador requiere un clic para reproducir. Pulsa Escuchar respuesta; el audio ya está generado.' : `${e.message} La respuesta escrita sigue disponible. Puedes elegir Voz del navegador.`);
+      estado('La respuesta escrita está lista. Puedes volver a escuchar o continuar.');
+      $('silenciar').disabled = true;
+    } finally { peticionVoz = null; await refrescarConsumo(); controles(false); }
+    return;
+  }
+  if (!hayVoz) { fallo('Este navegador no ofrece síntesis de voz local.'); return; }
+  const frase = new SpeechSynthesisUtterance(ultimoTexto); frase.lang = 'es-CO';
+  frase.voice = voces.find((v) => v.voiceURI === $('voz').value) || voces.find((v) => v.lang.startsWith('es')) || null;
   frase.onend = () => { $('silenciar').disabled = true; };
   frase.onerror = (e) => { $('silenciar').disabled = true; if (!['canceled', 'interrupted'].includes(e.error)) fallo('No se pudo leer la respuesta. Prueba otra voz del navegador.'); };
   $('silenciar').disabled = false; speechSynthesis.speak(frase);
 }
 function cargarVoces() {
-  if (!hayVoz) { $('automatica').disabled = true; $('voz').disabled = true; return; }
+  if (!hayVoz) return;
   const previa = $('voz').value;
   voces = speechSynthesis.getVoices().sort((a, b) => Number(b.lang.startsWith('es')) - Number(a.lang.startsWith('es')));
-  $('voz').replaceChildren(new Option('Voz del navegador', ''));
+  for (const opcion of [...$('voz').options]) if (!opcion.value.startsWith('gemini:') && opcion.value !== 'navegador') opcion.remove();
   for (const v of voces) $('voz').add(new Option(`${v.name} · ${v.lang}`, v.voiceURI));
   const preferida = voces.find((v) => v.voiceURI === previa) || voces.find((v) => v.lang.toLowerCase() === 'es-co') || voces.find((v) => v.lang.startsWith('es'));
-  if (preferida) $('voz').value = preferida.voiceURI;
+  if (previa.startsWith('gemini:') || previa === 'navegador') $('voz').value = previa;
+  else if (preferida) $('voz').value = preferida.voiceURI;
 }
 async function preguntar(texto) {
   mensaje('usuario', texto); $('eventos').replaceChildren(); $('cantidad-traza').textContent = 'Consultando…';
@@ -88,18 +123,18 @@ async function preguntar(texto) {
 }
 async function enviarTexto(texto) {
   if (ocupada || !texto.trim()) return;
-  controles(true); fallo(); detenerVoz(); ultimoTexto = '';
+  controles(true); fallo(); limpiarVoz(); ultimoTexto = '';
   try { await preguntar(demo ? '¿Cuánto tengo?' : texto.trim()); if (!demo) $('pregunta').value = ''; }
   catch (e) { fallo(e.message); estado('La consulta no se completó.'); }
-  finally { await refrescarConsumo(); controles(false); if ($('automatica').checked && !detenidoPorCuota) escuchar(); }
+  finally { await refrescarConsumo(); controles(false); if ($('automatica').checked && !detenidoPorCuota) await escuchar(); }
 }
 async function refrescarConsumo() { try { actualizar(await api('/api/estado')); } catch { /* Conserva el error original si el servidor se desconectó. */ } }
 $('formulario').addEventListener('submit', (e) => { e.preventDefault(); enviarTexto($('pregunta').value); });
 $('pregunta').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarTexto($('pregunta').value); } });
 $('ejemplo').addEventListener('click', () => enviarTexto('¿Cuánto tengo disponible?'));
-$('escuchar').addEventListener('click', escuchar); $('silenciar').addEventListener('click', detenerVoz);
+$('escuchar').addEventListener('click', escuchar); $('silenciar').addEventListener('click', () => { detenerVoz(); estado('Voz detenida. La respuesta escrita sigue disponible.'); });
 $('nueva').addEventListener('click', async () => {
-  if (ocupada) return; controles(true); fallo(); detenerVoz();
+  if (ocupada) return; controles(true); fallo(); limpiarVoz();
   try {
     actualizar(await api('/api/nueva', {method: 'POST'}));
     for (const nodo of $('mensajes').querySelectorAll('.mensaje,.tarjeta')) nodo.remove(); $('bienvenida').hidden = false;
@@ -122,11 +157,11 @@ async function detenerGrabacion() {
     actualizar(datos.estado); $('texto-transcripcion').textContent = datos.transcripcion; $('transcripcion').hidden = false;
     await preguntar(datos.transcripcion);
   } catch (e) { fallo(e.message); estado('No se pudo completar el turno de voz. Puedes escribir o grabar otra vez.'); }
-  finally { g.stream.getTracks().forEach((t) => t.stop()); if (g.contexto.state !== 'closed') await g.contexto.close(); grabacion = null; await refrescarConsumo(); controles(false); if ($('automatica').checked && !detenidoPorCuota) escuchar(); }
+  finally { g.stream.getTracks().forEach((t) => t.stop()); if (g.contexto.state !== 'closed') await g.contexto.close(); grabacion = null; await refrescarConsumo(); controles(false); if ($('automatica').checked && !detenidoPorCuota) await escuchar(); }
 }
 $('microfono').addEventListener('click', async () => {
   if (grabando) { await detenerGrabacion(); return; } if (ocupada) return;
-  controles(true); fallo(); detenerVoz(); ultimoTexto = ''; estado('Permite el micrófono en tu navegador.');
+  controles(true); fallo(); limpiarVoz(); ultimoTexto = ''; estado('Permite el micrófono en tu navegador.');
   let stream, contexto;
   try {
     stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
@@ -143,7 +178,7 @@ $('microfono').addEventListener('click', async () => {
     fallo(e.name === 'NotAllowedError' ? 'No se concedió acceso al micrófono. Habilítalo en el navegador o escribe tu pregunta.' : 'No se pudo iniciar el micrófono. Comprueba el dispositivo y abre esta página desde localhost.'); estado('Puedes continuar escribiendo.'); controles(false);
   }
 });
-window.addEventListener('pagehide', () => { detenerVoz(); if (clipURL) URL.revokeObjectURL(clipURL); if (grabacion) { clearTimeout(grabacion.limite); clearInterval(grabacion.temporizador); grabacion.stream.getTracks().forEach((t) => t.stop()); grabacion.contexto.close(); } });
+window.addEventListener('pagehide', () => { limpiarVoz(); if (clipURL) URL.revokeObjectURL(clipURL); if (grabacion) { clearTimeout(grabacion.limite); clearInterval(grabacion.temporizador); grabacion.stream.getTracks().forEach((t) => t.stop()); grabacion.contexto.close(); } });
 cargarVoces(); if (hayVoz) speechSynthesis.addEventListener('voiceschanged', cargarVoces);
 try { actualizar(await api('/api/estado')); estado('Listo. Escribe o pulsa «Hablar».'); controles(false); }
 catch (e) { fallo(e.message || 'No se pudo conectar. Abre el enlace completo del lanzador.'); estado('Sesión sin conectar.'); }

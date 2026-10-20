@@ -54,6 +54,18 @@ func (c *Consola) Transcribir(ctx context.Context, audio *copilot.AudioIA) (stri
 	return copilot.TranscribirAudio(ctx, c.presupuesto, audio)
 }
 
+// Sintetizar reserva una llamada del mismo presupuesto antes de generar voz.
+// El servidor serializa su uso junto al chat y la transcripción.
+func (c *Consola) Sintetizar(ctx context.Context, p copilot.SintetizadorVoz, texto, voz string) ([]byte, error) {
+	if p == nil {
+		return nil, copilot.ErrNoDisponibleIA
+	}
+	if err := c.presupuesto.reservar(ctx); err != nil {
+		return nil, err
+	}
+	return p.Sintetizar(ctx, texto, voz)
+}
+
 // NuevaConversacion borra el contexto sintético sin restablecer la cuota.
 func (c *Consola) NuevaConversacion() {
 	c.memoria.historial = nil

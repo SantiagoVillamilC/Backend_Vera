@@ -48,6 +48,7 @@ func run() error {
 	defer stop()
 	modelo := os.Getenv("VERA_MODELO")
 	var p copilot.ProveedorIA
+	var voz copilot.SintetizadorVoz
 	if *demo {
 		modelo = "Demo local"
 		*confirmado = true
@@ -60,6 +61,10 @@ func run() error {
 		p, err = gemini.Nuevo(ctx, gemini.Config{APIKey: os.Getenv("GEMINI_API_KEY"), Modelo: modelo, Timeout: 20 * time.Second, SinReintentos: true}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err != nil {
 			return errors.New("no se pudo configurar Gemini; revisa GEMINI_API_KEY y VERA_MODELO sin compartir la clave")
+		}
+		voz, err = gemini.NuevaVoz(os.Getenv("GEMINI_API_KEY"))
+		if err != nil {
+			return errors.New("no se pudo configurar la voz de Gemini")
 		}
 	}
 	token := os.Getenv("VERA_LAB_TOKEN")
@@ -80,7 +85,7 @@ func run() error {
 	}
 	defer func() { _ = l.Close() }()
 	_, puerto, _ := net.SplitHostPort(l.Addr().String())
-	h, err := laboratorio.Nuevo(evaluacion.ConfigReal{Modelo: modelo, Repeticiones: 1, MaxSolicitudes: *maximo, Intervalo: *intervalo, NivelGratuitoConfirmado: *confirmado}, p, token, "localhost:"+puerto, *demo)
+	h, err := laboratorio.Nuevo(evaluacion.ConfigReal{Modelo: modelo, Repeticiones: 1, MaxSolicitudes: *maximo, Intervalo: *intervalo, NivelGratuitoConfirmado: *confirmado}, p, token, "localhost:"+puerto, *demo, voz)
 	if err != nil {
 		return errors.New("no se pudo iniciar la sesión del laboratorio")
 	}

@@ -9,12 +9,14 @@ correspondiente automáticamente.
 En la pantalla puedes escribir, pulsar **Hablar** y después **Detener y enviar**,
 ver la transcripción y revisar las herramientas utilizadas. **Escuchar respuesta**
 lee el texto final; puedes elegir una voz disponible o activar la lectura
-automática. Grabar detiene la lectura anterior para evitar capturar a Vera.
+automática, activada inicialmente. Grabar detiene la lectura anterior para evitar capturar a Vera.
 
 La entrada de voz funciona por clips de hasta **20 segundos**, no como una
-llamada de audio simultánea. La salida de voz es lectura del navegador, no una
-voz personalizada entrenada para Vera. Si no existe una voz es-CO, se elige
-otra voz española disponible; puedes cambiarla en el selector.
+llamada de audio simultánea. En modo normal, la salida es audio generado por
+**Gemini 3.8 Flash TTS**, con **Aoede** como voz inicial. También puedes elegir
+Kore, Puck o una voz del navegador. El estilo pide español de Colombia, calidez,
+ritmo conversacional y pronunciación clara de cifras. El acento final depende
+del modelo; no es una voz personalizada entrenada para Vera.
 
 ## Qué es real y qué es de prueba
 
@@ -33,9 +35,13 @@ verificar captura, formato, transporte, catálogo, traza y reproducción; no mid
 la capacidad de Gemini para entender lo que dices. El modo normal usa su
 transcripción real. No uses datos personales en las pruebas.
 
-La sesión tiene **20 solicitudes** por defecto, compartidas entre texto y
-transcripción. Un audio añade una llamada de transcripción a las necesarias
-para contestar. El navegador muestra el consumo; «Nueva conversación» borra el
+La sesión tiene **20 solicitudes** por defecto, compartidas entre texto,
+transcripción y síntesis de voz. Un turno hablado añade una llamada de
+transcripción y una de síntesis a las necesarias para contestar. La síntesis
+ocurre después de mostrar el texto. Repetir la última respuesta con la misma
+voz reutiliza el audio en memoria; cambiar la voz vuelve a generarlo. La demo
+usa únicamente la voz del navegador y no consume Google.
+El navegador muestra el consumo; «Nueva conversación» borra el
 contexto pero conserva ese contador. No hay reintentos automáticos ni cambio
 de modelo. Para un límite distinto: `Probar-Vera-Voz.cmd -MaxSolicitudes 10`.
 
@@ -43,7 +49,10 @@ El audio y el historial permanecen en memoria. Los bytes de audio recibidos se
 limpian después de transcribir; el navegador conserva la última grabación para
 que puedas reproducirla hasta reemplazarla, reiniciar la conversación o cerrar
 la página. Esta herramienta no escribe grabaciones en archivos. El modo real
-transmite el audio a Google para transcribirlo.
+transmite el audio a Google para transcribirlo y el texto final para sintetizarlo.
+El adaptador TTS envía `store=false` para desactivar el almacenamiento de la
+interacción recuperable en Google; esto no sustituye los términos de uso y
+tratamiento de datos del Free Tier.
 
 ## Cómo Gemini actúa como Vera
 
@@ -128,9 +137,32 @@ transcripción del backend: `SoloTranscripcion=true`, sin herramientas, y salida
 JSON con una clave `transcripcion`. Se comprueba esa salida antes de mostrarla.
 La pantalla pasa el texto a `/api/preguntar`, reutilizando el ciclo de arriba.
 
-La respuesta final puede leerse con `SpeechSynthesis`. Esto no necesita otra
-llamada a Gemini; las voces y su disponibilidad dependen del navegador y del
-sistema. La aplicación no afirma que todas esas voces funcionen sin conexión.
+`/api/voz` acepta únicamente el nombre de una de las tres voces; recupera el
+texto de la última respuesta en el servidor. No acepta texto arbitrario ni
+invoca herramientas. `SintetizadorVoz` separa esta capacidad del proveedor del
+chat. Su adaptador usa `POST /v1beta/interactions`, la misma `GEMINI_API_KEY`,
+el modelo fijo `gemini-3.8-flash-tts` y `speech_metadata.style` separado del texto
+literal. Devuelve WAV PCM mono de 24 kHz y 16 bits. Hay timeout de 45 segundos,
+límites de respuesta y una sola solicitud, sin reintentos ni cambios de modelo.
+
+El servidor y el navegador conservan sólo el último audio y la voz seleccionada.
+Cambiar de turno o reiniciar la conversación limpia esa caché. Si TTS falla,
+la respuesta escrita permanece y el usuario puede elegir explícitamente
+`SpeechSynthesis`, cuya disponibilidad depende del navegador y del sistema.
+La aplicación no afirma que todas esas voces funcionen sin conexión. Si el
+navegador bloquea la reproducción automática, «Escuchar respuesta» reproduce
+el audio ya generado sin consumir otra llamada.
+
+Elección: TTS conserva el orquestador y las cifras actuales y añade expresividad
+al texto terminado. Live API requeriría otra sesión y otro ciclo de audio y
+herramientas. Google Cloud Text-to-Speech requiere su propia configuración de
+facturación. Gemini TTS usa la clave existente y ofrece Free Tier según la
+[tabla de precios](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash-tts)
+consultada el 20 de octubre de 2026. Las cuotas dependen del proyecto; no se
+habilita facturación desde este laboratorio.
+
+Referencia de [síntesis Gemini](https://ai.google.dev/gemini-api/docs/speech-generation)
+y [almacenamiento de interacciones](https://ai.google.dev/gemini-api/docs/interactions-overview).
 
 Referencias del navegador:
 [captura del micrófono](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia),
@@ -150,6 +182,10 @@ de WAV, cuota compartida, reinicio sin recuperar cuota, codificación de audio
 48/44,1 kHz a 16 kHz y límite de 20 segundos. La demo se revisó en navegador,
 incluyendo respuesta, traza y activación de lectura. La prueba manual de tu
 micrófono y la comprensión del audio por Gemini real requieren el modo normal.
+La integración TTS tiene pruebas con HTTP simulado para texto literal, voz,
+cuota, errores sin reintentos, salida inválida y caché del último turno.
+Se realizó además una solicitud real de síntesis con texto ficticio y Aoede;
+la muestra de 8,64 segundos está en `docs/evaluaciones/vera-voz-aoede.wav`.
 
 Archivos principales: `cmd/laboratorio-vera/main.go`,
 `internal/copilot/laboratorio/servidor.go`, `internal/copilot/instrucciones.go`,

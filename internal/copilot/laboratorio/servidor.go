@@ -26,11 +26,12 @@ import (
 var archivos embed.FS
 
 type estado struct {
-	Modelo  string `json:"modelo"`
-	Version string `json:"version"`
-	Usadas  int    `json:"usadas"`
-	Maximo  int    `json:"maximo"`
-	Demo    bool   `json:"demo"`
+	Modelo     string `json:"modelo"`
+	Version    string `json:"version"`
+	Usadas     int    `json:"usadas"`
+	Maximo     int    `json:"maximo"`
+	Demo       bool   `json:"demo"`
+	VozNatural bool   `json:"voz_natural"`
 }
 
 type tarjeta struct {
@@ -52,16 +53,19 @@ type servidor struct {
 	eventos               []evaluacion.EventoConsola
 	modelo, token, puerto string
 	demo                  bool
+	voz                   copilot.SintetizadorVoz
+	ultimoTexto, vozCache string
+	audioCache            []byte
 }
 
 // Nuevo protege la sesión con un token efímero y acepta sólo hosts y orígenes locales.
 // La clave de Gemini nunca se entrega al navegador.
-func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string, demo bool) (http.Handler, error) {
+func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string, demo bool, voz copilot.SintetizadorVoz) (http.Handler, error) {
 	_, puerto, err := net.SplitHostPort(host)
 	if err != nil || token == "" {
 		return nil, errors.New("laboratorio: host y token obligatorios")
 	}
-	s := &servidor{modelo: cfg.Modelo, token: token, puerto: puerto, demo: demo}
+	s := &servidor{modelo: cfg.Modelo, token: token, puerto: puerto, demo: demo, voz: voz}
 	s.consola, err = evaluacion.NuevaConsola(cfg, p, func(e evaluacion.EventoConsola) { s.eventos = append(s.eventos, e) }, time.Now)
 	if err != nil {
 		return nil, err
@@ -84,6 +88,7 @@ func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string,
 	r.Post("/api/preguntar", s.api)
 	r.Post("/api/transcribir", s.api)
 	r.Post("/api/nueva", s.api)
+	r.Post("/api/voz", s.api)
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		api.WriteError(w, 404, "NotFound", "Ruta no encontrada.", nil)
 	})
@@ -119,7 +124,7 @@ func (s *servidor) proteger(next http.Handler) http.Handler {
 
 func (s *servidor) estado() estado {
 	u, m := s.consola.Consumo()
-	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo}
+	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil}
 }
 
 func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
@@ -134,9 +139,12 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 	case "/api/estado":
 		api.WriteData(w, 200, s.estado(), nil)
 	case "/api/nueva":
+		s.limpiarVoz()
 		s.consola.NuevaConversacion()
 		s.eventos = nil
 		api.WriteData(w, 200, s.estado(), nil)
+	case "/api/voz":
+		s.sintetizar(ctx, w, r)
 	case "/api/transcribir":
 		if tipo, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); tipo != "audio/wav" {
 			api.WriteError(w, 415, "UnsupportedMediaType", "Envía un clip WAV.", nil)
@@ -164,6 +172,7 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 			Estado        estado `json:"estado"`
 		}{texto, s.estado()}, nil)
 	case "/api/preguntar":
+		s.limpiarVoz()
 		if tipo, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); tipo != "text/plain" {
 			api.WriteError(w, 415, "UnsupportedMediaType", "Envía la pregunta como texto.", nil)
 			return
@@ -183,8 +192,48 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 		if a := respuesta.AccionPendiente; a != nil {
 			accion = &tarjeta{a.Monto.PresentarUnidadesMayores() + " COP", a.NombreMostrado, a.RequiereCodigo}
 		}
+		s.ultimoTexto = respuesta.Texto
 		api.WriteData(w, 200, turno{respuesta.Texto, s.eventos, accion, s.estado()}, nil)
 	}
+}
+
+func (s *servidor) limpiarVoz() {
+	clear(s.audioCache)
+	s.audioCache = nil
+	s.ultimoTexto = ""
+	s.vozCache = ""
+}
+
+func (s *servidor) sintetizar(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if s.voz == nil {
+		api.WriteError(w, 503, "VoiceUnavailable", "La voz natural no está disponible en esta sesión. Puedes elegir la voz del navegador.", nil)
+		return
+	}
+	if tipo, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); tipo != "text/plain" {
+		api.WriteError(w, 415, "UnsupportedMediaType", "Envía el nombre de la voz como texto.", nil)
+		return
+	}
+	b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 32))
+	voz := string(b)
+	if err != nil || (voz != "Aoede" && voz != "Kore" && voz != "Puck") || s.ultimoTexto == "" {
+		api.WriteError(w, 422, "ValidationError", "Primero consulta a Vera y selecciona una voz disponible.", nil)
+		return
+	}
+	if s.vozCache != voz || len(s.audioCache) == 0 {
+		audio, err := s.consola.Sintetizar(ctx, s.voz, s.ultimoTexto, voz)
+		if err != nil {
+			s.error(w, err)
+			return
+		}
+		clear(s.audioCache)
+		s.audioCache = audio
+		s.vozCache = voz
+	}
+	api.WriteData(w, 200, struct {
+		Audio  string `json:"audio"`
+		MIME   string `json:"mime"`
+		Estado estado `json:"estado"`
+	}{base64.StdEncoding.EncodeToString(s.audioCache), "audio/wav", s.estado()}, nil)
 }
 
 func (s *servidor) error(w http.ResponseWriter, err error) {
