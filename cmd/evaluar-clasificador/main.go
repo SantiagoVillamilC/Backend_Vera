@@ -144,7 +144,11 @@ func escalonesDe(modo string) (inteligencia.Escalones, error) {
 	case ModoClasificador:
 		return inteligencia.Escalones{inteligencia.EscalonClasificador: {}}, nil
 	case ModoPrimerCorte:
-		return inteligencia.PrimerCorteConClasificador(), nil
+		// Primer corte tal como queda con las dos banderas encendidas: léxico antes que clasificador.
+		escalones := inteligencia.PrimerCorte()
+		escalones[inteligencia.EscalonLexico] = struct{}{}
+		escalones[inteligencia.EscalonClasificador] = struct{}{}
+		return escalones, nil
 	case ModoTodos:
 		return inteligencia.TodosLosEscalones(), nil
 	default:
