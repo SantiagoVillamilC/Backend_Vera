@@ -50,6 +50,33 @@ sql:
           nucleo_outbox: Outbox
           nucleo_descuadre: Descuadre
           nucleo_conciliacion_corrida: ConciliacionCorrida
+  # Repositorio de inteligencia: lee el ledger y escribe solo su propio esquema.
+  - engine: postgresql
+    schema:
+      - bd/migraciones/0004_create_nucleo_schema_and_role.sql
+      - bd/migraciones/0007_create_ledger.sql
+      - bd/migraciones/0021_create_inteligencia_schema_and_role.sql
+      - bd/migraciones/0022_create_categoria.sql
+      - bd/migraciones/0023_create_movimiento_enriquecido_y_memoria.sql
+      - bd/migraciones/0024_create_aviso_y_cursor.sql
+    queries: bd/consultas-inteligencia
+    gen:
+      go:
+        package: repositorio
+        out: internal/inteligencia/internal/repositorio
+        sql_package: pgx/v5
+        sql_driver: github.com/jackc/pgx/v5
+        emit_interface: true
+        emit_json_tags: true
+        emit_empty_slices: true
+        wrap_errors: true
+        rename:
+          inteligencia_categorium: Categoria
+          inteligencia_movimiento_enriquecido: MovimientoEnriquecido
+          inteligencia_memoria_correccion: MemoriaCorreccion
+          inteligencia_aviso: Aviso
+          inteligencia_aviso_entrega: AvisoEntrega
+          inteligencia_cursor_enriquecimiento: CursorEnriquecimiento
   # Repositorio de auth (fase0-2): su propio esquema y su propio rol, sin el ledger del núcleo.
   - engine: postgresql
     schema:
