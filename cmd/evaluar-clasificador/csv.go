@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"os"
 	"strings"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 )
 
 // leerFilas parsea un CSV completo y devuelve la cabecera y las filas, tolerando comas y comillas
@@ -42,6 +45,38 @@ func campo(fila []string, indice map[string]int, columna string) string {
 		return ""
 	}
 	return strings.TrimSpace(fila[posicion])
+}
+
+// leerLexico lee el CSV del léxico con las columnas palabra y categoria.
+func leerLexico(ruta string) ([]inteligencia.ParLexico, error) {
+	crudo, err := os.ReadFile(ruta) //nolint:gosec // la ruta la pasa el operador.
+	if err != nil {
+		return nil, fmt.Errorf("leer el léxico: %w", err)
+	}
+	cabecera, registros, err := leerFilas(crudo)
+	if err != nil {
+		return nil, err
+	}
+	indice := indiceDeColumnas(cabecera)
+	for _, obligatoria := range []string{"palabra", "categoria"} {
+		if _, existe := indice[obligatoria]; !existe {
+			return nil, fmt.Errorf("el léxico no trae la columna %q", obligatoria)
+		}
+	}
+	pares := make([]inteligencia.ParLexico, 0, len(registros))
+	for numero, registro := range registros {
+		palabra := strings.ToUpper(strings.TrimSpace(campo(registro, indice, "palabra")))
+		categoria := strings.TrimSpace(campo(registro, indice, "categoria"))
+		if palabra == "" {
+			return nil, fmt.Errorf("la fila %d del léxico no trae palabra", numero+2)
+		}
+		pares = append(pares, inteligencia.ParLexico{Palabra: palabra,
+			Categoria: inteligencia.Categoria(categoria)})
+	}
+	if len(pares) == 0 {
+		return nil, fmt.Errorf("el léxico está vacío")
+	}
+	return pares, nil
 }
 
 // esSi interpreta las formas en que una persona escribe un sí en la hoja.

@@ -16,6 +16,7 @@ type Servicio struct {
 	clasificador *Modelo
 	avisosCfg    avisos.Configuracion
 	metricas     Metricas
+	lexico       *Lexico
 }
 
 // OpcionServicio ajusta el servicio al construirlo.

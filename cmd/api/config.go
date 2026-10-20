@@ -46,6 +46,7 @@ type Config struct {
 	ExpirationTTL           time.Duration
 	EnriquecimientoInterval time.Duration
 	Clasificador            inteligencia.ModoClasificador
+	Lexico                  inteligencia.ModoLexico
 	AvisosActivo            bool
 	AvisosHora              string
 	MetricasActivo          bool
@@ -175,6 +176,11 @@ func LoadConfig() (*Config, error) {
 	if errClasificador != nil {
 		errs = append(errs, errClasificador)
 	}
+	var errLexico error
+	cfg.Lexico, errLexico = inteligencia.InterpretarModoLexico(os.Getenv("LEXICO"))
+	if errLexico != nil {
+		errs = append(errs, errLexico)
+	}
 	var errMetricas error
 	cfg.MetricasActivo, errMetricas = boolOr("METRICAS_ACTIVO", "false")
 	if errMetricas != nil {
@@ -260,6 +266,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("expiration_interval", c.ExpirationInterval.String()),
 		slog.String("enriquecimiento_interval", c.EnriquecimientoInterval.String()),
 		slog.String("clasificador", string(c.Clasificador)),
+		slog.String("lexico", string(c.Lexico)),
 		slog.Bool("avisos_activo", c.AvisosActivo),
 		slog.String("avisos_hora", c.AvisosHora),
 		slog.Bool("metricas_activo", c.MetricasActivo),

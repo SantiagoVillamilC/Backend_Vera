@@ -56,6 +56,17 @@ func run() error {
 		}
 		opciones = append(opciones, inteligencia.ConClasificador(modelo))
 	}
+	modoLexico, err := inteligencia.InterpretarModoLexico(os.Getenv("LEXICO"))
+	if err != nil {
+		return err
+	}
+	if modoLexico == inteligencia.ModoLexicoV2 {
+		lexico, err := inteligencia.CargarLexicoV2()
+		if err != nil {
+			return fmt.Errorf("léxico: %w", err)
+		}
+		opciones = append(opciones, inteligencia.ConLexico(lexico))
+	}
 	servicio := inteligencia.NuevoServicio(pool, opciones...)
 	switch os.Args[1] {
 	case "lote":

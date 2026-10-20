@@ -121,7 +121,7 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 						memorias[efecto.UsuarioID] = memoria
 					}
 					contraparte := ResolverContraparte(grupo.apuntes, efecto.UsuarioID, nombres)
-					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, s.clasificador, &resultado); err != nil {
+					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, s.clasificador, s.lexico.ParesDeLexico(), &resultado); err != nil {
 						return Resultado{}, err
 					}
 				}
@@ -425,7 +425,7 @@ func memoriaDeUsuario(ctx context.Context, q *repositorio.Queries, usuarioID str
 
 func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, efecto Efecto,
 	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, clasificador *Modelo,
-	resultado *Resultado) error {
+	lexico []ParLexico, resultado *Resultado) error {
 	monto, valido := Absoluto(efecto.Neto)
 	if !valido {
 		return errors.New("inteligencia: el monto del movimiento no cabe en int64")
@@ -458,8 +458,9 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 	}
 	decision := Decidir(entrada, Recursos{
 		Memoria:      Proyectar(memoria, efecto.UsuarioID, destino),
+		Lexico:       lexico,
 		Clasificador: clasificador,
-	}, escalonesDelLote(clasificador))
+	}, escalonesDelLote(clasificador, lexico))
 	categoria := decision.Categoria
 	if categoria == "" {
 		categoria = SinCategoria
@@ -541,10 +542,15 @@ func intentarBloqueo(ctx context.Context, tx transaccionDeInteligencia) (bool, e
 	return bloqueado, nil
 }
 
-// escalonesDelLote es el punto único donde el lote decide si el clasificador entra o no.
-func escalonesDelLote(clasificador *Modelo) Escalones {
-	if clasificador == nil {
-		return PrimerCorte()
+// escalonesDelLote es el punto único donde el lote decide qué escalones entran. El léxico va antes que
+// el clasificador, como manda el contrato, y ninguno de los dos cambia el primer corte por sí solo.
+func escalonesDelLote(clasificador *Modelo, lexico []ParLexico) Escalones {
+	escalones := PrimerCorte()
+	if len(lexico) > 0 {
+		escalones[EscalonLexico] = struct{}{}
 	}
-	return PrimerCorteConClasificador()
+	if clasificador != nil {
+		escalones[EscalonClasificador] = struct{}{}
+	}
+	return escalones
 }

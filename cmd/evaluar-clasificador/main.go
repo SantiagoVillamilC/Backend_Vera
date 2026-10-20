@@ -37,6 +37,7 @@ func run() error {
 	modo := flag.String("modo", ModoPrimerCorte, "lexico, clasificador, primer-corte o todos")
 	umbral := flag.Float64("umbral", 0, "precisión mínima de lo mostrado, 0 para solo informar")
 	salida := flag.String("salida", "", "ruta donde escribir el informe JSON, vacío para solo stdout")
+	lexicoCSV := flag.String("lexico", "", "CSV con palabra y categoría que reemplaza el léxico del artefacto")
 	flag.Parse()
 
 	if *hoja == "" {
@@ -60,7 +61,14 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("cargar el artefacto: %w", err)
 	}
-	decidir, err := decisorDe(*modo, modelo)
+	lexico := paresDelLexico(modelo)
+	if *lexicoCSV != "" {
+		lexico, err = leerLexico(*lexicoCSV)
+		if err != nil {
+			return err
+		}
+	}
+	decidir, err := decisorDe(*modo, modelo, lexico)
 	if err != nil {
 		return err
 	}
@@ -104,12 +112,12 @@ func modoDe(modo string) (string, error) {
 }
 
 // decisorDe arma el decisor del modo con los escalones que no necesitan Postgres.
-func decisorDe(modo string, modelo *inteligencia.Modelo) (Decisor, error) {
+func decisorDe(modo string, modelo *inteligencia.Modelo, lexico []inteligencia.ParLexico) (Decisor, error) {
 	escalones, err := escalonesDe(modo)
 	if err != nil {
 		return nil, err
 	}
-	recursos := inteligencia.Recursos{Lexico: paresDelLexico(modelo)}
+	recursos := inteligencia.Recursos{Lexico: lexico}
 	if modo == ModoClasificador || modo == ModoPrimerCorte || modo == ModoTodos {
 		recursos.Clasificador = modelo
 	}

@@ -101,6 +101,13 @@ func run() error {
 	if modeloClasificador != nil {
 		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConClasificador(modeloClasificador))
 	}
+	if cfg.Lexico == inteligencia.ModoLexicoV2 {
+		lexico, err := inteligencia.CargarLexicoV2()
+		if err != nil {
+			return fmt.Errorf("léxico: %w", err)
+		}
+		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConLexico(lexico))
+	}
 	if metricasInteligencia != nil {
 		metricasInteligencia.ClasificadorActivo(modeloClasificador != nil)
 		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConMetricas(metricasInteligencia))

@@ -3,11 +3,13 @@
 package inteligencia
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -160,5 +162,61 @@ func TestAvisosIdempotentesNoCuentanComoEmitidos(t *testing.T) {
 	}
 	if segunda.YaEmitidos == 0 {
 		t.Fatal("la segunda corrida debía contar las tarjetas ya emitidas")
+	}
+}
+
+// TestLoteConLexicoEscribeElOrigenLexico es la prueba de que el escalón 5, cuando está encendido,
+// deja su origen en la copia y no se confunde con el clasificador.
+func TestLoteConLexicoEscribeElOrigenLexico(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	lexico, err := CargarLexicoV2()
+	if err != nil {
+		t.Fatalf("CargarLexicoV2: %v", err)
+	}
+	servicio := NuevoServicio(pool, ConLexico(lexico))
+
+	usuario := uuid.NewString()
+	sembrarCuentaDeUsuario(t, pool, usuario)
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("abrir la transacción de la cuenta: %v", err)
+	}
+	defer func() { _ = tx.Rollback(t.Context()) }()
+	if _, err := tx.Exec(t.Context(), "SET LOCAL ROLE rol_nucleo"); err != nil {
+		t.Fatalf("bajar a rol_nucleo: %v", err)
+	}
+	if _, err := tx.Exec(t.Context(), `
+INSERT INTO nucleo.cuenta (id, naturaleza, clase) VALUES ($1, 'pasivo', 'comercio')
+ON CONFLICT (id) DO NOTHING`, "pasivo:liquidacion_pendiente:comercio-0"); err != nil {
+		t.Fatalf("crear la cuenta del comercio: %v", err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatalf("confirmar la cuenta del comercio: %v", err)
+	}
+	sembrarAsiento(t, pool, "liquidacion_confirmada", nil, "DROGUERIA NORTE 12",
+		time.Date(2026, 8, 12, 15, 0, 0, 0, time.UTC), []lineaDePrueba{
+			{"pasivo:usuario:" + usuario + ":disponible", 120_000_00},
+			{"pasivo:liquidacion_pendiente:comercio-0", -120_000_00},
+		})
+
+	resultado, err := servicio.Enriquecer(t.Context(), 200)
+	if err != nil {
+		t.Fatalf("Enriquecer: %v", err)
+	}
+	if resultado.PorOrigen[OrigenLexico] == 0 {
+		t.Fatalf("orígenes = %v, quiero al menos uno por léxico", resultado.PorOrigen)
+	}
+	var origen, categoria string
+	_, err = enTransaccion(t.Context(), poolDeInteligencia{pool: pool},
+		func(ctx context.Context, tx transaccionDeInteligencia, _ *repositorio.Queries) (struct{}, error) {
+			return struct{}{}, tx.QueryRow(ctx, `
+SELECT origen_categoria, categoria FROM inteligencia.movimiento_enriquecido
+ WHERE usuario_id = $1 ORDER BY ocurrido_en DESC LIMIT 1`, usuario).Scan(&origen, &categoria)
+		})
+	if err != nil {
+		t.Fatalf("leer la copia: %v", err)
+	}
+	if origen != OrigenLexico || categoria != string(CategoriaSalud) {
+		t.Fatalf("origen %q categoría %q, quiero %q y %q", origen, categoria, OrigenLexico, CategoriaSalud)
 	}
 }
