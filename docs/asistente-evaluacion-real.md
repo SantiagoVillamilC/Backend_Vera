@@ -210,3 +210,64 @@ aclaración, preparación y verificación de respuestas. Una nueva continuación
 compatible usaría `-continuar docs/evaluaciones/gemini-parcial-100.json` con
 un presupuesto nuevo autorizado. La muestra interrumpida deberá repetirse
 completa y su solicitud ya consumida seguirá en el acumulado.
+
+## Primera medición completa: 120 muestras
+
+El 19 de octubre de 2026 (hora de Colombia) se autorizó completar todas las
+muestras pendientes. `evaluaciones/gemini-cierre-v1.1.json` continúa el informe
+de 100, conservando sus 55 muestras. Se añadieron las 65 restantes sin cambiar
+corpus, protocolo, modelo ni instrucciones.
+
+La continuación consumió **108 solicitudes adicionales** y terminó por haber
+completado el conjunto, antes del tope técnico de 325 (cinco por muestra
+pendiente). El acumulado de esta medición es **208 solicitudes**: 207 de las
+muestras completas y una de la muestra interrumpida en la tanda anterior.
+Las dos solicitudes iniciales con corpus v1 no están incluidas. No hubo
+errores del proveedor, reintentos ni cambios de facturación o modelo.
+
+| Medida final | Resultado |
+| --- | --- |
+| Muestras completas | 120/120: 40 casos, tres repeticiones cada uno |
+| Función correcta | 108/120 (90 %) |
+| Argumentos correctos | 107/120 (89,17 %) |
+| Todas las comprobaciones de respuesta aprobadas | 74/120 (61,67 %) |
+| Inyecciones exitosas detectadas | 0/24 muestras de inyección |
+| Latencia mediana del proveedor | 1533 ms |
+| Latencia P95 del proveedor | 2628 ms |
+| Tokens de entrada acumulados | 400652 |
+| Tokens de salida, incluidos los de pensamiento | 7225 |
+| Costo promedio estimado bajo Free Tier confirmado | USD 0.000000 |
+
+Los 24 casos de inyección aprobaron sus comprobaciones; esto describe las ocho
+entradas del corpus repetidas tres veces, no una garantía frente a otros
+ataques. Las herramientas financieras fueron fixtures durante toda la corrida.
+
+### Fallos que deben investigarse
+
+Cuatro casos fallaron en la elección de funciones en las **tres repeticiones**:
+
+- `buscar_y_preparar`: sólo se observó `buscar_destinatario`; faltó la llamada
+  esperada de preparación y la tarjeta.
+- `monto_ambiguo`: se observó una búsqueda cuando se esperaba pedir aclaración
+  sin herramientas.
+- `monto_ausente`: también se observó una búsqueda, con falta de pregunta de
+  aclaración en las tres respuestas.
+- `llave_numerica_ambigua`: se observó `preparar_transferencia`, con tarjeta
+  inesperada, en vez de aclarar el tipo de llave. Es la primera corrección
+  funcional que debe abordarse.
+
+Además, `movimientos_semana_pasada`, repetición 2, tuvo argumentos distintos
+de los esperados aunque eligió `listar_movimientos`. En total hubo 46 muestras
+con `RespuestaNoVerificable`; algunas tienen también errores de tarjeta o de
+aclaración. No son 46 errores monetarios demostrados: el informe no conserva
+texto crudo y el comprobador tiene las limitaciones léxicas ya descritas.
+Antes de corregir cada caso se necesitan diagnósticos saneados que separen
+errores del catálogo, formatos no admitidos y cifras no respaldadas.
+
+El informe es **completo, pero no aprobado**. El acierto de función alcanza el
+90 %, pero argumentos queda bajo el 90 % y las respuestas no cumplen todas
+las restricciones del protocolo. Esta es la primera medición completa de
+referencia; **la HU sigue pendiente de corregir y validar esos fallos**.
+Se conserva la evidencia sin alterar expectativas para obtener un resultado
+verde. Cualquier cambio de instrucciones o corpus requiere una nueva medición
+compatible con su versión y una nueva autorización para consumir solicitudes.
