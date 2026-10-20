@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 )
@@ -29,6 +30,14 @@ type DecisionDeOro struct {
 	Categoria string
 	Origen    string
 	Abstuvo   bool
+	Lexico    []Coincidencia
+}
+
+// Coincidencia es una palabra del léxico que el nombre activa, con la categoría que el léxico le da.
+// Se llena solo en los modos que encienden el escalón 5 y es nil cuando no se midió.
+type Coincidencia struct {
+	Palabra   string `json:"palabra"`
+	Categoria string `json:"categoria"`
 }
 
 // Decisor es el punto de inyección: en producción decide la cascada real y en las pruebas un doble.
@@ -66,25 +75,51 @@ type ErrorDeCategoria struct {
 	Veces    int    `json:"veces"`
 }
 
+// DesgloseLexico separa por qué el léxico no decide: no encontró ninguna palabra o encontró palabras
+// que apuntan a categorías distintas. Solo se llena en los modos que encienden el escalón 5.
+type DesgloseLexico struct {
+	FilasConEtiqueta      int                   `json:"filas_con_etiqueta"`
+	UnaCategoria          int                   `json:"una_categoria"`
+	Conflictos            int                   `json:"conflictos"`
+	SinPalabra            int                   `json:"sin_palabra"`
+	UnaCategoriaCorrecta  int                   `json:"una_categoria_correcta"`
+	ConflictosConAcierto  int                   `json:"conflictos_con_acierto"`
+	ConflictosPorPalabras []ConflictoDePalabras `json:"conflictos_por_palabras"`
+}
+
+// ConflictoDePalabras es un conjunto de palabras que aparecen juntas y apuntan a categorías distintas.
+type ConflictoDePalabras struct {
+	Palabras  string `json:"palabras"`
+	Veces     int    `json:"veces"`
+	Correctas int    `json:"correctas"`
+}
+
 // Informe es el resultado completo de una corrida de medición.
 type Informe struct {
-	Modo         string             `json:"modo"`
-	Umbral       float64            `json:"umbral"`
-	Cumple       bool               `json:"cumple"`
-	CSV          string             `json:"csv"`
-	CSVSha256    string             `json:"csv_sha256"`
-	Artefacto    ArtefactoMedido    `json:"artefacto"`
-	Total        Conteo             `json:"total"`
-	PorParte     []FilaDeParte      `json:"por_parte"`
-	PorEstrato   []FilaDeParte      `json:"por_estrato"`
-	PorCategoria []FilaDeCategoria  `json:"por_categoria"`
-	Errores      []ErrorDeCategoria `json:"errores"`
+	Modo           string             `json:"modo"`
+	Umbral         float64            `json:"umbral"`
+	Cumple         bool               `json:"cumple"`
+	CSV            string             `json:"csv"`
+	CSVSha256      string             `json:"csv_sha256"`
+	Parte          string             `json:"parte,omitempty"`
+	Artefacto      ArtefactoMedido    `json:"artefacto"`
+	CatalogoCSV    string             `json:"catalogo_csv,omitempty"`
+	CatalogoSha256 string             `json:"catalogo_sha256,omitempty"`
+	LexicoCSV      string             `json:"lexico_csv,omitempty"`
+	LexicoSha256   string             `json:"lexico_sha256,omitempty"`
+	Lexico         *DesgloseLexico    `json:"lexico,omitempty"`
+	Total          Conteo             `json:"total"`
+	PorParte       []FilaDeParte      `json:"por_parte"`
+	PorEstrato     []FilaDeParte      `json:"por_estrato"`
+	PorCategoria   []FilaDeCategoria  `json:"por_categoria"`
+	Errores        []ErrorDeCategoria `json:"errores"`
 }
 
 // FilaDeParte es el resumen por parte o por estrato, que se reportan sin meta.
 type FilaDeParte struct {
 	Nombre string `json:"nombre"`
 	Conteo
+	Lexico *DesgloseLexico `json:"lexico,omitempty"`
 }
 
 // ArtefactoMedido identifica el modelo con el que se midió, para que el número sea reproducible.
@@ -118,6 +153,7 @@ func Evaluar(modo string, filas []Fila, decidir Decisor, umbral float64) (Inform
 		PorEstrato:   agrupar(filas, decisiones, func(f Fila) string { return f.Estrato }),
 		PorCategoria: porCategoria(filas, decisiones),
 		Errores:      errores(filas, decisiones),
+		Lexico:       desgloseDelLexico(filas, decisiones),
 	}
 	if umbral > 0 {
 		informe.Cumple = informe.Total.Precision >= umbral
@@ -231,7 +267,8 @@ func agrupar(filas []Fila, decisiones []DecisionDeOro, clave func(Fila) string) 
 			subFilas = append(subFilas, filas[i])
 			subDecisiones = append(subDecisiones, decisiones[i])
 		}
-		grupos = append(grupos, FilaDeParte{Nombre: nombre, Conteo: resumir(subFilas, subDecisiones, "")})
+		grupos = append(grupos, FilaDeParte{Nombre: nombre, Conteo: resumir(subFilas, subDecisiones, ""),
+			Lexico: desgloseDelLexico(subFilas, subDecisiones)})
 	}
 	return grupos
 }
@@ -303,4 +340,70 @@ func errores(filas []Fila, decisiones []DecisionDeOro) []ErrorDeCategoria {
 		lista = lista[:10]
 	}
 	return lista
+}
+
+// desgloseDelLexico cuenta las tres salidas del escalón 5 sobre las filas con etiqueta y los conjuntos
+// de palabras que lo dejan en conflicto. Devuelve nil cuando el modo no encendió el léxico.
+func desgloseDelLexico(filas []Fila, decisiones []DecisionDeOro) *DesgloseLexico {
+	activo := false
+	for _, decision := range decisiones {
+		if decision.Lexico != nil {
+			activo = true
+			break
+		}
+	}
+	if !activo {
+		return nil
+	}
+	desglose := &DesgloseLexico{}
+	pares := make(map[string]*ConflictoDePalabras)
+	for i, fila := range filas {
+		if fila.Oro == etiquetaSinDecidir {
+			continue
+		}
+		desglose.FilasConEtiqueta++
+		categorias := make(map[string]struct{}, len(decisiones[i].Lexico))
+		etiquetas := make([]string, 0, len(decisiones[i].Lexico))
+		for _, coincidencia := range decisiones[i].Lexico {
+			categorias[coincidencia.Categoria] = struct{}{}
+			etiquetas = append(etiquetas, coincidencia.Palabra+"="+coincidencia.Categoria)
+		}
+		_, acierta := categorias[fila.Oro]
+		switch len(categorias) {
+		case 0:
+			desglose.SinPalabra++
+		case 1:
+			desglose.UnaCategoria++
+			if acierta {
+				desglose.UnaCategoriaCorrecta++
+			}
+		default:
+			desglose.Conflictos++
+			if acierta {
+				desglose.ConflictosConAcierto++
+			}
+			clave := strings.Join(etiquetas, " | ")
+			if pares[clave] == nil {
+				pares[clave] = &ConflictoDePalabras{Palabras: clave}
+			}
+			pares[clave].Veces++
+			if acierta {
+				pares[clave].Correctas++
+			}
+		}
+	}
+	for _, par := range pares {
+		desglose.ConflictosPorPalabras = append(desglose.ConflictosPorPalabras, *par)
+	}
+	sort.Slice(desglose.ConflictosPorPalabras, func(i, j int) bool {
+		a, b := desglose.ConflictosPorPalabras[i], desglose.ConflictosPorPalabras[j]
+		if a.Veces != b.Veces {
+			return a.Veces > b.Veces
+		}
+		return a.Palabras < b.Palabras
+	})
+	if len(desglose.ConflictosPorPalabras) > 10 {
+		desglose.ConflictosPorPalabras = desglose.ConflictosPorPalabras[:10]
+	}
+	return desglose
 }

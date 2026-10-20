@@ -1,6 +1,9 @@
 package inteligencia
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Canal es el origen de un pago. La rama de la cascada depende de él.
 type Canal string
@@ -206,23 +209,9 @@ func buscarCategoria(tabla map[string]Categoria, clave string) (Categoria, bool)
 }
 
 func porLexico(lexico []ParLexico, nombre string) (Categoria, bool) {
-	if nombre == "" {
-		return "", false
-	}
-	palabras := make(map[string]struct{})
-	for _, palabra := range strings.Split(NormalizarNombre(nombre), "-") {
-		if palabra != "" {
-			palabras[palabra] = struct{}{}
-		}
-	}
 	halladas := make(map[Categoria]struct{})
-	for _, par := range lexico {
-		if _, presente := palabras[par.Palabra]; !presente {
-			continue
-		}
-		if EsCategoriaVisible(par.Categoria) {
-			halladas[par.Categoria] = struct{}{}
-		}
+	for _, par := range CoincidenciasDelLexico(lexico, nombre) {
+		halladas[par.Categoria] = struct{}{}
 	}
 	if len(halladas) != 1 {
 		return "", false
@@ -231,4 +220,35 @@ func porLexico(lexico []ParLexico, nombre string) (Categoria, bool) {
 		return categoria, true
 	}
 	return "", false
+}
+
+// CoincidenciasDelLexico devuelve, ordenados por palabra, los pares visibles que el nombre activa con
+// comparación exacta de palabra. Es la misma lectura que usa la cascada y sirve para separar la
+// abstención por conflicto de la abstención por ausencia de palabra sin cambiar lo que se decide.
+func CoincidenciasDelLexico(lexico []ParLexico, nombre string) []ParLexico {
+	if nombre == "" {
+		return nil
+	}
+	palabras := make(map[string]struct{})
+	for _, palabra := range strings.Split(NormalizarNombre(nombre), "-") {
+		if palabra != "" {
+			palabras[palabra] = struct{}{}
+		}
+	}
+	coincidencias := make([]ParLexico, 0, len(palabras))
+	for _, par := range lexico {
+		if _, presente := palabras[par.Palabra]; !presente {
+			continue
+		}
+		if EsCategoriaVisible(par.Categoria) {
+			coincidencias = append(coincidencias, par)
+		}
+	}
+	sort.Slice(coincidencias, func(i, j int) bool {
+		if coincidencias[i].Palabra != coincidencias[j].Palabra {
+			return coincidencias[i].Palabra < coincidencias[j].Palabra
+		}
+		return coincidencias[i].Categoria < coincidencias[j].Categoria
+	})
+	return coincidencias
 }

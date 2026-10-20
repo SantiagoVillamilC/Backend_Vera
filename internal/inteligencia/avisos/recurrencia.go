@@ -269,7 +269,10 @@ func bandaDeFecha(esperada time.Time, calendario string, tolerancia int) (time.T
 }
 
 func enAnclaDeQuincena(dia time.Time, tolerancia int) bool {
+	// La comparación es de días civiles: un pago a mediodía del 15 tiene que caer en el ancla del
+	// 15, y las bandas de `bandaDeFecha` terminan a medianoche del día hábil.
 	local := dia.In(Zona)
+	local = time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, Zona)
 	mesAnterior := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, Zona).AddDate(0, -1, 0)
 	mesSiguiente := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, Zona).AddDate(0, 1, 0)
 	anclas := []time.Time{
