@@ -183,3 +183,49 @@ func TestConTrabajoDeAuthRechazaElTrabajoIncompleto(t *testing.T) {
 		t.Fatal("planificar aceptó un trabajo periódico sin periodo ni args")
 	}
 }
+
+type inteligenciaFalsa struct {
+	llamado bool
+	limite  int
+	err     error
+}
+
+func (s *inteligenciaFalsa) EnriquecerAsientos(_ context.Context, limite int) (int, error) {
+	s.llamado = true
+	s.limite = limite
+	return 0, s.err
+}
+
+func TestEnriquecerWorkerDelegaYPropagaElError(t *testing.T) {
+	t.Parallel()
+
+	errLote := errors.New("falló el lote")
+	servicio := &inteligenciaFalsa{err: errLote}
+	worker := &EnriquecerWorker{servicio: servicio, limite: 250}
+
+	err := worker.Work(t.Context(), &river.Job[EnriquecerArgs]{})
+	if !errors.Is(err, errLote) {
+		t.Fatalf("Work() = %v, want que envuelva %v", err, errLote)
+	}
+	if !servicio.llamado || servicio.limite != 250 {
+		t.Errorf("llamada = %v, límite = %d", servicio.llamado, servicio.limite)
+	}
+}
+
+func TestElEnriquecimientoSeProgramaSoloConServicioYPeriodo(t *testing.T) {
+	t.Parallel()
+
+	base := Config{OutboxInterval: 5 * time.Second, ConciliationInterval: time.Minute, ExpirationInterval: time.Minute}
+	if tieneTrabajo(trabajosPeriodicos(base), "enriquecer_movimientos") {
+		t.Error("sin servicio de inteligencia no debe programarse el enriquecimiento")
+	}
+	conServicio := base
+	conServicio.Inteligencia = &inteligenciaFalsa{}
+	if tieneTrabajo(trabajosPeriodicos(conServicio), "enriquecer_movimientos") {
+		t.Error("sin periodo no debe programarse el enriquecimiento")
+	}
+	conServicio.EnriquecimientoInterval = time.Minute
+	if !tieneTrabajo(trabajosPeriodicos(conServicio), "enriquecer_movimientos") {
+		t.Error("con servicio y periodo falta el trabajo enriquecer_movimientos")
+	}
+}

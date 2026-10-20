@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
@@ -88,6 +89,7 @@ func run() error {
 			Tope:   cfg.OutboxBackoffMax,
 		}),
 	)
+	servicioInteligencia := inteligencia.NuevoServicio(pool)
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
@@ -197,11 +199,14 @@ func run() error {
 
 	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
 	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
-		OutboxInterval:       cfg.OutboxInterval,
-		ConciliationInterval: cfg.ConciliationInterval,
-		ConciliationWindow:   cfg.ConciliationWindow,
-		ExpirationInterval:   cfg.ExpirationInterval,
-		ExpirationTTL:        cfg.ExpirationTTL,
+		OutboxInterval:          cfg.OutboxInterval,
+		ConciliationInterval:    cfg.ConciliationInterval,
+		ConciliationWindow:      cfg.ConciliationWindow,
+		ExpirationInterval:      cfg.ExpirationInterval,
+		ExpirationTTL:           cfg.ExpirationTTL,
+		Inteligencia:            servicioInteligencia,
+		EnriquecimientoInterval: cfg.EnriquecimientoInterval,
+		EnriquecimientoLote:     500,
 	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
 	if err != nil {
 		return fmt.Errorf("river: %w", err)

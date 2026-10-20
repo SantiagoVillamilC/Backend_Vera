@@ -40,6 +40,15 @@ func (s *Servicio) Categorias(ctx context.Context) ([]EntradaCatalogo, error) {
 	return categorias, nil
 }
 
+// EnriquecerAsientos procesa un lote y devuelve cuántos asientos miró, para el worker de River.
+func (s *Servicio) EnriquecerAsientos(ctx context.Context, limite int) (int, error) {
+	resultado, err := s.Enriquecer(ctx, limite)
+	if err != nil {
+		return 0, err
+	}
+	return resultado.Asientos, nil
+}
+
 // EstadoDelCursor es la marca de agua del lote de enriquecimiento.
 type EstadoDelCursor struct {
 	UltimoEntryID int64

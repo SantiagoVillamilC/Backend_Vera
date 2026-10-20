@@ -75,13 +75,21 @@ type ServicioDeDisparadores interface {
 	ExpirarIntenciones(ctx context.Context, ttl time.Duration) (int, error)
 }
 
+// ServicioDeInteligencia es lo que el worker de enriquecimiento necesita del contexto de inteligencia.
+type ServicioDeInteligencia interface {
+	EnriquecerAsientos(ctx context.Context, limite int) (int, error)
+}
+
 // Config fija cada cuánto dispara cada trabajo y los parámetros que reciben sus workers.
 type Config struct {
-	OutboxInterval       time.Duration
-	ConciliationInterval time.Duration
-	ConciliationWindow   time.Duration
-	ExpirationInterval   time.Duration
-	ExpirationTTL        time.Duration
+	OutboxInterval          time.Duration
+	ConciliationInterval    time.Duration
+	ConciliationWindow      time.Duration
+	ExpirationInterval      time.Duration
+	ExpirationTTL           time.Duration
+	Inteligencia            ServicioDeInteligencia
+	EnriquecimientoInterval time.Duration
+	EnriquecimientoLote     int
 }
 
 // DespacharOutboxArgs no lleva datos: el barrido del outbox no recibe parámetros.
@@ -139,6 +147,29 @@ func (w *ExpirarIntencionesWorker) Work(ctx context.Context, _ *river.Job[Expira
 	return err
 }
 
+// EnriquecerArgs no lleva datos: el lote lo fija el cliente.
+type EnriquecerArgs struct{}
+
+// Kind es el nombre estable de la fila encolada.
+func (EnriquecerArgs) Kind() string { return "enriquecer_movimientos" }
+
+// EnriquecerWorker llama al lote de enriquecimiento del contexto de inteligencia.
+type EnriquecerWorker struct {
+	river.WorkerDefaults[EnriquecerArgs]
+	servicio ServicioDeInteligencia
+	limite   int
+}
+
+// Work delega en inteligencia y propaga su error para que River reintente.
+func (w *EnriquecerWorker) Work(ctx context.Context, _ *river.Job[EnriquecerArgs]) error {
+	limite := w.limite
+	if limite <= 0 {
+		limite = 500
+	}
+	_, err := w.servicio.EnriquecerAsientos(ctx, limite)
+	return err
+}
+
 // trabajoPeriodico describe un trabajo periódico antes de convertirlo al tipo de River.
 type trabajoPeriodico struct {
 	id      string
@@ -157,6 +188,10 @@ func trabajosPeriodicos(cfg Config) []trabajoPeriodico {
 	if cfg.ExpirationTTL > 0 {
 		trabajos = append(trabajos, trabajoPeriodico{id: "expirar_intenciones", periodo: cfg.ExpirationInterval,
 			nuevo: func() (river.JobArgs, *river.InsertOpts) { return ExpirarIntencionesArgs{}, nil }})
+	}
+	if cfg.Inteligencia != nil && cfg.EnriquecimientoInterval > 0 {
+		trabajos = append(trabajos, trabajoPeriodico{id: "enriquecer_movimientos", periodo: cfg.EnriquecimientoInterval,
+			nuevo: func() (river.JobArgs, *river.InsertOpts) { return EnriquecerArgs{}, nil }})
 	}
 	return trabajos
 }
@@ -186,6 +221,9 @@ func NewClient(pool *pgxpool.Pool, servicio ServicioDeDisparadores, cfg Config, 
 	river.AddWorker(workers, &DespacharOutboxWorker{servicio: servicio})
 	river.AddWorker(workers, &ConciliarWorker{servicio: servicio, ventana: cfg.ConciliationWindow})
 	river.AddWorker(workers, &ExpirarIntencionesWorker{servicio: servicio, ttl: cfg.ExpirationTTL})
+	if cfg.Inteligencia != nil {
+		river.AddWorker(workers, &EnriquecerWorker{servicio: cfg.Inteligencia, limite: cfg.EnriquecimientoLote})
+	}
 	for _, agregar := range plan.workers {
 		agregar(workers)
 	}

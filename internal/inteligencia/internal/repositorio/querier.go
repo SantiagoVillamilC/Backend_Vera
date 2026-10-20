@@ -6,12 +6,23 @@ package repositorio
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	AnclasPendientes(ctx context.Context, arg AnclasPendientesParams) ([]int64, error)
 	AvanzarCursor(ctx context.Context, ultimoEntryID int64) error
+	BorrarCopia(ctx context.Context) error
+	BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMovimientoEnriquecidoParams) error
+	ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
+	InsertarMovimientoEnriquecido(ctx context.Context, arg InsertarMovimientoEnriquecidoParams) error
 	LeerCursor(ctx context.Context) (LeerCursorRow, error)
+	LineasDeAsientos(ctx context.Context, asientos []int64) ([]LineasDeAsientosRow, error)
+	LineasDeTransferencias(ctx context.Context, transferencias []pgtype.UUID) ([]LineasDeTransferenciasRow, error)
 	ListarCategorias(ctx context.Context) ([]Categoria, error)
+	ListarMemoriaDeUsuario(ctx context.Context, usuarioID string) ([]ListarMemoriaDeUsuarioRow, error)
+	ReiniciarCursor(ctx context.Context) error
 }
 
 var _ Querier = (*Queries)(nil)
