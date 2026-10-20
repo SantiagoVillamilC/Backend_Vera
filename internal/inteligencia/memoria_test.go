@@ -65,9 +65,9 @@ func TestCorregirRechazaCategoriaNoVisible(t *testing.T) {
 func TestConsultarRespetaLaPrioridadYOmiteInvalidas(t *testing.T) {
 	destino := Destino{Tipo: DestinoComercio, Llave: "L", MID: "M", Nombre: "Comercio Uno"}
 	memoria := Memoria{
-		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelLlave, Valor: "L"}:             Categoria("inventada"),
-		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelMID, Valor: "M"}:               CategoriaCompras,
-		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelNombre, Valor: "COMERCIO-UNO"}: CategoriaSalud,
+		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelLlave, Valor: "L"}:             Correccion{Categoria: Categoria("inventada")},
+		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelMID, Valor: "M"}:               Correccion{Categoria: CategoriaCompras},
+		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelNombre, Valor: "COMERCIO-UNO"}: Correccion{Categoria: CategoriaSalud},
 	}
 	categoria, encontrada := Consultar(memoria, "u1", destino)
 	if !encontrada || categoria != CategoriaCompras {
@@ -78,8 +78,8 @@ func TestConsultarRespetaLaPrioridadYOmiteInvalidas(t *testing.T) {
 func TestProyectarAplanaLaMemoria(t *testing.T) {
 	destino := Destino{Tipo: DestinoComercio, Llave: "L", MID: "M", Nombre: "Comercio Uno"}
 	memoria := Memoria{
-		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelMID, Valor: "M"}:               CategoriaCompras,
-		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelNombre, Valor: "COMERCIO-UNO"}: CategoriaSalud,
+		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelMID, Valor: "M"}:               Correccion{Categoria: CategoriaCompras},
+		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelNombre, Valor: "COMERCIO-UNO"}: Correccion{Categoria: CategoriaSalud},
 	}
 	plana := Proyectar(memoria, "u1", destino)
 	if plana["M"] != CategoriaCompras || plana["COMERCIO-UNO"] != CategoriaSalud {
@@ -87,5 +87,67 @@ func TestProyectarAplanaLaMemoria(t *testing.T) {
 	}
 	if _, existe := plana["L"]; existe {
 		t.Errorf("proyección incluye una llave sin corrección: %v", plana)
+	}
+}
+
+func TestCorregirConservaElNombreYNombrarConservaLaCategoria(t *testing.T) {
+	t.Parallel()
+
+	destino := Destino{Tipo: DestinoComercio, Llave: "L", Nombre: "Comercio Uno"}
+	conNombre, err := Nombrar(Memoria{}, "u1", destino, "Mercado Central")
+	if err != nil {
+		t.Fatalf("Nombrar: %v", err)
+	}
+	if nombre, encontrado := NombreDe(conNombre, "u1", destino); !encontrado || nombre != "Mercado Central" {
+		t.Fatalf("NombreDe = %q, %v", nombre, encontrado)
+	}
+
+	conCategoria, err := Corregir(conNombre, "u1", destino, CategoriaCompras)
+	if err != nil {
+		t.Fatalf("Corregir: %v", err)
+	}
+	if nombre, _ := NombreDe(conCategoria, "u1", destino); nombre != "Mercado Central" {
+		t.Errorf("Corregir borró el nombre: %q", nombre)
+	}
+	if categoria, _ := Consultar(conCategoria, "u1", destino); categoria != CategoriaCompras {
+		t.Errorf("categoría = %q, want compras", categoria)
+	}
+
+	renombrada, err := Nombrar(conCategoria, "u1", destino, "Mercado Nuevo")
+	if err != nil {
+		t.Fatalf("Nombrar de nuevo: %v", err)
+	}
+	if categoria, _ := Consultar(renombrada, "u1", destino); categoria != CategoriaCompras {
+		t.Errorf("Nombrar borró la categoría: %q", categoria)
+	}
+	if categoria, _ := Consultar(conCategoria, "u1", destino); categoria != CategoriaCompras {
+		t.Error("Nombrar mutó la memoria de entrada")
+	}
+}
+
+func TestNombreDeRespetaLaPrioridad(t *testing.T) {
+	t.Parallel()
+
+	destino := Destino{Tipo: DestinoComercio, Llave: "L", MID: "M", Nombre: "Comercio Uno"}
+	memoria := Memoria{
+		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelLlave, Valor: "L"}:             Correccion{Nombre: "Nombre de la llave"},
+		{Usuario: "u1", TipoDestino: DestinoComercio, Nivel: NivelNombre, Valor: "COMERCIO-UNO"}: Correccion{Nombre: "Nombre del nombre"},
+	}
+	if nombre, _ := NombreDe(memoria, "u1", destino); nombre != "Nombre de la llave" {
+		t.Errorf("NombreDe = %q, want el de la llave", nombre)
+	}
+	if _, encontrado := NombreDe(memoria, "u2", destino); encontrado {
+		t.Error("el nombre se heredó a otro usuario")
+	}
+}
+
+func TestNombrarSoloComercioYRechazaVacio(t *testing.T) {
+	t.Parallel()
+
+	if _, err := Nombrar(Memoria{}, "u1", Destino{Tipo: DestinoPersona, Llave: "P"}, "Nombre"); !errors.Is(err, ErrNombreNoAplica) {
+		t.Errorf("persona: error = %v, want ErrNombreNoAplica", err)
+	}
+	if _, err := Nombrar(Memoria{}, "u1", Destino{Tipo: DestinoComercio, Llave: "L"}, "   "); !errors.Is(err, ErrNombreVacio) {
+		t.Errorf("vacío: error = %v, want ErrNombreVacio", err)
 	}
 }

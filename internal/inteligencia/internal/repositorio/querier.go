@@ -17,6 +17,9 @@ type Querier interface {
 	BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMovimientoEnriquecidoParams) error
 	ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error)
 	ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
+	FilaDeMovimiento(ctx context.Context, arg FilaDeMovimientoParams) (FilaDeMovimientoRow, error)
+	GuardarCategoriaDeMemoria(ctx context.Context, arg GuardarCategoriaDeMemoriaParams) error
+	GuardarNombreDeMemoria(ctx context.Context, arg GuardarNombreDeMemoriaParams) error
 	InsertarMovimientoEnriquecido(ctx context.Context, arg InsertarMovimientoEnriquecidoParams) error
 	LeerCursor(ctx context.Context) (LeerCursorRow, error)
 	LineasDeAsientos(ctx context.Context, asientos []int64) ([]LineasDeAsientosRow, error)
@@ -25,7 +28,9 @@ type Querier interface {
 	ListarMemoriaDeUsuario(ctx context.Context, usuarioID string) ([]ListarMemoriaDeUsuarioRow, error)
 	PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimientosParams) ([]PaginaDeMovimientosRow, error)
 	PrimerMovimientoDelUsuario(ctx context.Context, usuarioID string) (pgtype.Timestamptz, error)
+	RecalcularCategoriaPorDestino(ctx context.Context, arg RecalcularCategoriaPorDestinoParams) ([]pgtype.UUID, error)
 	ReiniciarCursor(ctx context.Context) error
+	RenombrarContrapartePorDestino(ctx context.Context, arg RenombrarContrapartePorDestinoParams) ([]pgtype.UUID, error)
 	TotalesPorCategoriaYMes(ctx context.Context, arg TotalesPorCategoriaYMesParams) ([]TotalesPorCategoriaYMesRow, error)
 }
 

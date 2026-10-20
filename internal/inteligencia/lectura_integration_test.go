@@ -31,9 +31,9 @@ func sembrarTransferencia(t *testing.T, pool *pgxpool.Pool, desde, hacia string,
 }
 
 func sembrarPagoExterno(t *testing.T, pool *pgxpool.Pool, usuario, descripcion string, monto int64,
-	momento time.Time) {
+	momento time.Time) int64 {
 	t.Helper()
-	sembrarAsiento(t, pool, "pago_qr", nil, descripcion, momento, []lineaDePrueba{
+	return sembrarAsiento(t, pool, "pago_qr", nil, descripcion, momento, []lineaDePrueba{
 		{"pasivo:usuario:" + usuario + ":disponible", -monto},
 		{"pasivo:liquidacion_pendiente:riel", monto},
 	})

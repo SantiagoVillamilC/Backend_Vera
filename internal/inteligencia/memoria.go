@@ -3,6 +3,7 @@ package inteligencia
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Los tres niveles de la clave de memoria, en orden de prioridad.
@@ -18,6 +19,12 @@ var ErrDestinoSinClave = errors.New("inteligencia: el destino no tiene clave que
 // ErrCategoriaNoVisible reporta un intento de asignar una categoría que no se ofrece al usuario.
 var ErrCategoriaNoVisible = errors.New("inteligencia: la categoría no es visible en el catálogo")
 
+// ErrNombreNoAplica reporta un intento de nombrar un destino que no es un comercio.
+var ErrNombreNoAplica = errors.New("inteligencia: la corrección de nombre solo aplica a comercios")
+
+// ErrNombreVacio reporta un nombre corregido vacío o hecho solo de espacios.
+var ErrNombreVacio = errors.New("inteligencia: el nombre corregido no puede estar vacío")
+
 // ClaveCorreccion es la clave tipada de la memoria privada.
 type ClaveCorreccion struct {
 	Usuario     string
@@ -26,8 +33,14 @@ type ClaveCorreccion struct {
 	Valor       string
 }
 
+// Correccion es lo que una fila de memoria puede guardar: categoría, nombre visible o los dos.
+type Correccion struct {
+	Categoria Categoria
+	Nombre    string
+}
+
 // Memoria es el conjunto de correcciones privadas.
-type Memoria map[ClaveCorreccion]Categoria
+type Memoria map[ClaveCorreccion]Correccion
 
 // Destino es lo que se conoce de la contraparte para consultar y corregir.
 type Destino struct {
@@ -64,15 +77,29 @@ func Consultar(memoria Memoria, usuario string, destino Destino) (Categoria, boo
 		return "", false
 	}
 	for _, clave := range claves {
-		categoria, existe := memoria[clave]
-		if existe && EsCategoriaVisible(categoria) {
-			return categoria, true
+		correccion, existe := memoria[clave]
+		if existe && EsCategoriaVisible(correccion.Categoria) {
+			return correccion.Categoria, true
 		}
 	}
 	return "", false
 }
 
-// Corregir devuelve una memoria nueva con la corrección aplicada a todas las claves del destino.
+// NombreDe devuelve el primer nombre visible guardado para el destino, en orden de prioridad.
+func NombreDe(memoria Memoria, usuario string, destino Destino) (string, bool) {
+	claves, err := ClavesDe(usuario, destino)
+	if err != nil {
+		return "", false
+	}
+	for _, clave := range claves {
+		if correccion, existe := memoria[clave]; existe && correccion.Nombre != "" {
+			return correccion.Nombre, true
+		}
+	}
+	return "", false
+}
+
+// Corregir devuelve una memoria nueva con la categoría aplicada a todas las claves del destino.
 func Corregir(memoria Memoria, usuario string, destino Destino, categoria Categoria) (Memoria, error) {
 	if !EsCategoriaVisible(categoria) {
 		return nil, fmt.Errorf("%w: %q", ErrCategoriaNoVisible, categoria)
@@ -81,12 +108,33 @@ func Corregir(memoria Memoria, usuario string, destino Destino, categoria Catego
 	if err != nil {
 		return nil, err
 	}
-	nueva := make(Memoria, len(memoria)+len(claves))
-	for clave, valor := range memoria {
-		nueva[clave] = valor
-	}
+	nueva := copiarMemoria(memoria, len(claves))
 	for _, clave := range claves {
-		nueva[clave] = categoria
+		correccion := nueva[clave]
+		correccion.Categoria = categoria
+		nueva[clave] = correccion
+	}
+	return nueva, nil
+}
+
+// Nombrar devuelve una memoria nueva con el nombre visible aplicado a todas las claves del destino.
+func Nombrar(memoria Memoria, usuario string, destino Destino, nombre string) (Memoria, error) {
+	if destino.Tipo != DestinoComercio {
+		return nil, ErrNombreNoAplica
+	}
+	nombre = strings.TrimSpace(nombre)
+	if nombre == "" {
+		return nil, ErrNombreVacio
+	}
+	claves, err := ClavesDe(usuario, destino)
+	if err != nil {
+		return nil, err
+	}
+	nueva := copiarMemoria(memoria, len(claves))
+	for _, clave := range claves {
+		correccion := nueva[clave]
+		correccion.Nombre = nombre
+		nueva[clave] = correccion
 	}
 	return nueva, nil
 }
@@ -100,13 +148,21 @@ func Proyectar(memoria Memoria, usuario string, destino Destino) map[string]Cate
 	}
 	plana := make(map[string]Categoria, len(claves))
 	for _, clave := range claves {
-		categoria, existe := memoria[clave]
-		if !existe || !EsCategoriaVisible(categoria) {
+		correccion, existe := memoria[clave]
+		if !existe || !EsCategoriaVisible(correccion.Categoria) {
 			continue
 		}
 		if _, ya := plana[clave.Valor]; !ya {
-			plana[clave.Valor] = categoria
+			plana[clave.Valor] = correccion.Categoria
 		}
 	}
 	return plana
+}
+
+func copiarMemoria(memoria Memoria, extra int) Memoria {
+	nueva := make(Memoria, len(memoria)+extra)
+	for clave, correccion := range memoria {
+		nueva[clave] = correccion
+	}
+	return nueva
 }

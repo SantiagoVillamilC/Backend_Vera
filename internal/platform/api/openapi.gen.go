@@ -633,6 +633,21 @@ func (e ErrorResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaCorreccionResponseSuccess.
+const (
+	InteligenciaCorreccionResponseSuccessTrue InteligenciaCorreccionResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaCorreccionResponseSuccess enum.
+func (e InteligenciaCorreccionResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaCorreccionResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InteligenciaMovimientoDireccion.
 const (
 	Entrada InteligenciaMovimientoDireccion = "entrada"
@@ -1375,6 +1390,8 @@ type APIError struct {
 	// DepositNotFound (404, la confirmacion del custodio apunta a un deposito inexistente),
 	// ConfirmationConflict (409, la confirmacion no coincide con el deposito),
 	// LateConfirmation (409, el deposito ya no esta pendiente),
+	// CopiaSinReconstruir (409, la fila no tiene destino hasta reconstruir la copia),
+	// CorreccionEnCurso (409, el lote de enriquecimiento tiene el candado),
 	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
 	// AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
 	// AudioNotUnderstood (422, el audio no tiene voz reconocible),
@@ -1836,6 +1853,32 @@ type FieldError struct {
 	Param *string `json:"param,omitempty"`
 	Rule  string  `json:"rule"`
 }
+
+// InteligenciaCorreccion defines model for InteligenciaCorreccion.
+type InteligenciaCorreccion struct {
+	// FilasCambiadas Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
+	FilasCambiadas int                    `json:"filas_cambiadas"`
+	Movimiento     InteligenciaMovimiento `json:"movimiento"`
+}
+
+// InteligenciaCorreccionRequest Al menos uno de los dos campos. Una correccion de categoria no renombra y una correccion de nombre no categoriza. sin_categoria no se ofrece.
+type InteligenciaCorreccionRequest struct {
+	Categoria *string `json:"categoria,omitempty" validate:"omitempty,max=64"`
+
+	// NombreComercio Nombre visible del comercio, de 1 a 80 puntos de codigo, sin espacios en los extremos.
+	NombreComercio *string `json:"nombre_comercio,omitempty" validate:"omitempty,max=80"`
+}
+
+// InteligenciaCorreccionResponse defines model for InteligenciaCorreccionResponse.
+type InteligenciaCorreccionResponse struct {
+	Data    InteligenciaCorreccion                `json:"data"`
+	Error   *map[string]interface{}               `json:"error"`
+	Meta    *map[string]interface{}               `json:"meta"`
+	Success InteligenciaCorreccionResponseSuccess `json:"success"`
+}
+
+// InteligenciaCorreccionResponseSuccess defines model for InteligenciaCorreccionResponse.Success.
+type InteligenciaCorreccionResponseSuccess bool
 
 // InteligenciaMovimiento defines model for InteligenciaMovimiento.
 type InteligenciaMovimiento struct {
@@ -2461,6 +2504,9 @@ type PhoneChangeRequestJSONRequestBody = PhoneChangeRequest
 // CrearDepositoJSONRequestBody defines body for CrearDeposito for application/json ContentType.
 type CrearDepositoJSONRequestBody = CrearDepositoRequest
 
+// CorregirMovimientoInteligenciaJSONRequestBody defines body for CorregirMovimientoInteligencia for application/json ContentType.
+type CorregirMovimientoInteligenciaJSONRequestBody = InteligenciaCorreccionRequest
+
 // KycVerificacionJSONRequestBody defines body for KycVerificacion for application/json ContentType.
 type KycVerificacionJSONRequestBody = KycVerificacionRequest
 
@@ -2627,6 +2673,9 @@ type ServerInterface interface {
 	// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
 	// (GET /v1/inteligencia/movimientos)
 	ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams)
+	// CorregirMovimientoInteligencia Corrige la categoria o el nombre visible de un movimiento propio y reaplica la memoria privada.
+	// (POST /v1/inteligencia/movimientos/{transaccion_id}/correcciones)
+	CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionId string)
 	// ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
 	// (GET /v1/inteligencia/resumen)
 	ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams)
@@ -2771,6 +2820,12 @@ func (_ Unimplemented) ConsultarDestinatario(w http.ResponseWriter, r *http.Requ
 // ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
 // (GET /v1/inteligencia/movimientos)
 func (_ Unimplemented) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CorregirMovimientoInteligencia Corrige la categoria o el nombre visible de un movimiento propio y reaplica la memoria privada.
+// (POST /v1/inteligencia/movimientos/{transaccion_id}/correcciones)
+func (_ Unimplemented) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionId string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3161,6 +3216,32 @@ func (siw *ServerInterfaceWrapper) ListarMovimientosInteligencia(w http.Response
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListarMovimientosInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CorregirMovimientoInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "transaccion_id" -------------
+	var transaccionId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transaccion_id", chi.URLParam(r, "transaccion_id"), &transaccionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaccion_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CorregirMovimientoInteligencia(w, r, transaccionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3746,6 +3827,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/inteligencia/resumen", wrapper.ResumenInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/inteligencia/movimientos/{transaccion_id}/correcciones", wrapper.CorregirMovimientoInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/depositos", wrapper.CrearDeposito)

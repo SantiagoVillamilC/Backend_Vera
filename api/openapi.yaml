@@ -878,6 +878,50 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/inteligencia/movimientos/{transaccion_id}/correcciones:
+    post:
+      operationId: corregirMovimientoInteligencia
+      summary: Corrige la categoria o el nombre visible de un movimiento propio y reaplica la memoria privada.
+      tags: [inteligencia]
+      parameters:
+        - name: transaccion_id
+          in: path
+          required: true
+          description: >
+            Se declara como texto simple para que un identificador malformado llegue al handler
+            y salga como ValidationError en el sobre, no como error del binding generado.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InteligenciaCorreccionRequest"
+      responses:
+        "200":
+          description: Movimiento actualizado y cuantas filas de la copia cambiaron.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaCorreccionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
   /v1/depositos:
     post:
       operationId: crearDeposito
@@ -1815,6 +1859,8 @@ components:
             DepositNotFound (404, la confirmacion del custodio apunta a un deposito inexistente),
             ConfirmationConflict (409, la confirmacion no coincide con el deposito),
             LateConfirmation (409, el deposito ya no esta pendiente),
+            CopiaSinReconstruir (409, la fila no tiene destino hasta reconstruir la copia),
+            CorreccionEnCurso (409, el lote de enriquecimiento tiene el candado),
             NotReady (503, solo en GET /readyz cuando una dependencia no responde),
             AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
             AudioNotUnderstood (422, el audio no tiene voz reconocible),
@@ -2958,6 +3004,52 @@ components:
           enum: [true]
         data:
           $ref: "#/components/schemas/InteligenciaResumen"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    InteligenciaCorreccionRequest:
+      type: object
+      description: >
+        Al menos uno de los dos campos. Una correccion de categoria no renombra y una correccion
+        de nombre no categoriza. sin_categoria no se ofrece.
+      properties:
+        categoria:
+          type: string
+          maxLength: 64
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=64"
+        nombre_comercio:
+          type: string
+          maxLength: 80
+          description: Nombre visible del comercio, de 1 a 80 puntos de codigo, sin espacios en los extremos.
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=80"
+
+    InteligenciaCorreccion:
+      type: object
+      required: [movimiento, filas_cambiadas]
+      properties:
+        movimiento:
+          $ref: "#/components/schemas/InteligenciaMovimiento"
+        filas_cambiadas:
+          type: integer
+          description: >
+            Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila
+            aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
+
+    InteligenciaCorreccionResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/InteligenciaCorreccion"
         error:
           type: object
           nullable: true

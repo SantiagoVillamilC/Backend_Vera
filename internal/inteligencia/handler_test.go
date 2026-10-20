@@ -23,6 +23,13 @@ type servicioDeLecturaFalso struct {
 	resumen ResumenDelMes
 	err     error
 
+	correccion            CorreccionAplicada
+	correccionErr         error
+	correccionLlamada     bool
+	correccionUsuario     string
+	correccionTransaccion uuid.UUID
+	correccionSolicitud   SolicitudDeCorreccion
+
 	llamado bool
 	usuario string
 	limite  int
@@ -37,6 +44,15 @@ func (f *servicioDeLecturaFalso) Movimientos(_ context.Context, usuarioID string
 	f.ancla = ancla
 	f.limite = limite
 	return f.pagina, f.err
+}
+
+func (f *servicioDeLecturaFalso) CorregirMovimiento(_ context.Context, usuarioID string, transaccionID uuid.UUID,
+	solicitud SolicitudDeCorreccion) (CorreccionAplicada, error) {
+	f.correccionLlamada = true
+	f.correccionUsuario = usuarioID
+	f.correccionTransaccion = transaccionID
+	f.correccionSolicitud = solicitud
+	return f.correccion, f.correccionErr
 }
 
 func (f *servicioDeLecturaFalso) Resumen(_ context.Context, usuarioID, mes string) (ResumenDelMes, error) {
@@ -310,9 +326,183 @@ func TestServicioQueFallaResponde500Generico(t *testing.T) {
 	assertErrorDelSobre(t, rec, "InternalError")
 }
 
+func TestCorregirMovimientoExigeIdentidad(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+		"/v1/inteligencia/movimientos/123e4567-e89b-42d3-a456-426614174000/correcciones",
+		strings.NewReader(`{"categoria":"compras"}`))
+	NuevoHandler(falso).CorregirMovimientoInteligencia(rec, req, "123e4567-e89b-42d3-a456-426614174000")
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("código = %d, want 401", rec.Code)
+	}
+	if falso.correccionLlamada {
+		t.Error("el servicio se llamó sin identidad")
+	}
+	assertErrorDelSobre(t, rec, "Unauthorized")
+}
+
+func TestCorregirMovimientoValidaRutaYCuerpo(t *testing.T) {
+	t.Parallel()
+
+	const id = "123e4567-e89b-42d3-a456-426614174000"
+	casos := map[string]struct {
+		idTransaccion string
+		cuerpo        string
+		errorServicio error
+		codigo        int
+		llamada       bool
+		categoria     Categoria
+		nombre        string
+	}{
+		"identificador malformado": {
+			idTransaccion: "no-es-uuid", cuerpo: `{"categoria":"compras"}`,
+			codigo: http.StatusBadRequest,
+		},
+		"cuerpo vacío": {
+			idTransaccion: id, cuerpo: `{}`, codigo: http.StatusUnprocessableEntity,
+		},
+		"JSON malformado": {
+			idTransaccion: id, cuerpo: `{"categoria":`, codigo: http.StatusBadRequest,
+		},
+		"campo desconocido": {
+			idTransaccion: id, cuerpo: `{"monto":"100"}`, codigo: http.StatusBadRequest,
+		},
+		"categoría válida": {
+			idTransaccion: id, cuerpo: `{"categoria":"compras"}`,
+			codigo: http.StatusOK, llamada: true, categoria: CategoriaCompras,
+		},
+		"nombre con espacios se recorta": {
+			idTransaccion: id, cuerpo: `{"nombre_comercio":"  Mercado Central  "}`,
+			codigo: http.StatusOK, llamada: true, nombre: "Mercado Central",
+		},
+		"nombre vacío": {
+			idTransaccion: id, cuerpo: `{"nombre_comercio":"   "}`,
+			errorServicio: ErrNombreVacio, codigo: http.StatusUnprocessableEntity, llamada: true,
+		},
+		"categoría no visible": {
+			idTransaccion: id, cuerpo: `{"categoria":"sin_categoria"}`,
+			errorServicio: fmt.Errorf("%w: sin_categoria", ErrCategoriaNoVisible),
+			codigo:        http.StatusUnprocessableEntity, llamada: true,
+		},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+			falso := &servicioDeLecturaFalso{correccionErr: caso.errorServicio}
+			rec := httptest.NewRecorder()
+			req := peticionConCuerpo(t, "/v1/inteligencia/movimientos/"+caso.idTransaccion+"/correcciones", caso.cuerpo)
+			NuevoHandler(falso).CorregirMovimientoInteligencia(rec, req, caso.idTransaccion)
+
+			if rec.Code != caso.codigo {
+				t.Fatalf("código = %d, want %d: %s", rec.Code, caso.codigo, rec.Body.String())
+			}
+			if falso.correccionLlamada != caso.llamada {
+				t.Fatalf("llamada = %v, want %v", falso.correccionLlamada, caso.llamada)
+			}
+			if !caso.llamada {
+				return
+			}
+			if falso.correccionUsuario != usuarioDePrueba || falso.correccionTransaccion.String() != id {
+				t.Errorf("usuario = %q, transacción = %s", falso.correccionUsuario, falso.correccionTransaccion)
+			}
+			if caso.categoria != "" {
+				if falso.correccionSolicitud.Categoria == nil || *falso.correccionSolicitud.Categoria != caso.categoria {
+					t.Errorf("categoría = %v, want %q", falso.correccionSolicitud.Categoria, caso.categoria)
+				}
+			}
+			if caso.nombre != "" {
+				if falso.correccionSolicitud.NombreComercio == nil || *falso.correccionSolicitud.NombreComercio != caso.nombre {
+					t.Errorf("nombre = %v, want %q", falso.correccionSolicitud.NombreComercio, caso.nombre)
+				}
+			}
+		})
+	}
+}
+
+func TestCorregirMovimientoDevuelveElSobre(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{correccion: CorreccionAplicada{
+		Movimiento: MovimientoDeLectura{
+			TransaccionID:       uuid.MustParse("123e4567-e89b-42d3-a456-426614174000"),
+			OcurridoEn:          time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC),
+			Moneda:              "COP",
+			Direccion:           "salida",
+			MontoCentavos:       150000,
+			Contraparte:         "Mercado Central",
+			ContraparteResuelta: false,
+			Categoria:           string(CategoriaCompras),
+			CategoriaNombre:     "Compras",
+			OrigenCategoria:     "memoria",
+		},
+		FilasCambiadas: 3,
+	}}
+	rec := httptest.NewRecorder()
+	req := peticionConCuerpo(t, "/v1/inteligencia/movimientos/123e4567-e89b-42d3-a456-426614174000/correcciones",
+		`{"categoria":"compras"}`)
+	NuevoHandler(falso).CorregirMovimientoInteligencia(rec, req, "123e4567-e89b-42d3-a456-426614174000")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	cuerpo := rec.Body.String()
+	for _, clave := range []string{
+		`"success":true`, `"error":null`, `"filas_cambiadas":3`,
+		`"monto_centavos":"150000"`, `"contraparte":"Mercado Central"`, `"categoria":"compras"`,
+	} {
+		if !strings.Contains(cuerpo, clave) {
+			t.Errorf("el cuerpo no contiene %s: %s", clave, cuerpo)
+		}
+	}
+}
+
+func TestCorregirMovimientoMapeaErrores(t *testing.T) {
+	t.Parallel()
+
+	casos := map[string]struct {
+		err    error
+		codigo int
+		code   string
+	}{
+		"no encontrado":         {err: ErrMovimientoNoEncontrado, codigo: http.StatusNotFound, code: "NotFound"},
+		"nombre en persona":     {err: ErrNombreNoAplica, codigo: http.StatusUnprocessableEntity, code: "ValidationError"},
+		"nombre largo":          {err: ErrNombreLargo, codigo: http.StatusUnprocessableEntity, code: "ValidationError"},
+		"destino genérico":      {err: ErrDestinoGenerico, codigo: http.StatusUnprocessableEntity, code: "ValidationError"},
+		"copia sin reconstruir": {err: ErrCopiaSinDestino, codigo: http.StatusConflict, code: "CopiaSinReconstruir"},
+		"corrección en curso":   {err: ErrCorreccionOcupada, codigo: http.StatusConflict, code: "CorreccionEnCurso"},
+		"error inesperado":      {err: errors.New("la base no responde"), codigo: http.StatusInternalServerError, code: "InternalError"},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+			falso := &servicioDeLecturaFalso{correccionErr: caso.err}
+			rec := httptest.NewRecorder()
+			req := peticionConCuerpo(t, "/v1/inteligencia/movimientos/123e4567-e89b-42d3-a456-426614174000/correcciones",
+				`{"categoria":"compras"}`)
+			NuevoHandler(falso).CorregirMovimientoInteligencia(rec, req, "123e4567-e89b-42d3-a456-426614174000")
+
+			if rec.Code != caso.codigo {
+				t.Fatalf("código = %d, want %d: %s", rec.Code, caso.codigo, rec.Body.String())
+			}
+			assertErrorDelSobre(t, rec, caso.code)
+		})
+	}
+}
+
 func peticionConIdentidad(t *testing.T, ruta string) *http.Request {
 	t.Helper()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, ruta, nil)
+	return req.WithContext(identidad.ConUsuarioID(req.Context(), usuarioDePrueba))
+}
+
+func peticionConCuerpo(t *testing.T, ruta, cuerpo string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, ruta, strings.NewReader(cuerpo))
+	req.Header.Set("Content-Type", "application/json")
 	return req.WithContext(identidad.ConUsuarioID(req.Context(), usuarioDePrueba))
 }
 

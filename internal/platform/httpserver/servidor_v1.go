@@ -82,9 +82,10 @@ type NucleoHandler interface {
 	TransferirInterbancaria(http.ResponseWriter, *http.Request)
 }
 
-// InteligenciaHandler agrupa las dos operaciones de lectura del contexto de inteligencia.
+// InteligenciaHandler agrupa las operaciones del contexto de inteligencia.
 type InteligenciaHandler interface {
 	ListarMovimientosInteligencia(http.ResponseWriter, *http.Request, api.ListarMovimientosInteligenciaParams)
+	CorregirMovimientoInteligencia(http.ResponseWriter, *http.Request, string)
 	ResumenInteligencia(http.ResponseWriter, *http.Request, api.ResumenInteligenciaParams)
 }
 
@@ -148,6 +149,14 @@ func (s servidorV1) ResumenInteligencia(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	s.inteligencia.ResumenInteligencia(w, r, params)
+}
+
+func (s servidorV1) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionID string) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.CorregirMovimientoInteligencia(w, r, transaccionID)
 }
 
 // Los metodos del asistente Vera aun no tienen handler: responden 501 dentro del envelope.

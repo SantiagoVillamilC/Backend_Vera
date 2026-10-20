@@ -53,23 +53,26 @@ type MemoriaCorreccion struct {
 }
 
 type MovimientoEnriquecido struct {
-	UsuarioID           string             `json:"usuario_id"`
-	TransaccionID       pgtype.UUID        `json:"transaccion_id"`
-	EntryAncla          int64              `json:"entry_ancla"`
-	OcurridoEn          pgtype.Timestamptz `json:"ocurrido_en"`
-	Moneda              string             `json:"moneda"`
-	Direccion           string             `json:"direccion"`
-	MontoCentavos       int64              `json:"monto_centavos"`
-	Contraparte         string             `json:"contraparte"`
-	ContraparteResuelta bool               `json:"contraparte_resuelta"`
-	Descripcion         pgtype.Text        `json:"descripcion"`
-	Categoria           string             `json:"categoria"`
-	OrigenCategoria     string             `json:"origen_categoria"`
-	ComercioMid         pgtype.Text        `json:"comercio_mid"`
-	ComercioNombre      pgtype.Text        `json:"comercio_nombre"`
-	Mcc                 pgtype.Text        `json:"mcc"`
-	VersionModelo       string             `json:"version_modelo"`
-	CalculadoEn         pgtype.Timestamptz `json:"calculado_en"`
+	UsuarioID                    string             `json:"usuario_id"`
+	TransaccionID                pgtype.UUID        `json:"transaccion_id"`
+	EntryAncla                   int64              `json:"entry_ancla"`
+	OcurridoEn                   pgtype.Timestamptz `json:"ocurrido_en"`
+	Moneda                       string             `json:"moneda"`
+	Direccion                    string             `json:"direccion"`
+	MontoCentavos                int64              `json:"monto_centavos"`
+	Contraparte                  string             `json:"contraparte"`
+	ContraparteResuelta          bool               `json:"contraparte_resuelta"`
+	Descripcion                  pgtype.Text        `json:"descripcion"`
+	Categoria                    string             `json:"categoria"`
+	OrigenCategoria              string             `json:"origen_categoria"`
+	ComercioMid                  pgtype.Text        `json:"comercio_mid"`
+	ComercioNombre               pgtype.Text        `json:"comercio_nombre"`
+	Mcc                          pgtype.Text        `json:"mcc"`
+	VersionModelo                string             `json:"version_modelo"`
+	CalculadoEn                  pgtype.Timestamptz `json:"calculado_en"`
+	TipoDestino                  pgtype.Text        `json:"tipo_destino"`
+	ContraparteLlave             pgtype.Text        `json:"contraparte_llave"`
+	ContraparteNombreNormalizado pgtype.Text        `json:"contraparte_nombre_normalizado"`
 }
 
 type NucleoCuentum struct {

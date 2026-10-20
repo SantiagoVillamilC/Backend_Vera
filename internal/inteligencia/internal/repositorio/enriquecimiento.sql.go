@@ -79,28 +79,32 @@ func (q *Queries) BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMov
 const exportarCopia = `-- name: ExportarCopia :many
 SELECT usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
        contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
-       comercio_mid, comercio_nombre, mcc, version_modelo
+       comercio_mid, comercio_nombre, mcc, version_modelo,
+       tipo_destino, contraparte_llave, contraparte_nombre_normalizado
   FROM inteligencia.movimiento_enriquecido
  ORDER BY usuario_id, ocurrido_en, transaccion_id
 `
 
 type ExportarCopiaRow struct {
-	UsuarioID           string             `json:"usuario_id"`
-	TransaccionID       pgtype.UUID        `json:"transaccion_id"`
-	EntryAncla          int64              `json:"entry_ancla"`
-	OcurridoEn          pgtype.Timestamptz `json:"ocurrido_en"`
-	Moneda              string             `json:"moneda"`
-	Direccion           string             `json:"direccion"`
-	MontoCentavos       int64              `json:"monto_centavos"`
-	Contraparte         string             `json:"contraparte"`
-	ContraparteResuelta bool               `json:"contraparte_resuelta"`
-	Descripcion         pgtype.Text        `json:"descripcion"`
-	Categoria           string             `json:"categoria"`
-	OrigenCategoria     string             `json:"origen_categoria"`
-	ComercioMid         pgtype.Text        `json:"comercio_mid"`
-	ComercioNombre      pgtype.Text        `json:"comercio_nombre"`
-	Mcc                 pgtype.Text        `json:"mcc"`
-	VersionModelo       string             `json:"version_modelo"`
+	UsuarioID                    string             `json:"usuario_id"`
+	TransaccionID                pgtype.UUID        `json:"transaccion_id"`
+	EntryAncla                   int64              `json:"entry_ancla"`
+	OcurridoEn                   pgtype.Timestamptz `json:"ocurrido_en"`
+	Moneda                       string             `json:"moneda"`
+	Direccion                    string             `json:"direccion"`
+	MontoCentavos                int64              `json:"monto_centavos"`
+	Contraparte                  string             `json:"contraparte"`
+	ContraparteResuelta          bool               `json:"contraparte_resuelta"`
+	Descripcion                  pgtype.Text        `json:"descripcion"`
+	Categoria                    string             `json:"categoria"`
+	OrigenCategoria              string             `json:"origen_categoria"`
+	ComercioMid                  pgtype.Text        `json:"comercio_mid"`
+	ComercioNombre               pgtype.Text        `json:"comercio_nombre"`
+	Mcc                          pgtype.Text        `json:"mcc"`
+	VersionModelo                string             `json:"version_modelo"`
+	TipoDestino                  pgtype.Text        `json:"tipo_destino"`
+	ContraparteLlave             pgtype.Text        `json:"contraparte_llave"`
+	ContraparteNombreNormalizado pgtype.Text        `json:"contraparte_nombre_normalizado"`
 }
 
 func (q *Queries) ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error) {
@@ -129,6 +133,9 @@ func (q *Queries) ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
 			&i.ComercioNombre,
 			&i.Mcc,
 			&i.VersionModelo,
+			&i.TipoDestino,
+			&i.ContraparteLlave,
+			&i.ContraparteNombreNormalizado,
 		); err != nil {
 			return nil, fmt.Errorf("query ExportarCopia: %w", err)
 		}
@@ -144,14 +151,16 @@ const insertarMovimientoEnriquecido = `-- name: InsertarMovimientoEnriquecido :e
 INSERT INTO inteligencia.movimiento_enriquecido (
     usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
     contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
-    comercio_mid, comercio_nombre, mcc, version_modelo
+    comercio_mid, comercio_nombre, mcc, version_modelo,
+    tipo_destino, contraparte_llave, contraparte_nombre_normalizado
 ) VALUES (
     $1, $2, $3,
     $4, $5, $6,
     $7, $8, $9,
     $10, $11, $12,
     $13, $14, $15,
-    $16
+    $16, $17, $18,
+    $19
 )
 ON CONFLICT (usuario_id, transaccion_id) DO UPDATE SET
     entry_ancla = EXCLUDED.entry_ancla,
@@ -168,26 +177,32 @@ ON CONFLICT (usuario_id, transaccion_id) DO UPDATE SET
     comercio_nombre = EXCLUDED.comercio_nombre,
     mcc = EXCLUDED.mcc,
     version_modelo = EXCLUDED.version_modelo,
+    tipo_destino = EXCLUDED.tipo_destino,
+    contraparte_llave = EXCLUDED.contraparte_llave,
+    contraparte_nombre_normalizado = EXCLUDED.contraparte_nombre_normalizado,
     calculado_en = now()
 `
 
 type InsertarMovimientoEnriquecidoParams struct {
-	UsuarioID           string             `json:"usuario_id"`
-	TransaccionID       pgtype.UUID        `json:"transaccion_id"`
-	EntryAncla          int64              `json:"entry_ancla"`
-	OcurridoEn          pgtype.Timestamptz `json:"ocurrido_en"`
-	Moneda              string             `json:"moneda"`
-	Direccion           string             `json:"direccion"`
-	MontoCentavos       int64              `json:"monto_centavos"`
-	Contraparte         string             `json:"contraparte"`
-	ContraparteResuelta bool               `json:"contraparte_resuelta"`
-	Descripcion         pgtype.Text        `json:"descripcion"`
-	Categoria           string             `json:"categoria"`
-	OrigenCategoria     string             `json:"origen_categoria"`
-	ComercioMid         pgtype.Text        `json:"comercio_mid"`
-	ComercioNombre      pgtype.Text        `json:"comercio_nombre"`
-	Mcc                 pgtype.Text        `json:"mcc"`
-	VersionModelo       string             `json:"version_modelo"`
+	UsuarioID                    string             `json:"usuario_id"`
+	TransaccionID                pgtype.UUID        `json:"transaccion_id"`
+	EntryAncla                   int64              `json:"entry_ancla"`
+	OcurridoEn                   pgtype.Timestamptz `json:"ocurrido_en"`
+	Moneda                       string             `json:"moneda"`
+	Direccion                    string             `json:"direccion"`
+	MontoCentavos                int64              `json:"monto_centavos"`
+	Contraparte                  string             `json:"contraparte"`
+	ContraparteResuelta          bool               `json:"contraparte_resuelta"`
+	Descripcion                  pgtype.Text        `json:"descripcion"`
+	Categoria                    string             `json:"categoria"`
+	OrigenCategoria              string             `json:"origen_categoria"`
+	ComercioMid                  pgtype.Text        `json:"comercio_mid"`
+	ComercioNombre               pgtype.Text        `json:"comercio_nombre"`
+	Mcc                          pgtype.Text        `json:"mcc"`
+	VersionModelo                string             `json:"version_modelo"`
+	TipoDestino                  pgtype.Text        `json:"tipo_destino"`
+	ContraparteLlave             pgtype.Text        `json:"contraparte_llave"`
+	ContraparteNombreNormalizado pgtype.Text        `json:"contraparte_nombre_normalizado"`
 }
 
 func (q *Queries) InsertarMovimientoEnriquecido(ctx context.Context, arg InsertarMovimientoEnriquecidoParams) error {
@@ -208,6 +223,9 @@ func (q *Queries) InsertarMovimientoEnriquecido(ctx context.Context, arg Inserta
 		arg.ComercioNombre,
 		arg.Mcc,
 		arg.VersionModelo,
+		arg.TipoDestino,
+		arg.ContraparteLlave,
+		arg.ContraparteNombreNormalizado,
 	)
 	if err != nil {
 		return fmt.Errorf("query InsertarMovimientoEnriquecido: %w", err)

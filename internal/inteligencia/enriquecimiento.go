@@ -180,12 +180,13 @@ func (s *Servicio) Huella(ctx context.Context) (string, error) {
 			transaccion = uuid.UUID(fila.TransaccionID.Bytes).String()
 		}
 		fmt.Fprintf(suma,
-			"%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%t\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
+			"%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%t\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
 			fila.UsuarioID, transaccion, fila.EntryAncla,
 			fila.OcurridoEn.Time.UTC().Format(time.RFC3339Nano), fila.Moneda, fila.Direccion,
 			fila.MontoCentavos, fila.Contraparte, fila.ContraparteResuelta,
 			fila.Descripcion.String, fila.Categoria, fila.OrigenCategoria,
-			fila.ComercioMid.String, fila.ComercioNombre.String, fila.Mcc.String, fila.VersionModelo)
+			fila.ComercioMid.String, fila.ComercioNombre.String, fila.Mcc.String, fila.VersionModelo,
+			fila.TipoDestino.String, fila.ContraparteLlave.String, fila.ContraparteNombreNormalizado.String)
 	}
 	return hex.EncodeToString(suma.Sum(nil)), nil
 }
@@ -389,15 +390,19 @@ func memoriaDeUsuario(ctx context.Context, q *repositorio.Queries, usuarioID str
 	}
 	memoria := make(Memoria, len(filas))
 	for _, fila := range filas {
-		if !fila.Categoria.Valid {
-			continue
+		correccion := Correccion{}
+		if fila.Categoria.Valid {
+			correccion.Categoria = Categoria(fila.Categoria.String)
+		}
+		if fila.Nombre.Valid {
+			correccion.Nombre = fila.Nombre.String
 		}
 		memoria[ClaveCorreccion{
 			Usuario:     fila.UsuarioID,
 			TipoDestino: TipoDestino(fila.TipoDestino),
 			Nivel:       fila.Nivel,
 			Valor:       fila.Valor,
-		}] = Categoria(fila.Categoria.String)
+		}] = correccion
 	}
 	return memoria, nil
 }
@@ -447,30 +452,38 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		origen = "contraparte_interna"
 	}
 	comercioNombre := ""
+	nombreVisible := contraparte.Texto
 	if contraparte.Tipo == DestinoComercio {
-		comercioNombre = contraparte.Nombre
+		if corregido, encontrado := NombreDe(memoria, efecto.UsuarioID, destino); encontrado {
+			nombreVisible = corregido
+		}
+		comercioNombre = nombreVisible
 	}
+	destinoPersistido := PersistirDestino(efecto.UsuarioID, destino)
 	descripcion := efecto.Descripcion
 	if descripcion == "" {
 		descripcion = g.descripcion
 	}
 	parametros := repositorio.InsertarMovimientoEnriquecidoParams{
-		UsuarioID:           efecto.UsuarioID,
-		TransaccionID:       pgtype.UUID{Bytes: transaccionID, Valid: true},
-		EntryAncla:          g.entryAncla,
-		OcurridoEn:          pgtype.Timestamptz{Time: g.ocurridoEn, Valid: true},
-		Moneda:              moneda,
-		Direccion:           direccion,
-		MontoCentavos:       monto,
-		Contraparte:         contraparte.Texto,
-		ContraparteResuelta: contraparte.Resuelta,
-		Descripcion:         pgtype.Text{String: descripcion, Valid: descripcion != ""},
-		Categoria:           string(categoria),
-		OrigenCategoria:     origen,
-		ComercioMid:         pgtype.Text{},
-		ComercioNombre:      pgtype.Text{String: comercioNombre, Valid: comercioNombre != ""},
-		Mcc:                 pgtype.Text{},
-		VersionModelo:       VersionModelo,
+		UsuarioID:                    efecto.UsuarioID,
+		TransaccionID:                pgtype.UUID{Bytes: transaccionID, Valid: true},
+		EntryAncla:                   g.entryAncla,
+		OcurridoEn:                   pgtype.Timestamptz{Time: g.ocurridoEn, Valid: true},
+		Moneda:                       moneda,
+		Direccion:                    direccion,
+		MontoCentavos:                monto,
+		Contraparte:                  nombreVisible,
+		ContraparteResuelta:          contraparte.Resuelta,
+		Descripcion:                  pgtype.Text{String: descripcion, Valid: descripcion != ""},
+		Categoria:                    string(categoria),
+		OrigenCategoria:              origen,
+		ComercioMid:                  pgtype.Text{String: destinoPersistido.MID, Valid: destinoPersistido.MID != ""},
+		ComercioNombre:               pgtype.Text{String: comercioNombre, Valid: comercioNombre != ""},
+		Mcc:                          pgtype.Text{},
+		VersionModelo:                VersionModelo,
+		TipoDestino:                  pgtype.Text{String: string(destinoPersistido.Tipo), Valid: destinoPersistido.Tipo != ""},
+		ContraparteLlave:             pgtype.Text{String: destinoPersistido.Llave, Valid: destinoPersistido.Llave != ""},
+		ContraparteNombreNormalizado: pgtype.Text{String: destinoPersistido.NombreNormalizado, Valid: destinoPersistido.NombreNormalizado != ""},
 	}
 	if err := q.InsertarMovimientoEnriquecido(ctx, parametros); err != nil {
 		return fmt.Errorf("inteligencia: escribir el movimiento %s de %q: %w", transaccionID, efecto.UsuarioID, err)

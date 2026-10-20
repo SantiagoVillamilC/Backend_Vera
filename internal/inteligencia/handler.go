@@ -5,9 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
+	"github.com/google/uuid"
 )
 
 // ErrServicioDeLecturaNulo reporta la construcción de un Handler sin el servicio que necesita.
@@ -16,6 +18,7 @@ var ErrServicioDeLecturaNulo = errors.New("inteligencia: NuevoHandler necesita u
 // ServicioDeLectura es lo que el handler necesita del servicio de inteligencia.
 type ServicioDeLectura interface {
 	Movimientos(ctx context.Context, usuarioID string, ancla *CursorDeMovimiento, limite int) (PaginaDeMovimientos, error)
+	CorregirMovimiento(ctx context.Context, usuarioID string, transaccionID uuid.UUID, solicitud SolicitudDeCorreccion) (CorreccionAplicada, error)
 	Resumen(ctx context.Context, usuarioID, mes string) (ResumenDelMes, error)
 }
 
@@ -91,6 +94,90 @@ func (h *Handler) ResumenInteligencia(w http.ResponseWriter, r *http.Request, pa
 		return
 	}
 	api.WriteData(w, http.StatusOK, respuestaDeResumen(resumen), nil)
+}
+
+// CorregirMovimientoInteligencia aplica una corrección de categoría o de nombre y devuelve el movimiento.
+func (h *Handler) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionID string) {
+	usuarioID, ok := usuarioDeLaPeticion(w, r)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(transaccionID)
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "transaccion_id", Rule: "uuid"}})
+		return
+	}
+	var cuerpo api.CorregirMovimientoInteligenciaJSONRequestBody
+	if !api.DecodeAndValidate(w, r, &cuerpo) {
+		return
+	}
+	solicitud, err := solicitudDeCorreccion(cuerpo)
+	if err != nil {
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "body", Rule: "at_least_one"}})
+		return
+	}
+	resultado, err := h.servicio.CorregirMovimiento(r.Context(), usuarioID, id, solicitud)
+	if err != nil {
+		escribirErrorDeLaCorreccion(w, r, err)
+		return
+	}
+	api.WriteData(w, http.StatusOK, respuestaDeCorreccion(resultado), nil)
+}
+
+func solicitudDeCorreccion(cuerpo api.InteligenciaCorreccionRequest) (SolicitudDeCorreccion, error) {
+	solicitud := SolicitudDeCorreccion{}
+	if cuerpo.Categoria != nil {
+		categoria := Categoria(strings.TrimSpace(*cuerpo.Categoria))
+		solicitud.Categoria = &categoria
+	}
+	if cuerpo.NombreComercio != nil {
+		nombre := strings.TrimSpace(*cuerpo.NombreComercio)
+		solicitud.NombreComercio = &nombre
+	}
+	if solicitud.Categoria == nil && solicitud.NombreComercio == nil {
+		return SolicitudDeCorreccion{}, ErrCorreccionVacia
+	}
+	return solicitud, nil
+}
+
+func escribirErrorDeLaCorreccion(w http.ResponseWriter, r *http.Request, err error) {
+	parametro := strconv.Itoa(LargoNombreComercio)
+	switch {
+	case errors.Is(err, ErrMovimientoNoEncontrado):
+		api.WriteError(w, http.StatusNotFound, "NotFound", "Movement not found.", nil)
+	case errors.Is(err, ErrCategoriaNoVisible):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "categoria", Rule: "categoria_visible"}})
+	case errors.Is(err, ErrNombreNoAplica):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "nombre_comercio", Rule: "solo_comercio"}})
+	case errors.Is(err, ErrNombreVacio):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "nombre_comercio", Rule: "min"}})
+	case errors.Is(err, ErrNombreLargo):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "nombre_comercio", Rule: "max", Param: &parametro}})
+	case errors.Is(err, ErrDestinoGenerico):
+		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "transaccion_id", Rule: "destino_generico"}})
+	case errors.Is(err, ErrCopiaSinDestino):
+		api.WriteError(w, http.StatusConflict, "CopiaSinReconstruir",
+			"The enriched copy must be rebuilt before correcting this movement.", nil)
+	case errors.Is(err, ErrCorreccionOcupada):
+		api.WriteError(w, http.StatusConflict, "CorreccionEnCurso",
+			"Another enrichment process is running. Try again later.", nil)
+	default:
+		api.WriteAPIError(w, r, err)
+	}
+}
+
+func respuestaDeCorreccion(resultado CorreccionAplicada) api.InteligenciaCorreccion {
+	return api.InteligenciaCorreccion{
+		Movimiento:     respuestaDeMovimiento(resultado.Movimiento),
+		FilasCambiadas: resultado.FilasCambiadas,
+	}
 }
 
 func usuarioDeLaPeticion(w http.ResponseWriter, r *http.Request) (string, bool) {
