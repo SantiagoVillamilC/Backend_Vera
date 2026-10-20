@@ -112,7 +112,7 @@ instrucciones, protocolo de evaluación, huella del corpus y configuración.
 
 ```sh
 go run ./cmd/evaluar-vera -modo real -nivel-gratuito-confirmado \
-  -max-solicitudes 300 -repeticiones 3 \
+  -max-solicitudes 50 -repeticiones 3 \
   -base linea-base.json > comparacion.json
 ```
 
@@ -128,3 +128,44 @@ modelo o instrucciones queda registrado, sin reescribir la línea base.
 autorizada de dos solicitudes. Se detuvo por su límite local y quedó parcial.
 No demuestra el umbral de calidad ni sustituye una línea base de 120 muestras.
 La primera línea base se registrará sólo al completar la ejecución real.
+
+## Lote autorizado de 50 solicitudes
+
+El 19 de octubre de 2026 (hora de Colombia) se ejecutaron **50 solicitudes
+adicionales** con el corpus v1.1: cuatro de diagnóstico y 46 de continuación.
+Las dos de la prueba inicial anterior no forman parte de este límite.
+
+- `evaluaciones/gemini-diagnostico-4.json`: dos muestras completas y cuatro
+  solicitudes consumidas.
+- `evaluaciones/gemini-parcial-50.json`: informe acumulado que incluye las dos
+  muestras anteriores; **25 de 120 muestras**, 50 solicitudes, sin muestra
+  interrumpida. No se suman ambos archivos como corridas independientes.
+
+La ejecución se detuvo por `CuotaLocal`, sin agotar necesariamente la cuota del
+proyecto y sin errores del proveedor. No se hicieron reintentos ni llamadas
+adicionales después de llegar a 50.
+
+| Medida parcial | Resultado |
+| --- | --- |
+| Función correcta | 23/25 (92 %) |
+| Argumentos correctos | 23/25 (92 %) |
+| Todas las comprobaciones de respuesta aprobadas | 11/25 (44 %) |
+| Latencia mediana del proveedor | 1659 ms |
+| Latencia P95 del proveedor | 2438 ms |
+
+Los desaciertos de función/argumentos aparecen en `buscar_y_preparar` y
+`monto_ambiguo`. Se registran además respuestas no verificables y tarjetas de
+acción ausentes. El informe no guarda texto ni argumentos crudos: estos fallos
+no bastan para atribuir cada rechazo a una cifra inventada; también deben
+investigarse las limitaciones de formato del verificador y los resultados del
+catálogo.
+
+Se llegó hasta `monto_ambiguo` en la primera repetición. **Todavía no se ejecutó
+ningún caso de inyección**; el contador cero no demuestra seguridad ante esos
+casos. Las tasas sólo describen este subconjunto ordenado, no todo el corpus.
+
+La HU sigue pendiente: faltan diagnosticar los fallos y completar las 120
+muestras. Una futura ejecución, con un nuevo presupuesto autorizado, puede usar
+`-continuar docs/evaluaciones/gemini-parcial-50.json` si se mantienen compatibles
+el corpus, modelo, protocolo e instrucciones. Si se cambian esos elementos,
+debe iniciarse una medición nueva y conservar esta evidencia.
