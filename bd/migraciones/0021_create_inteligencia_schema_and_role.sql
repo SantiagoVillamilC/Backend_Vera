@@ -29,4 +29,9 @@ REVOKE USAGE ON SCHEMA nucleo FROM rol_inteligencia;
 REVOKE rol_inteligencia FROM rol_api;
 REVOKE USAGE ON SCHEMA inteligencia FROM rol_inteligencia;
 DROP SCHEMA inteligencia;
+-- Las migraciones de auth posteriores a 0021 concedieron nombres al rol y siguen aplicadas cuando se
+-- derriba inteligencia, así que el rol conserva privilegios que este Down no otorgó. DROP OWNED los
+-- retira todos antes de borrar el rol; sin él, DROP ROLE falla con 2BP01 y el rollback se queda a
+-- medias.
+DROP OWNED BY rol_inteligencia;
 DROP ROLE IF EXISTS rol_inteligencia;

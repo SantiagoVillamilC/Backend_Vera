@@ -57,7 +57,9 @@ func ConConfiguracionDeAvisos(cfg avisos.Configuracion) OpcionServicio {
 
 // EmitirAvisos evalúa a todos los usuarios con historial y guarda los avisos que disparan.
 func (s *Servicio) EmitirAvisos(ctx context.Context, ahora time.Time) (int, error) {
+	inicio := time.Now()
 	emitidos := 0
+	resumen := ResumenDeAvisos{}
 	despuesDe := ""
 	for {
 		var usuarios []string
@@ -70,24 +72,37 @@ func (s *Servicio) EmitirAvisos(ctx context.Context, ahora time.Time) (int, erro
 				return struct{}{}, err
 			})
 		if err != nil {
+			resumen.Fallo = true
+			s.metricas.AvisosTerminados(resumen, time.Since(inicio))
 			return emitidos, fmt.Errorf("inteligencia: listar usuarios para avisos: %w", err)
 		}
 		if len(usuarios) == 0 {
+			s.metricas.AvisosTerminados(resumen, time.Since(inicio))
 			return emitidos, nil
 		}
 		for _, usuario := range usuarios {
-			insertados, err := s.emitirAvisosDeUsuario(ctx, usuario, ahora)
+			inicioUsuario := time.Now()
+			insertados, recuento, err := s.emitirAvisosDeUsuario(ctx, usuario, ahora)
+			resumen.DuracionesPorUsuario = append(resumen.DuracionesPorUsuario, time.Since(inicioUsuario))
+			resumen.Usuarios++
 			if err != nil {
+				resumen.Fallo = true
+				s.metricas.AvisosTerminados(resumen, time.Since(inicio))
 				return emitidos, err
 			}
 			emitidos += insertados
+			resumen.Emitidos += insertados
+			resumen.YaEmitidos += recuento.YaEmitidas
+			resumen.SuprimidosPorCupo += recuento.Recortadas
 		}
 		despuesDe = usuarios[len(usuarios)-1]
 	}
 }
 
-func (s *Servicio) emitirAvisosDeUsuario(ctx context.Context, usuarioID string, ahora time.Time) (int, error) {
+func (s *Servicio) emitirAvisosDeUsuario(ctx context.Context, usuarioID string,
+	ahora time.Time) (int, avisos.Recuento, error) {
 	insertados := 0
+	recuento := avisos.Recuento{}
 	_, err := enTransaccion(ctx, s.pool,
 		func(ctx context.Context, tx transaccionDeInteligencia, q *repositorio.Queries) (struct{}, error) {
 			if err := tomarElCandadoDeAvisos(ctx, tx); err != nil {
@@ -105,7 +120,8 @@ func (s *Servicio) emitirAvisosDeUsuario(ctx context.Context, usuarioID string, 
 			if err != nil {
 				return struct{}{}, err
 			}
-			tarjetas, err := avisos.TarjetasDelDia(hechos, yaEmitidas, emitidosDelMes, s.avisosCfg.TopeAvisosMes)
+			tarjetas, recuentoDelUsuario, err := avisos.TarjetasDelDiaConRecuento(
+				hechos, yaEmitidas, emitidosDelMes, s.avisosCfg.TopeAvisosMes)
 			if err != nil {
 				return struct{}{}, err
 			}
@@ -118,12 +134,13 @@ func (s *Servicio) emitirAvisosDeUsuario(ctx context.Context, usuarioID string, 
 					insertados++
 				}
 			}
+			recuento = recuentoDelUsuario
 			return struct{}{}, nil
 		})
 	if err != nil {
-		return insertados, err
+		return 0, avisos.Recuento{}, err
 	}
-	return insertados, nil
+	return insertados, recuento, nil
 }
 
 // contextoDeAvisos arma el contexto del usuario desde la copia y el ledger. Todo se corta en ahora.

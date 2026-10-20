@@ -29,22 +29,40 @@ type ServicioDeLectura interface {
 type Handler struct {
 	servicio ServicioDeLectura
 	reloj    func() time.Time
+	metricas Metricas
+}
+
+// OpcionHandler ajusta el handler al construirlo.
+type OpcionHandler func(*Handler)
+
+// ConMetricasDeLaCorreccion inyecta el registro de métricas del endpoint de corrección.
+func ConMetricasDeLaCorreccion(metricas Metricas) OpcionHandler {
+	return func(h *Handler) {
+		if metricas != nil {
+			h.metricas = metricas
+		}
+	}
 }
 
 // NuevoHandler construye el handler sobre el servicio de lectura y falla si el servicio es nulo.
-func NuevoHandler(servicio ServicioDeLectura) *Handler {
-	return NuevoHandlerConReloj(servicio, time.Now)
+func NuevoHandler(servicio ServicioDeLectura, opciones ...OpcionHandler) *Handler {
+	return NuevoHandlerConReloj(servicio, time.Now, opciones...)
 }
 
 // NuevoHandlerConReloj construye el handler con un reloj inyectable para las pruebas.
-func NuevoHandlerConReloj(servicio ServicioDeLectura, reloj func() time.Time) *Handler {
+func NuevoHandlerConReloj(servicio ServicioDeLectura, reloj func() time.Time,
+	opciones ...OpcionHandler) *Handler {
 	if servicio == nil {
 		panic(ErrServicioDeLecturaNulo)
 	}
 	if reloj == nil {
 		reloj = time.Now
 	}
-	return &Handler{servicio: servicio, reloj: reloj}
+	handler := &Handler{servicio: servicio, reloj: reloj, metricas: SinMetricas()}
+	for _, opcion := range opciones {
+		opcion(handler)
+	}
+	return handler
 }
 
 // ListarMovimientosInteligencia responde una página de la vista enriquecida, paginada por cursor opaco.
@@ -116,25 +134,29 @@ func (h *Handler) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.
 	}
 	id, err := uuid.Parse(transaccionID)
 	if err != nil {
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		api.WriteError(w, http.StatusBadRequest, "ValidationError", "Request validation failed.",
 			[]api.FieldError{{Field: "transaccion_id", Rule: "uuid"}})
 		return
 	}
 	var cuerpo api.CorregirMovimientoInteligenciaJSONRequestBody
 	if !api.DecodeAndValidate(w, r, &cuerpo) {
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		return
 	}
 	solicitud, err := solicitudDeCorreccion(cuerpo)
 	if err != nil {
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
 			[]api.FieldError{{Field: "body", Rule: "at_least_one"}})
 		return
 	}
 	resultado, err := h.servicio.CorregirMovimiento(r.Context(), usuarioID, id, solicitud)
 	if err != nil {
-		escribirErrorDeLaCorreccion(w, r, err)
+		h.escribirErrorDeLaCorreccion(w, r, err)
 		return
 	}
+	h.metricas.CorreccionTerminada(DesenlaceCorreccionAplicada, resultado.FilasCambiadas)
 	api.WriteData(w, http.StatusOK, respuestaDeCorreccion(resultado), nil)
 }
 
@@ -154,33 +176,44 @@ func solicitudDeCorreccion(cuerpo api.InteligenciaCorreccionRequest) (SolicitudD
 	return solicitud, nil
 }
 
-func escribirErrorDeLaCorreccion(w http.ResponseWriter, r *http.Request, err error) {
+func (h *Handler) escribirErrorDeLaCorreccion(w http.ResponseWriter, r *http.Request, err error) {
 	parametro := strconv.Itoa(LargoNombreComercio)
 	switch {
 	case errors.Is(err, ErrMovimientoNoEncontrado):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionNoEncontrada, 0)
 		api.WriteError(w, http.StatusNotFound, "NotFound", "Movement not found.", nil)
 	case errors.Is(err, ErrCategoriaNoVisible):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
 			[]api.FieldError{{Field: "categoria", Rule: "categoria_visible"}})
 	case errors.Is(err, ErrNombreNoAplica):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
 			[]api.FieldError{{Field: "nombre_comercio", Rule: "solo_comercio"}})
 	case errors.Is(err, ErrNombreVacio):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
 			[]api.FieldError{{Field: "nombre_comercio", Rule: "min"}})
 	case errors.Is(err, ErrNombreLargo):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
 			[]api.FieldError{{Field: "nombre_comercio", Rule: "max", Param: &parametro}})
 	case errors.Is(err, ErrDestinoGenerico):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionInvalida, 0)
 		api.WriteError(w, http.StatusUnprocessableEntity, "ValidationError", "Request validation failed.",
 			[]api.FieldError{{Field: "transaccion_id", Rule: "destino_generico"}})
 	case errors.Is(err, ErrCopiaSinDestino):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionConflicto, 0)
+		h.metricas.ConflictoDeCorreccion(ConflictoCopiaSinReconstruir)
 		api.WriteError(w, http.StatusConflict, "CopiaSinReconstruir",
 			"The enriched copy must be rebuilt before correcting this movement.", nil)
 	case errors.Is(err, ErrCorreccionOcupada):
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionConflicto, 0)
+		h.metricas.ConflictoDeCorreccion(ConflictoCorreccionEnCurso)
 		api.WriteError(w, http.StatusConflict, "CorreccionEnCurso",
 			"Another enrichment process is running. Try again later.", nil)
 	default:
+		h.metricas.CorreccionTerminada(DesenlaceCorreccionError, 0)
 		api.WriteAPIError(w, r, err)
 	}
 }

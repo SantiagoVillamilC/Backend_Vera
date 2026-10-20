@@ -93,12 +93,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	metricasInteligencia, err := metricasDeInteligencia(cfg)
+	if err != nil {
+		return err
+	}
 	var opcionesInteligencia []inteligencia.OpcionServicio
 	if modeloClasificador != nil {
 		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConClasificador(modeloClasificador))
 	}
+	if metricasInteligencia != nil {
+		metricasInteligencia.ClasificadorActivo(modeloClasificador != nil)
+		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConMetricas(metricasInteligencia))
+	}
 	servicioInteligencia := inteligencia.NuevoServicio(pool, opcionesInteligencia...)
-	handlerInteligencia := inteligencia.NuevoHandler(servicioInteligencia)
+	handlerInteligencia := inteligencia.NuevoHandler(servicioInteligencia,
+		inteligencia.ConMetricasDeLaCorreccion(metricasDeCorreccion(metricasInteligencia)))
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
@@ -203,6 +212,12 @@ func run() error {
 	}
 	deps.Registro = httpserver.NuevoRegistroHandler(registrador)
 	deps.Companies = httpserver.NuevoEmpresasHandler(registrador)
+	if metricasInteligencia != nil {
+		deps.Metricas = httpserver.MetricasDelRouter{
+			Handler:      metricasInteligencia.Handler(),
+			Autenticador: tokenEstatico(cfg.MetricasToken),
+		}
+	}
 
 	opcionOutbox, despachadorAvisos := opcionOutboxDeAuth(pool, canal, cfg)
 	despachadorAvisos.Registrar(auth.TipoAvisoAbrirSubcuentas, auth.ManejadorAbrirSubcuentas(deps.Subcuentas))

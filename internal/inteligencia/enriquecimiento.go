@@ -29,11 +29,13 @@ var EspacioTransaccion = uuid.MustParse("1f0f4f2e-6f2b-5f3a-9d5a-0b7c3a9e4d21")
 
 // Resultado resume un lote.
 type Resultado struct {
-	Asientos       int
-	Movimientos    int
-	SinContraparte int
-	SinCategoria   int
-	PorOrigen      map[string]int
+	Asientos            int
+	Movimientos         int
+	SinContraparte      int
+	SinCategoria        int
+	Abstenciones        int
+	PorOrigen           map[string]int
+	VersionClasificador string
 }
 
 // Enriquecer procesa un lote de asientos nuevos y escribe la copia enriquecida.
@@ -44,6 +46,7 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 	if limite > 5000 {
 		limite = 5000
 	}
+	inicio := time.Now()
 	resultado, err := enTransaccion(ctx, s.pool,
 		func(ctx context.Context, tx transaccionDeInteligencia, q *repositorio.Queries) (Resultado, error) {
 			bloqueado, err := intentarBloqueo(ctx, tx)
@@ -66,7 +69,7 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 				return Resultado{}, fmt.Errorf("inteligencia: leer asientos pendientes: %w", err)
 			}
 			if len(anclas) == 0 {
-				return Resultado{PorOrigen: map[string]int{}}, nil
+				return Resultado{PorOrigen: map[string]int{}, VersionClasificador: s.versionDelClasificador()}, nil
 			}
 
 			lineas, err := q.LineasDeAsientos(ctx, anclas)
@@ -88,7 +91,11 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 				return Resultado{}, err
 			}
 			memorias := make(map[string]Memoria)
-			resultado := Resultado{Asientos: len(anclas), PorOrigen: map[string]int{}}
+			resultado := Resultado{
+				Asientos:            len(anclas),
+				PorOrigen:           map[string]int{},
+				VersionClasificador: s.versionDelClasificador(),
+			}
 			for _, grupo := range grupos {
 				transaccionID := transaccionDeGrupo(grupo)
 				efectos, err := EfectosPorUsuario(grupo.apuntes)
@@ -126,14 +133,23 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 			return resultado, nil
 		})
 	if err != nil {
+		desenlace := DesenlaceLoteError
+		if errors.Is(err, ErrLoteEnCurso) {
+			desenlace = DesenlaceLoteEnCurso
+		}
+		s.metricas.LoteNoEjecutado(desenlace, time.Since(inicio))
 		return Resultado{}, err
 	}
+	duracion := time.Since(inicio)
+	s.metricas.LoteTerminado(resultado, duracion)
 	slog.Info("inteligencia.enriquecimiento",
 		"asientos", resultado.Asientos,
 		"movimientos", resultado.Movimientos,
 		"sin_contraparte", resultado.SinContraparte,
 		"sin_categoria", resultado.SinCategoria,
-		"por_origen", resultado.PorOrigen)
+		"abstenciones", resultado.Abstenciones,
+		"por_origen", resultado.PorOrigen,
+		"duracion_ms", duracion.Milliseconds())
 	return resultado, nil
 }
 
@@ -501,7 +517,19 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 	if categoria == SinCategoria {
 		resultado.SinCategoria++
 	}
+	if decision.PendienteLLM {
+		resultado.Abstenciones++
+	}
 	return nil
+}
+
+// versionDelClasificador es la etiqueta con la que viajan las abstenciones. Sin modelo cargado se
+// declara explícitamente, para que un cero no se lea como ausencia de abstenciones.
+func (s *Servicio) versionDelClasificador() string {
+	if s.clasificador == nil {
+		return "sin_modelo"
+	}
+	return s.clasificador.VersionModelo()
 }
 
 func intentarBloqueo(ctx context.Context, tx transaccionDeInteligencia) (bool, error) {

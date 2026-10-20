@@ -115,6 +115,7 @@ type DependenciasAuth struct {
 	Companies     CompaniesHandler
 	Destinatarios *DestinatariosHandler
 	Inteligencia  InteligenciaHandler
+	Metricas      MetricasDelRouter
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.

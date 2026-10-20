@@ -78,25 +78,49 @@ func SeveridadDe(tarjeta Tarjeta) int64 {
 	}
 }
 
+// Recuento describe qué pasó con las tarjetas de un usuario antes y después del cupo. Es la única
+// fuente del número que el cupo recorta: sin él, un aviso suprimido no deja rastro.
+type Recuento struct {
+	Hechos     int
+	YaEmitidas int
+	Candidatas int
+	Elegidas   int
+	Recortadas int
+}
+
 // TarjetasDelDia evalúa los hechos, arma las tarjetas, verifica los textos, descarta las ya emitidas,
 // ordena y aplica el cupo. Un texto que no reproduce sus cifras es un error de programación, no de
 // datos: la corrida falla cerrada y no se escribe nada.
 func TarjetasDelDia(hechos []Hecho, yaEmitidas map[ClaveDeAviso]struct{}, emitidos, tope int) ([]Tarjeta, error) {
+	tarjetas, _, err := TarjetasDelDiaConRecuento(hechos, yaEmitidas, emitidos, tope)
+	return tarjetas, err
+}
+
+// TarjetasDelDiaConRecuento hace lo mismo que TarjetasDelDia y además informa cuántas tarjetas
+// quedaron fuera por deduplicación y cuántas por el cupo. La lógica de orden y de tope no cambia.
+func TarjetasDelDiaConRecuento(hechos []Hecho, yaEmitidas map[ClaveDeAviso]struct{}, emitidos,
+	tope int) ([]Tarjeta, Recuento, error) {
+	recuento := Recuento{Hechos: len(hechos)}
 	tarjetas := make([]Tarjeta, 0, len(hechos))
 	for _, hecho := range hechos {
 		if _, existe := yaEmitidas[Clave(hecho)]; existe {
+			recuento.YaEmitidas++
 			continue
 		}
 		tarjeta, err := TarjetaDe(hecho)
 		if err != nil {
-			return nil, err
+			return nil, Recuento{}, err
 		}
 		if reproduce, motivo := VerificarTarjeta(tarjeta); !reproduce {
-			return nil, &ErrorDeTexto{Tipo: tarjeta.Tipo, Motivo: motivo}
+			return nil, Recuento{}, &ErrorDeTexto{Tipo: tarjeta.Tipo, Motivo: motivo}
 		}
 		tarjetas = append(tarjetas, tarjeta)
 	}
-	return Tope(Orden(tarjetas), emitidos, tope), nil
+	recuento.Candidatas = len(tarjetas)
+	elegidas := Tope(Orden(tarjetas), emitidos, tope)
+	recuento.Elegidas = len(elegidas)
+	recuento.Recortadas = recuento.Candidatas - recuento.Elegidas
+	return elegidas, recuento, nil
 }
 
 // ClaveDeAviso es la identidad de deduplicación de la tabla aviso: tipo, clave y período.

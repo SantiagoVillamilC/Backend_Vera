@@ -18,6 +18,9 @@ import (
 // horaValida es el formato HH:MM de 24 horas que acepta AVISOS_HORA.
 var horaValida = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 
+// largoMinimoDelTokenDeMetricas es el mínimo exigido a METRICAS_TOKEN cuando la superficie está abierta.
+const largoMinimoDelTokenDeMetricas = 32
+
 // Config reúne los valores de entorno que el proceso necesita para arrancar.
 type Config struct {
 	Port                    string
@@ -45,6 +48,8 @@ type Config struct {
 	Clasificador            inteligencia.ModoClasificador
 	AvisosActivo            bool
 	AvisosHora              string
+	MetricasActivo          bool
+	MetricasToken           string
 	A6PosicionLiquidacion   nucleo.Centavos
 	A6PrefondeoActivo       bool
 	Auth                    ConfigAuth
@@ -170,6 +175,21 @@ func LoadConfig() (*Config, error) {
 	if errClasificador != nil {
 		errs = append(errs, errClasificador)
 	}
+	var errMetricas error
+	cfg.MetricasActivo, errMetricas = boolOr("METRICAS_ACTIVO", "false")
+	if errMetricas != nil {
+		errs = append(errs, errMetricas)
+	}
+	cfg.MetricasToken = os.Getenv("METRICAS_TOKEN")
+	if cfg.MetricasActivo {
+		if len(cfg.MetricasToken) < largoMinimoDelTokenDeMetricas {
+			errs = append(errs, fmt.Errorf("METRICAS_TOKEN must be at least %d bytes when METRICAS_ACTIVO is on, got %d",
+				largoMinimoDelTokenDeMetricas, len(cfg.MetricasToken)))
+		}
+		if cfg.MetricasToken != "" && (cfg.MetricasToken == cfg.CustodioToken || cfg.MetricasToken == cfg.JWTSecret) {
+			errs = append(errs, errors.New("METRICAS_TOKEN must differ from CUSTODIO_TOKEN and JWT_SECRET"))
+		}
+	}
 	var errA6 error
 	cfg.A6PosicionLiquidacion, errA6 = centavosOr("A6_POSICION_LIQUIDACION_CENTAVOS", "0")
 	if errA6 != nil {
@@ -242,6 +262,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("clasificador", string(c.Clasificador)),
 		slog.Bool("avisos_activo", c.AvisosActivo),
 		slog.String("avisos_hora", c.AvisosHora),
+		slog.Bool("metricas_activo", c.MetricasActivo),
+		slog.Bool("metricas_token_set", c.MetricasToken != ""),
 		slog.Bool("a6_prefondeo_activo", c.A6PrefondeoActivo),
 		slog.String("a6_posicion_liquidacion_centavos", strconv.FormatInt(c.A6PosicionLiquidacion.Int64(), 10)),
 		slog.String("a6_posicion_liquidacion_cop", c.A6PosicionLiquidacion.PresentarUnidadesMayores()),

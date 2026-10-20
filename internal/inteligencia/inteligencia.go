@@ -15,6 +15,7 @@ type Servicio struct {
 	pool         abridorDeTransacciones
 	clasificador *Modelo
 	avisosCfg    avisos.Configuracion
+	metricas     Metricas
 }
 
 // OpcionServicio ajusta el servicio al construirlo.
@@ -25,11 +26,21 @@ func ConClasificador(modelo *Modelo) OpcionServicio {
 	return func(s *Servicio) { s.clasificador = modelo }
 }
 
+// ConMetricas inyecta el registro de métricas del contexto. Sin él no se mide nada.
+func ConMetricas(metricas Metricas) OpcionServicio {
+	return func(s *Servicio) {
+		if metricas != nil {
+			s.metricas = metricas
+		}
+	}
+}
+
 // NuevoServicio arma el servicio sobre el pool de la aplicación.
 func NuevoServicio(pool *pgxpool.Pool, opciones ...OpcionServicio) *Servicio {
 	servicio := &Servicio{
 		pool:      poolDeInteligencia{pool: pool},
 		avisosCfg: avisos.ConfiguracionPorDefecto(),
+		metricas:  SinMetricas(),
 	}
 	for _, opcion := range opciones {
 		opcion(servicio)
