@@ -244,6 +244,26 @@ func (s *servidor) sintetizar(ctx context.Context, w http.ResponseWriter, r *htt
 }
 
 func (s *servidor) error(w http.ResponseWriter, err error) {
+	var bloqueo *copilot.ErrorBloqueo
+	if errors.As(err, &bloqueo) {
+		mensaje := "La respuesta se detuvo por una regla de contenido."
+		switch bloqueo.Motivo {
+		case copilot.BloqueoEntrada:
+			mensaje = "Google bloqueó la entrada enviada al modelo (ProviderInput)."
+		case copilot.BloqueoSeguridad:
+			mensaje = "Google bloqueó la respuesta con su filtro de contenido (ProviderSafety)."
+		case copilot.BloqueoDatos:
+			mensaje = "Google bloqueó la respuesta por posible información sensible (ProviderSensitiveData)."
+		case copilot.BloqueoRecitacion:
+			mensaje = "Google detuvo la respuesta por posible reproducción de contenido (ProviderRecitation)."
+		case copilot.BloqueoOtro:
+			mensaje = "Google bloqueó la solicitud sin indicar una causa específica (ProviderOther)."
+		case copilot.BloqueoInstrucciones:
+			mensaje = "El backend detuvo una respuesta que parecía copiar instrucciones internas (InstructionDisclosure)."
+		}
+		api.WriteError(w, 422, "ResponseBlocked", mensaje, nil)
+		return
+	}
 	var audio *copilot.ErrorAudio
 	if errors.As(err, &audio) {
 		api.WriteError(w, 422, "InvalidAudio", "El clip no es un WAV válido o supera el límite. Graba de nuevo.", nil)

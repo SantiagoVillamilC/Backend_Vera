@@ -209,6 +209,20 @@ Referencias del navegador:
 
 ## Alcance y verificaciones
 
+Los bloqueos se diagnostican por origen: filtro de entrada de Google
+(`ProviderInput`), filtro de salida (`ProviderSafety`), reproducción de contenido
+(`ProviderRecitation`), información sensible (`ProviderSensitiveData`), motivo
+no especificado (`ProviderOther`) o copia de instrucciones detectada en el
+backend (`InstructionDisclosure`). Todos conservan la categoría `ResponseBlocked`;
+el mensaje sólo contiene motivos de una lista cerrada, nunca el texto bloqueado,
+las instrucciones ni mensajes internos del SDK. No se relajan filtros ni se
+reintentan bloqueos automáticamente. Una transcripción correcta seguida de un
+fallo al responder se identifica expresamente en la pantalla.
+
+El saludo «Hola, Vera, ¿cómo estás?» se comprobó en una conversación nueva con
+el proveedor real: respondió en una llamada. No se reprodujo el bloqueo reportado;
+no se atribuye a Google o al backend sin el diagnóstico correspondiente.
+
 El laboratorio escucha en el equipo local. Docker publica el puerto únicamente
 en `127.0.0.1`. Las rutas de prueba exigen un token aleatorio de sesión, distinto
 de la clave de Gemini, y rechazan hosts y orígenes ajenos. El token llega en el

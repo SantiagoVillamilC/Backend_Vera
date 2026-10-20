@@ -25,6 +25,10 @@ func TestOrquestadorNoEntregaNiPersisteInstruccionesCopiadas(t *testing.T) {
 		if !errors.Is(err, ErrBloqueoIA) || r.Texto != "" || len(s.registros) != 0 || !s.cerrada {
 			t.Fatalf("filtración aceptada: %v", err)
 		}
+		var bloqueo *ErrorBloqueo
+		if !errors.As(err, &bloqueo) || bloqueo.Motivo != BloqueoInstrucciones {
+			t.Fatal("se perdió el origen del bloqueo", err)
+		}
 		if strings.Contains(logs.String(), texto) || !strings.Contains(logs.String(), "InstructionDisclosure") {
 			t.Fatalf("logs de bloqueo: %s", logs.String())
 		}
@@ -33,6 +37,19 @@ func TestOrquestadorNoEntregaNiPersisteInstruccionesCopiadas(t *testing.T) {
 		if revelaInstrucciones(texto) {
 			t.Fatalf("bloqueó respuesta legítima: %s", texto)
 		}
+	}
+}
+
+func TestSaludoLegitimoNoActivaBloqueoDeInstrucciones(t *testing.T) {
+	const respuesta = "Hola. Estoy muy bien, lista para ayudarte con tu billetera Vera. ¿En qué te puedo colaborar hoy?"
+	p := proveedorCicloPrueba{generar: func(context.Context, SolicitudIA) (RespuestaIA, error) {
+		return RespuestaIA{Turno: TurnoIA{Rol: "asistente", Partes: []ParteIA{{Texto: respuesta}}}}, nil
+	}}
+	o, s, ctx := cicloPrueba(t, p, nil)
+	s.historial[0].Partes[0].Texto = "Hola, Vera, ¿cómo estás?"
+	r, err := o.Responder(ctx, EntradaOrquestador{ConversacionID: uuid.New(), MensajeID: uuid.New()})
+	if err != nil || r.Texto != respuesta || len(s.registros) != 1 {
+		t.Fatal("saludo legítimo bloqueado", err)
 	}
 }
 

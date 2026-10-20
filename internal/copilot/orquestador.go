@@ -180,7 +180,7 @@ func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (resp
 		}
 		if revelaInstrucciones(texto) {
 			o.logger.WarnContext(ctx, "respuesta del asistente bloqueada", "resultado", "InstructionDisclosure", "version_instrucciones", VersionInstruccionesVera)
-			return SalidaOrquestador{}, ErrBloqueoIA
+			return SalidaOrquestador{}, &ErrorBloqueo{Motivo: BloqueoInstrucciones}
 		}
 		salida.Vueltas = vuelta
 		salida.TokensEntrada += int64(respuesta.TokensEntrada)

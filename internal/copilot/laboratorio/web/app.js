@@ -197,6 +197,7 @@ async function detenerGrabacion() {
   grabando = false; controles(true); clearInterval(g.temporizador); clearTimeout(g.limite);
   $('reloj').hidden = true; $('microfono').classList.remove('activo'); $('texto-microfono').textContent = 'Hablar'; $('estado').classList.remove('grabando');
   let respondio = false;
+  let transcrito = false;
   try {
     g.nodo.port.postMessage('fin'); await Promise.race([g.fin, new Promise((r) => setTimeout(r, 500))]);
     g.stream.getTracks().forEach((t) => t.stop()); await g.contexto.close(); grabacion = null;
@@ -207,9 +208,10 @@ async function detenerGrabacion() {
     const datos = await api('/api/transcribir', {method: 'POST', headers: {'Content-Type': 'audio/wav'}, body: blob});
     medir('Transcripción', inicioTranscripcion);
     actualizar(datos.estado); $('texto-transcripcion').textContent = datos.transcripcion; $('transcripcion').hidden = false;
+    transcrito = true;
     await preguntar(datos.transcripcion);
     respondio = true;
-  } catch (e) { fallo(e.message); estado('No se pudo completar el turno de voz. Puedes escribir o grabar otra vez.'); }
+  } catch (e) { fallo(e.message); estado(transcrito ? 'Tu audio se transcribió correctamente. No se pudo generar la respuesta de Vera.' : 'No se pudo transcribir el audio. Puedes escribir o grabar otra vez.'); }
   finally { g.stream.getTracks().forEach((t) => t.stop()); if (g.contexto.state !== 'closed') await g.contexto.close(); grabacion = null; if (!respondio) await refrescarConsumo(); controles(false); if (respondio && $('automatica').checked && !detenidoPorCuota) await escuchar(); }
 }
 $('microfono').addEventListener('click', async () => {

@@ -130,22 +130,30 @@ func traducirRespuesta(raw *genai.GenerateContentResponse) (copilot.RespuestaIA,
 		r.TokensEntrada, r.TokensSalida = u.PromptTokenCount, u.CandidatesTokenCount+u.ThoughtsTokenCount
 	}
 	if raw.PromptFeedback != nil && raw.PromptFeedback.BlockReason != "" && raw.PromptFeedback.BlockReason != "BLOCK_REASON_UNSPECIFIED" {
-		return r, copilot.ErrBloqueoIA
+		motivo := copilot.BloqueoEntrada
+		if raw.PromptFeedback.BlockReason == "OTHER" {
+			motivo = copilot.BloqueoOtro
+		}
+		return r, &copilot.ErrorBloqueo{Motivo: motivo}
 	}
 	if len(raw.Candidates) != 1 || raw.Candidates[0] == nil {
 		return r, copilot.ErrRespuestaIA
 	}
 	c := raw.Candidates[0]
 	switch c.FinishReason {
-	case "SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY", "RECITATION":
-		return r, copilot.ErrBloqueoIA
+	case "SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "IMAGE_SAFETY":
+		return r, &copilot.ErrorBloqueo{Motivo: copilot.BloqueoSeguridad}
+	case "SPII":
+		return r, &copilot.ErrorBloqueo{Motivo: copilot.BloqueoDatos}
+	case "RECITATION":
+		return r, &copilot.ErrorBloqueo{Motivo: copilot.BloqueoRecitacion}
 	case "STOP", "":
 	default:
 		return r, copilot.ErrRespuestaIA
 	}
 	for _, rating := range c.SafetyRatings {
 		if rating != nil && rating.Blocked {
-			return r, copilot.ErrBloqueoIA
+			return r, &copilot.ErrorBloqueo{Motivo: copilot.BloqueoSeguridad}
 		}
 	}
 	if c.Content == nil {
