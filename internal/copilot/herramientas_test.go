@@ -108,3 +108,38 @@ func TestCatalogoIdentidadYCancelacion(t *testing.T) {
 		t.Fatal("ejecutó con contexto cancelado")
 	}
 }
+
+func TestCatalogoRechazaLlaveAmbiguaAntesDelManejador(t *testing.T) {
+	llamadas := 0
+	c := catalogoPrueba(t, map[string]ManejadorHerramienta{"preparar_transferencia": func(context.Context, identidad.Identidad, ArgumentosHerramienta) (DatosHerramienta, error) {
+		llamadas++
+		return nil, nil
+	}})
+	r, err := c.Ejecutar(contextoHerramienta(t), LlamadaIA{Nombre: "preparar_transferencia", Argumentos: json.RawMessage(`{"llave_breb":"1234567890","monto_pesos":"50000"}`)})
+	if err != nil || codigoResultado(t, r) != "ValidationError" || llamadas != 0 {
+		t.Fatalf("llave ambigua llegó al manejador: llamadas=%d resultado=%s err=%v", llamadas, r.Datos, err)
+	}
+}
+
+func TestCatalogoMantieneLlavesInequivocas(t *testing.T) {
+	for _, llave := range []string{"@laura", "laura@example.com", "+573001234567", "celular:3001234567", "documento:1234567", "comercio:ABC12345"} {
+		t.Run(llave, func(t *testing.T) {
+			llamadas := 0
+			c := catalogoPrueba(t, map[string]ManejadorHerramienta{"preparar_transferencia": func(_ context.Context, _ identidad.Identidad, args ArgumentosHerramienta) (DatosHerramienta, error) {
+				llamadas++
+				if args.Monto != 5000000 {
+					t.Fatalf("monto alterado: %d", args.Monto)
+				}
+				return nil, ErrHerramientaNoDisponible
+			}})
+			args, err := json.Marshal(map[string]string{"llave_breb": llave, "monto_pesos": "50000"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err := c.Ejecutar(contextoHerramienta(t), LlamadaIA{Nombre: "preparar_transferencia", Argumentos: args})
+			if err != nil || codigoResultado(t, r) != "FunctionUnavailable" || llamadas != 1 {
+				t.Fatalf("llave válida rechazada: %s %v", r.Datos, err)
+			}
+		})
+	}
+}

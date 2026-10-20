@@ -14,6 +14,41 @@ import (
 
 type proveedorEvaluacionPrueba func(context.Context, copilot.SolicitudIA) (copilot.RespuestaIA, error)
 
+func TestDiagnosticoNoCopiaDatosLibres(t *testing.T) {
+	if got := codigoResultadoSeguro(json.RawMessage(`{"error":{"codigo":"secreto del proveedor"}}`)); got != "FunctionError" {
+		t.Fatalf("filtró código libre: %q", got)
+	}
+	if got := codigoResultadoSeguro(json.RawMessage(`{"error":{"codigo":"ValidationError"}}`)); got != "ValidationError" {
+		t.Fatal(got)
+	}
+	datos := []json.RawMessage{json.RawMessage(`{"centavos":"12000000"}`)}
+	if got := diagnosticoMontos("$12,00,000.00", datos); got != "FormatoMonetarioNoAdmitido" {
+		t.Fatal(got)
+	}
+	if got := diagnosticoMontos("999.00 COP", datos); got != "ImporteNoRespaldado" {
+		t.Fatal(got)
+	}
+}
+
+func TestConsultaRealSinCifraNoAprueba(t *testing.T) {
+	c, err := Cargar()
+	if err != nil {
+		t.Fatal(err)
+	}
+	turno := 0
+	p := &proveedorMedido{max: 3, interno: proveedorEvaluacionPrueba(func(context.Context, copilot.SolicitudIA) (copilot.RespuestaIA, error) {
+		turno++
+		if turno == 1 {
+			return copilot.RespuestaIA{Turno: copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Llamada: &copilot.LlamadaIA{ID: "saldo", Nombre: "consultar_saldo", Argumentos: json.RawMessage(`{}`)}}}}}, nil
+		}
+		return copilot.RespuestaIA{Turno: copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Texto: "Puedes consultar tu saldo en la billetera."}}}}, nil
+	})}
+	m, _, err := ejecutarMuestraReal(t.Context(), c.FechaReferencia, c.Casos[0], 1, p)
+	if err != nil || !m.FuncionesCorrectas || m.RespuestaCorrecta {
+		t.Fatalf("aprobó consulta sin cifra: %+v %v", m, err)
+	}
+}
+
 func (p proveedorEvaluacionPrueba) Generar(ctx context.Context, s copilot.SolicitudIA) (copilot.RespuestaIA, error) {
 	return p(ctx, s)
 }
@@ -36,7 +71,11 @@ func proveedorCorrectoReal(t *testing.T, c Conjunto) copilot.ProveedorIA {
 				turno.Partes = append(turno.Partes, copilot.ParteIA{Llamada: &copilot.LlamadaIA{ID: fmt.Sprint(i), Nombre: l.Nombre, Argumentos: l.Argumentos}})
 			}
 		} else {
-			turno.Partes = []copilot.ParteIA{{Texto: "¿Puedes revisar y confirmar en la tarjeta de tu billetera?"}}
+			texto := "¿Puedes revisar y confirmar en la tarjeta de tu billetera?"
+			if v.Categoria == "consulta" || v.Categoria == "argumentos" {
+				texto = v.Guion[len(v.Guion)-1].Texto
+			}
+			turno.Partes = []copilot.ParteIA{{Texto: texto}}
 		}
 		return copilot.RespuestaIA{Turno: turno, TokensEntrada: 10, TokensSalida: 5}, nil
 	})

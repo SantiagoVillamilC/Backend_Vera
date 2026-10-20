@@ -75,6 +75,11 @@ func validarArgumentos(nombre string, esquema *openapi3.Schema, raw json.RawMess
 		args.Celular = celular
 	}
 	if nombre == "preparar_transferencia" {
+		if args.LlaveBreB != "" {
+			if _, err := llaveParaPreparacion(args.LlaveBreB); err != nil {
+				return args, nil, ErrHerramientaValidacion
+			}
+		}
 		monto, err := nucleo.ParsearPesosEnteros(args.MontoPesos)
 		if err != nil {
 			return args, nil, ErrHerramientaValidacion

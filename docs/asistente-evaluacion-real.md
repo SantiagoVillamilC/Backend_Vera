@@ -271,3 +271,49 @@ referencia; **la HU sigue pendiente de corregir y validar esos fallos**.
 Se conserva la evidencia sin alterar expectativas para obtener un resultado
 verde. Cualquier cambio de instrucciones o corpus requiere una nueva medición
 compatible con su versión y una nueva autorización para consumir solicitudes.
+
+## Correcciones posteriores a la primera medición
+
+Las instrucciones `vera-2026-10-20-v5` indican aclarar monto o destino ambiguo
+antes de cualquier herramienta, incluidas las búsquedas. Para buscar y preparar
+un monto ya definido, exigen continuar con la referencia de la única coincidencia
+en el mismo turno; varias coincidencias siguen requiriendo elección. También
+exigen copiar los pesos del backend con su signo, sin calcular ni reformatear.
+Son instrucciones al modelo: su cumplimiento debe volver a medirse con Gemini.
+
+El catálogo valida ahora la forma de la llave Bre-B antes del manejador, usando
+el mismo resolvedor de formas que el preparador real. Una secuencia numérica
+sin tipo se rechaza con `ValidationError` sin crear una acción ni llamar al
+manejador. Esto corrige además una diferencia del fixture, que aceptaba esa
+cadena aunque el preparador de producción ya la rechazaba.
+
+Las fechas relativas se calculan en el backend: hoy, ayer, semana calendario
+anterior de lunes a domingo y mes actual hasta hoy, con extremos inclusivos en
+Colombia. Se probaron el lunes de referencia, un domingo colombiano que ya es
+lunes en UTC y el cambio de año.
+
+El protocolo de evaluación pasa a **`vera-evaluacion-real-v2`**:
+
+- Admite agrupaciones monetarias válidas con punto o coma sin usar flotantes;
+  sigue rechazando agrupaciones mal formadas, centavos distintos, cambio de
+  signo y desbordamientos. Se reprodujo el rechazo de un formato válido antes
+  de corregirlo; no puede atribuirse a ello un número concreto de los 46 fallos
+  antiguos, porque sus respuestas no fueron archivadas.
+- Una consulta que obtuvo cifras pero responde sin importe explícito ya no
+  aprueba por omisión. Una tarjeta estructurada conserva su propio monto.
+- Un resultado fallido de herramienta impide aprobar la respuesta.
+- Añade códigos de herramientas de una lista cerrada y separa formato no
+  admitido de importe no respaldado. No copia argumentos ni respuestas crudas.
+
+Los informes v1 permanecen intactos y no pueden continuarse ni compararse como
+si sus criterios fueran v2. No se han obtenido nuevas métricas reales de las
+correcciones: la revisión automática de permisos rechazó las ocho solicitudes
+de diagnóstico por requerir autorización adicional para consumir cuota. No se
+consumieron solicitudes tras ese rechazo. La siguiente validación es una nueva
+corrida completa de 40 casos por tres repeticiones con v2 e instrucciones v5.
+
+Verificación local: suite completa con `-race`, `go vet`, lint sin incidencias
+nuevas y gate de generación sin cambios. El conjunto simulado conserva
+**52/52 casos aprobados**; la evidencia está en
+`evaluaciones/simulado-correcciones-v5.json`. Este resultado no sustituye la
+validación del comportamiento de Gemini ni permite cerrar todavía la HU.

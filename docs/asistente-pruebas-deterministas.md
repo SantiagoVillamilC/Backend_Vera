@@ -61,7 +61,8 @@ con ella, no con una frase generada por el proveedor.
 El verificador busca importes con `$`, `COP` o `pesos` y exige que coincidan con
 un campo `centavos` de un resultado de herramienta de ese mismo ciclo. No toma
 importes del guion ni del oráculo como fuente de verdad. Acepta la representación
-canónica del backend (`120000.00 COP`) y formato colombiano (`$120.000,00`). Usa
+canónica del backend (`120000.00 COP`), formato colombiano (`$120.000,00`) y
+agrupaciones válidas con coma (`$120,000.00`). Usa
 enteros y comprueba desbordamiento, signos y centavos superiores al límite seguro
 de JavaScript. Nunca calcula un saldo o un resumen a partir de la narración.
 

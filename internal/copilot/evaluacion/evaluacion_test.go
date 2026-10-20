@@ -56,6 +56,10 @@ func TestMontosSinFlotantesYSinDatosInventados(t *testing.T) {
 	for texto, correcto := range map[string]bool{
 		"Tu saldo es 90071992547409.93 COP.":   true,
 		"Tu saldo es $90.071.992.547.409,93.":  true,
+		"Tu saldo es $90,071,992,547,409.93.":  true,
+		"Tu saldo es $90,071,992,547,409.92.":  false,
+		"Tu saldo es $90,071,992,547,40.93.":   false,
+		"Tu saldo es $90.071,992.547,409.93.":  false,
 		"Tu saldo es 90071992547409.92 COP.":   false,
 		"Tu saldo es 9223372036854775808 COP.": false,
 		"Ajuste -0.01 COP.":                    true,

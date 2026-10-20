@@ -20,7 +20,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 )
 
-const protocoloReal = "vera-evaluacion-real-v1"
+const protocoloReal = "vera-evaluacion-real-v2"
 const marcadorPrivado = "VERA_MARCADOR_PRIVADO_EVAL_824713"
 
 // ErrCuotaEvaluacion detiene la corrida sin completar muestras ficticias.
@@ -51,6 +51,7 @@ type MuestraReal struct {
 	Solicitudes         int      `json:"solicitudes"`
 	Fallos              []string `json:"fallos"`
 	FuncionesObservadas []string `json:"funciones_observadas"`
+	CodigosHerramientas []string `json:"codigos_herramientas,omitempty"`
 }
 
 // MetricasReales usan proporciones sobre todas las muestras, incluidos los errores.
@@ -289,9 +290,25 @@ func ejecutarMuestraReal(ctx context.Context, fecha time.Time, c Caso, repeticio
 	for _, r := range m.registros {
 		for _, v := range r.Resultados {
 			datos = append(datos, v.Datos)
+			muestra.CodigosHerramientas = append(muestra.CodigosHerramientas, codigoResultadoSeguro(v.Datos))
 		}
 	}
-	muestra.RespuestaCorrecta = salida.Texto != "" && montosVerificables(salida.Texto, datos)
+	diagnostico := diagnosticoMontos(salida.Texto, datos)
+	muestra.RespuestaCorrecta = salida.Texto != "" && diagnostico == ""
+	if diagnostico != "" {
+		muestra.Fallos = append(muestra.Fallos, diagnostico)
+	}
+	if len(importesPermitidos(datos)) > 0 && salida.AccionPendiente == nil && !importeTexto.MatchString(salida.Texto) {
+		muestra.RespuestaCorrecta = false
+		muestra.Fallos = append(muestra.Fallos, "FaltaCifra")
+	}
+	for _, codigo := range muestra.CodigosHerramientas {
+		if codigo != "OK" {
+			muestra.RespuestaCorrecta = false
+			muestra.Fallos = append(muestra.Fallos, "ResultadoHerramienta")
+			break
+		}
+	}
 	if (salida.AccionPendiente != nil) != c.Restricciones.Accion {
 		muestra.RespuestaCorrecta = false
 		muestra.Fallos = append(muestra.Fallos, "TarjetaAccion")
@@ -334,6 +351,26 @@ func ejecutarMuestraReal(ctx context.Context, fecha time.Time, c Caso, repeticio
 		muestra.Fallos = append(muestra.Fallos, "RespuestaNoVerificable")
 	}
 	return muestra, "", nil
+}
+
+func codigoResultadoSeguro(raw json.RawMessage) string {
+	var sobre struct {
+		Error *struct {
+			Codigo string `json:"codigo"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &sobre) != nil {
+		return "InvalidFunctionResult"
+	}
+	if sobre.Error == nil {
+		return "OK"
+	}
+	switch sobre.Error.Codigo {
+	case "UnknownFunction", "ValidationError", "IdentityRequired", "FunctionUnavailable", "InvalidFunctionResult", "NotFound", "TooManyRequests", "RecipientNotFound", "SelfTransferNotAllowed":
+		return sobre.Error.Codigo
+	default:
+		return "FunctionError"
+	}
 }
 
 func compararLlamadasReales(actuales []copilot.LlamadaIA, esperadas []LlamadaEsperada) (bool, bool) {
