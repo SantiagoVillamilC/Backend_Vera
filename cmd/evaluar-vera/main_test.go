@@ -63,3 +63,19 @@ func TestComandoFallaAnteRegresionYEntradaInvalida(t *testing.T) {
 		t.Fatalf("cancelación ignorada: %d", codigo)
 	}
 }
+
+func TestModoRealNoEsImplicitoNiSeEjecutaEnCI(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "")
+	t.Setenv("VERA_MODELO", "")
+	for _, args := range [][]string{{"-modo", "otro"}, {"-modo", "real"}, {"-modo", "real", "-nivel-gratuito-confirmado"}, {"-continuar", "archivo.json"}} {
+		var salida, diagnostico bytes.Buffer
+		if codigo := ejecutar(t.Context(), args, &salida, &diagnostico); codigo != 2 || salida.Len() != 0 {
+			t.Fatalf("aceptó configuración incompleta: %v", args)
+		}
+	}
+	t.Setenv("CI", "true")
+	var salida, diagnostico bytes.Buffer
+	if codigo := ejecutar(t.Context(), []string{"-modo", "real", "-nivel-gratuito-confirmado"}, &salida, &diagnostico); codigo != 2 || !bytes.Contains(diagnostico.Bytes(), []byte("CI")) {
+		t.Fatal("habilitó modo real en CI")
+	}
+}

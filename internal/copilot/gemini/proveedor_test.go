@@ -114,6 +114,21 @@ func TestTraduccionFuncionesAudioYResultados(t *testing.T) {
 	}
 }
 
+func TestEvaluacionSinReintentosRespetaUnaSolicitudHTTP(t *testing.T) {
+	var llamadas atomic.Int32
+	p := proveedorPrueba(t, func(w http.ResponseWriter, _ *http.Request) {
+		llamadas.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"code":429,"message":"cuota"}}`))
+	})
+	p.cfg.SinReintentos = true
+	_, err := p.Generar(t.Context(), solicitudTexto())
+	if !errors.Is(err, copilot.ErrLimiteIA) || llamadas.Load() != 1 {
+		t.Fatalf("llamadas=%d error=%v", llamadas.Load(), err)
+	}
+}
+
 func TestErroresYReintentos(t *testing.T) {
 	for _, caso := range []struct {
 		nombre   string

@@ -22,6 +22,8 @@ type Config struct {
 	Modelo      string
 	Timeout     time.Duration
 	Temperatura float32
+	// SinReintentos permite que el evaluador limite cada solicitud HTTP de cuota.
+	SinReintentos bool
 }
 
 // Proveedor realiza hasta tres intentos por turno, sin ejecutar herramientas.
@@ -67,7 +69,11 @@ func (p *Proveedor) Generar(ctx context.Context, solicitud copilot.SolicitudIA) 
 	if err != nil {
 		return copilot.RespuestaIA{}, err
 	}
-	for intento := range 3 {
+	intentos := 3
+	if p.cfg.SinReintentos {
+		intentos = 1
+	}
+	for intento := range intentos {
 		inicio := time.Now()
 		llamadaCtx, cancelar := context.WithTimeout(ctx, p.cfg.Timeout)
 		raw, llamadaErr := p.cliente.Models.GenerateContent(llamadaCtx, p.cfg.Modelo, contenidos, config)
@@ -95,7 +101,7 @@ func (p *Proveedor) Generar(ctx context.Context, solicitud copilot.SolicitudIA) 
 		if !reintentar {
 			return respuesta, err
 		}
-		if intento == 2 {
+		if intento == intentos-1 {
 			return respuesta, errors.Join(copilot.ErrNoDisponibleIA, err)
 		}
 		// Fluctuación de 0..50% sobre 200ms y 400ms; no es aleatoriedad criptográfica.
