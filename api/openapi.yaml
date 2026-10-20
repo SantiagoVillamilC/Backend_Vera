@@ -43,6 +43,8 @@ tags:
       oapi-codegen.yaml) porque usa un token estatico, no el bearerAuth de un usuario.
   - name: asistente
     description: Asistente de IA Vera, chat de texto y voz.
+  - name: inteligencia
+    description: Vista enriquecida y resumen de consumo derivados del ledger, de solo lectura.
 
 paths:
   /v1/auth/register:
@@ -789,6 +791,85 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/movimientos:
+    get:
+      operationId: listarMovimientosInteligencia
+      summary: Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
+      tags: [inteligencia]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: >
+            Tamano de pagina, de 1 a 100. Por defecto 50. Un valor mayor se recorta a 100.
+            Se tipa x-go-type string para que un valor no numerico llegue al handler y salga
+            como ValidationError, en vez de fallar antes en el binding generado.
+          schema:
+            type: integer
+            x-go-type: string
+        - name: cursor
+          in: query
+          required: false
+          description: >
+            Cursor opaco que devuelve la pagina anterior en meta.next_cursor. Codifica
+            (ocurrido_en, transaccion_id) y no se construye a mano.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pagina enriquecida, del movimiento mas nuevo al mas viejo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaMovimientosResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/resumen:
+    get:
+      operationId: resumenInteligencia
+      summary: Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
+      tags: [inteligencia]
+      parameters:
+        - name: mes
+          in: query
+          required: false
+          description: >
+            Mes calendario en America/Bogota con formato YYYY-MM. Por defecto el mes en curso.
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            x-go-type: string
+      responses:
+        "200":
+          description: Gasto del mes por categoria y la referencia de los meses completos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaResumenResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
           $ref: "#/components/responses/Error"
         "429":
           $ref: "#/components/responses/Error"
@@ -2737,6 +2818,152 @@ components:
           nullable: true
         meta:
           $ref: "#/components/schemas/Meta"
+
+    InteligenciaMovimiento:
+      type: object
+      required:
+        [transaccion_id, ocurrido_en, moneda, direccion, monto_centavos, contraparte,
+         contraparte_resuelta, descripcion, categoria, categoria_nombre, origen_categoria]
+      properties:
+        transaccion_id:
+          type: string
+          format: uuid
+        ocurrido_en:
+          type: string
+          format: date-time
+        moneda:
+          type: string
+          enum: [COP]
+        direccion:
+          type: string
+          enum: [entrada, salida]
+        monto_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+          description: Monto en centavos, mayor que cero. La direccion del dinero viaja en su propio campo.
+        contraparte:
+          type: string
+          description: Texto legible de la contraparte, nunca una llave ni un identificador de cuenta.
+        contraparte_resuelta:
+          type: boolean
+        descripcion:
+          type: string
+          nullable: true
+        categoria:
+          type: string
+        categoria_nombre:
+          type: string
+        origen_categoria:
+          type: string
+          enum:
+            [memoria, contraparte_interna, mcc, catalogo, lexico, tfidf, llm, sin_categoria,
+             manual]
+
+    MetaCursor:
+      type: object
+      nullable: true
+      required: [limit, next_cursor, has_more]
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    InteligenciaMovimientosResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaMovimiento"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/MetaCursor"
+
+    InteligenciaResumenCategoria:
+      type: object
+      required: [codigo, nombre, total_centavos, mediana_centavos, meses_con_gasto]
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        total_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+        mediana_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+          nullable: true
+          description: >
+            Mediana de los meses completos con gasto, redondeada medio a par. Nula cuando la
+            categoria no tiene al menos tres meses completos con gasto.
+        meses_con_gasto:
+          type: integer
+
+    InteligenciaResumen:
+      type: object
+      required:
+        [mes, desde, hasta, alcance, moneda, evaluable, meses_completos, meses_requeridos,
+         total_centavos, cupo_avisos, avisos_emitidos, categorias]
+      properties:
+        mes:
+          type: string
+        desde:
+          type: string
+          format: date-time
+        hasta:
+          type: string
+          format: date-time
+        alcance:
+          type: string
+          enum: [billetera]
+          description: El resumen solo ve los movimientos de la billetera y no los de otras entidades.
+        moneda:
+          type: string
+          enum: [COP]
+        evaluable:
+          type: boolean
+        meses_completos:
+          type: integer
+        meses_requeridos:
+          type: integer
+        total_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+        cupo_avisos:
+          type: integer
+        avisos_emitidos:
+          type: integer
+        categorias:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaResumenCategoria"
+
+    InteligenciaResumenResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/InteligenciaResumen"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
 
     CrearDepositoRequest:
       type: object

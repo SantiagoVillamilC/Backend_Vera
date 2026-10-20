@@ -633,6 +633,138 @@ func (e ErrorResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaMovimientoDireccion.
+const (
+	Entrada InteligenciaMovimientoDireccion = "entrada"
+	Salida  InteligenciaMovimientoDireccion = "salida"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientoDireccion enum.
+func (e InteligenciaMovimientoDireccion) Valid() bool {
+	switch e {
+	case Entrada:
+		return true
+	case Salida:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaMovimientoMoneda.
+const (
+	InteligenciaMovimientoMonedaCOP InteligenciaMovimientoMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientoMoneda enum.
+func (e InteligenciaMovimientoMoneda) Valid() bool {
+	switch e {
+	case InteligenciaMovimientoMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaMovimientoOrigenCategoria.
+const (
+	Catalogo           InteligenciaMovimientoOrigenCategoria = "catalogo"
+	ContraparteInterna InteligenciaMovimientoOrigenCategoria = "contraparte_interna"
+	Lexico             InteligenciaMovimientoOrigenCategoria = "lexico"
+	Llm                InteligenciaMovimientoOrigenCategoria = "llm"
+	Manual             InteligenciaMovimientoOrigenCategoria = "manual"
+	Mcc                InteligenciaMovimientoOrigenCategoria = "mcc"
+	Memoria            InteligenciaMovimientoOrigenCategoria = "memoria"
+	SinCategoria       InteligenciaMovimientoOrigenCategoria = "sin_categoria"
+	Tfidf              InteligenciaMovimientoOrigenCategoria = "tfidf"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientoOrigenCategoria enum.
+func (e InteligenciaMovimientoOrigenCategoria) Valid() bool {
+	switch e {
+	case Catalogo:
+		return true
+	case ContraparteInterna:
+		return true
+	case Lexico:
+		return true
+	case Llm:
+		return true
+	case Manual:
+		return true
+	case Mcc:
+		return true
+	case Memoria:
+		return true
+	case SinCategoria:
+		return true
+	case Tfidf:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaMovimientosResponseSuccess.
+const (
+	InteligenciaMovimientosResponseSuccessTrue InteligenciaMovimientosResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientosResponseSuccess enum.
+func (e InteligenciaMovimientosResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaMovimientosResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaResumenAlcance.
+const (
+	Billetera InteligenciaResumenAlcance = "billetera"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaResumenAlcance enum.
+func (e InteligenciaResumenAlcance) Valid() bool {
+	switch e {
+	case Billetera:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaResumenMoneda.
+const (
+	InteligenciaResumenMonedaCOP InteligenciaResumenMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaResumenMoneda enum.
+func (e InteligenciaResumenMoneda) Valid() bool {
+	switch e {
+	case InteligenciaResumenMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaResumenResponseSuccess.
+const (
+	InteligenciaResumenResponseSuccessTrue InteligenciaResumenResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaResumenResponseSuccess enum.
+func (e InteligenciaResumenResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaResumenResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KycEstadoProducto.
 const (
 	KycEstadoProductoBajoMonto         KycEstadoProducto = "bajo_monto"
@@ -1705,6 +1837,90 @@ type FieldError struct {
 	Rule  string  `json:"rule"`
 }
 
+// InteligenciaMovimiento defines model for InteligenciaMovimiento.
+type InteligenciaMovimiento struct {
+	Categoria       string `json:"categoria"`
+	CategoriaNombre string `json:"categoria_nombre"`
+
+	// Contraparte Texto legible de la contraparte, nunca una llave ni un identificador de cuenta.
+	Contraparte         string                          `json:"contraparte"`
+	ContraparteResuelta bool                            `json:"contraparte_resuelta"`
+	Descripcion         *string                         `json:"descripcion"`
+	Direccion           InteligenciaMovimientoDireccion `json:"direccion"`
+	Moneda              InteligenciaMovimientoMoneda    `json:"moneda"`
+
+	// MontoCentavos Monto en centavos, mayor que cero. La direccion del dinero viaja en su propio campo.
+	MontoCentavos   string                                `json:"monto_centavos"`
+	OcurridoEn      time.Time                             `json:"ocurrido_en"`
+	OrigenCategoria InteligenciaMovimientoOrigenCategoria `json:"origen_categoria"`
+	TransaccionId   openapi_types.UUID                    `json:"transaccion_id"`
+}
+
+// InteligenciaMovimientoDireccion defines model for InteligenciaMovimiento.Direccion.
+type InteligenciaMovimientoDireccion string
+
+// InteligenciaMovimientoMoneda defines model for InteligenciaMovimiento.Moneda.
+type InteligenciaMovimientoMoneda string
+
+// InteligenciaMovimientoOrigenCategoria defines model for InteligenciaMovimiento.OrigenCategoria.
+type InteligenciaMovimientoOrigenCategoria string
+
+// InteligenciaMovimientosResponse defines model for InteligenciaMovimientosResponse.
+type InteligenciaMovimientosResponse struct {
+	Data    []InteligenciaMovimiento               `json:"data"`
+	Error   *map[string]interface{}                `json:"error"`
+	Meta    *MetaCursor                            `json:"meta"`
+	Success InteligenciaMovimientosResponseSuccess `json:"success"`
+}
+
+// InteligenciaMovimientosResponseSuccess defines model for InteligenciaMovimientosResponse.Success.
+type InteligenciaMovimientosResponseSuccess bool
+
+// InteligenciaResumen defines model for InteligenciaResumen.
+type InteligenciaResumen struct {
+	// Alcance El resumen solo ve los movimientos de la billetera y no los de otras entidades.
+	Alcance         InteligenciaResumenAlcance     `json:"alcance"`
+	AvisosEmitidos  int                            `json:"avisos_emitidos"`
+	Categorias      []InteligenciaResumenCategoria `json:"categorias"`
+	CupoAvisos      int                            `json:"cupo_avisos"`
+	Desde           time.Time                      `json:"desde"`
+	Evaluable       bool                           `json:"evaluable"`
+	Hasta           time.Time                      `json:"hasta"`
+	Mes             string                         `json:"mes"`
+	MesesCompletos  int                            `json:"meses_completos"`
+	MesesRequeridos int                            `json:"meses_requeridos"`
+	Moneda          InteligenciaResumenMoneda      `json:"moneda"`
+	TotalCentavos   string                         `json:"total_centavos"`
+}
+
+// InteligenciaResumenAlcance El resumen solo ve los movimientos de la billetera y no los de otras entidades.
+type InteligenciaResumenAlcance string
+
+// InteligenciaResumenMoneda defines model for InteligenciaResumen.Moneda.
+type InteligenciaResumenMoneda string
+
+// InteligenciaResumenCategoria defines model for InteligenciaResumenCategoria.
+type InteligenciaResumenCategoria struct {
+	Codigo string `json:"codigo"`
+
+	// MedianaCentavos Mediana de los meses completos con gasto, redondeada medio a par. Nula cuando la categoria no tiene al menos tres meses completos con gasto.
+	MedianaCentavos *string `json:"mediana_centavos"`
+	MesesConGasto   int     `json:"meses_con_gasto"`
+	Nombre          string  `json:"nombre"`
+	TotalCentavos   string  `json:"total_centavos"`
+}
+
+// InteligenciaResumenResponse defines model for InteligenciaResumenResponse.
+type InteligenciaResumenResponse struct {
+	Data    InteligenciaResumen                `json:"data"`
+	Error   *map[string]interface{}            `json:"error"`
+	Meta    *map[string]interface{}            `json:"meta"`
+	Success InteligenciaResumenResponseSuccess `json:"success"`
+}
+
+// InteligenciaResumenResponseSuccess defines model for InteligenciaResumenResponse.Success.
+type InteligenciaResumenResponseSuccess bool
+
 // KycEstado defines model for KycEstado.
 type KycEstado struct {
 	EstadoKyc string                  `json:"estado_kyc"`
@@ -1787,6 +2003,13 @@ type Meta struct {
 	HasMore    bool   `json:"has_more"`
 	Limit      int    `json:"limit"`
 	NextCursor *int64 `json:"next_cursor"`
+}
+
+// MetaCursor defines model for MetaCursor.
+type MetaCursor struct {
+	HasMore    bool    `json:"has_more"`
+	Limit      int     `json:"limit"`
+	NextCursor *string `json:"next_cursor"`
 }
 
 // MontoCalculado Forma compartida de saldo y del monto maximo enviable: los dos son un monto en centavos, la moneda y el instante en que se calcularon.
@@ -2175,6 +2398,21 @@ type ConsultarDestinatarioParams struct {
 	Celular string `form:"celular" json:"celular"`
 }
 
+// ListarMovimientosInteligenciaParams defines parameters for ListarMovimientosInteligencia.
+type ListarMovimientosInteligenciaParams struct {
+	// Limit Tamano de pagina, de 1 a 100. Por defecto 50. Un valor mayor se recorta a 100. Se tipa x-go-type string para que un valor no numerico llegue al handler y salga como ValidationError, en vez de fallar antes en el binding generado.
+	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Cursor opaco que devuelve la pagina anterior en meta.next_cursor. Codifica (ocurrido_en, transaccion_id) y no se construye a mano.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ResumenInteligenciaParams defines parameters for ResumenInteligencia.
+type ResumenInteligenciaParams struct {
+	// Mes Mes calendario en America/Bogota con formato YYYY-MM. Por defecto el mes en curso.
+	Mes *string `form:"mes,omitempty" json:"mes,omitempty"`
+}
+
 // MovimientosParams defines parameters for Movimientos.
 type MovimientosParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50. El handler recorta a 100 un valor mayor, no lo rechaza. Se tipa x-go-type string para que un valor no numerico llegue al handler y salga como ValidationError, en vez de fallar antes en el binding generado como BadRequest.
@@ -2386,6 +2624,12 @@ type ServerInterface interface {
 	// ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
 	// (GET /v1/destinatarios)
 	ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams)
+	// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
+	// (GET /v1/inteligencia/movimientos)
+	ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams)
+	// ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
+	// (GET /v1/inteligencia/resumen)
+	ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams)
 	// KycEstado Consulta el producto, el estado de KYC y los limites.
 	// (GET /v1/kyc/estado)
 	KycEstado(w http.ResponseWriter, r *http.Request)
@@ -2521,6 +2765,18 @@ func (_ Unimplemented) Deposito(w http.ResponseWriter, r *http.Request, id strin
 // ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
 // (GET /v1/destinatarios)
 func (_ Unimplemented) ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
+// (GET /v1/inteligencia/movimientos)
+func (_ Unimplemented) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
+// (GET /v1/inteligencia/resumen)
+func (_ Unimplemented) ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2859,6 +3115,85 @@ func (siw *ServerInterfaceWrapper) ConsultarDestinatario(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConsultarDestinatario(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarMovimientosInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarMovimientosInteligenciaParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarMovimientosInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumenInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ResumenInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResumenInteligenciaParams
+
+	// ------------- Optional query parameter "mes" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mes", r.URL.Query(), &params.Mes, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mes"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mes", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumenInteligencia(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3405,6 +3740,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/movimientos", wrapper.Movimientos)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/movimientos", wrapper.ListarMovimientosInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/resumen", wrapper.ResumenInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/depositos", wrapper.CrearDeposito)

@@ -15,6 +15,7 @@ type Querier interface {
 	AvanzarCursor(ctx context.Context, ultimoEntryID int64) error
 	BorrarCopia(ctx context.Context) error
 	BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMovimientoEnriquecidoParams) error
+	ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error)
 	ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
 	InsertarMovimientoEnriquecido(ctx context.Context, arg InsertarMovimientoEnriquecidoParams) error
 	LeerCursor(ctx context.Context) (LeerCursorRow, error)
@@ -22,7 +23,10 @@ type Querier interface {
 	LineasDeTransferencias(ctx context.Context, transferencias []pgtype.UUID) ([]LineasDeTransferenciasRow, error)
 	ListarCategorias(ctx context.Context) ([]Categoria, error)
 	ListarMemoriaDeUsuario(ctx context.Context, usuarioID string) ([]ListarMemoriaDeUsuarioRow, error)
+	PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimientosParams) ([]PaginaDeMovimientosRow, error)
+	PrimerMovimientoDelUsuario(ctx context.Context, usuarioID string) (pgtype.Timestamptz, error)
 	ReiniciarCursor(ctx context.Context) error
+	TotalesPorCategoriaYMes(ctx context.Context, arg TotalesPorCategoriaYMesParams) ([]TotalesPorCategoriaYMesRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -90,6 +90,7 @@ func run() error {
 		}),
 	)
 	servicioInteligencia := inteligencia.NuevoServicio(pool)
+	handlerInteligencia := inteligencia.NuevoHandler(servicioInteligencia)
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
@@ -182,6 +183,7 @@ func run() error {
 		Firmador:      tokensAuth,
 		Denylist:      denylistAuth,
 		Subcuentas:    servicio,
+		Inteligencia:  handlerInteligencia,
 	}
 	rellenoRegistro, err := auth.NuevoRellenoDeRegistro(pool, auth.NuevoRegistradorEventos(pool), contadoresAuth, clavesContadores, cfg.Auth.OTPPepper)
 	if err != nil {
