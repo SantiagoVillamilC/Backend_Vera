@@ -68,3 +68,39 @@ func TestConfigLogValueRegistraElClasificador(t *testing.T) {
 		t.Fatalf("el log del arranque no registra el clasificador")
 	}
 }
+
+func TestLoadConfigAvisosApagadosPorDefecto(t *testing.T) {
+	baseDeConfig(t)
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig sin AVISOS: %v", err)
+	}
+	if cfg.AvisosActivo {
+		t.Fatal("los avisos deben arrancar apagados")
+	}
+	if cfg.AvisosHora != "06:00" {
+		t.Fatalf("hora = %q, want 06:00", cfg.AvisosHora)
+	}
+}
+
+func TestLoadConfigAvisosActivosYHoraInvalida(t *testing.T) {
+	baseDeConfig(t)
+	t.Setenv("AVISOS_ACTIVO", "true")
+	t.Setenv("AVISOS_HORA", "07:15")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig con avisos: %v", err)
+	}
+	if !cfg.AvisosActivo || cfg.AvisosHora != "07:15" {
+		t.Fatalf("avisos = %v %q", cfg.AvisosActivo, cfg.AvisosHora)
+	}
+	for _, hora := range []string{"7:15", "24:00", "07:60", "mañana"} {
+		t.Run(hora, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AVISOS_HORA", hora)
+			if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "AVISOS_HORA") {
+				t.Fatalf("err = %v, want un error de AVISOS_HORA", err)
+			}
+		})
+	}
+}

@@ -208,7 +208,7 @@ func run() error {
 	despachadorAvisos.Registrar(auth.TipoAvisoAbrirSubcuentas, auth.ManejadorAbrirSubcuentas(deps.Subcuentas))
 
 	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
-	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
+	configuracionDeJobs := jobs.Config{
 		OutboxInterval:          cfg.OutboxInterval,
 		ConciliationInterval:    cfg.ConciliationInterval,
 		ConciliationWindow:      cfg.ConciliationWindow,
@@ -217,7 +217,12 @@ func run() error {
 		Inteligencia:            servicioInteligencia,
 		EnriquecimientoInterval: cfg.EnriquecimientoInterval,
 		EnriquecimientoLote:     500,
-	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
+		AvisosHora:              cfg.AvisosHora,
+	}
+	if cfg.AvisosActivo {
+		configuracionDeJobs.Avisos = servicioInteligencia
+	}
+	riverClient, err := jobs.NewClient(pool, servicio, configuracionDeJobs, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
 	if err != nil {
 		return fmt.Errorf("river: %w", err)
 	}

@@ -20,6 +20,7 @@ type Aviso struct {
 	TextoVerificado   bool               `json:"texto_verificado"`
 	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
 	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
+	DescartadoEn      pgtype.Timestamptz `json:"descartado_en"`
 }
 
 type AvisoEntrega struct {

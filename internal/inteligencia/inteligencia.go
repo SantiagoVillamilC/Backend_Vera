@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/internal/repositorio"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -13,6 +14,7 @@ import (
 type Servicio struct {
 	pool         abridorDeTransacciones
 	clasificador *Modelo
+	avisosCfg    avisos.Configuracion
 }
 
 // OpcionServicio ajusta el servicio al construirlo.
@@ -25,7 +27,10 @@ func ConClasificador(modelo *Modelo) OpcionServicio {
 
 // NuevoServicio arma el servicio sobre el pool de la aplicación.
 func NuevoServicio(pool *pgxpool.Pool, opciones ...OpcionServicio) *Servicio {
-	servicio := &Servicio{pool: poolDeInteligencia{pool: pool}}
+	servicio := &Servicio{
+		pool:      poolDeInteligencia{pool: pool},
+		avisosCfg: avisos.ConfiguracionPorDefecto(),
+	}
 	for _, opcion := range opciones {
 		opcion(servicio)
 	}

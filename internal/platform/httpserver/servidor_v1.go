@@ -87,6 +87,8 @@ type InteligenciaHandler interface {
 	ListarMovimientosInteligencia(http.ResponseWriter, *http.Request, api.ListarMovimientosInteligenciaParams)
 	CorregirMovimientoInteligencia(http.ResponseWriter, *http.Request, string)
 	ResumenInteligencia(http.ResponseWriter, *http.Request, api.ResumenInteligenciaParams)
+	ListarAvisosInteligencia(http.ResponseWriter, *http.Request, api.ListarAvisosInteligenciaParams)
+	DescartarAvisoInteligencia(http.ResponseWriter, *http.Request, string)
 }
 
 // DependenciasAuth agrupa los colaboradores que main inyecta en el router.
@@ -157,6 +159,22 @@ func (s servidorV1) CorregirMovimientoInteligencia(w http.ResponseWriter, r *htt
 		return
 	}
 	s.inteligencia.CorregirMovimientoInteligencia(w, r, transaccionID)
+}
+
+func (s servidorV1) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params api.ListarAvisosInteligenciaParams) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.ListarAvisosInteligencia(w, r, params)
+}
+
+func (s servidorV1) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.DescartarAvisoInteligencia(w, r, id)
 }
 
 // Los metodos del asistente Vera aun no tienen handler: responden 501 dentro del envelope.

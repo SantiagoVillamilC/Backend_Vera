@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
@@ -20,19 +21,30 @@ type ServicioDeLectura interface {
 	Movimientos(ctx context.Context, usuarioID string, ancla *CursorDeMovimiento, limite int) (PaginaDeMovimientos, error)
 	CorregirMovimiento(ctx context.Context, usuarioID string, transaccionID uuid.UUID, solicitud SolicitudDeCorreccion) (CorreccionAplicada, error)
 	Resumen(ctx context.Context, usuarioID, mes string) (ResumenDelMes, error)
+	AvisosDelUsuario(ctx context.Context, usuarioID, mes string, ahora time.Time) ([]AvisoEmitido, error)
+	DescartarAviso(ctx context.Context, usuarioID string, avisoID uuid.UUID, ahora time.Time) (DescarteDeAviso, error)
 }
 
 // Handler sirve la vista enriquecida y el resumen de consumo del usuario autenticado.
 type Handler struct {
 	servicio ServicioDeLectura
+	reloj    func() time.Time
 }
 
 // NuevoHandler construye el handler sobre el servicio de lectura y falla si el servicio es nulo.
 func NuevoHandler(servicio ServicioDeLectura) *Handler {
+	return NuevoHandlerConReloj(servicio, time.Now)
+}
+
+// NuevoHandlerConReloj construye el handler con un reloj inyectable para las pruebas.
+func NuevoHandlerConReloj(servicio ServicioDeLectura, reloj func() time.Time) *Handler {
 	if servicio == nil {
 		panic(ErrServicioDeLecturaNulo)
 	}
-	return &Handler{servicio: servicio}
+	if reloj == nil {
+		reloj = time.Now
+	}
+	return &Handler{servicio: servicio, reloj: reloj}
 }
 
 // ListarMovimientosInteligencia responde una página de la vista enriquecida, paginada por cursor opaco.
@@ -252,4 +264,80 @@ func respuestaDeResumen(resumen ResumenDelMes) api.InteligenciaResumen {
 		AvisosEmitidos:  resumen.AvisosEmitidos,
 		Categorias:      categorias,
 	}
+}
+
+// ListarAvisosInteligencia responde las tarjetas vigentes del mes pedido.
+func (h *Handler) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request,
+	params api.ListarAvisosInteligenciaParams) {
+	usuarioID, ok := usuarioDeLaPeticion(w, r)
+	if !ok {
+		return
+	}
+	mes := ""
+	if params.Mes != nil {
+		mes = strings.TrimSpace(*params.Mes)
+	}
+	delMes, err := h.servicio.AvisosDelUsuario(r.Context(), usuarioID, mes, h.reloj())
+	if err != nil {
+		if errors.Is(err, ErrMesInvalido) {
+			api.WriteError(w, http.StatusBadRequest, "ValidationError", "Request validation failed.",
+				[]api.FieldError{{Field: "mes", Rule: "format"}})
+			return
+		}
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	respuesta := make([]api.InteligenciaAviso, 0, len(delMes))
+	for _, aviso := range delMes {
+		respuesta = append(respuesta, respuestaDeAviso(aviso))
+	}
+	api.WriteData(w, http.StatusOK, respuesta, nil)
+}
+
+// DescartarAvisoInteligencia marca un aviso propio como descartado.
+func (h *Handler) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
+	usuarioID, ok := usuarioDeLaPeticion(w, r)
+	if !ok {
+		return
+	}
+	avisoID, err := uuid.Parse(strings.TrimSpace(id))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "ValidationError", "Request validation failed.",
+			[]api.FieldError{{Field: "id", Rule: "uuid"}})
+		return
+	}
+	descarte, err := h.servicio.DescartarAviso(r.Context(), usuarioID, avisoID, h.reloj())
+	if errors.Is(err, ErrAvisoNoEncontrado) {
+		api.WriteError(w, http.StatusNotFound, "NotFound", "Notice not found.", nil)
+		return
+	}
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	api.WriteData(w, http.StatusOK, api.InteligenciaAvisoDescarte{
+		Id:           descarte.AvisoID,
+		DescartadoEn: descarte.DescartadoEn,
+	}, nil)
+}
+
+func respuestaDeAviso(aviso AvisoEmitido) api.InteligenciaAviso {
+	respuesta := api.InteligenciaAviso{
+		Id:                aviso.ID,
+		Tipo:              api.InteligenciaAvisoTipo(aviso.Tipo),
+		Clave:             aviso.Clave,
+		Periodo:           aviso.Periodo.Format("2006-01-02"),
+		SeveridadCentavos: strconv.FormatInt(aviso.SeveridadCentavos, 10),
+		Prioridad:         aviso.Prioridad,
+		Titulo:            aviso.Titulo,
+		Texto:             aviso.Texto,
+		Porque:            aviso.Porque,
+		Accion:            aviso.Accion,
+		CreadoEn:          aviso.CreadoEn,
+	}
+	if aviso.TransaccionID != nil {
+		transaccion := *aviso.TransaccionID
+		respuesta.TransaccionId = &transaccion
+	}
+	return respuesta
 }

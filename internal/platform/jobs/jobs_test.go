@@ -229,3 +229,86 @@ func TestElEnriquecimientoSeProgramaSoloConServicioYPeriodo(t *testing.T) {
 		t.Error("con servicio y periodo falta el trabajo enriquecer_movimientos")
 	}
 }
+
+type servicioDeAvisosFalso struct {
+	llamado bool
+	ahora   time.Time
+	err     error
+}
+
+func (s *servicioDeAvisosFalso) EmitirAvisos(_ context.Context, ahora time.Time) (int, error) {
+	s.llamado = true
+	s.ahora = ahora
+	return 0, s.err
+}
+
+func TestAvisosWorkerPasaElRelojYPropagaElError(t *testing.T) {
+	momento := time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC)
+	servicio := &servicioDeAvisosFalso{err: errors.New("falló el job")}
+	worker := &AvisosWorker{servicio: servicio, reloj: func() time.Time { return momento }}
+	err := worker.Work(context.Background(), nil)
+	if err == nil || !servicio.llamado {
+		t.Fatalf("err = %v, llamado = %v", err, servicio.llamado)
+	}
+	if !servicio.ahora.Equal(momento) {
+		t.Fatalf("ahora = %v, want %v", servicio.ahora, momento)
+	}
+}
+
+func TestNuevaHoraDeBogotaValidaElFormato(t *testing.T) {
+	for _, texto := range []string{"24:00", "6:00", "06:60", ""} {
+		if _, err := NuevaHoraDeBogota(texto); err == nil {
+			t.Fatalf("NuevaHoraDeBogota(%q) no falló", texto)
+		}
+	}
+	horario, err := NuevaHoraDeBogota("06:30")
+	if err != nil {
+		t.Fatalf("hora válida: %v", err)
+	}
+	if horario.Hora != 6 || horario.Minuto != 30 {
+		t.Fatalf("horario = %+v", horario)
+	}
+}
+
+func TestHoraDeBogotaNext(t *testing.T) {
+	horario, _ := NuevaHoraDeBogota("06:00")
+	zona := horario.Zona
+	casos := []struct {
+		nombre   string
+		ahora    time.Time
+		esperado time.Time
+	}{
+		{"antes de la hora", time.Date(2026, 7, 15, 5, 59, 0, 0, zona), time.Date(2026, 7, 15, 6, 0, 0, 0, zona)},
+		{"a la hora exacta", time.Date(2026, 7, 15, 6, 0, 0, 0, zona), time.Date(2026, 7, 16, 6, 0, 0, 0, zona)},
+		{"fin de mes", time.Date(2026, 7, 31, 7, 0, 0, 0, zona), time.Date(2026, 8, 1, 6, 0, 0, 0, zona)},
+		{"fin de año", time.Date(2026, 12, 31, 7, 0, 0, 0, zona), time.Date(2027, 1, 1, 6, 0, 0, 0, zona)},
+		{"entrada en UTC", time.Date(2026, 7, 15, 10, 59, 0, 0, time.UTC), time.Date(2026, 7, 15, 6, 0, 0, 0, zona)},
+	}
+	for _, caso := range casos {
+		t.Run(caso.nombre, func(t *testing.T) {
+			if obtenido := horario.Next(caso.ahora); !obtenido.Equal(caso.esperado) {
+				t.Fatalf("Next = %v, want %v", obtenido, caso.esperado)
+			}
+		})
+	}
+}
+
+func TestElAvisoSeProgramaSoloConServicio(t *testing.T) {
+	cfg := Config{OutboxInterval: time.Minute, ConciliationInterval: time.Hour, AvisosHora: "06:00"}
+	if tieneTrabajo(trabajosPeriodicos(cfg), "emitir_avisos") {
+		t.Fatal("sin servicio no debe programarse el aviso")
+	}
+	cfg.Avisos = &servicioDeAvisosFalso{}
+	trabajos := trabajosPeriodicos(cfg)
+	if !tieneTrabajo(trabajos, "emitir_avisos") {
+		t.Fatal("con servicio debe programarse el aviso")
+	}
+	for _, trabajo := range trabajos {
+		if trabajo.id != "emitir_avisos" {
+			continue
+		}
+		if trabajo.horario == nil || trabajo.alArrancar {
+			t.Fatalf("el aviso debe tener horario fijo y no correr al arrancar: %+v", trabajo)
+		}
+	}
+}

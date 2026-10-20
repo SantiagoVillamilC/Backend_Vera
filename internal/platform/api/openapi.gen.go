@@ -633,6 +633,63 @@ func (e ErrorResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaAvisoTipo.
+const (
+	CaidaIngreso          InteligenciaAvisoTipo = "caida_ingreso"
+	CategoriaSobreMedia   InteligenciaAvisoTipo = "categoria_sobre_media"
+	CobroNuevo            InteligenciaAvisoTipo = "cobro_nuevo"
+	PagoNoAlcanza         InteligenciaAvisoTipo = "pago_no_alcanza"
+	PresupuestoAnticipado InteligenciaAvisoTipo = "presupuesto_anticipado"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoTipo enum.
+func (e InteligenciaAvisoTipo) Valid() bool {
+	switch e {
+	case CaidaIngreso:
+		return true
+	case CategoriaSobreMedia:
+		return true
+	case CobroNuevo:
+		return true
+	case PagoNoAlcanza:
+		return true
+	case PresupuestoAnticipado:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaAvisoDescarteResponseSuccess.
+const (
+	InteligenciaAvisoDescarteResponseSuccessTrue InteligenciaAvisoDescarteResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoDescarteResponseSuccess enum.
+func (e InteligenciaAvisoDescarteResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaAvisoDescarteResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaAvisosResponseSuccess.
+const (
+	InteligenciaAvisosResponseSuccessTrue InteligenciaAvisosResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisosResponseSuccess enum.
+func (e InteligenciaAvisosResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaAvisosResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InteligenciaCorreccionResponseSuccess.
 const (
 	InteligenciaCorreccionResponseSuccessTrue InteligenciaCorreccionResponseSuccess = true
@@ -1854,6 +1911,57 @@ type FieldError struct {
 	Rule  string  `json:"rule"`
 }
 
+// InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya.
+type InteligenciaAviso struct {
+	Accion string `json:"accion"`
+
+	// Clave Identidad estable del aviso dentro de su tipo y periodo.
+	Clave    string             `json:"clave"`
+	CreadoEn time.Time          `json:"creado_en"`
+	Id       openapi_types.UUID `json:"id"`
+
+	// Periodo Primer dia del mes en los avisos mensuales, o la fecha del pago o del primer cobro en los demas.
+	Periodo           string                `json:"periodo"`
+	Porque            string                `json:"porque"`
+	Prioridad         int                   `json:"prioridad"`
+	SeveridadCentavos string                `json:"severidad_centavos"`
+	Texto             string                `json:"texto"`
+	Tipo              InteligenciaAvisoTipo `json:"tipo"`
+	Titulo            string                `json:"titulo"`
+	TransaccionId     *openapi_types.UUID   `json:"transaccion_id"`
+}
+
+// InteligenciaAvisoTipo defines model for InteligenciaAviso.Tipo.
+type InteligenciaAvisoTipo string
+
+// InteligenciaAvisoDescarte defines model for InteligenciaAvisoDescarte.
+type InteligenciaAvisoDescarte struct {
+	DescartadoEn time.Time          `json:"descartado_en"`
+	Id           openapi_types.UUID `json:"id"`
+}
+
+// InteligenciaAvisoDescarteResponse defines model for InteligenciaAvisoDescarteResponse.
+type InteligenciaAvisoDescarteResponse struct {
+	Data    InteligenciaAvisoDescarte                `json:"data"`
+	Error   *map[string]interface{}                  `json:"error"`
+	Meta    *map[string]interface{}                  `json:"meta"`
+	Success InteligenciaAvisoDescarteResponseSuccess `json:"success"`
+}
+
+// InteligenciaAvisoDescarteResponseSuccess defines model for InteligenciaAvisoDescarteResponse.Success.
+type InteligenciaAvisoDescarteResponseSuccess bool
+
+// InteligenciaAvisosResponse defines model for InteligenciaAvisosResponse.
+type InteligenciaAvisosResponse struct {
+	Data    []InteligenciaAviso               `json:"data"`
+	Error   *map[string]interface{}           `json:"error"`
+	Meta    *map[string]interface{}           `json:"meta"`
+	Success InteligenciaAvisosResponseSuccess `json:"success"`
+}
+
+// InteligenciaAvisosResponseSuccess defines model for InteligenciaAvisosResponse.Success.
+type InteligenciaAvisosResponseSuccess bool
+
 // InteligenciaCorreccion defines model for InteligenciaCorreccion.
 type InteligenciaCorreccion struct {
 	// FilasCambiadas Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
@@ -2441,6 +2549,12 @@ type ConsultarDestinatarioParams struct {
 	Celular string `form:"celular" json:"celular"`
 }
 
+// ListarAvisosInteligenciaParams defines parameters for ListarAvisosInteligencia.
+type ListarAvisosInteligenciaParams struct {
+	// Mes Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido llegue al handler y salga como ValidationError.
+	Mes *string `form:"mes,omitempty" json:"mes,omitempty"`
+}
+
 // ListarMovimientosInteligenciaParams defines parameters for ListarMovimientosInteligencia.
 type ListarMovimientosInteligenciaParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50. Un valor mayor se recorta a 100. Se tipa x-go-type string para que un valor no numerico llegue al handler y salga como ValidationError, en vez de fallar antes en el binding generado.
@@ -2670,6 +2784,12 @@ type ServerInterface interface {
 	// ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
 	// (GET /v1/destinatarios)
 	ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams)
+	// ListarAvisosInteligencia Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+	// (GET /v1/inteligencia/avisos)
+	ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params ListarAvisosInteligenciaParams)
+	// DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+	// (POST /v1/inteligencia/avisos/{id}/descartar)
+	DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string)
 	// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
 	// (GET /v1/inteligencia/movimientos)
 	ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams)
@@ -2814,6 +2934,18 @@ func (_ Unimplemented) Deposito(w http.ResponseWriter, r *http.Request, id strin
 // ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
 // (GET /v1/destinatarios)
 func (_ Unimplemented) ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarAvisosInteligencia Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+// (GET /v1/inteligencia/avisos)
+func (_ Unimplemented) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params ListarAvisosInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+// (POST /v1/inteligencia/avisos/{id}/descartar)
+func (_ Unimplemented) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3170,6 +3302,65 @@ func (siw *ServerInterfaceWrapper) ConsultarDestinatario(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConsultarDestinatario(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarAvisosInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarAvisosInteligenciaParams
+
+	// ------------- Optional query parameter "mes" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mes", r.URL.Query(), &params.Mes, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mes"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mes", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarAvisosInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DescartarAvisoInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DescartarAvisoInteligencia(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3830,6 +4021,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/inteligencia/movimientos/{transaccion_id}/correcciones", wrapper.CorregirMovimientoInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/avisos", wrapper.ListarAvisosInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/inteligencia/avisos/{id}/descartar", wrapper.DescartarAvisoInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/depositos", wrapper.CrearDeposito)

@@ -922,6 +922,75 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/inteligencia/avisos:
+    get:
+      operationId: listarAvisosInteligencia
+      summary: Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+      tags: [inteligencia]
+      parameters:
+        - name: mes
+          in: query
+          required: false
+          description: >
+            Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del
+            aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido
+            llegue al handler y salga como ValidationError.
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            x-go-type: string
+      responses:
+        "200":
+          description: Tarjetas vigentes del mes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaAvisosResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/avisos/{id}/descartar:
+    post:
+      operationId: descartarAvisoInteligencia
+      summary: Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+      tags: [inteligencia]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: >
+            Identificador del aviso. Se declara como texto para que un valor malformado llegue al
+            handler y salga como ValidationError.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Aviso descartado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaAvisoDescarteResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
   /v1/depositos:
     post:
       operationId: crearDeposito
@@ -3040,6 +3109,97 @@ components:
           description: >
             Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila
             aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
+
+    InteligenciaAviso:
+      type: object
+      description: >
+        Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no
+        sean sus montos ni fechas que no sean la suya.
+      required:
+        [id, tipo, clave, periodo, severidad_centavos, prioridad, titulo, texto, porque, accion, transaccion_id, creado_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo:
+          type: string
+          enum: [pago_no_alcanza, caida_ingreso, cobro_nuevo, presupuesto_anticipado, categoria_sobre_media]
+        clave:
+          type: string
+          description: Identidad estable del aviso dentro de su tipo y periodo.
+        periodo:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: >
+            Primer dia del mes en los avisos mensuales, o la fecha del pago o del primer cobro en los
+            demas.
+        severidad_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+        prioridad:
+          type: integer
+          minimum: 1
+          maximum: 5
+        titulo:
+          type: string
+        texto:
+          type: string
+        porque:
+          type: string
+        accion:
+          type: string
+        transaccion_id:
+          type: string
+          format: uuid
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+
+    InteligenciaAvisosResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaAviso"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    InteligenciaAvisoDescarte:
+      type: object
+      required: [id, descartado_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        descartado_en:
+          type: string
+          format: date-time
+
+    InteligenciaAvisoDescarteResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/InteligenciaAvisoDescarte"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
 
     InteligenciaCorreccionResponse:
       type: object

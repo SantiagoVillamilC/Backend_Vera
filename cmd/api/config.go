@@ -7,12 +7,16 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
+
+// horaValida es el formato HH:MM de 24 horas que acepta AVISOS_HORA.
+var horaValida = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 
 // Config reúne los valores de entorno que el proceso necesita para arrancar.
 type Config struct {
@@ -39,6 +43,8 @@ type Config struct {
 	ExpirationTTL           time.Duration
 	EnriquecimientoInterval time.Duration
 	Clasificador            inteligencia.ModoClasificador
+	AvisosActivo            bool
+	AvisosHora              string
 	A6PosicionLiquidacion   nucleo.Centavos
 	A6PrefondeoActivo       bool
 	Auth                    ConfigAuth
@@ -150,6 +156,15 @@ func LoadConfig() (*Config, error) {
 	if errDuracion != nil {
 		errs = append(errs, errDuracion)
 	}
+	var errAvisos error
+	cfg.AvisosActivo, errAvisos = boolOr("AVISOS_ACTIVO", "false")
+	if errAvisos != nil {
+		errs = append(errs, errAvisos)
+	}
+	cfg.AvisosHora = envOr("AVISOS_HORA", "06:00")
+	if !horaValida.MatchString(cfg.AvisosHora) {
+		errs = append(errs, fmt.Errorf("AVISOS_HORA must be HH:MM, got %q", cfg.AvisosHora))
+	}
 	var errClasificador error
 	cfg.Clasificador, errClasificador = inteligencia.InterpretarModoClasificador(os.Getenv("CLASIFICADOR"))
 	if errClasificador != nil {
@@ -225,6 +240,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("expiration_interval", c.ExpirationInterval.String()),
 		slog.String("enriquecimiento_interval", c.EnriquecimientoInterval.String()),
 		slog.String("clasificador", string(c.Clasificador)),
+		slog.Bool("avisos_activo", c.AvisosActivo),
+		slog.String("avisos_hora", c.AvisosHora),
 		slog.Bool("a6_prefondeo_activo", c.A6PrefondeoActivo),
 		slog.String("a6_posicion_liquidacion_centavos", strconv.FormatInt(c.A6PosicionLiquidacion.Int64(), 10)),
 		slog.String("a6_posicion_liquidacion_cop", c.A6PosicionLiquidacion.PresentarUnidadesMayores()),

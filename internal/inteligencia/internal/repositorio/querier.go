@@ -13,13 +13,27 @@ import (
 type Querier interface {
 	AnclasPendientes(ctx context.Context, arg AnclasPendientesParams) ([]int64, error)
 	AvanzarCursor(ctx context.Context, ultimoEntryID int64) error
+	AvisoPorIdentidad(ctx context.Context, arg AvisoPorIdentidadParams) (AvisoPorIdentidadRow, error)
+	AvisosDelUsuarioEnVentana(ctx context.Context, arg AvisosDelUsuarioEnVentanaParams) ([]AvisosDelUsuarioEnVentanaRow, error)
+	AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDelMesParams) ([]AvisosVigentesDelMesRow, error)
 	BorrarCopia(ctx context.Context) error
 	BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMovimientoEnriquecidoParams) error
 	ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error)
+	ContarAvisosEmitidosEnElMes(ctx context.Context, arg ContarAvisosEmitidosEnElMesParams) (int64, error)
+	DescartarAviso(ctx context.Context, arg DescartarAvisoParams) (DescartarAvisoRow, error)
+	EmitirAviso(ctx context.Context, arg EmitirAvisoParams) (pgtype.UUID, error)
 	ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
 	FilaDeMovimiento(ctx context.Context, arg FilaDeMovimientoParams) (FilaDeMovimientoRow, error)
+	// Consultas de los cinco avisos.
+	//
+	// Gasto e ingreso se leen de la copia enriquecida con corte en el instante de la evaluación, porque un
+	// asiento posterior a ese instante no puede contar. El saldo suma la subcuenta disponible y la
+	// retenida: en el diario una subcuenta pasivo acumula negativo, así que el saldo del usuario es cero
+	// menos esa suma. Los pagos excluyen las etiquetas genéricas, que no identifican un destino recurrente.
+	GastoPorCategoriaYMesParaAvisos(ctx context.Context, arg GastoPorCategoriaYMesParaAvisosParams) ([]GastoPorCategoriaYMesParaAvisosRow, error)
 	GuardarCategoriaDeMemoria(ctx context.Context, arg GuardarCategoriaDeMemoriaParams) error
 	GuardarNombreDeMemoria(ctx context.Context, arg GuardarNombreDeMemoriaParams) error
+	IngresoPorMesParaAvisos(ctx context.Context, arg IngresoPorMesParaAvisosParams) ([]IngresoPorMesParaAvisosRow, error)
 	InsertarMovimientoEnriquecido(ctx context.Context, arg InsertarMovimientoEnriquecidoParams) error
 	LeerCursor(ctx context.Context) (LeerCursorRow, error)
 	LineasDeAsientos(ctx context.Context, asientos []int64) ([]LineasDeAsientosRow, error)
@@ -27,11 +41,14 @@ type Querier interface {
 	ListarCategorias(ctx context.Context) ([]Categoria, error)
 	ListarMemoriaDeUsuario(ctx context.Context, usuarioID string) ([]ListarMemoriaDeUsuarioRow, error)
 	PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimientosParams) ([]PaginaDeMovimientosRow, error)
+	PagosDelUsuarioParaSeries(ctx context.Context, arg PagosDelUsuarioParaSeriesParams) ([]PagosDelUsuarioParaSeriesRow, error)
 	PrimerMovimientoDelUsuario(ctx context.Context, usuarioID string) (pgtype.Timestamptz, error)
 	RecalcularCategoriaPorDestino(ctx context.Context, arg RecalcularCategoriaPorDestinoParams) ([]pgtype.UUID, error)
 	ReiniciarCursor(ctx context.Context) error
 	RenombrarContrapartePorDestino(ctx context.Context, arg RenombrarContrapartePorDestinoParams) ([]pgtype.UUID, error)
+	SaldoDelUsuarioHasta(ctx context.Context, arg SaldoDelUsuarioHastaParams) (int64, error)
 	TotalesPorCategoriaYMes(ctx context.Context, arg TotalesPorCategoriaYMesParams) ([]TotalesPorCategoriaYMesRow, error)
+	UsuariosConHistorial(ctx context.Context, arg UsuariosConHistorialParams) ([]string, error)
 }
 
 var _ Querier = (*Queries)(nil)

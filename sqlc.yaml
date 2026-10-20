@@ -60,6 +60,7 @@ sql:
       - bd/migraciones/0023_create_movimiento_enriquecido_y_memoria.sql
       - bd/migraciones/0024_create_aviso_y_cursor.sql
       - bd/migraciones/0025_add_destino_a_la_copia.sql
+      - bd/migraciones/0026_add_descarte_a_aviso.sql
     queries: bd/consultas-inteligencia
     gen:
       go:

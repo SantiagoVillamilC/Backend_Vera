@@ -35,6 +35,13 @@ type servicioDeLecturaFalso struct {
 	limite  int
 	ancla   *CursorDeMovimiento
 	mes     string
+
+	avisos        []AvisoEmitido
+	avisosErr     error
+	avisosMes     string
+	avisoDescarte DescarteDeAviso
+	avisoErr      error
+	avisoBorrado  uuid.UUID
 }
 
 func (f *servicioDeLecturaFalso) Movimientos(_ context.Context, usuarioID string, ancla *CursorDeMovimiento,
@@ -60,6 +67,20 @@ func (f *servicioDeLecturaFalso) Resumen(_ context.Context, usuarioID, mes strin
 	f.usuario = usuarioID
 	f.mes = mes
 	return f.resumen, f.err
+}
+
+func (f *servicioDeLecturaFalso) AvisosDelUsuario(_ context.Context, usuarioID, mes string,
+	_ time.Time) ([]AvisoEmitido, error) {
+	f.usuario = usuarioID
+	f.avisosMes = mes
+	return f.avisos, f.avisosErr
+}
+
+func (f *servicioDeLecturaFalso) DescartarAviso(_ context.Context, usuarioID string, avisoID uuid.UUID,
+	_ time.Time) (DescarteDeAviso, error) {
+	f.usuario = usuarioID
+	f.avisoBorrado = avisoID
+	return f.avisoDescarte, f.avisoErr
 }
 
 func TestNuevoHandlerConServicioNuloFallaAlConstruir(t *testing.T) {
@@ -519,5 +540,131 @@ func assertErrorDelSobre(t *testing.T, rec *httptest.ResponseRecorder, codigo st
 	}
 	if respuesta.Success || respuesta.Error == nil || respuesta.Error.Code != codigo {
 		t.Fatalf("sobre = %s, want error %q", rec.Body.String(), codigo)
+	}
+}
+
+func TestListarAvisosExigeIdentidad(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/inteligencia/avisos", nil)
+	NuevoHandler(falso).ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("código = %d, want 401", rec.Code)
+	}
+	assertErrorDelSobre(t, rec, "Unauthorized")
+}
+
+func TestListarAvisosValidaElMes(t *testing.T) {
+	t.Parallel()
+
+	mes := "2026-13"
+	falso := &servicioDeLecturaFalso{avisosErr: fmt.Errorf("%w: %s", ErrMesInvalido, mes)}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/avisos?mes="+mes)
+	NuevoHandler(falso).ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{Mes: &mes})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("código = %d, want 400", rec.Code)
+	}
+	assertErrorDelSobre(t, rec, "ValidationError")
+}
+
+func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
+	t.Parallel()
+
+	transaccion := uuid.MustParse("123e4567-e89b-42d3-a456-426614174001")
+	avisoID := uuid.MustParse("123e4567-e89b-42d3-a456-426614174002")
+	falso := &servicioDeLecturaFalso{avisos: []AvisoEmitido{{
+		ID: avisoID, Tipo: "pago_no_alcanza", Clave: "pago-proximo",
+		Titulo: "Tus próximos pagos suman más que tu saldo", Texto: "Tu saldo es $300.000.",
+		Porque: "Los pagos recurrentes de la ventana suman más que tu saldo.", Accion: "Ver los pagos que vencen",
+		Periodo: time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC), SeveridadCentavos: 50_000_000,
+		Prioridad: 1, TransaccionID: &transaccion, CreadoEn: time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC),
+	}}}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/avisos")
+	NuevoHandler(falso).ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d: %s", rec.Code, rec.Body.String())
+	}
+	var respuesta struct {
+		Success bool `json:"success"`
+		Data    []struct {
+			ID                string  `json:"id"`
+			SeveridadCentavos string  `json:"severidad_centavos"`
+			Periodo           string  `json:"periodo"`
+			TransaccionID     *string `json:"transaccion_id"`
+			Titulo            string  `json:"titulo"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if !respuesta.Success || len(respuesta.Data) != 1 {
+		t.Fatalf("respuesta = %s", rec.Body.String())
+	}
+	aviso := respuesta.Data[0]
+	if aviso.ID != avisoID.String() || aviso.SeveridadCentavos != "50000000" ||
+		aviso.Periodo != "2026-07-17" || aviso.TransaccionID == nil ||
+		*aviso.TransaccionID != transaccion.String() {
+		t.Fatalf("aviso = %+v", aviso)
+	}
+}
+
+func TestDescartarAvisoValidaElIdentificador(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{}
+	rec := httptest.NewRecorder()
+	req := peticionConCuerpo(t, "/v1/inteligencia/avisos/no-es-uuid/descartar", "")
+	NuevoHandler(falso).DescartarAvisoInteligencia(rec, req, "no-es-uuid")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("código = %d, want 400", rec.Code)
+	}
+	assertErrorDelSobre(t, rec, "ValidationError")
+	if falso.avisoBorrado != uuid.Nil {
+		t.Fatal("el servicio se llamó con un identificador inválido")
+	}
+}
+
+func TestDescartarAvisoAjenosDaNotFound(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{avisoErr: ErrAvisoNoEncontrado}
+	rec := httptest.NewRecorder()
+	id := uuid.NewString()
+	req := peticionConCuerpo(t, "/v1/inteligencia/avisos/"+id+"/descartar", "")
+	NuevoHandler(falso).DescartarAvisoInteligencia(rec, req, id)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("código = %d, want 404", rec.Code)
+	}
+	assertErrorDelSobre(t, rec, "NotFound")
+}
+
+func TestDescartarAvisoRespondeElSobre(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.New()
+	momento := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	falso := &servicioDeLecturaFalso{avisoDescarte: DescarteDeAviso{AvisoID: id, DescartadoEn: momento}}
+	rec := httptest.NewRecorder()
+	req := peticionConCuerpo(t, "/v1/inteligencia/avisos/"+id.String()+"/descartar", "")
+	NuevoHandler(falso).DescartarAvisoInteligencia(rec, req, id.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d: %s", rec.Code, rec.Body.String())
+	}
+	var respuesta struct {
+		Success bool `json:"success"`
+		Data    struct {
+			ID           string `json:"id"`
+			DescartadoEn string `json:"descartado_en"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if !respuesta.Success || respuesta.Data.ID != id.String() || respuesta.Data.DescartadoEn == "" {
+		t.Fatalf("respuesta = %s", rec.Body.String())
 	}
 }
