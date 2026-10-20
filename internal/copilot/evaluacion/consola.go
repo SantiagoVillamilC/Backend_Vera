@@ -17,8 +17,9 @@ import (
 // EventoConsola proyecta sólo llamadas y resultados públicos del sandbox.
 // No expone instrucciones, firmas, configuración ni cuerpos de error del proveedor.
 type EventoConsola struct {
-	Tipo, Nombre string
-	Datos        json.RawMessage
+	Tipo   string          `json:"tipo"`
+	Nombre string          `json:"nombre"`
+	Datos  json.RawMessage `json:"datos"`
 }
 
 // Consola mantiene una conversación local con herramientas financieras ficticias.
@@ -47,6 +48,11 @@ func NuevaConsola(cfg ConfigReal, p copilot.ProveedorIA, observar func(EventoCon
 
 // Consumo informa solicitudes al proveedor, no mensajes escritos por el usuario.
 func (c *Consola) Consumo() (int, int) { return c.presupuesto.solicitudes, c.presupuesto.max }
+
+// Transcribir comparte con el chat el presupuesto de solicitudes del laboratorio.
+func (c *Consola) Transcribir(ctx context.Context, audio *copilot.AudioIA) (string, error) {
+	return copilot.TranscribirAudio(ctx, c.presupuesto, audio)
+}
 
 // NuevaConversacion borra el contexto sintético sin restablecer la cuota.
 func (c *Consola) NuevaConversacion() {

@@ -1,5 +1,8 @@
 # Probar Vera desde una consola
 
+También tienes una [pantalla local con micrófono y lectura en voz alta](asistente-laboratorio-voz.md):
+abre `Probar-Vera-Voz.cmd` con Docker Desktop listo.
+
 Con Docker Desktop abierto, haz doble clic en **`Probar-Vera.cmd`**, en la raíz
 del backend. Escribe tu pregunta cuando aparezca `Tú >` y pulsa Enter.
 El arranque inicial puede tardar mientras Go compila el programa.
