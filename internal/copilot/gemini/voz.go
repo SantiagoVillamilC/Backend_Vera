@@ -15,7 +15,7 @@ import (
 )
 
 // ModeloVoz usa la oferta TTS con Free Tier publicada por Google; no cambia el modelo del chat.
-const ModeloVoz = "gemini-3.8-flash-tts"
+const ModeloVoz = "gemini-3.8-flash-lite-tts"
 
 // Voz llama a Interactions por REST para separar texto literal y estilo de interpretación.
 // No registra credenciales ni texto, no reintenta y no conserva interacciones en Google.
@@ -35,15 +35,29 @@ func NuevaVoz(clave string) (*Voz, error) {
 
 // Sintetizar devuelve WAV mono de 24 kHz generado a partir del texto final de Vera.
 func (v *Voz) Sintetizar(ctx context.Context, texto, voz string) ([]byte, error) {
+	r, err := v.solicitarVoz(ctx, texto, voz, false)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = r.Body.Close() }()
+	return leerWAV(r.Body)
+}
+
+func (v *Voz) solicitarVoz(ctx context.Context, texto, voz string, flujo bool) (*http.Response, error) {
 	if !utf8.ValidString(texto) || strings.TrimSpace(texto) == "" || len(texto) > 8192 || (voz != "Aoede" && voz != "Kore" && voz != "Puck") {
 		return nil, copilot.ErrSolicitudIA
 	}
+	formato := "audio/wav"
+	if flujo {
+		formato = "audio/l16"
+	}
 	cuerpo, err := json.Marshal(map[string]any{
 		"model": ModeloVoz, "store": false,
+		"stream": flujo,
 		"input": []any{map[string]any{"type": "user_input", "content": []any{map[string]any{
 			"type": "text", "text": texto, "annotations": []any{map[string]any{"type": "speech_metadata", "style": "Español de Colombia, conversación cercana y natural. Voz cálida, tranquila, ritmo fluido y pausas breves. Como una persona respondiendo, sin tono de locutora ni exageración. Pronuncia claramente las cifras y COP como pesos colombianos."}},
 		}}}},
-		"response_format":   map[string]any{"type": "audio", "mime_type": "audio/wav", "sample_rate": 24000},
+		"response_format":   map[string]any{"type": "audio", "mime_type": formato, "sample_rate": 24000},
 		"generation_config": map[string]any{"speech_config": []any{map[string]any{"voice": voz}}},
 	})
 	if err != nil {
@@ -60,12 +74,16 @@ func (v *Voz) Sintetizar(ctx context.Context, texto, voz string) ([]byte, error)
 		_, seguro := clasificar(err)
 		return nil, seguro
 	}
-	defer func() { _ = r.Body.Close() }()
 	if r.StatusCode != http.StatusOK {
+		_ = r.Body.Close()
 		_, seguro := clasificar(genai.APIError{Code: r.StatusCode})
 		return nil, seguro
 	}
-	b, err := io.ReadAll(io.LimitReader(r.Body, 8*1024*1024+1))
+	return r, nil
+}
+
+func leerWAV(lector io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(lector, 8*1024*1024+1))
 	if err != nil || len(b) > 8*1024*1024 {
 		return nil, copilot.ErrRespuestaIA
 	}

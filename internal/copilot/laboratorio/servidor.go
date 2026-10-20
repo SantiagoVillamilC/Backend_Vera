@@ -32,6 +32,7 @@ type estado struct {
 	Maximo     int    `json:"maximo"`
 	Demo       bool   `json:"demo"`
 	VozNatural bool   `json:"voz_natural"`
+	VozFlujo   bool   `json:"voz_flujo"`
 }
 
 type tarjeta struct {
@@ -72,14 +73,14 @@ func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string,
 	}
 	r := chi.NewRouter()
 	r.Use(s.proteger)
-	for ruta, nombre := range map[string]string{"/": "index.html", "/app.js": "app.js", "/audio.mjs": "audio.mjs", "/grabador.js": "grabador.js", "/estilos.css": "estilos.css"} {
+	for ruta, nombre := range map[string]string{"/": "index.html", "/app.js": "app.js", "/audio.mjs": "audio.mjs", "/voz-flujo.mjs": "voz-flujo.mjs", "/grabador.js": "grabador.js", "/estilos.css": "estilos.css"} {
 		r.Get(ruta, func(w http.ResponseWriter, _ *http.Request) {
 			b, err := archivos.ReadFile("web/" + nombre)
 			if err != nil {
 				api.WriteError(w, 500, "InternalError", "No se pudo abrir la interfaz.", nil)
 				return
 			}
-			content := map[string]string{"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "audio.mjs": "text/javascript; charset=utf-8", "grabador.js": "text/javascript; charset=utf-8", "estilos.css": "text/css; charset=utf-8"}
+			content := map[string]string{"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "audio.mjs": "text/javascript; charset=utf-8", "voz-flujo.mjs": "text/javascript; charset=utf-8", "grabador.js": "text/javascript; charset=utf-8", "estilos.css": "text/css; charset=utf-8"}
 			w.Header().Set("Content-Type", content[nombre])
 			_, _ = w.Write(b)
 		})
@@ -89,6 +90,7 @@ func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string,
 	r.Post("/api/transcribir", s.api)
 	r.Post("/api/nueva", s.api)
 	r.Post("/api/voz", s.api)
+	r.Post("/api/voz/flujo", s.api)
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		api.WriteError(w, 404, "NotFound", "Ruta no encontrada.", nil)
 	})
@@ -124,7 +126,8 @@ func (s *servidor) proteger(next http.Handler) http.Handler {
 
 func (s *servidor) estado() estado {
 	u, m := s.consola.Consumo()
-	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil}
+	_, flujo := s.voz.(copilot.SintetizadorVozFlujo)
+	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil, VozFlujo: flujo}
 }
 
 func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +146,7 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 		s.consola.NuevaConversacion()
 		s.eventos = nil
 		api.WriteData(w, 200, s.estado(), nil)
-	case "/api/voz":
+	case "/api/voz", "/api/voz/flujo":
 		s.sintetizar(ctx, w, r)
 	case "/api/transcribir":
 		if tipo, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); tipo != "audio/wav" {
@@ -217,6 +220,10 @@ func (s *servidor) sintetizar(ctx context.Context, w http.ResponseWriter, r *htt
 	voz := string(b)
 	if err != nil || (voz != "Aoede" && voz != "Kore" && voz != "Puck") || s.ultimoTexto == "" {
 		api.WriteError(w, 422, "ValidationError", "Primero consulta a Vera y selecciona una voz disponible.", nil)
+		return
+	}
+	if r.URL.Path == "/api/voz/flujo" {
+		s.sintetizarFlujo(ctx, w, voz)
 		return
 	}
 	if s.vozCache != voz || len(s.audioCache) == 0 {

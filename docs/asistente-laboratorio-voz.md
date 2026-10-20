@@ -13,7 +13,7 @@ automática, activada inicialmente. Grabar detiene la lectura anterior para evit
 
 La entrada de voz funciona por clips de hasta **20 segundos**, no como una
 llamada de audio simultánea. En modo normal, la salida es audio generado por
-**Gemini 3.8 Flash TTS**, con **Aoede** como voz inicial. También puedes elegir
+**Gemini 3.8 Flash-Lite TTS**, con **Aoede** como voz inicial. También puedes elegir
 Kore, Puck o una voz del navegador. El estilo pide español de Colombia, calidez,
 ritmo conversacional y pronunciación clara de cifras. El acento final depende
 del modelo; no es una voz personalizada entrenada para Vera.
@@ -141,9 +141,18 @@ La pantalla pasa el texto a `/api/preguntar`, reutilizando el ciclo de arriba.
 texto de la última respuesta en el servidor. No acepta texto arbitrario ni
 invoca herramientas. `SintetizadorVoz` separa esta capacidad del proveedor del
 chat. Su adaptador usa `POST /v1beta/interactions`, la misma `GEMINI_API_KEY`,
-el modelo fijo `gemini-3.8-flash-tts` y `speech_metadata.style` separado del texto
+el modelo fijo `gemini-3.8-flash-lite-tts` y `speech_metadata.style` separado del texto
 literal. Devuelve WAV PCM mono de 24 kHz y 16 bits. Hay timeout de 45 segundos,
 límites de respuesta y una sola solicitud, sin reintentos ni cambios de modelo.
+
+El adaptador también ofrece `SintetizarFlujo`: una solicitud SSE a Google con
+`stream=true` y salida PCM16 mono de 24 kHz. `/api/voz/flujo` retransmite los
+fragmentos como envelopes NDJSON y hace flush de cada uno. El navegador agenda
+los fragmentos con Web Audio, con un margen inicial de 60 ms, mientras llega
+el resto. Los fragmentos deben terminar con una confirmación explícita; un
+corte cancela la reproducción pendiente y no se guarda como caché válida.
+Al completar la transmisión se construye un WAV para repetir la respuesta.
+El endpoint WAV anterior se conserva como alternativa compatible.
 
 El servidor y el navegador conservan sólo el último audio y la voz seleccionada.
 Cambiar de turno o reiniciar la conversación limpia esa caché. Si TTS falla,
@@ -157,12 +166,41 @@ Elección: TTS conserva el orquestador y las cifras actuales y añade expresivid
 al texto terminado. Live API requeriría otra sesión y otro ciclo de audio y
 herramientas. Google Cloud Text-to-Speech requiere su propia configuración de
 facturación. Gemini TTS usa la clave existente y ofrece Free Tier según la
-[tabla de precios](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash-tts)
+[tabla de precios](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash-lite-tts)
 consultada el 20 de octubre de 2026. Las cuotas dependen del proyecto; no se
 habilita facturación desde este laboratorio.
 
 Referencia de [síntesis Gemini](https://ai.google.dev/gemini-api/docs/speech-generation)
 y [almacenamiento de interacciones](https://ai.google.dev/gemini-api/docs/interactions-overview).
+
+## Latencia del laboratorio
+
+El modo interactivo arranca con `-intervalo=0`: no impone una pausa entre
+transcripción, vueltas del modelo y síntesis. Antes usaba un intervalo mínimo
+de 12 segundos entre inicios de solicitudes, incluso entre modelos distintos.
+El evaluador por lotes conserva su configuración de intervalo. Se mantiene el
+tope de 20 solicitudes, sin reintentos ni ampliación de cuota ante un 429.
+
+La voz usa Flash-Lite TTS, orientado a menor latencia, con las mismas opciones
+de voz. El texto aparece antes del audio y la reproducción empieza al recibir
+PCM, sin esperar el WAV completo. Tampoco se relee `/api/estado` entre etapas
+que ya devolvieron el contador; se consulta al recuperarse de un error.
+
+La pantalla mide transcripción, respuesta y primera voz del último turno.
+«Primera voz» mide la llegada del primer fragmento, al que se añade el margen
+de reproducción y la latencia del dispositivo. No mide sólo cómputo del modelo.
+
+Prueba real del 20 de octubre de 2026: dos solicitudes con texto ficticio, una
+por modo, al mismo modelo Flash-Lite y Aoede. Esperar el WAV completo tardó
+3516 ms; en streaming, el primer PCM llegó a los 579 ms y la generación terminó
+a los 1807 ms para un audio de 8,68 segundos. Son observaciones individuales,
+sin mediana ni garantía de latencia; no incluyen transcripción ni chat. Informe:
+`docs/evaluaciones/latencia-voz.json`; audio: `docs/evaluaciones/vera-voz-rapida.wav`.
+
+Todavía hay una secuencia transcripción → orquestador → síntesis. Gemini Live
+podría solapar entrada y salida en una sesión de audio, pero requiere integrar
+sesiones, detección de turnos, interrupciones y llamadas al catálogo. La mejora
+actual conserva las validaciones y los cálculos existentes del backend.
 
 Referencias del navegador:
 [captura del micrófono](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia),
@@ -186,6 +224,11 @@ La integración TTS tiene pruebas con HTTP simulado para texto literal, voz,
 cuota, errores sin reintentos, salida inválida y caché del último turno.
 Se realizó además una solicitud real de síntesis con texto ficticio y Aoede;
 la muestra de 8,64 segundos está en `docs/evaluaciones/vera-voz-aoede.wav`.
+Esa muestra corresponde al modelo anterior Flash TTS; la prueba Flash-Lite y
+sus tiempos se describen arriba. Las pruebas de streaming verifican entrega
+antes del fin, caché sin cuota adicional, fragmentos divididos, orden de PCM,
+cancelación y descarte de transmisiones incompletas. La interfaz se comprueba
+con audio guardado sin repetir llamadas a Google.
 
 Archivos principales: `cmd/laboratorio-vera/main.go`,
 `internal/copilot/laboratorio/servidor.go`, `internal/copilot/instrucciones.go`,

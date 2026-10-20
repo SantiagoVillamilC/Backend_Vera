@@ -66,6 +66,17 @@ func (c *Consola) Sintetizar(ctx context.Context, p copilot.SintetizadorVoz, tex
 	return p.Sintetizar(ctx, texto, voz)
 }
 
+// SintetizarFlujo cuenta toda la transmisión como una sola llamada del presupuesto común.
+func (c *Consola) SintetizarFlujo(ctx context.Context, p copilot.SintetizadorVozFlujo, texto, voz string, recibir func([]byte) error) ([]byte, error) {
+	if p == nil {
+		return nil, copilot.ErrNoDisponibleIA
+	}
+	if err := c.presupuesto.reservar(ctx); err != nil {
+		return nil, err
+	}
+	return p.SintetizarFlujo(ctx, texto, voz, recibir)
+}
+
 // NuevaConversacion borra el contexto sintético sin restablecer la cuota.
 func (c *Consola) NuevaConversacion() {
 	c.memoria.historial = nil
