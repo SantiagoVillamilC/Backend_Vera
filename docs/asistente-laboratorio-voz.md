@@ -18,6 +18,14 @@ Kore, Puck o una voz del navegador. El estilo pide español de Colombia, calidez
 ritmo conversacional y pronunciación clara de cifras. El acento final depende
 del modelo; no es una voz personalizada entrenada para Vera.
 
+El lanzador prepara además **Kokoro-82M con Dora**, una voz neural femenina en
+español que se ejecuta en CPU dentro del mismo contenedor. Si Gemini agota cuota,
+no responde a tiempo o falla antes del primer fragmento, Dora lee el mismo texto.
+Puedes elegir **Dora · neural local, sin cuota** directamente. La voz del navegador
+queda como último respaldo. La pantalla identifica qué motor generó cada audio.
+La primera preparación descarga 142 MB de pesos verificados por SHA256, además
+de las dependencias de Docker; las siguientes aperturas reutilizan esa imagen.
+
 ## Qué es real y qué es de prueba
 
 El modo normal llama a Gemini. Las herramientas, validación y orquestación
@@ -40,7 +48,8 @@ transcripción y síntesis de voz. Un turno hablado añade una llamada de
 transcripción y una de síntesis a las necesarias para contestar. La síntesis
 ocurre después de mostrar el texto. Repetir la última respuesta con la misma
 voz reutiliza el audio en memoria; cambiar la voz vuelve a generarlo. La demo
-usa únicamente la voz del navegador y no consume Google.
+usa Dora local con el lanzador actualizado y no consume Google. Iniciar el comando
+Go sin el contenedor de voz conserva la alternativa del navegador.
 Una interacción de voz puede consumir tres, cuatro o más solicitudes: 20
 solicitudes no equivalen a 20 turnos. La cabecera distingue turnos respondidos
 y solicitudes físicas. El límite local da margen para ensayar 20 turnos,
@@ -50,6 +59,9 @@ contexto pero conserva ese contador y las esperas por cuota de Google. Ante
 timeout o indisponibilidad hay como máximo un reintento automático, contado
 como otra solicitud. No se reintentan automáticamente cuota, credenciales ni
 bloqueos; tampoco audio que ya comenzó a reproducirse. No hay cambio de modelo.
+Los reintentos de Gemini siguen esa regla; el respaldo local de disponibilidad
+no es otro intento a Google y no consume su presupuesto. También funciona si se
+agotó el presupuesto local de Google y ya existe una respuesta escrita.
 Para un límite distinto: `Probar-Vera-Voz.cmd -MaxSolicitudes 10`.
 
 El audio y el historial permanecen en memoria. Los bytes de audio recibidos se
@@ -60,6 +72,63 @@ transmite el audio a Google para transcribirlo y el texto final para sintetizarl
 El adaptador TTS envía `store=false` para desactivar el almacenamiento de la
 interacción recuperable en Google; esto no sustituye los términos de uso y
 tratamiento de datos del Free Tier.
+
+## Respaldo neural y comprobación de disponibilidad
+
+El 21 de octubre se observó un HTTP 429 de Interactions con `Retry-After: 7412`
+y sin `google.rpc.RetryInfo`. El adaptador ignoraba la cabecera y aplicaba 60
+segundos. Ahora acepta tanto segundos como fecha HTTP, acotados a 24 horas,
+y conserva la dimensión desconocida si Google no indica minuto o día. La espera
+es una indicación del proveedor; no una promesa de capacidad al vencer.
+
+`ConVozLocal` se configura sólo en el laboratorio. El chat, su catálogo, permisos
+y confirmaciones financieras conservan su flujo. El respaldo recibe únicamente
+la respuesta final que el servidor acaba de producir, nunca un texto arbitrario
+enviado al endpoint de voz por el navegador. Google dispone de hasta 12 segundos
+por intento lógico cuando existe respaldo; el servicio local tiene su propio
+timeout, dentro del plazo total de voz de 50 segundos. No se cambia de motor
+después de emitir PCM, ni tras cancelación del usuario o rechazo de contenido.
+
+Kokoro reside en el mismo contenedor, en `127.0.0.1:8766`, sin puerto publicado.
+Exige el token efímero de la sesión, limita texto y tamaño de audio, conserva los
+pesos cargados y no registra preguntas, respuestas ni claves. No realiza llamadas
+externas durante la síntesis. Sólo el puerto del laboratorio se publica en
+loopback del equipo. No se instala Python en Windows ni se modifica la facturación.
+
+Gemini y Dora pueden entregar PCM mono de 24 kHz progresivamente. Dora divide
+por frases y bloques de hasta unos 200 caracteres, sin cortar números decimales.
+La pronunciación sustituye `120000.00 COP` por `120000 pesos colombianos`, sin
+calcular ni redondear; el texto escrito permanece literal. El WAV sólo se guarda
+en memoria si termina todo el flujo. Repetir la última voz utiliza esa caché.
+Un bloqueo de autoplay pide pulsar Escuchar y no activa la voz robótica.
+
+Los contadores distinguen generaciones completas de Gemini y Dora, caché y
+fallos. No equivalen a calidad percibida, reproducción efectiva o reconocimiento
+con micrófono físico. El modo demo identifica claramente chat simulado y audio
+neural real. Dora tiene otra identidad vocal y acento; no imita a Aoede.
+
+Diagnóstico reproducible (datos ficticios, sólo fuera de CI):
+
+```powershell
+docker build -t vera-laboratorio-voz:kokoro-0.6.1 infra/voz-local
+docker run --rm --env-file .env.local -e VERA_LAB_TOKEN=diagnostico-local-voz-datos-ficticios -v "${PWD}:/src" -v vera117-gomod:/go/pkg/mod -v vera117-gocache:/root/.cache/go-build -w /src vera-laboratorio-voz:kokoro-0.6.1 go run ./cmd/revisar-voz-vera -nivel-gratuito-confirmado
+```
+
+Con `-solo-local`, el chat es simulado y Dora real, sin solicitudes a Google.
+El informe identifica ese modo. Alterna `/api/voz` y `/api/voz/flujo` y comprueba
+PCM16 mono de 24 kHz completo, incluidos WAV con metadatos RIFF. Conserva latencia
+total, primer fragmento, fuente, motivo del respaldo y consumo. Los informes
+anteriores no se sobrescriben al comparar ejecuciones; los errores de validación
+de audio se conservan como evidencia, no se cuentan como aprobación.
+
+La síntesis local quita la dependencia de la cuota de Google para leer una
+respuesta existente. No garantiza disponibilidad del chat/ASR de Google ni
+funcionamiento con Docker apagado, audio del equipo bloqueado o recursos agotados.
+
+Fuentes: [cuotas por proyecto de Google](https://ai.google.dev/gemini-api/docs/rate-limits),
+[TTS de Gemini](https://ai.google.dev/gemini-api/docs/speech-generation),
+[Kokoro ONNX](https://github.com/thewh1teagle/kokoro-onnx) y
+[voces de Kokoro](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md).
 
 ## Cómo Gemini actúa como Vera
 
@@ -144,7 +213,7 @@ transcripción del backend: `SoloTranscripcion=true`, sin herramientas, y salida
 JSON con una clave `transcripcion`. Se comprueba esa salida antes de mostrarla.
 La pantalla pasa el texto a `/api/preguntar`, reutilizando el ciclo de arriba.
 
-`/api/voz` acepta únicamente el nombre de una de las tres voces; recupera el
+`/api/voz` acepta únicamente Aoede, Kore, Puck o Dora si está configurada; recupera el
 texto de la última respuesta en el servidor. No acepta texto arbitrario ni
 invoca herramientas. `SintetizadorVoz` separa esta capacidad del proveedor del
 chat. Su adaptador usa `POST /v1beta/interactions`, la misma `GEMINI_API_KEY`,
@@ -164,8 +233,9 @@ Al completar la transmisión se construye un WAV para repetir la respuesta.
 El endpoint WAV anterior se conserva como alternativa compatible.
 
 El servidor y el navegador conservan sólo el último audio y la voz seleccionada.
-Cambiar de turno o reiniciar la conversación limpia esa caché. Si TTS falla
-antes de reproducir audio, la respuesta escrita permanece y la opción «Usar voz
+Cambiar de turno o reiniciar la conversación limpia esa caché. Si Gemini falla
+antes de reproducir audio, se intenta Dora local cuando está configurada. Si
+ambos motores fallan, la respuesta escrita permanece y la opción «Usar voz
 del navegador si falla la voz natural» activa `SpeechSynthesis`, sin otra llamada
 a Gemini. Se puede desmarcar. Un audio interrumpido a mitad no se repite
 automáticamente. La disponibilidad de la lectura depende del navegador y del sistema.
@@ -192,10 +262,11 @@ de 12 segundos entre inicios de solicitudes, incluso entre modelos distintos.
 El evaluador por lotes conserva su configuración de intervalo. Se mantiene el
 tope local de 120 solicitudes, sin reenvíos ni ampliación de cuota ante un 429.
 
-La voz usa Flash-Lite TTS, orientado a menor latencia, con las mismas opciones
+La voz principal usa Flash-Lite TTS, orientado a menor latencia, con las mismas opciones
 de voz. El texto aparece antes del audio y la reproducción empieza al recibir
 PCM, sin esperar el WAV completo. Tampoco se relee `/api/estado` entre etapas
 que ya devolvieron el contador; se consulta al recuperarse de un error.
+El respaldo Dora también transmite por frases para reducir la espera inicial.
 
 La pantalla mide transcripción, respuesta y primera voz del último turno.
 «Primera voz» mide la llegada del primer fragmento, al que se añade el margen

@@ -11,7 +11,7 @@ const limites = new LimitesSesion();
 let turnoActivo = null, preguntaPendiente = '', audioParcial = false;
 let audioPendiente = null;
 let vozNatural = false, peticionVoz = null, audioVoz = null, vozURL = '', cacheVoz = '', vozElegida = '';
-let vozFlujo = false, contextoSalida = null, reproductorVoz = null, tiempos = {};
+let vozFlujo = false, vozLocal = false, contextoSalida = null, reproductorVoz = null, tiempos = {};
 const hayVoz = 'speechSynthesis' in window;
 function estado(s) { $('estado').textContent = s; }
 function fallo(s = '') { $('error').textContent = s; $('error').hidden = !s; }
@@ -29,7 +29,7 @@ function controles(b) {
   $('cancelar').hidden = !b || grabando || (!turnoActivo && !peticionVoz);
   const chat = limites.esperaChat(), voz = limites.esperaVoz();
   $('espera').hidden = !chat && !voz;
-  $('espera').textContent = [chat ? `Chat disponible para reintentar en ${chat} s.` : '', voz ? `Voz natural disponible para reintentar en ${voz} s. La voz del navegador sigue disponible.` : ''].filter(Boolean).join(' ');
+  $('espera').textContent = [chat ? `Chat disponible para reintentar en ${chat} s.` : '', voz ? `Voz de Gemini en pausa: ${voz} s.${vozLocal ? ' Dora local sigue disponible, sin cuota de Google.' : ' Puedes usar la voz del navegador.'}` : ''].filter(Boolean).join(' ');
 }
 function actualizar(e) {
   limites.actualizar(e);
@@ -38,10 +38,15 @@ function actualizar(e) {
   $('modelo').textContent = `Modelo: ${e.modelo}`; $('version').textContent = `Instrucciones: ${e.version}`;
   demo = e.demo;
   vozNatural = e.voz_natural;
+  vozLocal = Boolean(e.voz_local);
   vozFlujo = e.voz_flujo && Boolean(window.AudioContext);
   for (const opcion of $('voz').options) if (opcion.value.startsWith('gemini:')) opcion.disabled = !vozNatural;
+  for (const opcion of $('voz').options) if (opcion.value.startsWith('local:')) opcion.disabled = !vozLocal;
   if (!vozNatural && $('voz').value.startsWith('gemini:')) $('voz').value = 'navegador';
-  $('nota-voz').textContent = vozNatural ? 'Voz natural · Gemini. Generar audio utiliza una llamada; repetir la misma voz reutiliza el audio.' : 'Demo: voz del navegador. La voz natural de Gemini está disponible al iniciar sin -Demo.';
+  if (e.demo && vozLocal && $('voz').value.startsWith('gemini:')) $('voz').value = 'local:Dora';
+  $('nota-voz').textContent = e.demo && vozLocal ? 'Demo con voz neural Dora en tu equipo. La respuesta es simulada; el audio es real y no usa Google.' : vozLocal ? 'Gemini con respaldo neural Dora en tu equipo. Si Google falla o agota su cuota, Dora lee la respuesta sin llamadas a Google. Puedes elegir Dora directamente.' : vozNatural ? 'Voz natural · Gemini. Generar audio utiliza una llamada; repetir la misma voz reutiliza el audio.' : 'Demo: voz del navegador. La voz natural está disponible con el lanzador habitual.';
+  const v = e.voces;
+  if (v) $('estadistica-voz').textContent = `Generaciones completas: ${v.gemini + v.local}/${v.solicitudes - v.cache} · Gemini ${v.gemini} · Dora ${v.local} · Repeticiones en caché ${v.cache}. No mide reproducción ni calidad percibida.`;
   if (demo) $('aviso').textContent = 'Demo sin llamadas a Google. La pregunta y la transcripción de ejemplo son fijas: «¿Cuánto tengo?». Puedes probar también la grabación.';
   $('nota-audio').textContent = demo ? 'Hasta 20 s · prueba local, sin enviar a Google' : 'Hasta 20 s · al detener, se envía a Gemini';
   $('pregunta').readOnly = demo;
@@ -78,7 +83,7 @@ function traza(eventos) {
   }
 }
 function detenerVoz() { peticionVoz?.abort(); reproductorVoz?.detener(); reproductorVoz = null; if (audioVoz) { audioVoz.pause(); audioVoz.currentTime = 0; } if (hayVoz) speechSynthesis.cancel(); $('silenciar').disabled = true; }
-function limpiarVoz() { detenerVoz(); if (vozURL) URL.revokeObjectURL(vozURL); vozURL = ''; audioVoz = null; cacheVoz = ''; vozElegida = ''; }
+function limpiarVoz() { detenerVoz(); if (vozURL) URL.revokeObjectURL(vozURL); vozURL = ''; audioVoz = null; cacheVoz = ''; vozElegida = ''; $('resultado-voz').textContent = ''; }
 function medir(nombre, inicio) {
   tiempos[nombre] = performance.now() - inicio;
   $('tiempos').hidden = false; $('tiempos').textContent = Object.entries(tiempos).map(([n, ms]) => `${n}: ${(ms / 1000).toFixed(1)} s`).join(' · ');
@@ -96,9 +101,12 @@ function conservarAudio(bytes, voz) {
   audioVoz.onended = () => { $('silenciar').disabled = true; if (!ocupada && !grabando) estado('Listo. Puedes continuar o volver a escuchar la respuesta.'); };
   audioVoz.onerror = () => { $('silenciar').disabled = true; fallo('No se pudo reproducir el audio. Puedes volver a pulsar Escuchar respuesta.'); };
 }
+function mostrarFuenteVoz(datos) {
+  $('resultado-voz').textContent = datos.fuente === 'kokoro' ? `Voz: Dora · neural local${datos.motivo_respaldo ? ' · respaldo de Gemini' : ''}${datos.cache ? ' · audio guardado en memoria' : ''}.` : `Voz: Gemini · ${$('voz').value.slice(7)}${datos.cache ? ' · audio guardado en memoria' : ''}.`;
+}
 async function recibirVoz(voz, solicitud) {
   prepararSalida();
-  if (!contextoSalida || contextoSalida.state !== 'running') throw new Error('Pulsa Escuchar respuesta para habilitar el audio del navegador.');
+  if (!contextoSalida || contextoSalida.state !== 'running') throw new DOMException('Pulsa Escuchar respuesta para habilitar el audio del navegador.', 'NotAllowedError');
   const inicio = performance.now(), partes = [];
   let primera = true, recibioFin = false;
   reproductorVoz = new ReproductorPCM(contextoSalida, () => { $('silenciar').disabled = true; if (!ocupada && !grabando) estado('Listo. Puedes continuar o volver a escuchar la respuesta.'); });
@@ -114,8 +122,9 @@ async function recibirVoz(voz, solicitud) {
     } else if (e.tipo === 'wav') {
       conservarAudio(Uint8Array.from(atob(e.audio), (c) => c.charCodeAt(0)), voz);
       await audioVoz.play(); primera = false; medir('Primera voz', inicio);
+      audioParcial = true;
     } else if (e.tipo === 'fin') {
-      actualizar(e.estado); recibioFin = true;
+      actualizar(e.estado); mostrarFuenteVoz(e); recibioFin = true;
     }
   });
   }, solicitud.signal, 55000);
@@ -125,19 +134,20 @@ async function recibirVoz(voz, solicitud) {
 async function escuchar() {
   if (!ultimoTexto || ocupada) return;
   detenerVoz(); fallo(); audioParcial = false;
-  if (vozNatural && $('voz').value.startsWith('gemini:')) {
+  if (vozNatural && ($('voz').value.startsWith('gemini:') || $('voz').value.startsWith('local:'))) {
     const solicitud = new AbortController(); peticionVoz = solicitud;
     controles(true); $('silenciar').disabled = false;
     let completa = false;
     try {
-      const voz = $('voz').value.slice(7);
+      const voz = $('voz').value.split(':')[1];
       if (cacheVoz !== ultimoTexto || vozElegida !== voz || !audioVoz) {
-        if (limites.agotada || limites.credenciales || limites.vozNoDisponible || limites.esperaVoz()) throw new ErrorLaboratorio('La voz natural no está disponible ahora; no se consumió otra llamada.', 'VoiceUnavailable');
+        if (!vozLocal && (limites.agotada || limites.credenciales || limites.vozNoDisponible || limites.esperaVoz())) throw new ErrorLaboratorio('La voz natural no está disponible ahora; no se consumió otra llamada.', 'VoiceUnavailable');
         estado('Generando la voz natural de Vera…');
-        if (vozFlujo) { await recibirVoz(voz, solicitud); completa = true; return; }
+        if (vozFlujo && contextoSalida?.state === 'running') { await recibirVoz(voz, solicitud); completa = true; return; }
         const inicioVoz = performance.now();
         const datos = await api('/api/voz', {method: 'POST', headers: {'Content-Type': 'text/plain'}, body: voz, signal: solicitud.signal});
         actualizar(datos.estado);
+        mostrarFuenteVoz(datos);
         const bytes = Uint8Array.from(atob(datos.audio), (c) => c.charCodeAt(0));
         conservarAudio(bytes, voz); medir('Primera voz', inicioVoz);
       }
@@ -152,6 +162,7 @@ async function escuchar() {
       $('silenciar').disabled = true;
       if (e.name !== 'AbortError' && e.name !== 'NotAllowedError' && !audioParcial && $('respaldo').checked && hayVoz) {
         leerNavegador();
+        $('resultado-voz').textContent = 'Voz: navegador · respaldo final. No cuenta como voz neural completada.';
         estado('La voz natural no está disponible. Vera está leyendo con la voz del navegador.');
       }
     } finally { peticionVoz = null; if (!completa) await refrescarConsumo(); controles(false); }
@@ -161,6 +172,7 @@ async function escuchar() {
 }
 function leerNavegador() {
   if (!hayVoz) { fallo('Este navegador no ofrece síntesis de voz local.'); return; }
+  $('resultado-voz').textContent = 'Voz: navegador. No cuenta como voz neural completada.';
   const frase = new SpeechSynthesisUtterance(ultimoTexto); frase.lang = 'es-CO';
   frase.voice = voces.find((v) => v.voiceURI === $('voz').value) || voces.find((v) => v.lang.startsWith('es')) || null;
   frase.onend = () => { $('silenciar').disabled = true; };
@@ -171,10 +183,10 @@ function cargarVoces() {
   if (!hayVoz) return;
   const previa = $('voz').value;
   voces = speechSynthesis.getVoices().sort((a, b) => Number(b.lang.startsWith('es')) - Number(a.lang.startsWith('es')));
-  for (const opcion of [...$('voz').options]) if (!opcion.value.startsWith('gemini:') && opcion.value !== 'navegador') opcion.remove();
+  for (const opcion of [...$('voz').options]) if (!opcion.value.startsWith('gemini:') && !opcion.value.startsWith('local:') && opcion.value !== 'navegador') opcion.remove();
   for (const v of voces) $('voz').add(new Option(`${v.name} · ${v.lang}`, v.voiceURI));
   const preferida = voces.find((v) => v.voiceURI === previa) || voces.find((v) => v.lang.toLowerCase() === 'es-co') || voces.find((v) => v.lang.startsWith('es'));
-  if (previa.startsWith('gemini:') || previa === 'navegador') $('voz').value = previa;
+  if (previa.startsWith('gemini:') || previa.startsWith('local:') || previa === 'navegador') $('voz').value = previa;
   else if (preferida) $('voz').value = preferida.voiceURI;
 }
 async function preguntar(texto, reintento = false) {

@@ -1,0 +1,2 @@
+# El entrypoint se ejecuta en Linux aunque el checkout del laboratorio sea Windows.
+infra/voz-local/iniciar.sh text eol=lf

@@ -76,3 +76,19 @@ func TestVozFlujoRechazaCortesFormatosYCancelacion(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestVozFlujoConservaCuotaYNoAceptaFinalCancelado(t *testing.T) {
+	for _, tc := range []struct {
+		datos    string
+		esperado error
+	}{
+		{`data: {"event_type":"error","error":{"code":"https://example.test/errors/resource_exhausted","message":"privado"}}` + "\n\n", copilot.ErrLimiteIA},
+		{`data: {"event_type":"error","error":{"code":"content_blocked","message":"privado"}}` + "\n\n", copilot.ErrBloqueoIA},
+		{`data: {"event_type":"interaction.completed","interaction":{"status":"cancelled"}}` + "\n\n", copilot.ErrRespuestaIA},
+	} {
+		_, err := leerFlujoVoz(t.Context(), strings.NewReader(tc.datos), func([]byte) error { return nil })
+		if !errors.Is(err, tc.esperado) || strings.Contains(err.Error(), "privado") {
+			t.Fatal(err)
+		}
+	}
+}

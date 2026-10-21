@@ -94,3 +94,18 @@ micrófono. Si falla ASR, se puede reintentar el mismo clip; si falla el chat de
 de ASR, se reintenta sólo la respuesta. La cuota de TTS no bloquea escribir o
 transcribir con el modelo de chat. El respaldo de voz del navegador permanece
 activado por defecto y no consume otra solicitud a Google.
+
+## Voz neural de respaldo
+
+El lanzador incluye Dora (Kokoro-82M) en el mismo contenedor. La selección inicial
+continúa siendo Aoede en modo real; la demo selecciona Dora y aclara que el chat
+es simulado y el audio neural real. El selector permite elegir Dora directamente.
+Un error o una pausa de cuota de Gemini conserva la lectura neural local antes
+de utilizar SpeechSynthesis. Los bloqueos de autoplay solicitan un clic.
+
+«Voz: …» identifica el motor que produjo la última respuesta. La espera de cuota
+se refiere explícitamente a Gemini y explica que Dora continúa disponible.
+Los contadores separan generaciones completas, caché y fallos y no afirman medir
+calidad, audición o captura de micrófono. El texto de la respuesta sigue siendo
+el principal contenido y puede leerse durante la generación de voz. El servidor
+sólo conserva audio completo; las cancelaciones o interrupciones no mezclan voces.

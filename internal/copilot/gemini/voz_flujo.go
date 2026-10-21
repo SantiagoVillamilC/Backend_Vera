@@ -38,6 +38,12 @@ func leerFlujoVoz(ctx context.Context, lector io.Reader, recibir func([]byte) er
 		var e struct {
 			Event string `json:"event_type"`
 			Type  string `json:"type"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+			Interaction struct {
+				Status string `json:"status"`
+			} `json:"interaction"`
 			Delta struct {
 				Type string `json:"type"`
 				Data []byte `json:"data"`
@@ -55,8 +61,27 @@ func leerFlujoVoz(ctx context.Context, lector io.Reader, recibir func([]byte) er
 		}
 		switch tipo {
 		case "interaction.completed":
+			if e.Interaction.Status != "" && e.Interaction.Status != "completed" {
+				return copilot.ErrRespuestaIA
+			}
 			completo = true
 		case "error", "interaction.failed":
+			// La API define code como URI. Nunca clasificamos por message: puede
+			// incluir texto de la conversación y no debe salir del adaptador.
+			codigo := strings.ToLower(e.Error.Code)
+			for _, separador := range []string{"/", "#"} {
+				if i := strings.LastIndex(codigo, separador); i >= 0 {
+					codigo = codigo[i+1:]
+				}
+			}
+			switch codigo {
+			case "resource_exhausted", "rate_limit_exceeded", "429":
+				return limiteProveedor(nil)
+			case "safety", "content_filter", "content_blocked":
+				return copilot.ErrBloqueoIA
+			case "unauthenticated", "permission_denied", "401", "403":
+				return copilot.ErrCredencialesIA
+			}
 			return copilot.ErrNoDisponibleIA
 		case "step.delta":
 			if e.Delta.Type != "audio" || len(e.Delta.Data) == 0 {

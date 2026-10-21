@@ -55,7 +55,7 @@ func (v *Voz) solicitarVoz(ctx context.Context, texto, voz string, flujo bool) (
 		"model": ModeloVoz, "store": false,
 		"stream": flujo,
 		"input": []any{map[string]any{"type": "user_input", "content": []any{map[string]any{
-			"type": "text", "text": texto, "annotations": []any{map[string]any{"type": "speech_metadata", "style": "Español de Colombia, conversación cercana y natural. Voz cálida, tranquila, ritmo fluido y pausas breves. Como una persona respondiendo, sin tono de locutora ni exageración. Pronuncia claramente las cifras y COP como pesos colombianos."}},
+			"type": "text", "text": texto, "annotations": []any{map[string]any{"type": "speech_metadata", "style": "Español colombiano, cálida y conversacional. COP se pronuncia pesos colombianos."}},
 		}}}},
 		"response_format":   map[string]any{"type": "audio", "mime_type": formato, "sample_rate": 24000},
 		"generation_config": map[string]any{"speech_config": []any{map[string]any{"voice": voz}}},
@@ -84,7 +84,7 @@ func (v *Voz) solicitarVoz(ctx context.Context, texto, voz string, flujo bool) (
 				} `json:"error"`
 			}
 			_ = json.Unmarshal(b, &respuesta)
-			return nil, limiteProveedor(respuesta.Error.Details)
+			return nil, limiteConCabecera(respuesta.Error.Details, r.Header.Get("Retry-After"), time.Now())
 		}
 		_ = r.Body.Close()
 		_, seguro := clasificar(genai.APIError{Code: r.StatusCode})

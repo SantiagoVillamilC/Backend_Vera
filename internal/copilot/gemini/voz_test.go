@@ -8,9 +8,26 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 )
+
+func TestVozRespetaRetryAfterAunqueInteractionsNoDevuelvaDetails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "7412")
+		w.WriteHeader(429)
+		_, _ = w.Write([]byte(`{"error":{"code":"resource_exhausted"}}`))
+	}))
+	defer srv.Close()
+	v, _ := NuevaVoz("ficticia")
+	v.endpoint, v.cliente = srv.URL, srv.Client()
+	_, err := v.Sintetizar(t.Context(), "Hola", "Aoede")
+	var limite *copilot.ErrorLimiteIA
+	if !errors.As(err, &limite) || limite.ReintentarEn != 7412*time.Second {
+		t.Fatalf("perdió la espera real: %+v", limite)
+	}
+}
 
 func TestVozEnviaTextoLiteralYRecibeWAV(t *testing.T) {
 	wav := make([]byte, 46)

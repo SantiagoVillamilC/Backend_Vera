@@ -21,6 +21,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/evaluacion"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/gemini"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/laboratorio"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/vozlocal"
 )
 
 func main() {
@@ -78,6 +79,14 @@ func run() error {
 	if len(token) < 32 || len(token) > 128 {
 		return errors.New("el token de sesión local debe tener entre 32 y 128 caracteres")
 	}
+	var opciones []laboratorio.Opcion
+	if endpoint := os.Getenv("VERA_VOZ_LOCAL_URL"); endpoint != "" {
+		local, err := vozlocal.Nueva(endpoint, token)
+		if err != nil {
+			return errors.New("configuración de voz local inválida; usa loopback y token de sesión")
+		}
+		opciones = append(opciones, laboratorio.ConVozLocal(local))
+	}
 	var escucha net.ListenConfig
 	l, err := escucha.Listen(ctx, "tcp", *addr)
 	if err != nil {
@@ -85,7 +94,7 @@ func run() error {
 	}
 	defer func() { _ = l.Close() }()
 	_, puerto, _ := net.SplitHostPort(l.Addr().String())
-	h, err := laboratorio.Nuevo(evaluacion.ConfigReal{Modelo: modelo, Repeticiones: 1, MaxSolicitudes: *maximo, Intervalo: *intervalo, NivelGratuitoConfirmado: *confirmado}, p, token, "localhost:"+puerto, *demo, voz)
+	h, err := laboratorio.Nuevo(evaluacion.ConfigReal{Modelo: modelo, Repeticiones: 1, MaxSolicitudes: *maximo, Intervalo: *intervalo, NivelGratuitoConfirmado: *confirmado}, p, token, "localhost:"+puerto, *demo, voz, opciones...)
 	if err != nil {
 		return errors.New("no se pudo iniciar la sesión del laboratorio")
 	}

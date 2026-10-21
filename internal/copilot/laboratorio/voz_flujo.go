@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 )
 
@@ -15,14 +14,13 @@ type eventoVoz struct {
 	PCM    string  `json:"pcm,omitempty"`
 	Audio  string  `json:"audio,omitempty"`
 	Estado *estado `json:"estado,omitempty"`
+	Fuente string  `json:"fuente,omitempty"`
+	Motivo string  `json:"motivo_respaldo,omitempty"`
+	Cache  bool    `json:"cache,omitempty"`
 }
 
 func (s *servidor) sintetizarFlujo(ctx context.Context, w http.ResponseWriter, voz string) {
-	p, ok := s.voz.(copilot.SintetizadorVozFlujo)
-	if !ok {
-		api.WriteError(w, 503, "VoiceUnavailable", "Esta sesión no ofrece voz en streaming.", nil)
-		return
-	}
+	s.voces.Solicitudes++
 	iniciado := false
 	escribir := func(e eventoVoz) error {
 		if err := ctx.Err(); err != nil {
@@ -38,15 +36,18 @@ func (s *servidor) sintetizarFlujo(ctx context.Context, w http.ResponseWriter, v
 		}
 		return http.NewResponseController(w).Flush()
 	}
-	if s.vozCache == voz && len(s.audioCache) > 0 {
+	cache := s.vozCache == voz && len(s.audioCache) > 0
+	if cache {
 		if escribir(eventoVoz{Tipo: "wav", Audio: base64.StdEncoding.EncodeToString(s.audioCache)}) != nil {
+			s.voces.Fallos++
 			return
 		}
 	} else {
-		audio, err := s.consola.SintetizarFlujo(ctx, p, s.ultimoTexto, voz, func(pcm []byte) error {
+		audio, fuente, motivo, err := s.generarVoz(ctx, voz, func(pcm []byte) error {
 			return escribir(eventoVoz{Tipo: "audio", PCM: base64.StdEncoding.EncodeToString(pcm)})
 		})
 		if err != nil {
+			s.voces.Fallos++
 			if !iniciado {
 				s.error(w, err)
 				return
@@ -57,10 +58,18 @@ func (s *servidor) sintetizarFlujo(ctx context.Context, w http.ResponseWriter, v
 			_ = http.NewResponseController(w).Flush()
 			return
 		}
+		if !iniciado {
+			if escribir(eventoVoz{Tipo: "wav", Audio: base64.StdEncoding.EncodeToString(audio)}) != nil {
+				s.voces.Fallos++
+				return
+			}
+		}
 		clear(s.audioCache)
 		s.audioCache = audio
 		s.vozCache = voz
+		s.fuenteCache, s.motivoCache = fuente, motivo
 	}
+	s.registrarVoz(cache)
 	e := s.estado()
-	_ = escribir(eventoVoz{Tipo: "fin", Estado: &e})
+	_ = escribir(eventoVoz{Tipo: "fin", Estado: &e, Fuente: s.fuenteCache, Motivo: s.motivoCache, Cache: cache})
 }

@@ -5,6 +5,9 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Write-Host 'Neces
 docker info *> $null
 if ($LASTEXITCODE -ne 0) { Write-Host 'Abre Docker Desktop y espera a que el motor esté listo.'; exit 1 }
 if (-not $Demo -and -not (Test-Path -LiteralPath '.env.local')) { Write-Host 'Falta .env.local con GEMINI_API_KEY y VERA_MODELO. No compartas la clave.'; exit 1 }
+Write-Host 'Preparando la voz neural local. La primera vez descarga el modelo; después reutiliza la imagen.'
+docker build -q -t vera-laboratorio-voz:kokoro-0.6.1 infra/voz-local
+if ($LASTEXITCODE -ne 0) { Write-Host 'No se pudo preparar la voz local. Revisa la conexión y Docker; vuelve a abrir el lanzador.'; exit 1 }
 # Prefiere el puerto habitual; si está ocupado, Windows asigna uno disponible.
 $sondaPuerto = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 8787)
 try { $sondaPuerto.Start() }
@@ -34,7 +37,7 @@ $navegador = Start-Job -ArgumentList $tokenSesion,$puertoLaboratorio -ScriptBloc
 }
 $argumentosDocker = @('run','--rm','-it','-p',"127.0.0.1:${puertoLaboratorio}:${puertoLaboratorio}",'-e','VERA_LAB_TOKEN')
 if (-not $Demo) { $argumentosDocker += @('--env-file','.env.local') }
-$argumentosDocker += @('-v',"${PSScriptRoot}:/src",'-v','vera117-gomod:/go/pkg/mod','-v','vera117-gocache:/root/.cache/go-build','-w','/src','golang:1.27.0','go','run','./cmd/laboratorio-vera','-addr',"0.0.0.0:$puertoLaboratorio",'-max-solicitudes',"$MaxSolicitudes")
+$argumentosDocker += @('-v',"${PSScriptRoot}:/src",'-v','vera117-gomod:/go/pkg/mod','-v','vera117-gocache:/root/.cache/go-build','-w','/src','vera-laboratorio-voz:kokoro-0.6.1','go','run','./cmd/laboratorio-vera','-addr',"0.0.0.0:$puertoLaboratorio",'-max-solicitudes',"$MaxSolicitudes")
 if ($Demo) { $argumentosDocker += '-demo' } else { $argumentosDocker += '-nivel-gratuito-confirmado' }
 Write-Host 'Preparando el laboratorio. Se abrirá el navegador cuando esté listo.'
 Write-Host 'Mantén esta ventana abierta. El audio y las propuestas usan datos de prueba.'
