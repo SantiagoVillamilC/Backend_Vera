@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import {conPlazo, ErrorLaboratorio, errorDelSobre, LimitesSesion} from './web/sesion.mjs';
 import {leerVozFlujo, wavPCM, ReproductorPCM} from './web/voz-flujo.mjs';
 
-async function laboratorio(t, {local = true, audioBloqueado = false, vozFalla = false} = {}) {
+async function laboratorio(t, {local = true, cartesia = false, audioBloqueado = false, vozFalla = false} = {}) {
   class Elemento {
     constructor() { Object.assign(this, {hidden: false, disabled: false, textContent: '', value: '', checked: false, children: [], events: {}, options: [], classList: {add() {}, remove() {}}}); }
     addEventListener(tipo, fn) { this.events[tipo] = fn; }
@@ -17,11 +17,11 @@ async function laboratorio(t, {local = true, audioBloqueado = false, vozFalla = 
   const html = await readFile(new URL('./web/index.html', import.meta.url), 'utf8');
   const elementos = new Map([...html.matchAll(/id="([^"]+)"/g)].map((m) => [m[1], new Elemento()]));
   const el = (id) => { assert.ok(elementos.has(id), id); return elementos.get(id); };
-  for (const value of ['gemini:Aoede', 'local:Dora', 'navegador']) el('voz').add({value});
-  el('voz').value = 'gemini:Aoede'; el('automatica').checked = true; el('respaldo').checked = true;
+  for (const value of ['cartesia:Catalina', 'gemini:Aoede', 'local:Dora', 'navegador']) el('voz').add({value});
+  el('voz').value = 'cartesia:Catalina'; el('automatica').checked = true; el('respaldo').checked = true;
   let navegador = 0, reproducciones = 0;
   const solicitudes = [], cierres = {}, relojes = new Set(), eventosVoces = {};
-  const estado = {modelo: 'prueba', usadas: 1, maximo: 120, turnos: 1, voz_natural: true, voz_local: local, voz_flujo: true, espera_voz_segundos: 3600, espera_chat_segundos: 0};
+  const estado = {modelo: 'prueba', usadas: 1, maximo: 120, turnos: 1, voz_natural: true, voz_local: local, voz_cartesia: cartesia, caracteres_cartesia: 20, max_caracteres_cartesia: 5000, espera_cartesia_segundos: 0, voz_flujo: true, espera_voz_segundos: 3600, espera_chat_segundos: 0};
   class Contexto {
     constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {}; }
     async resume() {} async close() {}
@@ -45,7 +45,7 @@ async function laboratorio(t, {local = true, audioBloqueado = false, vozFalla = 
         if (vozFalla) return Response.json({success: false, error: {code: 'Unavailable', message: 'Voz local indisponible.'}}, {status: 503});
         return new Response([
           {tipo: 'wav', audio: Buffer.from(wavPCM([Uint8Array.of(0, 0, 1, 0)])).toString('base64')},
-          {tipo: 'fin', fuente: 'kokoro', motivo_respaldo: 'GeminiQuota', estado},
+          {tipo: 'fin', fuente: cartesia ? 'cartesia' : 'kokoro', motivo_respaldo: cartesia ? '' : 'GeminiQuota', estado},
         ].map((data) => JSON.stringify({success: true, data}) + '\n').join(''));
       }
       return Response.json({success: true, data: estado});
@@ -80,4 +80,18 @@ test('voz del navegador sólo aparece si también falla el respaldo neural', asy
   const lab = await laboratorio(t, {vozFalla: true});
   await lab.el('ejemplo').events.click();
   assert.equal(lab.navegador(), 1); assert.match(lab.el('resultado-voz').textContent, /respaldo final/);
+});
+
+test('Catalina conserva selección, audio y cuota independiente de Gemini', async (t) => {
+  const lab = await laboratorio(t, {cartesia: true, local: false});
+  assert.equal(lab.el('voz').value, 'cartesia:Catalina');
+  await lab.el('ejemplo').events.click();
+  assert.equal(lab.navegador(), 0); assert.equal(lab.reproducciones(), 1);
+  assert.match(lab.el('resultado-voz').textContent, /Catalina · Cartesia/);
+  assert.equal(lab.solicitudes.find((s) => s.ruta === '/api/voz/flujo').body, 'Catalina');
+  await lab.el('escuchar').events.click();
+  assert.equal(lab.solicitudes.filter((s) => s.ruta === '/api/voz/flujo').length, 1);
+  lab.eventosVoces.voiceschanged();
+  assert.equal(lab.el('voz').value, 'cartesia:Catalina');
+  assert.ok(lab.el('voz').options.some((v) => v.value === 'cartesia:Catalina'));
 });

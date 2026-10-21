@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/cartesia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/evaluacion"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/gemini"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/laboratorio"
@@ -80,6 +81,13 @@ func run() error {
 		return errors.New("el token de sesión local debe tener entre 32 y 128 caracteres")
 	}
 	var opciones []laboratorio.Opcion
+	if clave := os.Getenv("CARTESIA_API_KEY"); !*demo && clave != "" {
+		catalina, err := cartesia.NuevaVoz(clave)
+		if err != nil {
+			return errors.New("no se pudo configurar Catalina; revisa CARTESIA_API_KEY sin compartirla")
+		}
+		opciones = append(opciones, laboratorio.ConVozCartesia(catalina))
+	}
 	if endpoint := os.Getenv("VERA_VOZ_LOCAL_URL"); endpoint != "" {
 		local, err := vozlocal.Nueva(endpoint, token)
 		if err != nil {

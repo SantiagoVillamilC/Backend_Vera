@@ -28,18 +28,22 @@ import (
 var archivos embed.FS
 
 type estado struct {
-	Modelo     string      `json:"modelo"`
-	Version    string      `json:"version"`
-	Usadas     int         `json:"usadas"`
-	Maximo     int         `json:"maximo"`
-	Demo       bool        `json:"demo"`
-	VozNatural bool        `json:"voz_natural"`
-	VozFlujo   bool        `json:"voz_flujo"`
-	EsperaChat int         `json:"espera_chat_segundos"`
-	EsperaVoz  int         `json:"espera_voz_segundos"`
-	Turnos     int         `json:"turnos"`
-	VozLocal   bool        `json:"voz_local"`
-	Voces      metricasVoz `json:"voces"`
+	Modelo                string      `json:"modelo"`
+	Version               string      `json:"version"`
+	Usadas                int         `json:"usadas"`
+	Maximo                int         `json:"maximo"`
+	Demo                  bool        `json:"demo"`
+	VozNatural            bool        `json:"voz_natural"`
+	VozFlujo              bool        `json:"voz_flujo"`
+	EsperaChat            int         `json:"espera_chat_segundos"`
+	EsperaVoz             int         `json:"espera_voz_segundos"`
+	Turnos                int         `json:"turnos"`
+	VozLocal              bool        `json:"voz_local"`
+	VozCartesia           bool        `json:"voz_cartesia"`
+	EsperaCartesia        int         `json:"espera_cartesia_segundos"`
+	CaracteresCartesia    int         `json:"caracteres_cartesia"`
+	MaxCaracteresCartesia int         `json:"max_caracteres_cartesia"`
+	Voces                 metricasVoz `json:"voces"`
 }
 
 type tarjeta struct {
@@ -58,17 +62,21 @@ type turno struct {
 }
 
 type servidor struct {
-	mu                       sync.Mutex
-	consola                  *evaluacion.Consola
-	eventos                  []evaluacion.EventoConsola
-	modelo, token, puerto    string
-	demo                     bool
-	voz                      copilot.SintetizadorVoz
-	ultimoTexto, vozCache    string
-	audioCache               []byte
-	vozLocal                 copilot.SintetizadorVoz
-	fuenteCache, motivoCache string
-	voces                    metricasVoz
+	mu                            sync.Mutex
+	consola                       *evaluacion.Consola
+	eventos                       []evaluacion.EventoConsola
+	modelo, token, puerto         string
+	demo                          bool
+	voz                           copilot.SintetizadorVoz
+	ultimoTexto, vozCache         string
+	audioCache                    []byte
+	vozLocal                      copilot.SintetizadorVoz
+	vozCartesia                   copilot.SintetizadorVoz
+	caracteresCartesia            int
+	pausaCartesia                 time.Time
+	credencialesCartesiaInvalidas bool
+	fuenteCache, motivoCache      string
+	voces                         metricasVoz
 }
 
 // Opcion configura extensiones locales, sin modificar la API financiera.
@@ -76,6 +84,9 @@ type Opcion func(*servidor)
 
 // ConVozLocal habilita un respaldo neural que no usa la cuota de Google.
 func ConVozLocal(v copilot.SintetizadorVoz) Opcion { return func(s *servidor) { s.vozLocal = v } }
+
+// ConVozCartesia habilita Catalina con presupuesto independiente de Google.
+func ConVozCartesia(v copilot.SintetizadorVoz) Opcion { return func(s *servidor) { s.vozCartesia = v } }
 
 // Nuevo protege la sesión con un token efímero y acepta sólo hosts y orígenes locales.
 // La clave de Gemini nunca se entrega al navegador.
@@ -151,7 +162,7 @@ func (s *servidor) estado() estado {
 	_, flujo := s.voz.(copilot.SintetizadorVozFlujo)
 	_, flujoLocal := s.vozLocal.(copilot.SintetizadorVozFlujo)
 	flujo = flujo || flujoLocal
-	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil || s.vozLocal != nil, VozFlujo: flujo, EsperaChat: chat, EsperaVoz: voz, Turnos: s.consola.TurnosCompletados(), VozLocal: s.vozLocal != nil, Voces: s.voces}
+	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil || s.vozLocal != nil || s.vozCartesia != nil, VozFlujo: flujo, EsperaChat: chat, EsperaVoz: voz, Turnos: s.consola.TurnosCompletados(), VozLocal: s.vozLocal != nil, Voces: s.voces, VozCartesia: s.vozCartesia != nil, EsperaCartesia: s.esperaCartesia(), CaracteresCartesia: s.caracteresCartesia, MaxCaracteresCartesia: maxCaracteresCartesia}
 }
 
 func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
@@ -244,7 +255,7 @@ func (s *servidor) limpiarVoz() {
 }
 
 func (s *servidor) sintetizar(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	if s.voz == nil && s.vozLocal == nil {
+	if s.voz == nil && s.vozLocal == nil && s.vozCartesia == nil {
 		api.WriteError(w, 503, "VoiceUnavailable", "La voz natural no está disponible en esta sesión. Puedes elegir la voz del navegador.", nil)
 		return
 	}
@@ -254,7 +265,8 @@ func (s *servidor) sintetizar(ctx context.Context, w http.ResponseWriter, r *htt
 	}
 	b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 32))
 	voz := string(b)
-	if err != nil || (voz != "Aoede" && voz != "Kore" && voz != "Puck" && (voz != "Dora" || s.vozLocal == nil)) || s.ultimoTexto == "" {
+	valida := ((voz == "Aoede" || voz == "Kore" || voz == "Puck") && s.voz != nil) || (voz == "Dora" && s.vozLocal != nil) || (voz == "Catalina" && s.vozCartesia != nil)
+	if err != nil || !valida || s.ultimoTexto == "" {
 		api.WriteError(w, 422, "ValidationError", "Primero consulta a Vera y selecciona una voz disponible.", nil)
 		return
 	}
@@ -268,7 +280,7 @@ func (s *servidor) sintetizar(ctx context.Context, w http.ResponseWriter, r *htt
 		audio, fuente, motivo, err := s.generarVoz(ctx, voz, nil)
 		if err != nil {
 			s.voces.Fallos++
-			s.error(w, err)
+			s.errorVoz(w, err, voz)
 			return
 		}
 		clear(s.audioCache)

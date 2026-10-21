@@ -49,7 +49,7 @@ func (s *servidor) sintetizarFlujo(ctx context.Context, w http.ResponseWriter, v
 		if err != nil {
 			s.voces.Fallos++
 			if !iniciado {
-				s.error(w, err)
+				s.errorVoz(w, err, voz)
 				return
 			}
 			// Una respuesta HTTP ya iniciada no puede cambiar de status. El último

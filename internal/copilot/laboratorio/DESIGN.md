@@ -67,7 +67,7 @@ Panel principal suavemente redondeado; botones y tarjeta de propuesta comparten 
 - **Sesión:** modo demo o Gemini, consumo acumulado y límite. Nueva conversación borra el diálogo, pero conserva consumo y pausas. La cuota temporal muestra espera y libera el reintento sin reiniciar; la cuota de voz no bloquea el chat. El límite local de sesión sigue deshabilitando nuevas solicitudes. Un fallo transitorio admite un reintento contado; contenido bloqueado, credenciales y cuota no se reenvían automáticamente.
 - **Texto:** etiqueta visible, máximo de 2000 caracteres; Enter envía y Shift+Enter introduce una línea. Durante consultas los controles de entrada quedan deshabilitados.
 - **Grabación:** permiso del navegador → grabación con contador y botón «Detener y enviar» → transcripción → consulta → respuesta. Se detiene a los 20 segundos y envía automáticamente. El clip queda reproducible y la transcripción visible. Los errores permiten volver a escribir o grabar, salvo un bloqueo de cuota o credenciales.
-- **Lectura:** Gemini 3.8 Flash-Lite TTS, Aoede inicial y alternativas Kore/Puck; voz del navegador como opción explícita. Lectura automática activada inicialmente, generación con estado visible, botones para escuchar y detener. El texto aparece antes que el audio y permanece ante errores; repetir la última voz reutiliza audio en memoria. La nota informa consumo y el modo demo distingue la voz del navegador. Si el navegador bloquea autoplay, se indica pulsar Escuchar sin generar de nuevo.
+- **Lectura:** Catalina de Cartesia como voz inicial cuando hay clave; Gemini (Aoede/Kore/Puck), Dora local y voz del navegador como alternativas explícitas. Lectura automática activada inicialmente, generación con estado visible, botones para escuchar y detener. El texto aparece antes que el audio y permanece ante errores; repetir la última voz reutiliza audio en memoria. La nota informa consumo y el modo demo distingue la voz del navegador. Si el navegador bloquea autoplay, se indica pulsar Escuchar sin generar de nuevo.
 - **Traza:** detalles desplegables, abiertos al recibirlos, para función y argumentos o resultado del backend. Se reemplaza en cada turno; no es una transmisión de eventos en vivo. La propuesta de transferencia informa que es simulada y no ejecuta dinero.
 - **Accesibilidad:** documento en español, formulario etiquetado, log y estado con anuncios corteses, errores con `role="alert"`, foco cian visible y controles nativos de audio y desplegables. El estado no depende sólo del color. Son mecanismos presentes en el código, sin afirmar auditoría con lector de pantalla.
 - **Respuesta progresiva:** los estados distinguen generación y reproducción mientras llegan fragmentos. Se muestran los tiempos de transcripción, respuesta y primer audio sin bloquear el texto. Detener cancela la solicitud y los buffers de audio; únicamente un turno completo se conserva para repetir. La nota de tiempos no anuncia cada fragmento al lector de pantalla.
@@ -97,15 +97,27 @@ activado por defecto y no consume otra solicitud a Google.
 
 ## Voz neural de respaldo
 
-El lanzador incluye Dora (Kokoro-82M) en el mismo contenedor. La selección inicial
-continúa siendo Aoede en modo real; la demo selecciona Dora y aclara que el chat
+El lanzador incluye Dora (Kokoro-82M) en el mismo contenedor. Con la clave de
+Cartesia, la selección inicial en modo real es Catalina, de acento colombiano.
+Sin esa clave comienza en Aoede. La demo selecciona Dora y aclara que el chat
 es simulado y el audio neural real. El selector permite elegir Dora directamente.
 Un error o una pausa de cuota de Gemini conserva la lectura neural local antes
 de utilizar SpeechSynthesis. Los bloqueos de autoplay solicitan un clic.
 
 «Voz: …» identifica el motor que produjo la última respuesta. La espera de cuota
-se refiere explícitamente a Gemini y explica que Dora continúa disponible.
+identifica por separado a Gemini y Cartesia; ninguna pausa de TTS bloquea el chat.
 Los contadores separan generaciones completas, caché y fallos y no afirman medir
 calidad, audición o captura de micrófono. El texto de la respuesta sigue siendo
 el principal contenido y puede leerse durante la generación de voz. El servidor
 sólo conserva audio completo; las cancelaciones o interrupciones no mezclan voces.
+
+## Catalina y respuestas breves
+
+El selector conserva Catalina al cargar las voces del sistema y al repetir la
+última respuesta. La nota explica el consumo de la voz seleccionada. La métrica
+de Cartesia cuenta caracteres reservados sobre un tope local de 5000 por sesión,
+sin presentarlo como saldo de la cuenta. Caché y nueva conversación conservan
+los controles de consumo; cambiar a otra voz es una elección visible. Un fallo
+de Catalina permite el respaldo del navegador según la casilla existente.
+Las instrucciones v8 piden respuestas habituales de una a tres frases sin quitar
+la revisión y confirmación de propuestas ni los detalles que la persona solicite.

@@ -12,9 +12,13 @@ lee el texto final; puedes elegir una voz disponible o activar la lectura
 automática, activada inicialmente. Grabar detiene la lectura anterior para evitar capturar a Vera.
 
 La entrada de voz funciona por clips de hasta **20 segundos**, no como una
-llamada de audio simultánea. En modo normal, la salida es audio generado por
-**Gemini 3.8 Flash-Lite TTS**, con **Aoede** como voz inicial. También puedes elegir
-Kore, Puck o una voz del navegador. El estilo pide español de Colombia, calidez,
+llamada de audio simultánea. En modo normal, con `CARTESIA_API_KEY` en `.env.local`,
+la voz inicial es **Catalina · Colombia · Cartesia** (Sonic 3.6 fijado al snapshot
+evaluado). Lee literalmente la respuesta final con cifras numéricas; no se añadió
+un conversor de montos a palabras. El chat y la transcripción continúan en Gemini.
+La clave nunca llega al navegador. Sin la clave de Cartesia se mantiene **Aoede**
+de **Gemini 3.8 Flash-Lite TTS** como selección inicial. También puedes elegir
+Kore, Puck o una voz del navegador. El estilo de Gemini pide español de Colombia, calidez,
 ritmo conversacional y pronunciación clara de cifras. El acento final depende
 del modelo; no es una voz personalizada entrenada para Vera.
 
@@ -43,9 +47,9 @@ verificar captura, formato, transporte, catálogo, traza y reproducción; no mid
 la capacidad de Gemini para entender lo que dices. El modo normal usa su
 transcripción real. No uses datos personales en las pruebas.
 
-La sesión tiene **120 solicitudes físicas** por defecto, compartidas entre texto,
-transcripción y síntesis de voz. Un turno hablado añade una llamada de
-transcripción y una de síntesis a las necesarias para contestar. La síntesis
+La sesión tiene **120 solicitudes físicas a Google** por defecto, compartidas entre texto,
+transcripción y síntesis de voz de Gemini. Un turno hablado añade una llamada de
+transcripción y una de síntesis al proveedor de voz elegido, además de las necesarias para contestar. La síntesis
 ocurre después de mostrar el texto. Repetir la última respuesta con la misma
 voz reutiliza el audio en memoria; cambiar la voz vuelve a generarlo. La demo
 usa Dora local con el lanzador actualizado y no consume Google. Iniciar el comando
@@ -63,6 +67,32 @@ Los reintentos de Gemini siguen esa regla; el respaldo local de disponibilidad
 no es otro intento a Google y no consume su presupuesto. También funciona si se
 agotó el presupuesto local de Google y ya existe una respuesta escrita.
 Para un límite distinto: `Probar-Vera-Voz.cmd -MaxSolicitudes 10`.
+
+Catalina tiene un límite preventivo independiente de **5000 caracteres por sesión**.
+Se reserva el texto Unicode antes de cada llamada, incluso si falla, y se muestra
+por separado de Google. Es un tope local, no el saldo real de Cartesia; reiniciar
+el laboratorio no renueva los créditos del proveedor. Repetir el último audio no
+consume caracteres y «Nueva conversación» no reinicia el tope. Los errores 429
+respetan `Retry-After`, las credenciales rechazadas no se reenvían y no hay
+reintentos automáticos de TTS de Cartesia. Un fallo de Catalina conserva el texto
+y el chat; la casilla de respaldo del navegador controla la lectura alternativa.
+No se cambia automáticamente a Dora ni a otra voz de Cartesia. Este adaptador
+devuelve un WAV completo; no se presenta como transmisión progresiva de Cartesia.
+
+## Respuestas breves
+
+Las instrucciones `vera-2026-10-21-v8` piden normalmente **una a tres frases**, con
+un objetivo de hasta **60 palabras**. Primero responden lo preguntado, sin
+preámbulos, despedidas repetidas ni ofertas de ayuda en cada turno. Conservan un
+tono amable. Se admite ampliar si la persona pide detalle, solicita una lista
+o necesita datos y advertencias para revisar una propuesta. Las cifras siguen
+procediendo del backend y se mantiene la confirmación explícita en la aplicación.
+
+Es una pauta del modelo, no un corte del texto ni una garantía de palabras exactas.
+Se conserva el límite técnico de 2048 tokens para no truncar argumentos de
+funciones o transcripciones. Menos texto de respuesta reduce tanto tokens de
+salida como caracteres enviados a TTS; no elimina el consumo de instrucciones,
+historial y herramientas. La configuración de producción de voz no cambia.
 
 El audio y el historial permanecen en memoria. Los bytes de audio recibidos se
 limpian después de transcribir; el navegador conserva la última grabación para

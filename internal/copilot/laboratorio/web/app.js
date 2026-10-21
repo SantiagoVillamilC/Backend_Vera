@@ -11,10 +11,14 @@ const limites = new LimitesSesion();
 let turnoActivo = null, preguntaPendiente = '', audioParcial = false;
 let audioPendiente = null;
 let vozNatural = false, peticionVoz = null, audioVoz = null, vozURL = '', cacheVoz = '', vozElegida = '';
-let vozFlujo = false, vozLocal = false, contextoSalida = null, reproductorVoz = null, tiempos = {};
+let vozFlujo = false, vozLocal = false, vozCartesia = false, contextoSalida = null, reproductorVoz = null, tiempos = {};
 const hayVoz = 'speechSynthesis' in window;
 function estado(s) { $('estado').textContent = s; }
 function fallo(s = '') { $('error').textContent = s; $('error').hidden = !s; }
+function actualizarNotaVoz() {
+  const seleccion = $('voz').value;
+  $('nota-voz').textContent = seleccion.startsWith('cartesia:') ? 'Catalina · voz colombiana de Cartesia. Consume caracteres al generar; repetir el último audio usa la caché. Su cuota es independiente de Gemini.' : seleccion.startsWith('local:') ? 'Dora · voz neural en tu equipo, sin cuota de Google ni Cartesia.' : seleccion.startsWith('gemini:') ? `Voz natural · Gemini. Generar audio utiliza una llamada; repetir la misma voz reutiliza el audio.${vozLocal ? ' Si Gemini falla antes de comenzar, Dora local lee la respuesta.' : ''}` : 'Voz del navegador. No consume llamadas a Gemini ni Cartesia.';
+}
 function controles(b) {
   ocupada = b;
   for (const id of ['enviar', 'pregunta', 'ejemplo']) $(id).disabled = b || limites.bloqueada();
@@ -27,9 +31,9 @@ function controles(b) {
   $('reintentar-audio').hidden = !audioPendiente;
   $('reintentar-audio').disabled = b || limites.bloqueada();
   $('cancelar').hidden = !b || grabando || (!turnoActivo && !peticionVoz);
-  const chat = limites.esperaChat(), voz = limites.esperaVoz();
-  $('espera').hidden = !chat && !voz;
-  $('espera').textContent = [chat ? `Chat disponible para reintentar en ${chat} s.` : '', voz ? `Voz de Gemini en pausa: ${voz} s.${vozLocal ? ' Dora local sigue disponible, sin cuota de Google.' : ' Puedes usar la voz del navegador.'}` : ''].filter(Boolean).join(' ');
+  const chat = limites.esperaChat(), voz = limites.esperaVoz(), cartesia = limites.esperaCartesia();
+  $('espera').hidden = !chat && !voz && !cartesia;
+  $('espera').textContent = [chat ? `Chat disponible para reintentar en ${chat} s.` : '', voz ? `Voz de Gemini en pausa: ${voz} s.${vozCartesia ? ' Puedes usar Catalina con la cuota de Cartesia.' : vozLocal ? ' Dora local sigue disponible, sin cuota de Google.' : ' Puedes usar la voz del navegador.'}` : '', cartesia ? `Catalina en pausa: ${cartesia} s. El chat sigue disponible.` : ''].filter(Boolean).join(' ');
 }
 function actualizar(e) {
   limites.actualizar(e);
@@ -39,14 +43,17 @@ function actualizar(e) {
   demo = e.demo;
   vozNatural = e.voz_natural;
   vozLocal = Boolean(e.voz_local);
+  vozCartesia = Boolean(e.voz_cartesia);
   vozFlujo = e.voz_flujo && Boolean(window.AudioContext);
   for (const opcion of $('voz').options) if (opcion.value.startsWith('gemini:')) opcion.disabled = !vozNatural;
   for (const opcion of $('voz').options) if (opcion.value.startsWith('local:')) opcion.disabled = !vozLocal;
+  for (const opcion of $('voz').options) if (opcion.value.startsWith('cartesia:')) opcion.disabled = !vozCartesia;
+  if (!vozCartesia && $('voz').value.startsWith('cartesia:')) $('voz').value = vozNatural && !e.demo ? 'gemini:Aoede' : vozLocal ? 'local:Dora' : 'navegador';
   if (!vozNatural && $('voz').value.startsWith('gemini:')) $('voz').value = 'navegador';
   if (e.demo && vozLocal && $('voz').value.startsWith('gemini:')) $('voz').value = 'local:Dora';
-  $('nota-voz').textContent = e.demo && vozLocal ? 'Demo con voz neural Dora en tu equipo. La respuesta es simulada; el audio es real y no usa Google.' : vozLocal ? 'Gemini con respaldo neural Dora en tu equipo. Si Google falla o agota su cuota, Dora lee la respuesta sin llamadas a Google. Puedes elegir Dora directamente.' : vozNatural ? 'Voz natural · Gemini. Generar audio utiliza una llamada; repetir la misma voz reutiliza el audio.' : 'Demo: voz del navegador. La voz natural está disponible con el lanzador habitual.';
+  actualizarNotaVoz();
   const v = e.voces;
-  if (v) $('estadistica-voz').textContent = `Generaciones completas: ${v.gemini + v.local}/${v.solicitudes - v.cache} · Gemini ${v.gemini} · Dora ${v.local} · Repeticiones en caché ${v.cache}. No mide reproducción ni calidad percibida.`;
+  if (v) $('estadistica-voz').textContent = `Generaciones completas: ${v.gemini + v.local + (v.cartesia || 0)}/${v.solicitudes - v.cache} · Gemini ${v.gemini} · Catalina ${v.cartesia || 0} · Dora ${v.local} · Repeticiones en caché ${v.cache}.${vozCartesia ? ` Cartesia: ${e.caracteres_cartesia}/${e.max_caracteres_cartesia} caracteres reservados en esta sesión; no es el saldo de la cuenta.` : ''} No mide reproducción ni calidad percibida.`;
   if (demo) $('aviso').textContent = 'Demo sin llamadas a Google. La pregunta y la transcripción de ejemplo son fijas: «¿Cuánto tengo?». Puedes probar también la grabación.';
   $('nota-audio').textContent = demo ? 'Hasta 20 s · prueba local, sin enviar a Google' : 'Hasta 20 s · al detener, se envía a Gemini';
   $('pregunta').readOnly = demo;
@@ -102,7 +109,8 @@ function conservarAudio(bytes, voz) {
   audioVoz.onerror = () => { $('silenciar').disabled = true; fallo('No se pudo reproducir el audio. Puedes volver a pulsar Escuchar respuesta.'); };
 }
 function mostrarFuenteVoz(datos) {
-  $('resultado-voz').textContent = datos.fuente === 'kokoro' ? `Voz: Dora · neural local${datos.motivo_respaldo ? ' · respaldo de Gemini' : ''}${datos.cache ? ' · audio guardado en memoria' : ''}.` : `Voz: Gemini · ${$('voz').value.slice(7)}${datos.cache ? ' · audio guardado en memoria' : ''}.`;
+  const nombre = datos.fuente === 'cartesia' ? 'Catalina · Cartesia' : datos.fuente === 'kokoro' ? `Dora · neural local${datos.motivo_respaldo ? ' · respaldo de Gemini' : ''}` : `Gemini · ${$('voz').value.split(':')[1]}`;
+  $('resultado-voz').textContent = `Voz: ${nombre}${datos.cache ? ' · audio guardado en memoria' : ''}.`;
 }
 async function recibirVoz(voz, solicitud) {
   prepararSalida();
@@ -134,14 +142,15 @@ async function recibirVoz(voz, solicitud) {
 async function escuchar() {
   if (!ultimoTexto || ocupada) return;
   detenerVoz(); fallo(); audioParcial = false;
-  if (vozNatural && ($('voz').value.startsWith('gemini:') || $('voz').value.startsWith('local:'))) {
+  if (vozNatural && ($('voz').value.startsWith('gemini:') || $('voz').value.startsWith('local:') || $('voz').value.startsWith('cartesia:'))) {
     const solicitud = new AbortController(); peticionVoz = solicitud;
     controles(true); $('silenciar').disabled = false;
     let completa = false;
     try {
       const voz = $('voz').value.split(':')[1];
       if (cacheVoz !== ultimoTexto || vozElegida !== voz || !audioVoz) {
-        if (!vozLocal && (limites.agotada || limites.credenciales || limites.vozNoDisponible || limites.esperaVoz())) throw new ErrorLaboratorio('La voz natural no está disponible ahora; no se consumió otra llamada.', 'VoiceUnavailable');
+        if (voz === 'Catalina' && (limites.cartesiaAgotada || limites.cartesiaCredenciales || limites.esperaCartesia())) throw new ErrorLaboratorio('Catalina no está disponible ahora; no se consumió otra llamada. Puedes elegir otra voz.', 'CartesiaUnavailable');
+        if (voz !== 'Catalina' && !vozLocal && (limites.agotada || limites.credenciales || limites.vozNoDisponible || limites.esperaVoz())) throw new ErrorLaboratorio('La voz natural no está disponible ahora; no se consumió otra llamada.', 'VoiceUnavailable');
         estado('Generando la voz natural de Vera…');
         if (vozFlujo && contextoSalida?.state === 'running') { await recibirVoz(voz, solicitud); completa = true; return; }
         const inicioVoz = performance.now();
@@ -183,10 +192,10 @@ function cargarVoces() {
   if (!hayVoz) return;
   const previa = $('voz').value;
   voces = speechSynthesis.getVoices().sort((a, b) => Number(b.lang.startsWith('es')) - Number(a.lang.startsWith('es')));
-  for (const opcion of [...$('voz').options]) if (!opcion.value.startsWith('gemini:') && !opcion.value.startsWith('local:') && opcion.value !== 'navegador') opcion.remove();
+  for (const opcion of [...$('voz').options]) if (!opcion.value.startsWith('gemini:') && !opcion.value.startsWith('local:') && !opcion.value.startsWith('cartesia:') && opcion.value !== 'navegador') opcion.remove();
   for (const v of voces) $('voz').add(new Option(`${v.name} · ${v.lang}`, v.voiceURI));
   const preferida = voces.find((v) => v.voiceURI === previa) || voces.find((v) => v.lang.toLowerCase() === 'es-co') || voces.find((v) => v.lang.startsWith('es'));
-  if (previa.startsWith('gemini:') || previa.startsWith('local:') || previa === 'navegador') $('voz').value = previa;
+  if (previa.startsWith('gemini:') || previa.startsWith('local:') || previa.startsWith('cartesia:') || previa === 'navegador') $('voz').value = previa;
   else if (preferida) $('voz').value = preferida.voiceURI;
 }
 async function preguntar(texto, reintento = false) {
@@ -234,6 +243,7 @@ $('reintentar-audio').addEventListener('click', async () => {
 });
 $('cancelar').addEventListener('click', () => { turnoActivo?.abort(); detenerVoz(); estado('Cancelando la consulta…'); });
 $('escuchar').addEventListener('click', escuchar); $('silenciar').addEventListener('click', () => { detenerVoz(); estado('Voz detenida. La respuesta escrita sigue disponible.'); });
+$('voz').addEventListener('change', actualizarNotaVoz);
 $('nueva').addEventListener('click', async () => {
   if (ocupada) return; controles(true); fallo(); limpiarVoz();
   try {

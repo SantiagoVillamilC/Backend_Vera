@@ -14,6 +14,7 @@ type metricasVoz struct {
 	Solicitudes int `json:"solicitudes"`
 	Gemini      int `json:"gemini"`
 	Local       int `json:"local"`
+	Cartesia    int `json:"cartesia"`
 	Cache       int `json:"cache"`
 	Fallos      int `json:"fallos"`
 }
@@ -23,9 +24,12 @@ func (s *servidor) registrarVoz(cache bool) {
 		s.voces.Cache++
 		return
 	}
-	if s.fuenteCache == "kokoro" {
+	switch s.fuenteCache {
+	case "cartesia":
+		s.voces.Cartesia++
+	case "kokoro":
 		s.voces.Local++
-	} else {
+	default:
 		s.voces.Gemini++
 	}
 }
@@ -33,6 +37,10 @@ func (s *servidor) registrarVoz(cache bool) {
 // La espera de Gemini nunca impide usar el sintetizador local. Sólo se cambia
 // de motor antes del primer fragmento; no se mezclan dos voces a media frase.
 func (s *servidor) generarVoz(ctx context.Context, voz string, recibir func([]byte) error) ([]byte, string, string, error) {
+	if voz == "Catalina" {
+		audio, err := s.sintetizarCartesia(ctx)
+		return audio, "cartesia", "", err
+	}
 	var err error
 	var audio []byte
 	emitido := false

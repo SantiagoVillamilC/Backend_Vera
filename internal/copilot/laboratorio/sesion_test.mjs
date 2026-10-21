@@ -26,3 +26,15 @@ test('cancelar se distingue del timeout para no activar lectura de respaldo', as
   const p = conPlazo((signal) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new DOMException('Cancelado', 'AbortError')))), c.signal, 1000);
   c.abort(); await assert.rejects(p, (e) => e.name === 'AbortError' && !e.codigo);
 });
+
+test('cuota y credenciales de Cartesia no bloquean Gemini ni el chat', () => {
+  let ahora = 0; const s = new LimitesSesion(() => ahora);
+  s.registrar(new ErrorLaboratorio('Cuota', 'CartesiaLimit', 2), true);
+  assert.equal(s.esperaCartesia(), 2); assert.equal(s.esperaVoz(), 0); assert.equal(s.bloqueada(), false);
+  ahora = 2100; assert.equal(s.esperaCartesia(), 0);
+  s.registrar(new ErrorLaboratorio('Clave', 'CartesiaCredentials'), true);
+  assert.equal(s.cartesiaCredenciales, true); assert.equal(s.vozNoDisponible, false); assert.equal(s.bloqueada(), false);
+  s.registrar(new ErrorLaboratorio('Presupuesto', 'CartesiaSessionLimit'), true);
+  s.actualizar({usadas: 2, maximo: 120, caracteres_cartesia: 4999, max_caracteres_cartesia: 5000});
+  assert.equal(s.cartesiaAgotada, true); assert.equal(s.agotada, false);
+});
