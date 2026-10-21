@@ -192,15 +192,5 @@ func filaDeAsiento(a Apunte) repositorio.LineasDeAsientosRow {
 }
 
 func filaDeTransferencia(a Apunte) repositorio.LineasDeTransferenciasRow {
-	fila := filaDeAsiento(a)
-	return repositorio.LineasDeTransferenciasRow{
-		EntryID:         fila.EntryID,
-		Tipo:            fila.Tipo,
-		TransferenciaID: fila.TransferenciaID,
-		OcurridoEn:      fila.OcurridoEn,
-		Descripcion:     fila.Descripcion,
-		CuentaID:        fila.CuentaID,
-		Monto:           fila.Monto,
-		Moneda:          fila.Moneda,
-	}
+	return repositorio.LineasDeTransferenciasRow(filaDeAsiento(a))
 }

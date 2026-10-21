@@ -38,6 +38,28 @@ type Resultado struct {
 	VersionClasificador string
 }
 
+// limiteMaximoDelLote acota cuantos asientos procesa un lote.
+const limiteMaximoDelLote = 5000
+
+// limiteDelLote recorta el limite pedido al rango que acepta la consulta y lo
+// devuelve en el tipo que espera el repositorio.
+func limiteDelLote(limite int) int32 {
+	if limite <= 0 {
+		return 500
+	}
+	if limite > limiteMaximoDelLote {
+		return limiteMaximoDelLote
+	}
+	return int32(limite)
+}
+
+// esUUIDValido informa si el texto tiene forma de identificador. Un texto que
+// no lo es simplemente no tiene nombre asociado, no es un fallo de la consulta.
+func esUUIDValido(texto string) bool {
+	_, err := uuid.Parse(texto)
+	return err == nil
+}
+
 // Enriquecer procesa un lote de asientos nuevos y escribe la copia enriquecida.
 func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error) {
 	if limite <= 0 {
@@ -63,7 +85,7 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 			}
 			anclas, err := q.AnclasPendientes(ctx, repositorio.AnclasPendientesParams{
 				DespuesDe: cursor.UltimoEntryID,
-				Limite:    int32(limite),
+				Limite:    limiteDelLote(limite),
 			})
 			if err != nil {
 				return Resultado{}, fmt.Errorf("inteligencia: leer asientos pendientes: %w", err)
@@ -195,7 +217,7 @@ func (s *Servicio) Huella(ctx context.Context) (string, error) {
 		if fila.TransaccionID.Valid {
 			transaccion = uuid.UUID(fila.TransaccionID.Bytes).String()
 		}
-		fmt.Fprintf(suma,
+		_, _ = fmt.Fprintf(suma,
 			"%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%t\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
 			fila.UsuarioID, transaccion, fila.EntryAncla,
 			fila.OcurridoEn.Time.UTC().Format(time.RFC3339Nano), fila.Moneda, fila.Direccion,
@@ -386,7 +408,7 @@ SELECT e.razon_social
  LIMIT 1`
 
 func nombreDeParte(ctx context.Context, tx transaccionDeInteligencia, parteID string) (string, bool, error) {
-	if _, err := uuid.Parse(parteID); err != nil {
+	if !esUUIDValido(parteID) {
 		return "", false, nil
 	}
 	var nombre string

@@ -8,6 +8,7 @@ import (
 // Canal es el origen de un pago. La rama de la cascada depende de él.
 type Canal string
 
+// Canales de pago que la cascada distingue.
 const (
 	CanalLlave Canal = "llave"
 	CanalQR    Canal = "qr"
@@ -16,6 +17,7 @@ const (
 // TipoDestino distingue un comercio de una persona.
 type TipoDestino string
 
+// Tipos de destino que la cascada reconoce.
 const (
 	DestinoComercio TipoDestino = "comercio"
 	DestinoPersona  TipoDestino = "persona"
