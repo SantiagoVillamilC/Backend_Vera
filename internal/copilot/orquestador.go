@@ -36,6 +36,7 @@ type SalidaOrquestador struct {
 	Limitado                    bool
 	AccionPendiente             *AccionOrquestador
 	RespuestaDelBackend         bool
+	MotivoRecuperacion          string
 }
 
 // RegistroCiclo persiste un turno del modelo y sus resultados como un bloque atómico.
@@ -167,6 +168,14 @@ func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (resp
 		return SalidaOrquestador{}, err
 	}
 	salida.Llamadas = funcionesPrevias
+	if previas == 0 {
+		if aclaracion := aclaracionImporteAislado(historial); aclaracion != "" {
+			salida.Texto = aclaracion
+			salida.RespuestaDelBackend = true
+			registro := RegistroCiclo{Respuesta: RespuestaIA{Turno: TurnoIA{Rol: "asistente", Partes: []ParteIA{{Texto: aclaracion}}}}, Modelo: "backend/aclaracion-importe-v1", VersionInstrucciones: VersionInstruccionesVera}
+			return o.finalizar(ctx, sesion, registro, salida, uuid.Nil)
+		}
+	}
 	for vuelta := previas + 1; vuelta <= 5; vuelta++ {
 		if err := ctx.Err(); err != nil {
 			return SalidaOrquestador{}, err

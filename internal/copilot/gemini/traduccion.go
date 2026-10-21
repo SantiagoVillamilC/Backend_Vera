@@ -26,7 +26,7 @@ func traducirSolicitud(s copilot.SolicitudIA, temperatura float32) ([]*genai.Con
 		cfg.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: s.Instrucciones}}}
 	}
 	for _, categoria := range []genai.HarmCategory{genai.HarmCategoryHarassment, genai.HarmCategoryHateSpeech, genai.HarmCategorySexuallyExplicit, genai.HarmCategoryDangerousContent} {
-		cfg.SafetySettings = append(cfg.SafetySettings, &genai.SafetySetting{Category: categoria, Threshold: genai.HarmBlockThresholdBlockMediumAndAbove})
+		cfg.SafetySettings = append(cfg.SafetySettings, &genai.SafetySetting{Category: categoria, Threshold: genai.HarmBlockThresholdBlockOnlyHigh})
 	}
 	declaraciones := make([]*genai.FunctionDeclaration, 0, len(s.Funciones))
 	nombres := make(map[string]bool)

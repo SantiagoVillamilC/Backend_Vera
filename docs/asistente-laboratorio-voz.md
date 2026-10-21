@@ -35,12 +35,16 @@ verificar captura, formato, transporte, catálogo, traza y reproducción; no mid
 la capacidad de Gemini para entender lo que dices. El modo normal usa su
 transcripción real. No uses datos personales en las pruebas.
 
-La sesión tiene **20 solicitudes** por defecto, compartidas entre texto,
+La sesión tiene **120 solicitudes físicas** por defecto, compartidas entre texto,
 transcripción y síntesis de voz. Un turno hablado añade una llamada de
 transcripción y una de síntesis a las necesarias para contestar. La síntesis
 ocurre después de mostrar el texto. Repetir la última respuesta con la misma
 voz reutiliza el audio en memoria; cambiar la voz vuelve a generarlo. La demo
 usa únicamente la voz del navegador y no consume Google.
+Una interacción de voz puede consumir tres, cuatro o más solicitudes: 20
+solicitudes no equivalen a 20 turnos. La cabecera distingue turnos respondidos
+y solicitudes físicas. El límite local da margen para ensayar 20 turnos,
+pero no amplía las cuotas que Google imponga al proyecto o a TTS.
 El navegador muestra el consumo; «Nueva conversación» borra el
 contexto pero conserva ese contador y las esperas por cuota de Google. Ante
 timeout o indisponibilidad hay como máximo un reintento automático, contado
@@ -186,7 +190,7 @@ El modo interactivo arranca con `-intervalo=0`: no impone una pausa entre
 transcripción, vueltas del modelo y síntesis. Antes usaba un intervalo mínimo
 de 12 segundos entre inicios de solicitudes, incluso entre modelos distintos.
 El evaluador por lotes conserva su configuración de intervalo. Se mantiene el
-tope de 20 solicitudes, sin reintentos ni ampliación de cuota ante un 429.
+tope local de 120 solicitudes, sin reenvíos ni ampliación de cuota ante un 429.
 
 La voz usa Flash-Lite TTS, orientado a menor latencia, con las mismas opciones
 de voz. El texto aparece antes del audio y la reproducción empieza al recibir
@@ -225,7 +229,7 @@ Referencias del navegador:
   `America/Los_Angeles`, incluido horario de verano. Una espera sugerida no
   garantiza que Google conceda capacidad al terminar.
 - El navegador deja de bloquear toda la sesión por un 429 temporal. Muestra
-  una cuenta regresiva y vuelve a habilitar el reintento manual. Agotar las 20
+  una cuenta regresiva y vuelve a habilitar el reintento manual. Agotar las 120
   llamadas locales sigue siendo un límite distinto. Nueva conversación no
   reinicia ninguno de esos presupuestos.
 - «Reintentar respuesta» conserva la pregunta o transcripción después de un
@@ -242,9 +246,33 @@ Referencias del navegador:
 - Al crear una propuesta válida, el laboratorio cierra con una plantilla del
   backend: relee acción, monto y vencimiento desde el servidor y exige confirmar
   en la tarjeta. No vuelve al modelo para redactar esa confirmación. La interfaz
-  identifica «CONFIRMACIÓN DEL BACKEND» y sigue sin ejecutar dinero. Es una
+  identifica «RESPUESTA DEL BACKEND» y sigue sin ejecutar dinero. Es una
   opción del orquestador habilitada por el perfil del laboratorio; el resto de
   integraciones conserva su configuración actual.
+
+### Conversación continua: revisión del 20 de octubre, versión v7
+
+La [revisión detallada](asistente-revision-conversacion.md) conserva las corridas
+antes/después y sus límites. El laboratorio ofrece continuidad explícita ante
+bloqueo, salida inválida o indisponibilidad: si hay lecturas autorizadas del
+turno actual, construye una respuesta con sus importes enteros; si no las hay,
+informa que no pudo generar la respuesta y permite continuar. Se etiqueta como
+backend con `motivo_recuperacion`; no se atribuye al modelo ni se contabiliza
+como un éxito normal de Gemini. No reenvía el contenido bloqueado, no cambia
+de modelo y no oculta cuota, credenciales ni cancelación.
+
+Al comenzar otra grabación se ocultan y limpian la transcripción y el clip
+anteriores. Un fallo de ASR tiene código `TranscriptionBlocked`, distinto de
+un bloqueo al responder. «Reintentar transcripción» reutiliza el clip en
+memoria. Si ASR ya tuvo éxito, «Reintentar respuesta» conserva el texto y no
+repite la transcripción. Una salida JSON de ASR con caracteres de control
+dentro de palabras se rechaza; el laboratorio permite un único nuevo intento
+para salida mal formada, contado en el presupuesto. Un bloqueo de contenido
+no provoca ese reintento.
+
+El orquestador aclara importes aislados como «pues cincuenta» antes de consultar
+al modelo: pide escala e intención, sin herramientas ni propuesta. Esto no es
+un parser general de lenguaje natural ni sustituye la confirmación de la app.
 
 En la revisión real del 20 de octubre se verificaron audio sintético →
 transcripción → respuesta → voz, saldo, límites, movimientos y resumen. Se

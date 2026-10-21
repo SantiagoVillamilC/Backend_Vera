@@ -17,6 +17,7 @@ func TestTranscribirSinHerramientasNiHistorial(t *testing.T) {
 		{"silencio", `{"transcripcion":""}`, ErrAudioNoEntendido},
 		{"blancos", `{"transcripcion":"   "}`, ErrAudioNoEntendido},
 		{"malformado", `no es JSON`, ErrRespuestaIA},
+		{"controles en palabras", `{"transcripcion":"Hola, Vera, \u0019c\u0013mo est\u0015s?"}`, ErrRespuestaIA},
 		{"extra", `{"transcripcion":"saldo","accion":"ejecutar"}`, ErrRespuestaIA},
 		{"largo", `{"transcripcion":"` + strings.Repeat("a", 6001) + `"}`, ErrRespuestaIA},
 	} {

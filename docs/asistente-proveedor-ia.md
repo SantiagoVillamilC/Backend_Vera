@@ -45,9 +45,11 @@ la presencia de la clave. No hay modelo fijado en código ni credenciales en el 
   entregar al catálogo enteros redondeados. El catálogo validará el esquema y la
   semántica de cada argumento en SCRUM-123.
 - Máximo 2048 tokens de salida, un candidato y filtros de seguridad configurados
-  en `BLOCK_MEDIUM_AND_ABOVE`. No devuelve razonamiento interno. Los tokens de
+  en `BLOCK_ONLY_HIGH` para reducir falsos positivos en conversación normal sin
+  desactivar los filtros. No devuelve razonamiento interno. Los tokens de
   salida incluyen los de pensamiento cuando el proveedor los informa.
-- Tres intentos como máximo ante timeout, HTTP 408/429 o 5xx. Esperas de 200–300 ms
+- Tres intentos como máximo ante timeout, HTTP 408 o 5xx. Un 429 no se reintenta.
+  Esperas de 200–300 ms
   y 400–600 ms (exponencial con jitter). Reintentos internos del SDK y continuación
   automática desactivados. Truncamiento, continuación y respuesta vacía se rechazan
   como respuesta incompleta, sin ejecutar llamadas parciales.

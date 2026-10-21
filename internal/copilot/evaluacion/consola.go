@@ -31,6 +31,8 @@ type Consola struct {
 	ahora               func() time.Time
 	proveedor           copilot.ProveedorIA
 	recuperar           bool
+	continuidad         bool
+	turnos              int
 	pausaChat, pausaVoz pausaProveedor
 }
 
@@ -57,9 +59,17 @@ func NuevaConsola(cfg ConfigReal, p copilot.ProveedorIA, observar func(EventoCon
 // Consumo informa solicitudes al proveedor, no mensajes escritos por el usuario.
 func (c *Consola) Consumo() (int, int) { return c.presupuesto.solicitudes, c.presupuesto.max }
 
+// TurnosCompletados cuenta respuestas, distinguidas de las solicitudes físicas al proveedor.
+func (c *Consola) TurnosCompletados() int { return c.turnos }
+
 // Transcribir comparte con el chat el presupuesto de solicitudes del laboratorio.
 func (c *Consola) Transcribir(ctx context.Context, audio *copilot.AudioIA) (string, error) {
-	return copilot.TranscribirAudio(ctx, c.proveedor, audio)
+	texto, err := copilot.TranscribirAudio(ctx, c.proveedor, audio)
+	// Repetir sólo una salida mal formada; nunca un rechazo de contenido/cuota.
+	if c.recuperar && errors.Is(err, copilot.ErrRespuestaIA) && ctx.Err() == nil {
+		return copilot.TranscribirAudio(ctx, c.proveedor, audio)
+	}
+	return texto, err
 }
 
 // Sintetizar reserva una llamada del mismo presupuesto antes de generar voz.
@@ -115,8 +125,21 @@ func (c *Consola) Preguntar(ctx context.Context, pregunta string) (copilot.Salid
 	ctx = identidad.ConIdentidad(ctx, identidad.Identidad{ParteID: parteEscenario.String(), UsuarioID: usuarioEscenario.String()})
 	salida, err := o.Responder(ctx, copilot.EntradaOrquestador{ConversacionID: conversacionEscenario, MensajeID: uuid.New()})
 	if err != nil {
+		respaldo := respuestaDeLecturas(c.memoria.historial[inicio:])
 		c.memoria.historial = c.memoria.historial[:inicio]
 		*c.memoria.memoriaEscenario = estadoAnterior
+		if c.continuidad && ctx.Err() == nil && falloRecuperable(err) {
+			if respaldo == "" {
+				respaldo = "No pude generar una respuesta para este mensaje. No se ha enviado dinero. Podemos continuar: puedo ayudarte a consultar saldo, límites y movimientos o preparar una propuesta que debes confirmar en la app."
+			}
+			c.memoria.historial = append(c.memoria.historial,
+				copilot.TurnoIA{Rol: "usuario", Partes: []copilot.ParteIA{{Texto: pregunta}}},
+				copilot.TurnoIA{Rol: "asistente", Partes: []copilot.ParteIA{{Texto: respaldo}}})
+			c.turnos++
+			return copilot.SalidaOrquestador{Texto: respaldo, RespuestaDelBackend: true, MotivoRecuperacion: motivoRecuperacion(err), VersionInstrucciones: copilot.VersionInstruccionesVera}, nil
+		}
+	} else {
+		c.turnos++
 	}
 	return salida, err
 }

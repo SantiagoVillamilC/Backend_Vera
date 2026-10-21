@@ -37,6 +37,7 @@ type estado struct {
 	VozFlujo   bool   `json:"voz_flujo"`
 	EsperaChat int    `json:"espera_chat_segundos"`
 	EsperaVoz  int    `json:"espera_voz_segundos"`
+	Turnos     int    `json:"turnos"`
 }
 
 type tarjeta struct {
@@ -51,6 +52,7 @@ type turno struct {
 	Accion              *tarjeta                   `json:"accion_pendiente"`
 	Estado              estado                     `json:"estado"`
 	RespuestaDelBackend bool                       `json:"respuesta_del_backend"`
+	MotivoRecuperacion  string                     `json:"motivo_recuperacion,omitempty"`
 }
 
 type servidor struct {
@@ -72,7 +74,7 @@ func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string,
 		return nil, errors.New("laboratorio: host y token obligatorios")
 	}
 	s := &servidor{modelo: cfg.Modelo, token: token, puerto: puerto, demo: demo, voz: voz}
-	s.consola, err = evaluacion.NuevaConsola(cfg, p, func(e evaluacion.EventoConsola) { s.eventos = append(s.eventos, e) }, time.Now, evaluacion.ConRecuperacion())
+	s.consola, err = evaluacion.NuevaConsola(cfg, p, func(e evaluacion.EventoConsola) { s.eventos = append(s.eventos, e) }, time.Now, evaluacion.ConRecuperacion(), evaluacion.ConContinuidadConversacion())
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +135,7 @@ func (s *servidor) estado() estado {
 	u, m := s.consola.Consumo()
 	chat, voz := s.consola.Esperas()
 	_, flujo := s.voz.(copilot.SintetizadorVozFlujo)
-	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil, VozFlujo: flujo, EsperaChat: chat, EsperaVoz: voz}
+	return estado{Modelo: s.modelo, Version: copilot.VersionInstruccionesVera, Usadas: u, Maximo: m, Demo: s.demo, VozNatural: s.voz != nil, VozFlujo: flujo, EsperaChat: chat, EsperaVoz: voz, Turnos: s.consola.TurnosCompletados()}
 }
 
 func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
@@ -180,6 +182,10 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 		defer clear(audio.Datos)
 		texto, err := s.consola.Transcribir(ctx, audio)
 		if err != nil {
+			if errors.Is(err, copilot.ErrBloqueoIA) {
+				api.WriteError(w, 422, "TranscriptionBlocked", "Google no permitió transcribir este clip. La conversación se conserva. Puedes reintentar el audio o escribir tu pregunta.", nil)
+				return
+			}
 			s.error(w, err)
 			return
 		}
@@ -209,7 +215,7 @@ func (s *servidor) api(w http.ResponseWriter, r *http.Request) {
 			accion = &tarjeta{a.Monto.PresentarUnidadesMayores() + " COP", a.NombreMostrado, a.RequiereCodigo}
 		}
 		s.ultimoTexto = respuesta.Texto
-		api.WriteData(w, 200, turno{respuesta.Texto, s.eventos, accion, s.estado(), respuesta.RespuestaDelBackend}, nil)
+		api.WriteData(w, 200, turno{respuesta.Texto, s.eventos, accion, s.estado(), respuesta.RespuestaDelBackend, respuesta.MotivoRecuperacion}, nil)
 	}
 }
 

@@ -1,4 +1,4 @@
-﻿param([switch]$Demo, [ValidateRange(1,300)][int]$MaxSolicitudes = 20)
+﻿param([switch]$Demo, [ValidateRange(1,300)][int]$MaxSolicitudes = 120)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Write-Host 'Necesitas Docker Desktop instalado y abierto.'; exit 1 }

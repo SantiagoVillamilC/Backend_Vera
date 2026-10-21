@@ -80,3 +80,17 @@ Panel principal suavemente redondeado; botones y tarjeta de propuesta comparten 
 - No presentar el modo demo como transcripción real: devuelve una pregunta y respuesta fijas sin Google, aunque permite probar la captura local.
 - No afirmar validación de micrófono físico, calidad de transcripción real ni compatibilidad móvil a partir de la revisión de escritorio.
 - Mantener el alcance local: audio e historial permanecen en memoria de esta herramienta; en modo Gemini el audio se envía al proveedor para transcribir. La clave permanece en el servidor y nunca forma parte de la interfaz.
+
+## Revisión de continuidad v7
+
+La cabecera separa turnos y solicitudes físicas (120 por defecto). Las respuestas
+de preparación, aclaración y recuperación se identifican como «RESPUESTA DEL
+BACKEND». Una recuperación conserva el motivo técnico sin afirmar que Gemini
+contestó correctamente. Los importes de respaldo proceden únicamente de las
+lecturas validadas del turno que falló.
+
+Una nueva grabación limpia la transcripción anterior antes de pedir permiso al
+micrófono. Si falla ASR, se puede reintentar el mismo clip; si falla el chat después
+de ASR, se reintenta sólo la respuesta. La cuota de TTS no bloquea escribir o
+transcribir con el modelo de chat. El respaldo de voz del navegador permanece
+activado por defecto y no consume otra solicitud a Google.

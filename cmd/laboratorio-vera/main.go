@@ -33,7 +33,7 @@ func main() {
 func run() error {
 	addr := flag.String("addr", "127.0.0.1:8787", "dirección de escucha; en Docker usar 0.0.0.0:8787 con publicación sólo local")
 	demo := flag.Bool("demo", false, "proveedor y transcripción simulados; sin llamadas a Gemini")
-	maximo := flag.Int("max-solicitudes", 20, "máximo total de llamadas de texto y transcripción")
+	maximo := flag.Int("max-solicitudes", 120, "máximo total de solicitudes físicas: chat, transcripción, voz y reintentos; no equivale a turnos")
 	intervalo := flag.Duration("intervalo", 0, "pausa opcional entre llamadas; el laboratorio interactivo no añade espera")
 	confirmado := flag.Bool("nivel-gratuito-confirmado", false, "confirma el proyecto y modelo Free Tier")
 	flag.Parse()
