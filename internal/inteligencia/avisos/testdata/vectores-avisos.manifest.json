@@ -1,0 +1,14 @@
+{
+  "archivo": "vectores-avisos.json",
+  "sha256_archivo": "926ca712b8ec6ba6bb00f955aa5c5f1d8e7384e697bccfb9f92119cde0160faf",
+  "sha256_por_caso": {
+    "caida_ingreso-caida_ingreso": "03853d9b4583db0e7181e0a74adafab289315cf5677bf584212d225f2150ee8a",
+    "categoria_sobre_media-categoria_sobre_media": "8778e67aae045a7992bcdbcf676913bba39168e510848c41a0b564b498bbb57f",
+    "categoria_sobre_media-presupuesto_anticipado": "5bfbe055cc6583685cebb4e442cbc392ab4150bb045d2f4d543890d9bdff320d",
+    "cobro_nuevo-cobro_nuevo": "78b57c117f0e0eb081daed79bdd4144cb4f3615cee72eaa2e46af3c6358b228c",
+    "pago_no_alcanza-pago_no_alcanza": "ba99a6d04023525db2a8bddeb00eab107c069f6adcf7cd29ced50f355a11cf0f",
+    "presupuesto_anticipado-categoria_sobre_media": "851d33690ec3adf6db8a53d918afac900b142ea82aa4783dcc871ee2051c9df7",
+    "presupuesto_anticipado-presupuesto_anticipado": "a4cbc2a402e497df2fff4affa1faccf546e6d249d8fd157f05cffb92be2cc281"
+  },
+  "version": 1
+}

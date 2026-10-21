@@ -82,7 +82,16 @@ type NucleoHandler interface {
 	TransferirInterbancaria(http.ResponseWriter, *http.Request)
 }
 
-// DependenciasAuth agrupa los colaboradores del módulo de autenticación que main inyecta.
+// InteligenciaHandler agrupa las operaciones del contexto de inteligencia.
+type InteligenciaHandler interface {
+	ListarMovimientosInteligencia(http.ResponseWriter, *http.Request, api.ListarMovimientosInteligenciaParams)
+	CorregirMovimientoInteligencia(http.ResponseWriter, *http.Request, string)
+	ResumenInteligencia(http.ResponseWriter, *http.Request, api.ResumenInteligenciaParams)
+	ListarAvisosInteligencia(http.ResponseWriter, *http.Request, api.ListarAvisosInteligenciaParams)
+	DescartarAvisoInteligencia(http.ResponseWriter, *http.Request, string)
+}
+
+// DependenciasAuth agrupa los colaboradores que main inyecta en el router.
 type DependenciasAuth struct {
 	Identidad     IdentidadDeLaPeticion
 	Auth          AuthHandler
@@ -105,6 +114,8 @@ type DependenciasAuth struct {
 	PhoneChange   PhoneChangeHandler
 	Companies     CompaniesHandler
 	Destinatarios *DestinatariosHandler
+	Inteligencia  InteligenciaHandler
+	Metricas      MetricasDelRouter
 }
 
 // servidorV1 implementa api.ServerInterface delegando cada método al handler de su módulo.
@@ -116,6 +127,7 @@ type servidorV1 struct {
 	companies     CompaniesHandler
 	nucleo        NucleoHandler
 	destinatarios *DestinatariosHandler
+	inteligencia  InteligenciaHandler
 }
 
 func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request, _ api.ConsultarDestinatarioParams) {
@@ -124,6 +136,46 @@ func (s servidorV1) ConsultarDestinatario(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.destinatarios.ConsultarDestinatario(w, r)
+}
+
+func (s servidorV1) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params api.ListarMovimientosInteligenciaParams) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.ListarMovimientosInteligencia(w, r, params)
+}
+
+func (s servidorV1) ResumenInteligencia(w http.ResponseWriter, r *http.Request, params api.ResumenInteligenciaParams) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.ResumenInteligencia(w, r, params)
+}
+
+func (s servidorV1) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionID string) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.CorregirMovimientoInteligencia(w, r, transaccionID)
+}
+
+func (s servidorV1) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params api.ListarAvisosInteligenciaParams) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.ListarAvisosInteligencia(w, r, params)
+}
+
+func (s servidorV1) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.DescartarAvisoInteligencia(w, r, id)
 }
 
 // Los metodos del asistente Vera aun no tienen handler: responden 501 dentro del envelope.

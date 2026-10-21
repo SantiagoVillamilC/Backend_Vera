@@ -46,7 +46,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 		MaxAge:         300,
 	}))
-	r.Use(RateLimitExempting([]string{"/healthz", "/readyz"}, rateLimitRequests, rateLimitWindow))
+	r.Use(RateLimitExempting([]string{"/healthz", "/readyz", "/metrics"}, rateLimitRequests, rateLimitWindow))
 	r.Use(MethodNotAllowedEnvelope)
 
 	// /copilot sigue con NewService(nil): decisión S7 pendiente, no se toca en esta unidad.
@@ -54,7 +54,7 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
 	nucleoHandler := nucleo.NewHandler(nucleoServicio, pseURL...)
-	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler, destinatarios: authDeps.Destinatarios}
+	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler, destinatarios: authDeps.Destinatarios, inteligencia: authDeps.Inteligencia}
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
@@ -86,6 +86,20 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 		r.Use(RequireCustodio(autenticadorCustodio))
 		r.Post("/v1/depositos/confirmaciones", nucleoHandler.ConfirmarDeposito)
 	})
+
+	// Métricas: superficie operativa, fuera del OpenAPI y con su propio token. Solo se monta cuando
+	// main inyecta el handler, de modo que con la bandera apagada la ruta no existe.
+	if authDeps.Metricas.Handler != nil {
+		if authDeps.Metricas.Autenticador == nil {
+			panic(ErrMetricasSinToken)
+		}
+		r.Group(func(r chi.Router) {
+			r.Use(Timeout(publicTimeout))
+			r.Use(RequireMetricas(authDeps.Metricas.Autenticador))
+			r.Method(http.MethodGet, "/metrics", authDeps.Metricas.Handler)
+			r.Method(http.MethodHead, "/metrics", authDeps.Metricas.Handler)
+		})
+	}
 
 	// Los handlers por defecto de chi responden texto plano, así que el 404 va dentro del envelope.
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {

@@ -8,3 +8,6 @@ custodio.db
 custodio.db-journal
 simulador-custodia.db*
 simulador-riel.db*
+
+# Salidas de la prueba de carga: access firmados y resúmenes de k6, nunca se versionan.
+out/
