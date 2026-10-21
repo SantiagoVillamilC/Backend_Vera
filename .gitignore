@@ -2,8 +2,12 @@
 .vagrant/
 
 # Variables de entorno locales con secretos. .env.example sí se versiona como plantilla.
-.env
-.env.local
+.env*
+!.env.example
+
+# Lanzadores personales de pruebas: conservar sólo en cada máquina.
+*.cmd
+/Laboratorio-Vera.ps1
 custodio.db
 custodio.db-journal
 simulador-custodia.db*

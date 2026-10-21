@@ -1,10 +1,23 @@
 # Laboratorio local de texto y voz de Vera
 
-Abre Docker Desktop y haz doble clic en **`Probar-Vera-Voz.cmd`**. El navegador
-se abre cuando el servidor está listo. Mantén la ventana de CMD abierta; Ctrl+C
-la detiene. El lanzador carga `.env.local` sin enviar la clave al navegador.
-Prefiere el puerto 8787; si está ocupado, elige otro disponible y abre la dirección
-correspondiente automáticamente.
+Los accesos `.cmd` y `Laboratorio-Vera.ps1` son personales: permanecen locales,
+ignorados por Git. Si ya los tienes puedes seguir abriéndolos con Docker Desktop.
+Para un clon nuevo, ejecuta el laboratorio directamente desde la raíz del backend.
+Crea `.env.local` a partir de `.env.example` si todavía no existe y completa
+`GEMINI_API_KEY`, `VERA_MODELO` y, para Catalina, `CARTESIA_API_KEY`.
+Los espacios de la plantilla quedan vacíos; nunca subas el archivo local.
+
+Desde PowerShell con Docker Desktop abierto:
+
+```powershell
+docker run --rm --env-file .env.local -p 127.0.0.1:8787:8787 -v "${PWD}:/src" -v vera117-gomod:/go/pkg/mod -v vera117-gocache:/root/.cache/go-build -w /src golang:1.27.0 go run ./cmd/laboratorio-vera -addr 0.0.0.0:8787 -nivel-gratuito-confirmado
+```
+
+Abre el enlace completo que imprime el servidor y mantén la terminal abierta.
+Ctrl+C lo detiene. El comando carga las variables sin enviar las claves al
+navegador. Si el puerto 8787 ya está ocupado, publica otro puerto local y usa ese
+mismo número en `-addr`. Este comando usa Catalina/Gemini y no inicia Dora local;
+el lanzador personal o la configuración de Kokoro descrita abajo sí la incluyen.
 
 En la pantalla puedes escribir, pulsar **Hablar** y después **Detener y enviar**,
 ver la transcripción y revisar las herramientas utilizadas. **Escuchar respuesta**
@@ -39,7 +52,7 @@ y movimientos pertenecen al sandbox. Ninguna propuesta ejecuta dinero.
 Para probar la pantalla sin cuota:
 
 ```powershell
-.\Probar-Vera-Voz.cmd -Demo
+docker run --rm -p 127.0.0.1:8787:8787 -v "${PWD}:/src" -v vera117-gomod:/go/pkg/mod -v vera117-gocache:/root/.cache/go-build -w /src golang:1.27.0 go run ./cmd/laboratorio-vera -addr 0.0.0.0:8787 -demo
 ```
 
 La demo tiene una pregunta y transcripción fijas («¿Cuánto tengo?»). Sirve para
@@ -66,7 +79,7 @@ bloqueos; tampoco audio que ya comenzó a reproducirse. No hay cambio de modelo.
 Los reintentos de Gemini siguen esa regla; el respaldo local de disponibilidad
 no es otro intento a Google y no consume su presupuesto. También funciona si se
 agotó el presupuesto local de Google y ya existe una respuesta escrita.
-Para un límite distinto: `Probar-Vera-Voz.cmd -MaxSolicitudes 10`.
+Para un límite distinto añade `-max-solicitudes 10` al comando Go.
 
 Catalina tiene un límite preventivo independiente de **5000 caracteres por sesión**.
 Se reserva el texto Unicode antes de cada llamada, incluso si falla, y se muestra

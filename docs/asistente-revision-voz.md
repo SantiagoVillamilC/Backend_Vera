@@ -74,7 +74,9 @@ laboratorio habitual conserva audio e historial exclusivamente en memoria.
 
 ## Uso
 
-Cierra la ventana del laboratorio anterior y vuelve a abrir `Probar-Vera-Voz.cmd`.
+Cierra la instancia anterior y vuelve a iniciar el laboratorio con el comando
+de la [guía de voz](asistente-laboratorio-voz.md). Si conservas el acceso personal
+`Probar-Vera-Voz.cmd`, también puedes usarlo: no se distribuye en el repositorio.
 La primera preparación descarga pesos/dependencias; las siguientes reutilizan
 la imagen. Mantén Docker Desktop abierto. Puedes elegir Aoede con respaldo
 automático o Dora directamente para una identidad vocal constante sin cuota TTS.

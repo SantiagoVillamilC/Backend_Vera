@@ -320,7 +320,7 @@ validación del comportamiento de Gemini ni permite cerrar todavía la HU.
 
 ## Consola para pruebas manuales
 
-`Probar-Vera.cmd` abre una conversación interactiva con Gemini y herramientas
+`cmd/consola-vera` abre una conversación interactiva con Gemini y herramientas
 financieras ficticias. Muestra función y argumentos, resultado validado del
 catálogo y respuesta final del modelo, manteniendo contexto y un límite de
 20 solicitudes por sesión. La [guía de consola](asistente-consola.md) explica

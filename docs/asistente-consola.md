@@ -1,14 +1,20 @@
 # Probar Vera desde una consola
 
-También tienes una [pantalla local con micrófono y lectura en voz alta](asistente-laboratorio-voz.md):
-abre `Probar-Vera-Voz.cmd` con Docker Desktop listo.
+También tienes una [pantalla local con micrófono y lectura en voz alta](asistente-laboratorio-voz.md).
+Los accesos `.cmd` y su auxiliar PowerShell son personales, están ignorados y no
+se distribuyen en Git. Si ya los tienes localmente, puedes seguir utilizándolos.
 
-Con Docker Desktop abierto, haz doble clic en **`Probar-Vera.cmd`**, en la raíz
-del backend. Escribe tu pregunta cuando aparezca `Tú >` y pulsa Enter.
-El arranque inicial puede tardar mientras Go compila el programa.
+Desde la raíz del backend, con Docker Desktop abierto, crea `.env.local` a partir
+de `.env.example` si todavía no existe. Completa `GEMINI_API_KEY` y `VERA_MODELO`
+sólo en ese archivo local; las claves y el modelo permanecen vacíos en la plantilla.
+Después ejecuta desde PowerShell:
 
-El archivo carga la clave y el modelo desde `.env.local`, que ya tienes
-configurado y está excluido de Git. La consola usa Gemini real con herramientas
+```powershell
+docker run --rm -it --env-file .env.local -v "${PWD}:/src" -v vera117-gomod:/go/pkg/mod -v vera117-gocache:/root/.cache/go-build -w /src golang:1.27.0 go run ./cmd/consola-vera -nivel-gratuito-confirmado
+```
+
+Escribe tu pregunta cuando aparezca `Tú >` y pulsa Enter. El arranque inicial
+puede tardar mientras Go compila. La consola usa Gemini real con herramientas
 de prueba: saldo, movimientos y destinatarios son **ficticios**. No consulta
 la base de datos ni puede ejecutar transferencias. Usa datos inventados en tus
 preguntas; los argumentos y resultados se muestran en la terminal.
@@ -62,7 +68,7 @@ contexto parcial, conservando las preguntas anteriores y la cuota consumida.
 Desde PowerShell, situado en la raíz del backend:
 
 ```powershell
-.\Probar-Vera.cmd -demo
+docker run --rm -it -v "${PWD}:/src" -v vera117-gomod:/go/pkg/mod -v vera117-gocache:/root/.cache/go-build -w /src golang:1.27.0 go run ./cmd/consola-vera -demo
 ```
 
 Esta demo ejecuta un ejemplo fijo con proveedor simulado, sin clave ni llamadas
@@ -71,7 +77,7 @@ a Google. Usa el mismo catálogo y orquestador. Puedes ver su salida guardada en
 
 ## Límite y ejecución manual
 
-El lanzador abre una sesión de **máximo 20 solicitudes**, con pausa de 12
+La consola abre una sesión de **máximo 20 solicitudes**, con pausa de 12
 segundos entre ellas y sin reintentos. Una pregunta suele necesitar varias
 llamadas. `/nuevo` no restablece el límite. Un rechazo de credenciales o cuota
 de Google detiene la sesión. No activa facturación ni cambia de modelo.
@@ -79,7 +85,7 @@ de Google detiene la sesión. No activa facturación ni cambia de modelo.
 Para ajustar explícitamente el límite al iniciar:
 
 ```powershell
-.\Probar-Vera.cmd -max-solicitudes 10
+docker run --rm -it --env-file .env.local -v "${PWD}:/src" -v vera117-gomod:/go/pkg/mod -v vera117-gocache:/root/.cache/go-build -w /src golang:1.27.0 go run ./cmd/consola-vera -nivel-gratuito-confirmado -max-solicitudes 10
 ```
 
 Si tienes Go 1.27 y las variables ya cargadas en tu entorno:
@@ -89,7 +95,7 @@ go run ./cmd/consola-vera -nivel-gratuito-confirmado
 go run ./cmd/consola-vera -demo
 ```
 
-El binario no carga archivos dotenv por sí mismo: el lanzador los carga con
-Docker. `-pregunta "¿Cuánto tengo?"` permite ejecutar una sola pregunta y salir.
+El binario no carga archivos dotenv por sí mismo: Docker los carga con
+`--env-file`. `-pregunta "¿Cuánto tengo?"` permite ejecutar una sola pregunta y salir.
 La consola no ejecuta el conjunto completo de evaluación. Las pruebas locales
 usan proveedores escritos a mano y la demo; no consumen cuota.
