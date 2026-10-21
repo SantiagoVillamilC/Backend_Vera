@@ -633,6 +633,210 @@ func (e ErrorResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaAvisoTipo.
+const (
+	CaidaIngreso          InteligenciaAvisoTipo = "caida_ingreso"
+	CategoriaSobreMedia   InteligenciaAvisoTipo = "categoria_sobre_media"
+	CobroNuevo            InteligenciaAvisoTipo = "cobro_nuevo"
+	PagoNoAlcanza         InteligenciaAvisoTipo = "pago_no_alcanza"
+	PresupuestoAnticipado InteligenciaAvisoTipo = "presupuesto_anticipado"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoTipo enum.
+func (e InteligenciaAvisoTipo) Valid() bool {
+	switch e {
+	case CaidaIngreso:
+		return true
+	case CategoriaSobreMedia:
+		return true
+	case CobroNuevo:
+		return true
+	case PagoNoAlcanza:
+		return true
+	case PresupuestoAnticipado:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaAvisoDescarteResponseSuccess.
+const (
+	InteligenciaAvisoDescarteResponseSuccessTrue InteligenciaAvisoDescarteResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoDescarteResponseSuccess enum.
+func (e InteligenciaAvisoDescarteResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaAvisoDescarteResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaAvisosResponseSuccess.
+const (
+	InteligenciaAvisosResponseSuccessTrue InteligenciaAvisosResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisosResponseSuccess enum.
+func (e InteligenciaAvisosResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaAvisosResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaCorreccionResponseSuccess.
+const (
+	InteligenciaCorreccionResponseSuccessTrue InteligenciaCorreccionResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaCorreccionResponseSuccess enum.
+func (e InteligenciaCorreccionResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaCorreccionResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaMovimientoDireccion.
+const (
+	Entrada InteligenciaMovimientoDireccion = "entrada"
+	Salida  InteligenciaMovimientoDireccion = "salida"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientoDireccion enum.
+func (e InteligenciaMovimientoDireccion) Valid() bool {
+	switch e {
+	case Entrada:
+		return true
+	case Salida:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaMovimientoMoneda.
+const (
+	InteligenciaMovimientoMonedaCOP InteligenciaMovimientoMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientoMoneda enum.
+func (e InteligenciaMovimientoMoneda) Valid() bool {
+	switch e {
+	case InteligenciaMovimientoMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaMovimientoOrigenCategoria.
+const (
+	Catalogo           InteligenciaMovimientoOrigenCategoria = "catalogo"
+	ContraparteInterna InteligenciaMovimientoOrigenCategoria = "contraparte_interna"
+	Lexico             InteligenciaMovimientoOrigenCategoria = "lexico"
+	Llm                InteligenciaMovimientoOrigenCategoria = "llm"
+	Manual             InteligenciaMovimientoOrigenCategoria = "manual"
+	Mcc                InteligenciaMovimientoOrigenCategoria = "mcc"
+	Memoria            InteligenciaMovimientoOrigenCategoria = "memoria"
+	SinCategoria       InteligenciaMovimientoOrigenCategoria = "sin_categoria"
+	Tfidf              InteligenciaMovimientoOrigenCategoria = "tfidf"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientoOrigenCategoria enum.
+func (e InteligenciaMovimientoOrigenCategoria) Valid() bool {
+	switch e {
+	case Catalogo:
+		return true
+	case ContraparteInterna:
+		return true
+	case Lexico:
+		return true
+	case Llm:
+		return true
+	case Manual:
+		return true
+	case Mcc:
+		return true
+	case Memoria:
+		return true
+	case SinCategoria:
+		return true
+	case Tfidf:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaMovimientosResponseSuccess.
+const (
+	InteligenciaMovimientosResponseSuccessTrue InteligenciaMovimientosResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaMovimientosResponseSuccess enum.
+func (e InteligenciaMovimientosResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaMovimientosResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaResumenAlcance.
+const (
+	Billetera InteligenciaResumenAlcance = "billetera"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaResumenAlcance enum.
+func (e InteligenciaResumenAlcance) Valid() bool {
+	switch e {
+	case Billetera:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaResumenMoneda.
+const (
+	InteligenciaResumenMonedaCOP InteligenciaResumenMoneda = "COP"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaResumenMoneda enum.
+func (e InteligenciaResumenMoneda) Valid() bool {
+	switch e {
+	case InteligenciaResumenMonedaCOP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaResumenResponseSuccess.
+const (
+	InteligenciaResumenResponseSuccessTrue InteligenciaResumenResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaResumenResponseSuccess enum.
+func (e InteligenciaResumenResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaResumenResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KycEstadoProducto.
 const (
 	KycEstadoProductoBajoMonto         KycEstadoProducto = "bajo_monto"
@@ -1243,6 +1447,8 @@ type APIError struct {
 	// DepositNotFound (404, la confirmacion del custodio apunta a un deposito inexistente),
 	// ConfirmationConflict (409, la confirmacion no coincide con el deposito),
 	// LateConfirmation (409, el deposito ya no esta pendiente),
+	// CopiaSinReconstruir (409, la fila no tiene destino hasta reconstruir la copia),
+	// CorreccionEnCurso (409, el lote de enriquecimiento tiene el candado),
 	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
 	// AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
 	// AudioNotUnderstood (422, el audio no tiene voz reconocible),
@@ -1705,6 +1911,167 @@ type FieldError struct {
 	Rule  string  `json:"rule"`
 }
 
+// InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya.
+type InteligenciaAviso struct {
+	Accion string `json:"accion"`
+
+	// Clave Identidad estable del aviso dentro de su tipo y periodo.
+	Clave    string             `json:"clave"`
+	CreadoEn time.Time          `json:"creado_en"`
+	Id       openapi_types.UUID `json:"id"`
+
+	// Periodo Primer dia del mes en los avisos mensuales, o la fecha del pago o del primer cobro en los demas.
+	Periodo           string                `json:"periodo"`
+	Porque            string                `json:"porque"`
+	Prioridad         int                   `json:"prioridad"`
+	SeveridadCentavos string                `json:"severidad_centavos"`
+	Texto             string                `json:"texto"`
+	Tipo              InteligenciaAvisoTipo `json:"tipo"`
+	Titulo            string                `json:"titulo"`
+	TransaccionId     *openapi_types.UUID   `json:"transaccion_id"`
+}
+
+// InteligenciaAvisoTipo defines model for InteligenciaAviso.Tipo.
+type InteligenciaAvisoTipo string
+
+// InteligenciaAvisoDescarte defines model for InteligenciaAvisoDescarte.
+type InteligenciaAvisoDescarte struct {
+	DescartadoEn time.Time          `json:"descartado_en"`
+	Id           openapi_types.UUID `json:"id"`
+}
+
+// InteligenciaAvisoDescarteResponse defines model for InteligenciaAvisoDescarteResponse.
+type InteligenciaAvisoDescarteResponse struct {
+	Data    InteligenciaAvisoDescarte                `json:"data"`
+	Error   *map[string]interface{}                  `json:"error"`
+	Meta    *map[string]interface{}                  `json:"meta"`
+	Success InteligenciaAvisoDescarteResponseSuccess `json:"success"`
+}
+
+// InteligenciaAvisoDescarteResponseSuccess defines model for InteligenciaAvisoDescarteResponse.Success.
+type InteligenciaAvisoDescarteResponseSuccess bool
+
+// InteligenciaAvisosResponse defines model for InteligenciaAvisosResponse.
+type InteligenciaAvisosResponse struct {
+	Data    []InteligenciaAviso               `json:"data"`
+	Error   *map[string]interface{}           `json:"error"`
+	Meta    *map[string]interface{}           `json:"meta"`
+	Success InteligenciaAvisosResponseSuccess `json:"success"`
+}
+
+// InteligenciaAvisosResponseSuccess defines model for InteligenciaAvisosResponse.Success.
+type InteligenciaAvisosResponseSuccess bool
+
+// InteligenciaCorreccion defines model for InteligenciaCorreccion.
+type InteligenciaCorreccion struct {
+	// FilasCambiadas Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
+	FilasCambiadas int                    `json:"filas_cambiadas"`
+	Movimiento     InteligenciaMovimiento `json:"movimiento"`
+}
+
+// InteligenciaCorreccionRequest Al menos uno de los dos campos. Una correccion de categoria no renombra y una correccion de nombre no categoriza. sin_categoria no se ofrece.
+type InteligenciaCorreccionRequest struct {
+	Categoria *string `json:"categoria,omitempty" validate:"omitempty,max=64"`
+
+	// NombreComercio Nombre visible del comercio, de 1 a 80 puntos de codigo, sin espacios en los extremos.
+	NombreComercio *string `json:"nombre_comercio,omitempty" validate:"omitempty,max=80"`
+}
+
+// InteligenciaCorreccionResponse defines model for InteligenciaCorreccionResponse.
+type InteligenciaCorreccionResponse struct {
+	Data    InteligenciaCorreccion                `json:"data"`
+	Error   *map[string]interface{}               `json:"error"`
+	Meta    *map[string]interface{}               `json:"meta"`
+	Success InteligenciaCorreccionResponseSuccess `json:"success"`
+}
+
+// InteligenciaCorreccionResponseSuccess defines model for InteligenciaCorreccionResponse.Success.
+type InteligenciaCorreccionResponseSuccess bool
+
+// InteligenciaMovimiento defines model for InteligenciaMovimiento.
+type InteligenciaMovimiento struct {
+	Categoria       string `json:"categoria"`
+	CategoriaNombre string `json:"categoria_nombre"`
+
+	// Contraparte Texto legible de la contraparte, nunca una llave ni un identificador de cuenta.
+	Contraparte         string                          `json:"contraparte"`
+	ContraparteResuelta bool                            `json:"contraparte_resuelta"`
+	Descripcion         *string                         `json:"descripcion"`
+	Direccion           InteligenciaMovimientoDireccion `json:"direccion"`
+	Moneda              InteligenciaMovimientoMoneda    `json:"moneda"`
+
+	// MontoCentavos Monto en centavos, mayor que cero. La direccion del dinero viaja en su propio campo.
+	MontoCentavos   string                                `json:"monto_centavos"`
+	OcurridoEn      time.Time                             `json:"ocurrido_en"`
+	OrigenCategoria InteligenciaMovimientoOrigenCategoria `json:"origen_categoria"`
+	TransaccionId   openapi_types.UUID                    `json:"transaccion_id"`
+}
+
+// InteligenciaMovimientoDireccion defines model for InteligenciaMovimiento.Direccion.
+type InteligenciaMovimientoDireccion string
+
+// InteligenciaMovimientoMoneda defines model for InteligenciaMovimiento.Moneda.
+type InteligenciaMovimientoMoneda string
+
+// InteligenciaMovimientoOrigenCategoria defines model for InteligenciaMovimiento.OrigenCategoria.
+type InteligenciaMovimientoOrigenCategoria string
+
+// InteligenciaMovimientosResponse defines model for InteligenciaMovimientosResponse.
+type InteligenciaMovimientosResponse struct {
+	Data    []InteligenciaMovimiento               `json:"data"`
+	Error   *map[string]interface{}                `json:"error"`
+	Meta    *MetaCursor                            `json:"meta"`
+	Success InteligenciaMovimientosResponseSuccess `json:"success"`
+}
+
+// InteligenciaMovimientosResponseSuccess defines model for InteligenciaMovimientosResponse.Success.
+type InteligenciaMovimientosResponseSuccess bool
+
+// InteligenciaResumen defines model for InteligenciaResumen.
+type InteligenciaResumen struct {
+	// Alcance El resumen solo ve los movimientos de la billetera y no los de otras entidades.
+	Alcance         InteligenciaResumenAlcance     `json:"alcance"`
+	AvisosEmitidos  int                            `json:"avisos_emitidos"`
+	Categorias      []InteligenciaResumenCategoria `json:"categorias"`
+	CupoAvisos      int                            `json:"cupo_avisos"`
+	Desde           time.Time                      `json:"desde"`
+	Evaluable       bool                           `json:"evaluable"`
+	Hasta           time.Time                      `json:"hasta"`
+	Mes             string                         `json:"mes"`
+	MesesCompletos  int                            `json:"meses_completos"`
+	MesesRequeridos int                            `json:"meses_requeridos"`
+	Moneda          InteligenciaResumenMoneda      `json:"moneda"`
+	TotalCentavos   string                         `json:"total_centavos"`
+}
+
+// InteligenciaResumenAlcance El resumen solo ve los movimientos de la billetera y no los de otras entidades.
+type InteligenciaResumenAlcance string
+
+// InteligenciaResumenMoneda defines model for InteligenciaResumen.Moneda.
+type InteligenciaResumenMoneda string
+
+// InteligenciaResumenCategoria defines model for InteligenciaResumenCategoria.
+type InteligenciaResumenCategoria struct {
+	Codigo string `json:"codigo"`
+
+	// MedianaCentavos Mediana de los meses completos con gasto, redondeada medio a par. Nula cuando la categoria no tiene al menos tres meses completos con gasto.
+	MedianaCentavos *string `json:"mediana_centavos"`
+	MesesConGasto   int     `json:"meses_con_gasto"`
+	Nombre          string  `json:"nombre"`
+	TotalCentavos   string  `json:"total_centavos"`
+}
+
+// InteligenciaResumenResponse defines model for InteligenciaResumenResponse.
+type InteligenciaResumenResponse struct {
+	Data    InteligenciaResumen                `json:"data"`
+	Error   *map[string]interface{}            `json:"error"`
+	Meta    *map[string]interface{}            `json:"meta"`
+	Success InteligenciaResumenResponseSuccess `json:"success"`
+}
+
+// InteligenciaResumenResponseSuccess defines model for InteligenciaResumenResponse.Success.
+type InteligenciaResumenResponseSuccess bool
+
 // KycEstado defines model for KycEstado.
 type KycEstado struct {
 	EstadoKyc string                  `json:"estado_kyc"`
@@ -1787,6 +2154,13 @@ type Meta struct {
 	HasMore    bool   `json:"has_more"`
 	Limit      int    `json:"limit"`
 	NextCursor *int64 `json:"next_cursor"`
+}
+
+// MetaCursor defines model for MetaCursor.
+type MetaCursor struct {
+	HasMore    bool    `json:"has_more"`
+	Limit      int     `json:"limit"`
+	NextCursor *string `json:"next_cursor"`
 }
 
 // MontoCalculado Forma compartida de saldo y del monto maximo enviable: los dos son un monto en centavos, la moneda y el instante en que se calcularon.
@@ -2175,6 +2549,27 @@ type ConsultarDestinatarioParams struct {
 	Celular string `form:"celular" json:"celular"`
 }
 
+// ListarAvisosInteligenciaParams defines parameters for ListarAvisosInteligencia.
+type ListarAvisosInteligenciaParams struct {
+	// Mes Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido llegue al handler y salga como ValidationError.
+	Mes *string `form:"mes,omitempty" json:"mes,omitempty"`
+}
+
+// ListarMovimientosInteligenciaParams defines parameters for ListarMovimientosInteligencia.
+type ListarMovimientosInteligenciaParams struct {
+	// Limit Tamano de pagina, de 1 a 100. Por defecto 50. Un valor mayor se recorta a 100. Se tipa x-go-type string para que un valor no numerico llegue al handler y salga como ValidationError, en vez de fallar antes en el binding generado.
+	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Cursor opaco que devuelve la pagina anterior en meta.next_cursor. Codifica (ocurrido_en, transaccion_id) y no se construye a mano.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ResumenInteligenciaParams defines parameters for ResumenInteligencia.
+type ResumenInteligenciaParams struct {
+	// Mes Mes calendario en America/Bogota con formato YYYY-MM. Por defecto el mes en curso.
+	Mes *string `form:"mes,omitempty" json:"mes,omitempty"`
+}
+
 // MovimientosParams defines parameters for Movimientos.
 type MovimientosParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50. El handler recorta a 100 un valor mayor, no lo rechaza. Se tipa x-go-type string para que un valor no numerico llegue al handler y salga como ValidationError, en vez de fallar antes en el binding generado como BadRequest.
@@ -2222,6 +2617,9 @@ type PhoneChangeRequestJSONRequestBody = PhoneChangeRequest
 
 // CrearDepositoJSONRequestBody defines body for CrearDeposito for application/json ContentType.
 type CrearDepositoJSONRequestBody = CrearDepositoRequest
+
+// CorregirMovimientoInteligenciaJSONRequestBody defines body for CorregirMovimientoInteligencia for application/json ContentType.
+type CorregirMovimientoInteligenciaJSONRequestBody = InteligenciaCorreccionRequest
 
 // KycVerificacionJSONRequestBody defines body for KycVerificacion for application/json ContentType.
 type KycVerificacionJSONRequestBody = KycVerificacionRequest
@@ -2386,6 +2784,21 @@ type ServerInterface interface {
 	// ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
 	// (GET /v1/destinatarios)
 	ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams)
+	// ListarAvisosInteligencia Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+	// (GET /v1/inteligencia/avisos)
+	ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params ListarAvisosInteligenciaParams)
+	// DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+	// (POST /v1/inteligencia/avisos/{id}/descartar)
+	DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string)
+	// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
+	// (GET /v1/inteligencia/movimientos)
+	ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams)
+	// CorregirMovimientoInteligencia Corrige la categoria o el nombre visible de un movimiento propio y reaplica la memoria privada.
+	// (POST /v1/inteligencia/movimientos/{transaccion_id}/correcciones)
+	CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionId string)
+	// ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
+	// (GET /v1/inteligencia/resumen)
+	ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams)
 	// KycEstado Consulta el producto, el estado de KYC y los limites.
 	// (GET /v1/kyc/estado)
 	KycEstado(w http.ResponseWriter, r *http.Request)
@@ -2521,6 +2934,36 @@ func (_ Unimplemented) Deposito(w http.ResponseWriter, r *http.Request, id strin
 // ConsultarDestinatario Consulta el nombre visible de un destinatario interno por celular.
 // (GET /v1/destinatarios)
 func (_ Unimplemented) ConsultarDestinatario(w http.ResponseWriter, r *http.Request, params ConsultarDestinatarioParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarAvisosInteligencia Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+// (GET /v1/inteligencia/avisos)
+func (_ Unimplemented) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params ListarAvisosInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+// (POST /v1/inteligencia/avisos/{id}/descartar)
+func (_ Unimplemented) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
+// (GET /v1/inteligencia/movimientos)
+func (_ Unimplemented) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CorregirMovimientoInteligencia Corrige la categoria o el nombre visible de un movimiento propio y reaplica la memoria privada.
+// (POST /v1/inteligencia/movimientos/{transaccion_id}/correcciones)
+func (_ Unimplemented) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
+// (GET /v1/inteligencia/resumen)
+func (_ Unimplemented) ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2859,6 +3302,170 @@ func (siw *ServerInterfaceWrapper) ConsultarDestinatario(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConsultarDestinatario(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarAvisosInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarAvisosInteligenciaParams
+
+	// ------------- Optional query parameter "mes" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mes", r.URL.Query(), &params.Mes, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mes"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mes", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarAvisosInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DescartarAvisoInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DescartarAvisoInteligencia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarMovimientosInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarMovimientosInteligenciaParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarMovimientosInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CorregirMovimientoInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "transaccion_id" -------------
+	var transaccionId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transaccion_id", chi.URLParam(r, "transaccion_id"), &transaccionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaccion_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CorregirMovimientoInteligencia(w, r, transaccionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumenInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ResumenInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResumenInteligenciaParams
+
+	// ------------- Optional query parameter "mes" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mes", r.URL.Query(), &params.Mes, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mes"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mes", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumenInteligencia(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3405,6 +4012,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/movimientos", wrapper.Movimientos)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/movimientos", wrapper.ListarMovimientosInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/resumen", wrapper.ResumenInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/inteligencia/movimientos/{transaccion_id}/correcciones", wrapper.CorregirMovimientoInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/avisos", wrapper.ListarAvisosInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/inteligencia/avisos/{id}/descartar", wrapper.DescartarAvisoInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/depositos", wrapper.CrearDeposito)
