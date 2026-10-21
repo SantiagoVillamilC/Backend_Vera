@@ -109,6 +109,13 @@ func casosDeTransferenciasYCompensaciones() map[string]casoDeLineas {
 			},
 			want: []LineaMovimiento{{Monto: -500000, Motivo: MotivoEnvio}},
 		},
+		"una compra confirmada sale como envio": {
+			apuntes: []apunte{
+				apunteEn(8, "liquidacion_confirmada", disponible, 500000),
+				apunteEn(8, "liquidacion_confirmada", "pasivo:liquidacion_pendiente:comercio-1", -500000),
+			},
+			want: []LineaMovimiento{{Monto: -500000, Motivo: MotivoEnvio}},
+		},
 	}
 }
 
