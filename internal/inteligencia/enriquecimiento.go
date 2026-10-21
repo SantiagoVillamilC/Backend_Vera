@@ -445,6 +445,15 @@ func memoriaDeUsuario(ctx context.Context, q *repositorio.Queries, usuarioID str
 	return memoria, nil
 }
 
+// direccionDeNeto fija el convenio del diario, donde el neto de las cuentas del usuario es negativo
+// cuando le entró plata (nucleo.Saldo devuelve -SUM(monto)).
+func direccionDeNeto(neto int64) string {
+	if neto < 0 {
+		return "entrada"
+	}
+	return "salida"
+}
+
 func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, efecto Efecto,
 	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, clasificador *Modelo,
 	lexico []ParLexico, resultado *Resultado) error {
@@ -452,10 +461,7 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 	if !valido {
 		return errors.New("inteligencia: el monto del movimiento no cabe en int64")
 	}
-	direccion := "salida"
-	if efecto.Neto > 0 {
-		direccion = "entrada"
-	}
+	direccion := direccionDeNeto(efecto.Neto)
 	moneda := efecto.Moneda
 	if moneda == "" {
 		moneda = "COP"
