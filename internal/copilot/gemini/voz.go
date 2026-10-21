@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/audiopcm"
 	"google.golang.org/genai"
 )
 
@@ -119,7 +120,9 @@ func leerWAV(lector io.Reader) ([]byte, error) {
 		for j := len(paso.Content) - 1; j >= 0; j-- {
 			a := paso.Content[j]
 			if a.Type == "audio" && a.MIME == "audio/wav" && len(a.Data) >= 44 && len(a.Data) <= 4*1024*1024 && string(a.Data[:4]) == "RIFF" && string(a.Data[8:12]) == "WAVE" {
-				return a.Data, nil
+				if audio, ok := audiopcm.Normalizar(a.Data); ok {
+					return audio, nil
+				}
 			}
 		}
 	}
