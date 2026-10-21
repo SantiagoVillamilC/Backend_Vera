@@ -1,5 +1,5 @@
 {
-  "artefacto_sha256": "8382898374ebe8f1ba3396a326a1e1d2ff2f83989bacd9884cee8c7155e793d0",
+  "artefacto_sha256": "fe69c5efda1f885cb9bd0de0fcd835d7cf098c976f9eb868fddf29d79e864253",
   "casos": [
     {
       "clase": "coseno_fuerte",
@@ -149,7 +149,7 @@
       "esperado": {
         "abstencion": false,
         "categoria": "salud",
-        "rama": "lexico"
+        "rama": "coseno_debil"
       },
       "id": "artefacto-farmacia-central",
       "mcc_categoria": null,
@@ -160,9 +160,9 @@
     {
       "clase": "artefacto",
       "esperado": {
-        "abstencion": false,
-        "categoria": "restaurantes_domicilios",
-        "rama": "lexico"
+        "abstencion": true,
+        "categoria": null,
+        "rama": "abstencion"
       },
       "id": "artefacto-restaurante-el-buen-sabor",
       "mcc_categoria": null,
@@ -173,9 +173,9 @@
     {
       "clase": "artefacto",
       "esperado": {
-        "abstencion": false,
-        "categoria": "transporte",
-        "rama": "lexico"
+        "abstencion": true,
+        "categoria": null,
+        "rama": "abstencion"
       },
       "id": "artefacto-gasolinera-la-80",
       "mcc_categoria": null,
@@ -229,6 +229,9 @@
   "generado_por": "generar_artefacto_tfidf.py",
   "modelos": {
     "abstencion": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "w:INEXISTENTE": "1.0"
@@ -243,12 +246,15 @@
         "JOYERIA": "compras",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "coseno-debil-con-lexico": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "c: BR": "1.0",
@@ -291,12 +297,15 @@
         "OPTICA": "salud",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "coseno-debil-sin-lexico": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "c: CH": "1.0"
@@ -329,12 +338,15 @@
         "OPTICA": "salud",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "coseno-fuerte": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "c: AL": "1.0",
@@ -368,12 +380,15 @@
         "OPTICA": "salud",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "empate-alfabetico": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "alimentos_mercado": {
           "c: GO": "1.0",
@@ -408,12 +423,15 @@
         "SUPERMERCADO": "alimentos_mercado",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "fuerte-con-lexico-en-contra": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "c: AL": "1.0",
@@ -465,12 +483,15 @@
         "OPTICA": "salud",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "mcc-cambia": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "c: AL": "1.0",
@@ -535,12 +556,15 @@
         "OPTICA": "salud",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "mcc-no-cambia": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "c: AL": "1.0",
@@ -590,12 +614,15 @@
         "OPTICA": "salud",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "nombre-vacio": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "w:ALFA": "1.0"
@@ -610,12 +637,15 @@
         "JOYERIA": "compras",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "solo-genericos": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "w:TIENDA": "1.0"
@@ -630,12 +660,15 @@
         "JOYERIA": "compras",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     },
     "tildes-y-minusculas": {
+      "categorias_prohibidas": [
+        "comisiones_costos_financieros"
+      ],
       "centroides": {
         "compras": {
           "c: AL": "1.0",
@@ -685,10 +718,10 @@
         "OPTICA": "salud",
         "ZAPATERIA": "compras"
       },
-      "umbral_coseno": "0.1",
+      "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-1"
+      "version": "tfidf-2"
     }
   },
   "nota": "Solo datos sinteticos y el catalogo publico v2. No se alimenta de nombres, extractos ni montos reales.",

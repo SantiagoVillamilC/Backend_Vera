@@ -1,13 +1,13 @@
 {
   "archivo": "vectores-clasificador-tfidf.json",
-  "artefacto_sha256": "8382898374ebe8f1ba3396a326a1e1d2ff2f83989bacd9884cee8c7155e793d0",
-  "sha256_archivo": "28e1b9a65df775635a4cc228dbb27a45c2b1b43d1585080f469949880a58bb24",
+  "artefacto_sha256": "fe69c5efda1f885cb9bd0de0fcd835d7cf098c976f9eb868fddf29d79e864253",
+  "sha256_archivo": "6a948bb0d0fb2de7a328538fa0510af380fca0bb452085ee19080209b6ad001b",
   "sha256_por_caso": {
     "abstencion": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
     "artefacto-alux": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
-    "artefacto-farmacia-central": "6e8724062c06344e8f1b5ab2d589ab2755ec8d6e2dc636f5e1d0fa53caf61455",
-    "artefacto-gasolinera-la-80": "6d472764d8c2d6cf64e54f56de88cf717d27b9d654fb4aefc2f9e1f00052ed25",
-    "artefacto-restaurante-el-buen-sabor": "d65f3c1b172b55156aa628acb68e02edd43bde2a1e244660298b2f5d5146bdf7",
+    "artefacto-farmacia-central": "08e265e99dcdc33b9d3e928a7566625f7175a557fb03706f75458caed98ccd75",
+    "artefacto-gasolinera-la-80": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
+    "artefacto-restaurante-el-buen-sabor": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
     "coseno-debil-con-lexico": "6e8724062c06344e8f1b5ab2d589ab2755ec8d6e2dc636f5e1d0fa53caf61455",
     "coseno-debil-sin-lexico": "641c55ae42dabdd5f3a8ebeebe19b0ce4314e75cfe2151bea840f2bdba53841b",
     "coseno-fuerte": "9b951de6e9300df87a36600325e976d62830a46fcc1565b452c4199f29357267",

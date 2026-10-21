@@ -210,3 +210,59 @@ func TestMCCCategoriaDeSoloAceptaLaTabla(t *testing.T) {
 		}
 	}
 }
+
+func modeloClasificadorConProhibidas(t *testing.T, idf map[string]string,
+	centroides map[string]map[string]string, lexico map[string]string, prohibidas []string) *Modelo {
+	t.Helper()
+	modelo, err := CargarModelo(artefactoConProhibidas(t, VersionArtefacto, idf, umbralesDePrueba(),
+		centroides, lexico, prohibidas))
+	if err != nil {
+		t.Fatalf("cargar el modelo de prueba: %v", err)
+	}
+	return modelo
+}
+
+func TestPredecirSeAbstieneSiGanaProhibidaFuerte(t *testing.T) {
+	modelo := modeloClasificadorConProhibidas(t, idfDeTexto("ALFA"),
+		map[string]map[string]string{
+			"compras": centroideConCoseno(t, "ALFA", 0.9),
+			"salud":   {"w:INEXISTENTE": "1"},
+		}, nil, []string{string(CategoriaCompras)})
+	categoria, decidio := Predecir(modelo, "ALFA", "")
+	if decidio || categoria != "" {
+		t.Fatalf("decisión = %q (%v), want abstención por prohibida", categoria, decidio)
+	}
+}
+
+func TestPredecirSeAbstieneSiGanaProhibidaDebil(t *testing.T) {
+	modelo := modeloClasificadorConProhibidas(t, idfDeTexto("BRAVO ALFA"),
+		map[string]map[string]string{
+			"compras": {"w:ALFA": "1"},
+			"salud":   {"w:INEXISTENTE": "1"},
+		}, nil, []string{string(CategoriaCompras)})
+	categoria, decidio := Predecir(modelo, "BRAVO ALFA", "")
+	if decidio || categoria != "" {
+		t.Fatalf("decisión = %q (%v), want abstención por prohibida", categoria, decidio)
+	}
+}
+
+func TestPredecirSeAbstieneSiElLexicoDaProhibida(t *testing.T) {
+	// Un artefacto válido no puede traer esta combinación: el cargador rechaza una semilla que apunte a
+	// una categoría prohibida. La prueba arma el modelo en memoria para fijar la semántica de Predecir
+	// en caso de que esa validación se relaje algún día.
+	modelo := &Modelo{
+		Version:            VersionArtefacto,
+		IDF:                map[string]float64{"w:ALFA": 1, "w:DROGUERIA": 1},
+		Centroides:         map[Categoria]map[string]float64{"compras": {"w:ALFA": 1}, "salud": {"w:INEXISTENTE": 1}},
+		Lexico:             map[string]Categoria{"DROGUERIA": CategoriaSalud},
+		UmbralCoseno:       0.1,
+		UmbralCosenoFuerte: 0.5,
+		UmbralJW:           0.85,
+		Prohibidas:         map[Categoria]bool{CategoriaSalud: true},
+	}
+	modelo.ordenar()
+	categoria, decidio := Predecir(modelo, "DROGUERIA ALFA", "")
+	if decidio || categoria != "" {
+		t.Fatalf("decisión = %q (%v), want abstención por prohibida del léxico", categoria, decidio)
+	}
+}
