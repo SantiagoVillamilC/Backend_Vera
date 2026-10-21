@@ -1,0 +1,696 @@
+{
+  "artefacto_sha256": "8382898374ebe8f1ba3396a326a1e1d2ff2f83989bacd9884cee8c7155e793d0",
+  "casos": [
+    {
+      "clase": "coseno_fuerte",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "compras",
+        "rama": "coseno_fuerte"
+      },
+      "id": "coseno-fuerte",
+      "mcc_categoria": null,
+      "modelo": "coseno-fuerte",
+      "nombre": "ALFA",
+      "nota": "El centroide cubre casi todo el vector del nombre y el coseno supera 0.5."
+    },
+    {
+      "clase": "fuerte_con_lexico_en_contra",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "compras",
+        "rama": "coseno_fuerte"
+      },
+      "id": "fuerte-con-lexico-en-contra",
+      "mcc_categoria": null,
+      "modelo": "fuerte-con-lexico-en-contra",
+      "nombre": "FARMACIA ALFA",
+      "nota": "El coseno fuerte manda sobre el lexico, que apunta a salud por FARMACIA."
+    },
+    {
+      "clase": "coseno_debil_con_lexico",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "salud",
+        "rama": "lexico"
+      },
+      "id": "coseno-debil-con-lexico",
+      "mcc_categoria": null,
+      "modelo": "coseno-debil-con-lexico",
+      "nombre": "DROGUERIA BRAVO",
+      "nota": "El coseno queda entre 0.1 y 0.5 y el lexico decide por DROGUERIA."
+    },
+    {
+      "clase": "coseno_debil_sin_lexico",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "compras",
+        "rama": "coseno_debil"
+      },
+      "id": "coseno-debil-sin-lexico",
+      "mcc_categoria": null,
+      "modelo": "coseno-debil-sin-lexico",
+      "nombre": "CHARLIE",
+      "nota": "El coseno queda entre 0.1 y 0.5 y no hay semilla aplicable, decide el coseno."
+    },
+    {
+      "clase": "abstencion",
+      "esperado": {
+        "abstencion": true,
+        "categoria": null,
+        "rama": "abstencion"
+      },
+      "id": "abstencion",
+      "mcc_categoria": null,
+      "modelo": "abstencion",
+      "nombre": "DELTA",
+      "nota": "Ningun centroide comparte caracteristicas con el nombre y no hay semilla."
+    },
+    {
+      "clase": "nombre_vacio",
+      "esperado": {
+        "abstencion": true,
+        "categoria": null,
+        "rama": "abstencion"
+      },
+      "id": "nombre-vacio",
+      "mcc_categoria": null,
+      "modelo": "nombre-vacio",
+      "nombre": "",
+      "nota": "Un nombre vacio no produce vector y el clasificador se abstiene."
+    },
+    {
+      "clase": "solo_genericos",
+      "esperado": {
+        "abstencion": true,
+        "categoria": null,
+        "rama": "abstencion"
+      },
+      "id": "solo-genericos",
+      "mcc_categoria": null,
+      "modelo": "solo-genericos",
+      "nombre": "TIENDA SAS",
+      "nota": "Un nombre de solo genericos legales no deja caracteristicas utiles."
+    },
+    {
+      "clase": "mcc_cambia",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "salud",
+        "rama": "coseno_fuerte"
+      },
+      "id": "mcc-cambia",
+      "mcc_categoria": "salud",
+      "modelo": "mcc-cambia",
+      "nombre": "ECO ALFA",
+      "nota": "El token mcc:salud suma un centroide que gana y cambia la decision frente al nombre solo."
+    },
+    {
+      "clase": "mcc_no_cambia",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "compras",
+        "rama": "coseno_fuerte"
+      },
+      "id": "mcc-no-cambia",
+      "mcc_categoria": "salud",
+      "modelo": "mcc-no-cambia",
+      "nombre": "FOXTROT ALFA",
+      "nota": "Con el centroide armado sobre el nombre completo, el token de MCC no cambia la categoria."
+    },
+    {
+      "clase": "empate_alfabetico",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "alimentos_mercado",
+        "rama": "coseno_fuerte"
+      },
+      "id": "empate-alfabetico",
+      "mcc_categoria": null,
+      "modelo": "empate-alfabetico",
+      "nombre": "GOLF",
+      "nota": "Dos centroides identicos se desempatan por orden alfabetico de la categoria."
+    },
+    {
+      "clase": "tildes_y_minusculas",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "compras",
+        "rama": "coseno_fuerte"
+      },
+      "id": "tildes-y-minusculas",
+      "mcc_categoria": null,
+      "modelo": "tildes-y-minusculas",
+      "nombre": "PESCAÑA ALFA",
+      "nota": "El clasificador recibe el nombre ya normalizado, con tildes quitadas y Ñ conservada."
+    },
+    {
+      "clase": "artefacto",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "salud",
+        "rama": "lexico"
+      },
+      "id": "artefacto-farmacia-central",
+      "mcc_categoria": null,
+      "modelo": "artefacto",
+      "nombre": "FARMACIA-CENTRAL",
+      "nota": "Caso con el artefacto congelado: la categoria tiene que ser la misma en Go y en Python."
+    },
+    {
+      "clase": "artefacto",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "restaurantes_domicilios",
+        "rama": "lexico"
+      },
+      "id": "artefacto-restaurante-el-buen-sabor",
+      "mcc_categoria": null,
+      "modelo": "artefacto",
+      "nombre": "RESTAURANTE-EL-BUEN-SABOR",
+      "nota": "Caso con el artefacto congelado: la categoria tiene que ser la misma en Go y en Python."
+    },
+    {
+      "clase": "artefacto",
+      "esperado": {
+        "abstencion": false,
+        "categoria": "transporte",
+        "rama": "lexico"
+      },
+      "id": "artefacto-gasolinera-la-80",
+      "mcc_categoria": null,
+      "modelo": "artefacto",
+      "nombre": "GASOLINERA-LA-80",
+      "nota": "Caso con el artefacto congelado: la categoria tiene que ser la misma en Go y en Python."
+    },
+    {
+      "clase": "artefacto",
+      "esperado": {
+        "abstencion": true,
+        "categoria": null,
+        "rama": "abstencion"
+      },
+      "id": "artefacto-alux",
+      "mcc_categoria": null,
+      "modelo": "artefacto",
+      "nombre": "ALUX",
+      "nota": "Caso con el artefacto congelado: la categoria tiene que ser la misma en Go y en Python."
+    }
+  ],
+  "catalogo": [
+    "alimentos_mercado",
+    "comisiones_costos_financieros",
+    "compras",
+    "educacion",
+    "entretenimiento",
+    "otros_gastos",
+    "restaurantes_domicilios",
+    "salud",
+    "transporte",
+    "vivienda_servicios"
+  ],
+  "clases": [
+    "coseno_fuerte",
+    "fuerte_con_lexico_en_contra",
+    "coseno_debil_con_lexico",
+    "coseno_debil_sin_lexico",
+    "abstencion",
+    "nombre_vacio",
+    "solo_genericos",
+    "mcc_cambia",
+    "mcc_no_cambia",
+    "empate_alfabetico",
+    "tildes_y_minusculas",
+    "artefacto",
+    "artefacto",
+    "artefacto",
+    "artefacto"
+  ],
+  "generado_por": "generar_artefacto_tfidf.py",
+  "modelos": {
+    "abstencion": {
+      "centroides": {
+        "compras": {
+          "w:INEXISTENTE": "1.0"
+        }
+      },
+      "idf": {
+        "w:DELTA": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "JOYERIA": "compras",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "coseno-debil-con-lexico": {
+      "centroides": {
+        "compras": {
+          "c: BR": "1.0",
+          "c: DR": "1.0"
+        },
+        "salud": {
+          "w:INEXISTENTE": "1.0"
+        }
+      },
+      "idf": {
+        "c: BR": "1.0",
+        "c: DR": "1.0",
+        "c:A B": "1.0",
+        "c:AVO": "1.0",
+        "c:BRA": "1.0",
+        "c:DRO": "1.0",
+        "c:ERI": "1.0",
+        "c:GUE": "1.0",
+        "c:IA ": "1.0",
+        "c:OGU": "1.0",
+        "c:RAV": "1.0",
+        "c:RIA": "1.0",
+        "c:ROG": "1.0",
+        "c:UER": "1.0",
+        "c:VO ": "1.0",
+        "w:BRAVO": "1.0",
+        "w:DROGUERIA": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "CLINICA": "salud",
+        "CONSULTORIO": "salud",
+        "DROGUERIA": "salud",
+        "FARMACIA": "salud",
+        "HOSPITAL": "salud",
+        "JOYERIA": "compras",
+        "LABORATORIO": "salud",
+        "ODONTOLOGIA": "salud",
+        "OPTICA": "salud",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "coseno-debil-sin-lexico": {
+      "centroides": {
+        "compras": {
+          "c: CH": "1.0"
+        },
+        "salud": {
+          "w:INEXISTENTE": "1.0"
+        }
+      },
+      "idf": {
+        "c: CH": "1.0",
+        "c:ARL": "1.0",
+        "c:CHA": "1.0",
+        "c:HAR": "1.0",
+        "c:IE ": "1.0",
+        "c:LIE": "1.0",
+        "c:RLI": "1.0",
+        "w:CHARLIE": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "CLINICA": "salud",
+        "CONSULTORIO": "salud",
+        "DROGUERIA": "salud",
+        "FARMACIA": "salud",
+        "HOSPITAL": "salud",
+        "JOYERIA": "compras",
+        "LABORATORIO": "salud",
+        "ODONTOLOGIA": "salud",
+        "OPTICA": "salud",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "coseno-fuerte": {
+      "centroides": {
+        "compras": {
+          "c: AL": "1.0",
+          "c:ALF": "1.0",
+          "c:FA ": "1.0",
+          "c:LFA": "1.0",
+          "w:ALFA": "1.0"
+        },
+        "salud": {
+          "w:INEXISTENTE": "1.0"
+        }
+      },
+      "idf": {
+        "c: AL": "1.0",
+        "c:ALF": "1.0",
+        "c:FA ": "1.0",
+        "c:LFA": "1.0",
+        "w:ALFA": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "CLINICA": "salud",
+        "CONSULTORIO": "salud",
+        "DROGUERIA": "salud",
+        "FARMACIA": "salud",
+        "HOSPITAL": "salud",
+        "JOYERIA": "compras",
+        "LABORATORIO": "salud",
+        "ODONTOLOGIA": "salud",
+        "OPTICA": "salud",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "empate-alfabetico": {
+      "centroides": {
+        "alimentos_mercado": {
+          "c: GO": "1.0",
+          "c:GOL": "1.0",
+          "c:LF ": "1.0",
+          "c:OLF": "1.0",
+          "w:GOLF": "1.0"
+        },
+        "compras": {
+          "c: GO": "1.0",
+          "c:GOL": "1.0",
+          "c:LF ": "1.0",
+          "c:OLF": "1.0",
+          "w:GOLF": "1.0"
+        }
+      },
+      "idf": {
+        "c: GO": "1.0",
+        "c:GOL": "1.0",
+        "c:LF ": "1.0",
+        "c:OLF": "1.0",
+        "w:GOLF": "1.0"
+      },
+      "lexico": {
+        "ABASTOS": "alimentos_mercado",
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "JOYERIA": "compras",
+        "MERCADO": "alimentos_mercado",
+        "MINIMERCADO": "alimentos_mercado",
+        "PLAZA": "alimentos_mercado",
+        "SUPERMERCADO": "alimentos_mercado",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "fuerte-con-lexico-en-contra": {
+      "centroides": {
+        "compras": {
+          "c: AL": "1.0",
+          "c: FA": "1.0",
+          "c:A A": "1.0",
+          "c:ACI": "1.0",
+          "c:ALF": "1.0",
+          "c:ARM": "1.0",
+          "c:CIA": "1.0",
+          "c:FA ": "1.0",
+          "c:FAR": "1.0",
+          "c:IA ": "1.0",
+          "c:LFA": "1.0",
+          "c:MAC": "1.0",
+          "c:RMA": "1.0"
+        },
+        "salud": {
+          "w:INEXISTENTE": "1.0"
+        }
+      },
+      "idf": {
+        "c: AL": "1.0",
+        "c: FA": "1.0",
+        "c:A A": "1.0",
+        "c:ACI": "1.0",
+        "c:ALF": "1.0",
+        "c:ARM": "1.0",
+        "c:CIA": "1.0",
+        "c:FA ": "1.0",
+        "c:FAR": "1.0",
+        "c:IA ": "1.0",
+        "c:LFA": "1.0",
+        "c:MAC": "1.0",
+        "c:RMA": "1.0",
+        "w:ALFA": "1.0",
+        "w:FARMACIA": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "CLINICA": "salud",
+        "CONSULTORIO": "salud",
+        "DROGUERIA": "salud",
+        "FARMACIA": "salud",
+        "HOSPITAL": "salud",
+        "JOYERIA": "compras",
+        "LABORATORIO": "salud",
+        "ODONTOLOGIA": "salud",
+        "OPTICA": "salud",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "mcc-cambia": {
+      "centroides": {
+        "compras": {
+          "c: AL": "1.0",
+          "c: EC": "1.0",
+          "c:ALF": "1.0",
+          "c:CO ": "1.0",
+          "c:ECO": "1.0",
+          "c:FA ": "1.0",
+          "c:LFA": "1.0",
+          "c:O A": "1.0",
+          "w:ALFA": "1.0",
+          "w:ECO": "1.0"
+        },
+        "salud": {
+          "c: mc": "1.0",
+          "c::sa": "1.0",
+          "c:alu": "1.0",
+          "c:c:s": "1.0",
+          "c:cc:": "1.0",
+          "c:lud": "1.0",
+          "c:mcc": "1.0",
+          "c:sal": "1.0",
+          "c:ud ": "1.0",
+          "w:MCC": "1.0",
+          "w:SALUD": "1.0"
+        }
+      },
+      "idf": {
+        "c: AL": "1.0",
+        "c: EC": "1.0",
+        "c: mc": "1.0",
+        "c::sa": "1.0",
+        "c:ALF": "1.0",
+        "c:CO ": "1.0",
+        "c:ECO": "1.0",
+        "c:FA ": "1.0",
+        "c:LFA": "1.0",
+        "c:O A": "1.0",
+        "c:alu": "1.0",
+        "c:c:s": "1.0",
+        "c:cc:": "1.0",
+        "c:lud": "1.0",
+        "c:mcc": "1.0",
+        "c:sal": "1.0",
+        "c:ud ": "1.0",
+        "w:ALFA": "1.0",
+        "w:ECO": "1.0",
+        "w:MCC": "1.0",
+        "w:SALUD": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "CLINICA": "salud",
+        "CONSULTORIO": "salud",
+        "DROGUERIA": "salud",
+        "FARMACIA": "salud",
+        "HOSPITAL": "salud",
+        "JOYERIA": "compras",
+        "LABORATORIO": "salud",
+        "ODONTOLOGIA": "salud",
+        "OPTICA": "salud",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "mcc-no-cambia": {
+      "centroides": {
+        "compras": {
+          "c: AL": "1.0",
+          "c: FO": "1.0",
+          "c:ALF": "1.0",
+          "c:FA ": "1.0",
+          "c:FOX": "1.0",
+          "c:LFA": "1.0",
+          "c:OT ": "1.0",
+          "c:OXT": "1.0",
+          "c:ROT": "1.0",
+          "c:T A": "1.0",
+          "c:TRO": "1.0",
+          "c:XTR": "1.0"
+        },
+        "salud": {
+          "w:INEXISTENTE": "1.0"
+        }
+      },
+      "idf": {
+        "c: AL": "1.0",
+        "c: FO": "1.0",
+        "c:ALF": "1.0",
+        "c:FA ": "1.0",
+        "c:FOX": "1.0",
+        "c:LFA": "1.0",
+        "c:OT ": "1.0",
+        "c:OXT": "1.0",
+        "c:ROT": "1.0",
+        "c:T A": "1.0",
+        "c:TRO": "1.0",
+        "c:XTR": "1.0",
+        "w:ALFA": "1.0",
+        "w:FOXTROT": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "CLINICA": "salud",
+        "CONSULTORIO": "salud",
+        "DROGUERIA": "salud",
+        "FARMACIA": "salud",
+        "HOSPITAL": "salud",
+        "JOYERIA": "compras",
+        "LABORATORIO": "salud",
+        "ODONTOLOGIA": "salud",
+        "OPTICA": "salud",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "nombre-vacio": {
+      "centroides": {
+        "compras": {
+          "w:ALFA": "1.0"
+        }
+      },
+      "idf": {
+        "w:ALFA": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "JOYERIA": "compras",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "solo-genericos": {
+      "centroides": {
+        "compras": {
+          "w:TIENDA": "1.0"
+        }
+      },
+      "idf": {
+        "w:TIENDA": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "JOYERIA": "compras",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    },
+    "tildes-y-minusculas": {
+      "centroides": {
+        "compras": {
+          "c: AL": "1.0",
+          "c: PE": "1.0",
+          "c:A A": "1.0",
+          "c:ALF": "1.0",
+          "c:AÑA": "1.0",
+          "c:CAÑ": "1.0",
+          "c:ESC": "1.0",
+          "c:FA ": "1.0",
+          "c:LFA": "1.0",
+          "c:PES": "1.0",
+          "c:SCA": "1.0",
+          "c:ÑA ": "1.0"
+        },
+        "salud": {
+          "w:INEXISTENTE": "1.0"
+        }
+      },
+      "idf": {
+        "c: AL": "1.0",
+        "c: PE": "1.0",
+        "c:A A": "1.0",
+        "c:ALF": "1.0",
+        "c:AÑA": "1.0",
+        "c:CAÑ": "1.0",
+        "c:ESC": "1.0",
+        "c:FA ": "1.0",
+        "c:LFA": "1.0",
+        "c:PES": "1.0",
+        "c:SCA": "1.0",
+        "c:ÑA ": "1.0",
+        "w:ALFA": "1.0",
+        "w:PESCAÑA": "1.0"
+      },
+      "lexico": {
+        "BOUTIQUE": "compras",
+        "CALZADO": "compras",
+        "CLINICA": "salud",
+        "CONSULTORIO": "salud",
+        "DROGUERIA": "salud",
+        "FARMACIA": "salud",
+        "HOSPITAL": "salud",
+        "JOYERIA": "compras",
+        "LABORATORIO": "salud",
+        "ODONTOLOGIA": "salud",
+        "OPTICA": "salud",
+        "ZAPATERIA": "compras"
+      },
+      "umbral_coseno": "0.1",
+      "umbral_coseno_fuerte": "0.5",
+      "umbral_jw": "0.85",
+      "version": "tfidf-1"
+    }
+  },
+  "nota": "Solo datos sinteticos y el catalogo publico v2. No se alimenta de nombres, extractos ni montos reales.",
+  "version": 1
+}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/database"
@@ -88,6 +89,32 @@ func run() error {
 			Tope:   cfg.OutboxBackoffMax,
 		}),
 	)
+	modeloClasificador, err := modeloDelClasificador(cfg)
+	if err != nil {
+		return err
+	}
+	metricasInteligencia, err := metricasDeInteligencia(cfg)
+	if err != nil {
+		return err
+	}
+	var opcionesInteligencia []inteligencia.OpcionServicio
+	if modeloClasificador != nil {
+		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConClasificador(modeloClasificador))
+	}
+	if cfg.Lexico == inteligencia.ModoLexicoV2 {
+		lexico, err := inteligencia.CargarLexicoV2()
+		if err != nil {
+			return fmt.Errorf("léxico: %w", err)
+		}
+		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConLexico(lexico))
+	}
+	if metricasInteligencia != nil {
+		metricasInteligencia.ClasificadorActivo(modeloClasificador != nil)
+		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConMetricas(metricasInteligencia))
+	}
+	servicioInteligencia := inteligencia.NuevoServicio(pool, opcionesInteligencia...)
+	handlerInteligencia := inteligencia.NuevoHandler(servicioInteligencia,
+		inteligencia.ConMetricasDeLaCorreccion(metricasDeCorreccion(metricasInteligencia)))
 
 	// Fase 0: la identidad autenticada es el usuario de prueba. El swap a JWT es solo acá.
 	clienteRedisAuth := clienteRedis(cfg)
@@ -180,6 +207,7 @@ func run() error {
 		Firmador:      tokensAuth,
 		Denylist:      denylistAuth,
 		Subcuentas:    servicio,
+		Inteligencia:  handlerInteligencia,
 	}
 	rellenoRegistro, err := auth.NuevoRellenoDeRegistro(pool, auth.NuevoRegistradorEventos(pool), contadoresAuth, clavesContadores, cfg.Auth.OTPPepper)
 	if err != nil {
@@ -191,18 +219,32 @@ func run() error {
 	}
 	deps.Registro = httpserver.NuevoRegistroHandler(registrador)
 	deps.Companies = httpserver.NuevoEmpresasHandler(registrador)
+	if metricasInteligencia != nil {
+		deps.Metricas = httpserver.MetricasDelRouter{
+			Handler:      metricasInteligencia.Handler(),
+			Autenticador: tokenEstatico(cfg.MetricasToken),
+		}
+	}
 
 	opcionOutbox, despachadorAvisos := opcionOutboxDeAuth(pool, canal, cfg)
 	despachadorAvisos.Registrar(auth.TipoAvisoAbrirSubcuentas, auth.ManejadorAbrirSubcuentas(deps.Subcuentas))
 
 	// Start con Background, no con ctx: cancelarlo corta los jobs en vuelo.
-	riverClient, err := jobs.NewClient(pool, servicio, jobs.Config{
-		OutboxInterval:       cfg.OutboxInterval,
-		ConciliationInterval: cfg.ConciliationInterval,
-		ConciliationWindow:   cfg.ConciliationWindow,
-		ExpirationInterval:   cfg.ExpirationInterval,
-		ExpirationTTL:        cfg.ExpirationTTL,
-	}, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
+	configuracionDeJobs := jobs.Config{
+		OutboxInterval:          cfg.OutboxInterval,
+		ConciliationInterval:    cfg.ConciliationInterval,
+		ConciliationWindow:      cfg.ConciliationWindow,
+		ExpirationInterval:      cfg.ExpirationInterval,
+		ExpirationTTL:           cfg.ExpirationTTL,
+		Inteligencia:            servicioInteligencia,
+		EnriquecimientoInterval: cfg.EnriquecimientoInterval,
+		EnriquecimientoLote:     500,
+		AvisosHora:              cfg.AvisosHora,
+	}
+	if cfg.AvisosActivo {
+		configuracionDeJobs.Avisos = servicioInteligencia
+	}
+	riverClient, err := jobs.NewClient(pool, servicio, configuracionDeJobs, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
 	if err != nil {
 		return fmt.Errorf("river: %w", err)
 	}

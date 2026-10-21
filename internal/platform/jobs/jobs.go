@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -75,13 +76,28 @@ type ServicioDeDisparadores interface {
 	ExpirarIntenciones(ctx context.Context, ttl time.Duration) (int, error)
 }
 
+// ServicioDeInteligencia es lo que el worker de enriquecimiento necesita del contexto de inteligencia.
+type ServicioDeInteligencia interface {
+	EnriquecerAsientos(ctx context.Context, limite int) (int, error)
+}
+
+// ServicioDeAvisos es lo que el worker de avisos necesita del contexto de inteligencia.
+type ServicioDeAvisos interface {
+	EmitirAvisos(ctx context.Context, ahora time.Time) (int, error)
+}
+
 // Config fija cada cuánto dispara cada trabajo y los parámetros que reciben sus workers.
 type Config struct {
-	OutboxInterval       time.Duration
-	ConciliationInterval time.Duration
-	ConciliationWindow   time.Duration
-	ExpirationInterval   time.Duration
-	ExpirationTTL        time.Duration
+	OutboxInterval          time.Duration
+	ConciliationInterval    time.Duration
+	ConciliationWindow      time.Duration
+	ExpirationInterval      time.Duration
+	ExpirationTTL           time.Duration
+	Inteligencia            ServicioDeInteligencia
+	EnriquecimientoInterval time.Duration
+	EnriquecimientoLote     int
+	Avisos                  ServicioDeAvisos
+	AvisosHora              string
 }
 
 // DespacharOutboxArgs no lleva datos: el barrido del outbox no recibe parámetros.
@@ -139,24 +155,63 @@ func (w *ExpirarIntencionesWorker) Work(ctx context.Context, _ *river.Job[Expira
 	return err
 }
 
-// trabajoPeriodico describe un trabajo periódico antes de convertirlo al tipo de River.
+// EnriquecerArgs no lleva datos: el lote lo fija el cliente.
+type EnriquecerArgs struct{}
+
+// Kind es el nombre estable de la fila encolada.
+func (EnriquecerArgs) Kind() string { return "enriquecer_movimientos" }
+
+// EnriquecerWorker llama al lote de enriquecimiento del contexto de inteligencia.
+type EnriquecerWorker struct {
+	river.WorkerDefaults[EnriquecerArgs]
+	servicio ServicioDeInteligencia
+	limite   int
+}
+
+// Work delega en inteligencia y propaga su error para que River reintente.
+func (w *EnriquecerWorker) Work(ctx context.Context, _ *river.Job[EnriquecerArgs]) error {
+	limite := w.limite
+	if limite <= 0 {
+		limite = 500
+	}
+	_, err := w.servicio.EnriquecerAsientos(ctx, limite)
+	return err
+}
+
+// trabajoPeriodico describe un trabajo periódico antes de convertirlo al tipo de River. Un horario
+// fijo reemplaza al intervalo, y alArrancar decide si River corre el trabajo al desplegar.
 type trabajoPeriodico struct {
-	id      string
-	periodo time.Duration
-	nuevo   river.PeriodicJobConstructor
+	id         string
+	periodo    time.Duration
+	horario    river.PeriodicSchedule
+	alArrancar bool
+	nuevo      river.PeriodicJobConstructor
 }
 
 // trabajosPeriodicos arma el plan; el barrido de expiración solo entra con un TTL positivo.
 func trabajosPeriodicos(cfg Config) []trabajoPeriodico {
 	trabajos := []trabajoPeriodico{
-		{id: "despachar_outbox", periodo: cfg.OutboxInterval,
+		{id: "despachar_outbox", periodo: cfg.OutboxInterval, alArrancar: true,
 			nuevo: func() (river.JobArgs, *river.InsertOpts) { return DespacharOutboxArgs{}, nil }},
-		{id: "conciliar", periodo: cfg.ConciliationInterval,
+		{id: "conciliar", periodo: cfg.ConciliationInterval, alArrancar: true,
 			nuevo: func() (river.JobArgs, *river.InsertOpts) { return ConciliarArgs{}, nil }},
 	}
 	if cfg.ExpirationTTL > 0 {
 		trabajos = append(trabajos, trabajoPeriodico{id: "expirar_intenciones", periodo: cfg.ExpirationInterval,
-			nuevo: func() (river.JobArgs, *river.InsertOpts) { return ExpirarIntencionesArgs{}, nil }})
+			alArrancar: true,
+			nuevo:      func() (river.JobArgs, *river.InsertOpts) { return ExpirarIntencionesArgs{}, nil }})
+	}
+	if cfg.Inteligencia != nil && cfg.EnriquecimientoInterval > 0 {
+		trabajos = append(trabajos, trabajoPeriodico{id: "enriquecer_movimientos", periodo: cfg.EnriquecimientoInterval,
+			alArrancar: true,
+			nuevo:      func() (river.JobArgs, *river.InsertOpts) { return EnriquecerArgs{}, nil }})
+	}
+	if cfg.Avisos != nil {
+		if horario, err := NuevaHoraDeBogota(cfg.AvisosHora); err == nil {
+			trabajos = append(trabajos, trabajoPeriodico{id: "emitir_avisos", horario: horario,
+				alArrancar: false,
+				nuevo:      func() (river.JobArgs, *river.InsertOpts) { return AvisosArgs{}, nil }})
+		}
 	}
 	return trabajos
 }
@@ -166,10 +221,16 @@ func newPeriodicJobs(cfg Config) []*river.PeriodicJob {
 	trabajos := trabajosPeriodicos(cfg)
 	periodicos := make([]*river.PeriodicJob, 0, len(trabajos))
 	for _, t := range trabajos {
+		var planificacion river.PeriodicSchedule
+		if t.horario != nil {
+			planificacion = t.horario
+		} else {
+			planificacion = river.PeriodicInterval(t.periodo)
+		}
 		periodicos = append(periodicos, river.NewPeriodicJob(
-			river.PeriodicInterval(t.periodo),
+			planificacion,
 			t.nuevo,
-			&river.PeriodicJobOpts{ID: t.id, RunOnStart: true},
+			&river.PeriodicJobOpts{ID: t.id, RunOnStart: t.alArrancar},
 		))
 	}
 	return periodicos
@@ -186,6 +247,12 @@ func NewClient(pool *pgxpool.Pool, servicio ServicioDeDisparadores, cfg Config, 
 	river.AddWorker(workers, &DespacharOutboxWorker{servicio: servicio})
 	river.AddWorker(workers, &ConciliarWorker{servicio: servicio, ventana: cfg.ConciliationWindow})
 	river.AddWorker(workers, &ExpirarIntencionesWorker{servicio: servicio, ttl: cfg.ExpirationTTL})
+	if cfg.Inteligencia != nil {
+		river.AddWorker(workers, &EnriquecerWorker{servicio: cfg.Inteligencia, limite: cfg.EnriquecimientoLote})
+	}
+	if cfg.Avisos != nil {
+		river.AddWorker(workers, &AvisosWorker{servicio: cfg.Avisos, reloj: time.Now})
+	}
 	for _, agregar := range plan.workers {
 		agregar(workers)
 	}
@@ -211,4 +278,63 @@ func NewClient(pool *pgxpool.Pool, servicio ServicioDeDisparadores, cfg Config, 
 		Queues:       colas,
 		PeriodicJobs: periodicos,
 	})
+}
+
+var horaDeDosDigitos = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+
+// AvisosArgs no lleva datos: el reloj llega por el worker.
+type AvisosArgs struct{}
+
+// Kind es el nombre estable de la fila encolada.
+func (AvisosArgs) Kind() string { return "emitir_avisos" }
+
+// AvisosWorker evalúa a todos los usuarios y guarda los avisos del día.
+type AvisosWorker struct {
+	river.WorkerDefaults[AvisosArgs]
+	servicio ServicioDeAvisos
+	reloj    func() time.Time
+}
+
+// Work delega en inteligencia con el instante inyectado y propaga el error para que River reintente.
+func (w *AvisosWorker) Work(ctx context.Context, _ *river.Job[AvisosArgs]) error {
+	reloj := w.reloj
+	if reloj == nil {
+		reloj = time.Now
+	}
+	_, err := w.servicio.EmitirAvisos(ctx, reloj())
+	return err
+}
+
+// HoraDeBogota es un horario diario a una hora fija de Colombia. Implementa river.PeriodicSchedule.
+type HoraDeBogota struct {
+	Hora   int
+	Minuto int
+	Zona   *time.Location
+}
+
+// NuevaHoraDeBogota valida y parsea una hora en formato HH:MM de dos dígitos.
+func NuevaHoraDeBogota(texto string) (HoraDeBogota, error) {
+	zona := time.FixedZone("America/Bogota", -5*60*60)
+	if !horaDeDosDigitos.MatchString(texto) {
+		return HoraDeBogota{}, fmt.Errorf("jobs: hora inválida %q, se esperaba HH:MM", texto)
+	}
+	valor, err := time.ParseInLocation("15:04", texto, zona)
+	if err != nil {
+		return HoraDeBogota{}, fmt.Errorf("jobs: hora inválida %q, se esperaba HH:MM", texto)
+	}
+	return HoraDeBogota{Hora: valor.Hour(), Minuto: valor.Minute(), Zona: zona}, nil
+}
+
+// Next devuelve la próxima vez que se cumple la hora, siempre estrictamente después de t.
+func (h HoraDeBogota) Next(t time.Time) time.Time {
+	zona := h.Zona
+	if zona == nil {
+		zona = time.FixedZone("America/Bogota", -5*60*60)
+	}
+	local := t.In(zona)
+	siguiente := time.Date(local.Year(), local.Month(), local.Day(), h.Hora, h.Minuto, 0, 0, zona)
+	if !siguiente.After(local) {
+		siguiente = siguiente.AddDate(0, 0, 1)
+	}
+	return siguiente
 }
