@@ -48,7 +48,7 @@ func (s servidorV1) ListarConversacionesVera(w http.ResponseWriter, r *http.Requ
 	for _, c := range pagina.Elementos {
 		datos = append(datos, api.ConversacionVera{Id: c.ID, Titulo: c.Titulo, CreadaEn: c.CreadaEn.In(zona), UltimaActividad: c.UltimaActividad.In(zona)})
 	}
-	api.WriteDataConCursor(w, 200, datos, &api.MetaHistorialVera{Limit: pagina.Limite, HasMore: pagina.Siguiente != nil, NextCursor: pagina.Siguiente})
+	api.WriteDataHistorialVera(w, 200, datos, &api.MetaHistorialVera{Limit: pagina.Limite, HasMore: pagina.Siguiente != nil, NextCursor: pagina.Siguiente})
 }
 
 func (s servidorV1) ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, id uuid.UUID, params api.ListarMensajesConversacionVeraParams) {
@@ -66,7 +66,7 @@ func (s servidorV1) ListarMensajesConversacionVera(w http.ResponseWriter, r *htt
 	for _, m := range pagina.Elementos {
 		datos = append(datos, api.MensajeVera{Id: m.ID, Rol: api.MensajeVeraRol(m.Rol), Canal: api.MensajeVeraCanal(m.Canal), Texto: m.Texto, CreadoEn: m.CreadoEn.In(zona), AccionPendiente: tarjetaVeraOpcional(m.Accion, zona)})
 	}
-	api.WriteDataConCursor(w, 200, datos, &api.MetaHistorialVera{Limit: pagina.Limite, HasMore: pagina.Siguiente != nil, NextCursor: pagina.Siguiente})
+	api.WriteDataHistorialVera(w, 200, datos, &api.MetaHistorialVera{Limit: pagina.Limite, HasMore: pagina.Siguiente != nil, NextCursor: pagina.Siguiente})
 }
 
 func (s servidorV1) BorrarConversacionVera(w http.ResponseWriter, r *http.Request, id uuid.UUID) {

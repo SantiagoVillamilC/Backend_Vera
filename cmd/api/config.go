@@ -7,37 +7,52 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
+// horaValida es el formato HH:MM de 24 horas que acepta AVISOS_HORA.
+var horaValida = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+
+// largoMinimoDelTokenDeMetricas es el mínimo exigido a METRICAS_TOKEN cuando la superficie está abierta.
+const largoMinimoDelTokenDeMetricas = 32
+
 // Config reúne los valores de entorno que el proceso necesita para arrancar.
 type Config struct {
-	Port                   string
-	AppDatabaseURL         string
-	JWTSecret              string
-	CustodioToken          string
-	PSEURL                 string
-	CustodioExtractoURL    string
-	RielSimuladorURL       string
-	DirectorioSimuladorURL string
-	OCRWorkerURL           string
-	LogLevel               string
-	LogFormat              string
-	OutboxInterval         time.Duration
-	OutboxBackoffBase      time.Duration
-	OutboxBackoffFactor    float64
-	OutboxBackoffMax       time.Duration
-	ConciliationInterval   time.Duration
-	ConciliationWindow     time.Duration
-	ExpirationInterval     time.Duration
-	ExpirationTTL          time.Duration
-	A6PosicionLiquidacion  nucleo.Centavos
-	A6PrefondeoActivo      bool
-	Auth                   ConfigAuth
-	Vera                   ConfigVera
+	Port                    string
+	AppDatabaseURL          string
+	JWTSecret               string
+	CustodioToken           string
+	PSEURL                  string
+	CustodioExtractoURL     string
+	RielSimuladorURL        string
+	DirectorioSimuladorURL  string
+	OCRWorkerURL            string
+	LogLevel                string
+	LogFormat               string
+	OutboxInterval          time.Duration
+	OutboxBackoffBase       time.Duration
+	OutboxBackoffFactor     float64
+	OutboxBackoffMax        time.Duration
+	ConciliationInterval    time.Duration
+	ConciliationWindow      time.Duration
+	ExpirationInterval      time.Duration
+	ExpirationTTL           time.Duration
+	EnriquecimientoInterval time.Duration
+	Clasificador            inteligencia.ModoClasificador
+	Lexico                  inteligencia.ModoLexico
+	AvisosActivo            bool
+	AvisosHora              string
+	MetricasActivo          bool
+	MetricasToken           string
+	A6PosicionLiquidacion   nucleo.Centavos
+	A6PrefondeoActivo       bool
+	Auth                    ConfigAuth
+	Vera                    ConfigVera
 }
 
 // LoadConfig valida el entorno y reporta todos los errores juntos.
@@ -143,6 +158,44 @@ func LoadConfig() (*Config, error) {
 	if errDuracion != nil {
 		errs = append(errs, errDuracion)
 	}
+	cfg.EnriquecimientoInterval, errDuracion = durationOr("ENRIQUECIMIENTO_INTERVAL", "5m")
+	if errDuracion != nil {
+		errs = append(errs, errDuracion)
+	}
+	var errAvisos error
+	cfg.AvisosActivo, errAvisos = boolOr("AVISOS_ACTIVO", "false")
+	if errAvisos != nil {
+		errs = append(errs, errAvisos)
+	}
+	cfg.AvisosHora = envOr("AVISOS_HORA", "06:00")
+	if !horaValida.MatchString(cfg.AvisosHora) {
+		errs = append(errs, fmt.Errorf("AVISOS_HORA must be HH:MM, got %q", cfg.AvisosHora))
+	}
+	var errClasificador error
+	cfg.Clasificador, errClasificador = inteligencia.InterpretarModoClasificador(os.Getenv("CLASIFICADOR"))
+	if errClasificador != nil {
+		errs = append(errs, errClasificador)
+	}
+	var errLexico error
+	cfg.Lexico, errLexico = inteligencia.InterpretarModoLexico(os.Getenv("LEXICO"))
+	if errLexico != nil {
+		errs = append(errs, errLexico)
+	}
+	var errMetricas error
+	cfg.MetricasActivo, errMetricas = boolOr("METRICAS_ACTIVO", "false")
+	if errMetricas != nil {
+		errs = append(errs, errMetricas)
+	}
+	cfg.MetricasToken = os.Getenv("METRICAS_TOKEN")
+	if cfg.MetricasActivo {
+		if len(cfg.MetricasToken) < largoMinimoDelTokenDeMetricas {
+			errs = append(errs, fmt.Errorf("METRICAS_TOKEN must be at least %d bytes when METRICAS_ACTIVO is on, got %d",
+				largoMinimoDelTokenDeMetricas, len(cfg.MetricasToken)))
+		}
+		if cfg.MetricasToken != "" && (cfg.MetricasToken == cfg.CustodioToken || cfg.MetricasToken == cfg.JWTSecret) {
+			errs = append(errs, errors.New("METRICAS_TOKEN must differ from CUSTODIO_TOKEN and JWT_SECRET"))
+		}
+	}
 	var errA6 error
 	cfg.A6PosicionLiquidacion, errA6 = centavosOr("A6_POSICION_LIQUIDACION_CENTAVOS", "0")
 	if errA6 != nil {
@@ -210,6 +263,13 @@ func (c Config) LogValue() slog.Value {
 		slog.String("conciliation_window", c.ConciliationWindow.String()),
 		slog.String("expiration_ttl", c.ExpirationTTL.String()),
 		slog.String("expiration_interval", c.ExpirationInterval.String()),
+		slog.String("enriquecimiento_interval", c.EnriquecimientoInterval.String()),
+		slog.String("clasificador", string(c.Clasificador)),
+		slog.String("lexico", string(c.Lexico)),
+		slog.Bool("avisos_activo", c.AvisosActivo),
+		slog.String("avisos_hora", c.AvisosHora),
+		slog.Bool("metricas_activo", c.MetricasActivo),
+		slog.Bool("metricas_token_set", c.MetricasToken != ""),
 		slog.Bool("a6_prefondeo_activo", c.A6PrefondeoActivo),
 		slog.String("a6_posicion_liquidacion_centavos", strconv.FormatInt(c.A6PosicionLiquidacion.Int64(), 10)),
 		slog.String("a6_posicion_liquidacion_cop", c.A6PosicionLiquidacion.PresentarUnidadesMayores()),

@@ -148,7 +148,7 @@ jobs:
 
       - name: Start custodian simulator
         run: |
-          go build -o "$RUNNER_TEMP/simulador-custodia" ./cmd/simulador-custodia
+          (cd servicios/simuladores && go build -o "$RUNNER_TEMP/simulador-custodia" ./cmd/simulador-custodia)
           SIMULADOR_CUSTODIA_PORT=8099 SIMULADOR_CUSTODIA_DB="$RUNNER_TEMP/simulador-custodia.db" \
             nohup "$RUNNER_TEMP/simulador-custodia" >"$RUNNER_TEMP/simulador-custodia.log" 2>&1 &
           for _ in $(seq 1 30); do

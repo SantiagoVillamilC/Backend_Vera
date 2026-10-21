@@ -1,0 +1,58 @@
+name: CD simuladores
+
+on:
+  push:
+    # El despliegue de los simuladores lo hace cd.yml con deploy-ci.sh en la
+    # misma corrida que la API: aquí solo se publican las imágenes.
+    branches: [dev, staging, main]
+    paths:
+      - "servicios/simuladores/**"
+      - ".github/workflows/cd-simuladores.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cd-simuladores-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRO: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and push ${{ matrix.servicio }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        servicio: [simulador-riel, simulador-custodia, simulador-pse]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRO }}/${{ matrix.servicio }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=${{ github.ref_name }}-
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: servicios/simuladores
+          file: servicios/simuladores/deploy/Dockerfile
+          build-args: |
+            SERVICIO=${{ matrix.servicio }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+

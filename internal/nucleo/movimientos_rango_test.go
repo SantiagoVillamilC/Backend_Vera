@@ -47,7 +47,7 @@ func TestResumenPorMotivoNoDuplicaSubcuentas(t *testing.T) {
 
 func TestResumenContrapartesDiezGruposYOverflow(t *testing.T) {
 	a := nuevoResumenPeriodo("contraparte")
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		if err := a.anexar(MovimientoPeriodo{ContraparteRef: string(rune('a' + i)), Lineas: []LineaMovimiento{{Monto: Centavos(i + 1), Motivo: MotivoTransferenciaRecibida}}}); err != nil {
 			t.Fatal(err)
 		}

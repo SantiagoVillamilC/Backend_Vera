@@ -51,7 +51,7 @@ aun si llegan inserciones concurrentes o con fecha anterior. No se carga el hist
 completo en memoria: el listado retiene como máximo 20 filas, y el resumen acumula un
 registro por clave de grupo antes de ordenar y recortar. Se respeta el contexto y plazo.
 
-La migración 0021 añade `posting.ocurrido_en`, rellena los postings previos desde su
+La migración 0027 añade `posting.ocurrido_en`, rellena los postings previos desde su
 asiento y crea un trigger que fija la fecha al insertar, incluso si se proporciona otra.
 Es una copia derivada de `journal_entry.ocurrido_en`, inmutable para el rol de aplicación.
 Así puede existir el índice compuesto `(cuenta_id, ocurrido_en DESC, entry_id DESC)`;
@@ -86,4 +86,8 @@ motivos, bordes de medianoche, usuario distinto de ParteID, terceros, contrapart
 la misma máscara, filtros, periodos vacíos y 501 asientos con empates de fecha.
 Los esperados se calculan a partir de importes sembrados conocidos. También verifica
 que el cliente no pueda elegir la fecha del índice. Una prueba de migración separada
-crea datos anteriores a 0021, aplica, revierte y reaplica sin perder importes ni fechas.
+crea datos anteriores a 0027, aplica, revierte y reaplica sin perder importes ni fechas.
+
+La migración de este índice se numeró 0027 al integrar la rama del asistente con
+`dev`: 0021–0026 pertenecen a inteligencia. El SQL del índice y su backfill no
+cambiaron y no se renumeró ninguna migración ya publicada en `dev`.

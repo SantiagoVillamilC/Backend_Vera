@@ -1,0 +1,8 @@
+{
+  "version": "v2",
+  "fuente": "dataset-inteligencia/lexico/v2/lexico_v2.csv",
+  "regla": "v1 menos las catorce palabras genéricas del punto 213 del registro",
+  "palabras": 588,
+  "sha256_origen": "1a469ab4fda9780256cd091041c1a1a20f1c6b7722d7eb4ec13d4b5906b1abfd",
+  "sha256_embebido": "1a469ab4fda9780256cd091041c1a1a20f1c6b7722d7eb4ec13d4b5906b1abfd"
+}

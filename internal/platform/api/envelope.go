@@ -26,9 +26,22 @@ func WriteData[T any](w http.ResponseWriter, status int, data T, meta *Meta) {
 	writeJSON(w, status, Envelope[T]{Success: true, Data: data, Meta: meta})
 }
 
-// WriteDataConCursor usa la metadata generada del historial sin alterar el cursor del núcleo.
-func WriteDataConCursor[T any](w http.ResponseWriter, status int, data T, meta *MetaHistorialVera) {
+// WriteDataHistorialVera usa la metadata generada del historial sin alterar el cursor del núcleo.
+func WriteDataHistorialVera[T any](w http.ResponseWriter, status int, data T, meta *MetaHistorialVera) {
 	writeJSON(w, status, EnvelopeConMeta[T, MetaHistorialVera]{Success: true, Data: data, Meta: meta})
+}
+
+// EnvelopeConCursor es el envelope de los listados que paginan con un cursor opaco.
+type EnvelopeConCursor[T any] struct {
+	Success bool        `json:"success"`
+	Data    T           `json:"data"`
+	Error   *APIError   `json:"error"`
+	Meta    *MetaCursor `json:"meta"`
+}
+
+// WriteDataConCursor responde un listado paginado por un cursor opaco, no por el identificador del ledger.
+func WriteDataConCursor[T any](w http.ResponseWriter, status int, data T, meta *MetaCursor) {
+	writeJSON(w, status, EnvelopeConCursor[T]{Success: true, Data: data, Meta: meta})
 }
 
 // WriteError responde con un envelope de error a partir de sus piezas.

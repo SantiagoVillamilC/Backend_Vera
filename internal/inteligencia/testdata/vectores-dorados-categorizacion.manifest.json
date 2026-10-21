@@ -1,0 +1,29 @@
+{
+  "archivo": "vectores-dorados-categorizacion.json",
+  "sha256_archivo": "b990677d96311676f86257f3606d114b2eac67d4fe1234ac8b0425f68b15a70d",
+  "sha256_por_caso": {
+    "catalogo-por-llave": "c76e48a296cc509239b9e5887821bea2cd8c959698d8014c57e0db4525869787",
+    "catalogo-por-nombre": "c76e48a296cc509239b9e5887821bea2cd8c959698d8014c57e0db4525869787",
+    "interna-fuera-del-catalogo-se-ignora": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "interna-gana-a-mcc": "89ae4a407d79e29cee367c033002e87699a66ba0ccfb33df250ef5c44467eb4a",
+    "lexico-dos-categorias-no-decide": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "lexico-una-categoria": "3358a8dec85022a9b494e9d7ef1f005e6e80a653509478d807bc563dec48b82a",
+    "llave-gana-a-nombre": "d848ab8b8763b09b77bddee1373175fbedc729c1949a84feb5a4c69b66a79f69",
+    "llave-sin-qr-no-usa-catalogo-de-nombres": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "llm-cache-acierta": "f70b180d29fdfb751ca0f214219b0e0caf85f6340fb75ce3dec890a69f599bc8",
+    "llm-pendiente": "0e1159751bfe0e465a50b5b102f084339eb920efb173921f7b22d1762493c5be",
+    "mcc-con-espacios-se-normaliza": "41b0c4bbeb59893671748ac3185745c5c312e7ff4881bf89019c7516f871b6e4",
+    "mcc-generico-no-resuelve": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "mcc-invalido-no-resuelve": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "mcc-resuelve": "41b0c4bbeb59893671748ac3185745c5c312e7ff4881bf89019c7516f871b6e4",
+    "memoria-por-llave": "d848ab8b8763b09b77bddee1373175fbedc729c1949a84feb5a4c69b66a79f69",
+    "memoria-por-nombre": "bfa86e3ddebf641208bbc24ec0455d431df9ccc5edaaebe4bd4d4cb400606b1d",
+    "nombre-vacio-no-llama-al-llm": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "persona-no-hereda-por-nombre": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "primer-corte-apaga-catalogo": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "primer-corte-apaga-mcc": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "qr-de-persona-tampoco-usa-nombre": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a",
+    "valor-fuera-del-catalogo-se-ignora": "541f56478d275423d72e5d4efe168695605639ec6d46cfd5f4593cb92e6ee94a"
+  },
+  "version": 1
+}

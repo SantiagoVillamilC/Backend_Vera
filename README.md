@@ -64,6 +64,42 @@ backend/
 └── go.sum
 ```
 
+## Servicios simulados
+
+Los tres sistemas externos (riel Bre-B, banco custodio y pasarela PSE) no viven en este
+repositorio. Están en el monorepo `Simuladores_Vera`, como procesos independientes con su
+propio almacenamiento, y este backend los consume por HTTP con `RIEL_SIMULADOR_URL`,
+`DIRECTORIO_SIMULADOR_URL`, `CUSTODIO_EXTRACTO_URL`, `PSE_URL` y `CUSTODIO_TOKEN`.
+
+## Compilar y demostrar
+
+Los binarios no se versionan. `make build` compila los siete comandos en `out/bin` con
+`CGO_ENABLED=0`, igual que la imagen de Docker: `api`, `migrate`, `enriquecer`, `avisos`,
+`semilla-inteligencia`, `evaluar-clasificador` y `rollback-m8`.
+
+```bash
+make build       # compila los siete comandos en out/bin
+make verificar   # build, go vet y go test -race -count=1 ./...
+make imagen      # construye la imagen vera-api:local con api y migrate
+make demo        # levanta todo sobre una base desechable y lo comprueba
+make limpiar     # borra out/bin y los contenedores de la demo
+```
+
+`make demo` ejecuta `infra/local/demostrar.sh`. Ese script levanta Postgres 16 y Redis 7 en
+contenedores desechables, aplica las migraciones, siembra 1.200 usuarios con 10 meses de
+historial, corre dos lotes de enriquecimiento con `LEXICO=v2` y `CLASIFICADOR=tfidf`, emite
+avisos una vez, arranca la API con `METRICAS_ACTIVO=true` y `AVISOS_ACTIVO=true`, y comprueba
+`/healthz`, `/metrics`, `/v1/inteligencia/movimientos`, `/v1/inteligencia/resumen` y
+`/v1/inteligencia/avisos` con un access real. Al final mide el primer corte con
+`evaluar-clasificador` y deja los informes en `out/demo/`.
+
+El sembrador solo acepta loopback, el puerto 55437 y bases cuyo nombre empiece por
+`vera_semilla_`, así que el script no puede escribir en una base real. Los avisos se encienden
+solo en esta base desechable: en un despliegue real `AVISOS_ACTIVO` sigue apagado hasta que
+haya un piloto con personas. Se puede ajustar el tamaño con `USUARIOS`, `MESES`, `EXTRA` y
+`LOTES`, el puerto con `PUERTO_PG`, `PUERTO_REDIS` y `PUERTO_API`, y dejar el stack corriendo
+con `DEJAR=si`.
+
 ## Variables de entorno esperadas (`.env.example`)
 
 El asistente tiene su contrato bajo `/v1/vera` en `api/openapi.yaml`; sus handlers

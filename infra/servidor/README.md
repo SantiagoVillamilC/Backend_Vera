@@ -187,6 +187,7 @@ en `.gitignore`).
 | `50-certbot.sh` | Emitir el certificado TLS con certbot y su temporizador | SCRUM-30 | Implementado |
 | `45-redis.sh` | Instalar y configurar Redis en contenedor | SCRUM-100 | Implementado |
 | `60-api.sh` | Instalar y configurar el contenedor de la API | SCRUM-100 | Implementado |
+| `65-simuladores.sh` | Instalar los servicios simulados y el vhost de PSE | SCRUM-114 | Implementado |
 | `70-ci-deploy-key.sh` | Actualizar el command= forzado de la llave de deploy de CI | SCRUM-100 | Implementado |
 
 ### `imagen-fijada.sh`
@@ -456,7 +457,9 @@ Emite el certificado TLS con certbot y programa su renovación (tarjeta
 SCRUM-30). El dominio ya es definitivo (`veraapp.tech`, ver
 `dominio-fijado.sh`). Nunca toca el contenedor `nginx` ni escribe
 `raiz-http.conf`: solo deja archivos en disco (`compose.certbot.yaml`,
-`nginx/conf.d/centinela-tls.conf`, `nginx/snippets/raiz-redirigir.conf`) y
+`nginx/conf.d/centinela-tls.conf`, `nginx/conf.d/www-tls.conf`,
+`nginx/conf.d/api-tls.conf`, `nginx/conf.d/staging-tls.conf`,
+`nginx/snippets/cabeceras-seguridad.conf`, `nginx/snippets/raiz-redirigir.conf`) y
 gestiona el certificado y su timer de renovación. Es `30-nginx.sh` quien
 recoge esos archivos la próxima vez que corra completo: la activación real
 del puerto 443 y la redirección a HTTPS quedan diferidas una corrida
@@ -474,8 +477,23 @@ siendo el comodín `_`; (3) falta `CORREO_CERTBOT` en `aprovisionar.env`
 **Emisión**: contenedor efímero `docker run --rm` con el plugin webroot,
 montando `nginx/webroot` (sin `:ro`: certbot necesita escribir el reto ahí)
 y `/etc/letsencrypt` COMPLETO (no solo `live/`: son symlinks hacia
-`archive/`). Idempotente por existencia de `fullchain.pem`: si ya existe,
-no se vuelve a invocar `certonly`.
+`archive/`). El certificado cubre cuatro nombres (`DOMINIOS_TLS`): el apex,
+`www`, `api` y `staging`. Idempotente por existencia Y cobertura: si
+`fullchain.pem` existe y su `subjectAltName` incluye `www`, no se vuelve a
+invocar `certonly`. Si existe pero le faltan nombres (el caso de un
+certificado emitido antes de que existieran los alias), se reemite una sola
+vez con `--expand`, que reemplaza el linaje en lugar de gastar el cupo de
+certificados duplicados.
+
+**Cuatro nombres, tres vhosts**: `centinela-tls.conf` sirve el apex,
+`www-tls.conf` devuelve un 301 al apex sin servir contenido, y `api-tls.conf`
+y `staging-tls.conf` proxean al MISMO contenedor `api` con el mismo
+`raiz-http.conf`, porque `staging` y `main` comparten esta VM y entre ellos
+solo cambia la etiqueta de la imagen. No son ambientes aislados: lo que
+responda `staging.veraapp.tech` es lo que esté desplegado en ese momento. Los
+tres vhosts de la API incluyen `cabeceras-seguridad.conf` (HSTS,
+`X-Content-Type-Options`, `Referrer-Policy`); `pse-tls.conf` mantiene su
+propio HSTS y no lo incluye.
 
 **Trampa de `CERTBOT_STAGING`**: un certificado de staging queda en la
 MISMA ruta (`live/${DOMINIO_SERVIDOR}/fullchain.pem`) que uno real. Como la
@@ -532,15 +550,34 @@ propiedad frente a `30-nginx.sh`, y la verificación en vivo contra Let's
 Encrypt real y contra Azure, incluido el cutover de staging a producción)
 queda documentado en la bitácora técnica del proyecto.
 
-### `45-redis.sh`, `60-api.sh`, `70-ci-deploy-key.sh` (SCRUM-100)
+### `45-redis.sh`, `60-api.sh`, `65-simuladores.sh`, `70-ci-deploy-key.sh` (SCRUM-100, SCRUM-114)
 
-Dueños de `compose.redis.yaml`, `compose.api.yaml`, y del `command=`
-forzado de `authorized_keys` respectivamente. Cierran el hueco que
-`30-nginx.sh` ya documentaba: no existía ningún service `api`, así que el
-CD de SCRUM-50 fallaba con "no such service: api" (bitácora 2026-09-24).
-`60-api.sh` también fija la contraseña de `rol_api` (migración 0004 la
-crea `LOGIN` sin una), usa el tag flotante `:main` (`staging` y `main`
-comparten la misma VM, no hay segundo ambiente), y requiere `cmd/migrate
-up` ya corrido. `70-ci-deploy-key.sh` reemplaza la lista fija de `-f
-compose*.yaml` del `command=` por el mismo glob dinámico de
-`asegurar_servicio_compose`, y se omite si la llave no existe todavía.
+Dueños de `compose.redis.yaml`, `compose.api.yaml`, del compose de los
+simuladores y del `command=` forzado de `authorized_keys` respectivamente.
+Cierran el hueco que `30-nginx.sh` ya documentaba: no existía ningún service
+`api`, así que el CD de SCRUM-50 fallaba con "no such service: api" (bitácora
+2026-09-24). `60-api.sh` también fija la contraseña de `rol_api` (migración
+0004 la crea `LOGIN` sin una) y genera `infra-servidor/.env` con `IMAGEN_API`.
+
+**La rama desplegada es una etiqueta, no un archivo.** `cd.yml` publica un tag
+por rama (`dev`, `staging`, `main`) y `deploy-ci.sh` recibe la rama por
+`SSH_ORIGINAL_COMMAND`, valida que sea una de las tres y reescribe `IMAGEN_API`
+en `infra-servidor/.env` y `TAG` en `simuladores/.env` antes de hacer `pull`.
+Por eso `compose.api.yaml` referencia `${IMAGEN_API:?}` en vez de llevar el tag
+dentro: regenerar el compose para cambiar de rama era el paso manual que hacía
+imposible desplegar `dev`. Un push a `dev` construye la imagen pero no despliega
+(`if: github.ref_name != 'dev'`), porque `staging` y `main` comparten la misma
+VM y desplegar `dev` sería publicar en producción sin compuerta.
+
+`deploy-ci.sh` aplica las migraciones con `docker compose run --rm migrate`
+antes de `up -d api`: con `depends_on`, un `up -d` reusa el contenedor `migrate`
+ya terminado y no volvería a aplicarlas. `70-ci-deploy-key.sh` deja el
+`command=` apuntando a ese script, le fija dueño `root:root` y modo `700`, y se
+omite si la llave no existe todavía.
+
+`65-simuladores.sh` instala además el borde HTTP de PSE: copia
+`simuladores/pse-http.conf` como snippet, escribe el bloque de `:80`, emite el
+certificado de `DOMINIO_PSE` con el mismo certbot de `50-certbot.sh` si aún no
+existe, agrega el bloque de `:443` y recarga nginx. Es el único nombre público
+de los tres simuladores: el riel y el custodio se quedan en `127.0.0.1` porque
+`/control` no tiene autenticación.

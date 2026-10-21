@@ -1,0 +1,44 @@
+name: CI simuladores
+
+on:
+  push:
+    paths:
+      - "servicios/simuladores/**"
+      - ".github/workflows/ci-simuladores.yml"
+  pull_request:
+    paths:
+      - "servicios/simuladores/**"
+      - ".github/workflows/ci-simuladores.yml"
+
+jobs:
+  test:
+    name: Build, test and lint simuladores
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: servicios/simuladores
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: servicios/simuladores/go.mod
+          cache-dependency-path: servicios/simuladores/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+
+  build:
+    name: Build ${{ matrix.servicio }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        servicio: [simulador-riel, simulador-custodia, simulador-pse]
+    defaults:
+      run:
+        working-directory: servicios/simuladores
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: servicios/simuladores/go.mod
+          cache-dependency-path: servicios/simuladores/go.sum
+      - run: CGO_ENABLED=0 go build -o /dev/null ./cmd/${{ matrix.servicio }}

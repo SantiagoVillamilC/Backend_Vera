@@ -43,6 +43,8 @@ tags:
       oapi-codegen.yaml) porque usa un token estatico, no el bearerAuth de un usuario.
   - name: asistente
     description: Asistente de IA Vera, chat de texto y voz.
+  - name: inteligencia
+    description: Vista enriquecida y resumen de consumo derivados del ledger, de solo lectura.
 
 paths:
   /v1/auth/register:
@@ -806,6 +808,198 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/movimientos:
+    get:
+      operationId: listarMovimientosInteligencia
+      summary: Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
+      tags: [inteligencia]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: >
+            Tamano de pagina, de 1 a 100. Por defecto 50. Un valor mayor se recorta a 100.
+            Se tipa x-go-type string para que un valor no numerico llegue al handler y salga
+            como ValidationError, en vez de fallar antes en el binding generado.
+          schema:
+            type: integer
+            x-go-type: string
+        - name: cursor
+          in: query
+          required: false
+          description: >
+            Cursor opaco que devuelve la pagina anterior en meta.next_cursor. Codifica
+            (ocurrido_en, transaccion_id) y no se construye a mano.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pagina enriquecida, del movimiento mas nuevo al mas viejo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaMovimientosResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/resumen:
+    get:
+      operationId: resumenInteligencia
+      summary: Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
+      tags: [inteligencia]
+      parameters:
+        - name: mes
+          in: query
+          required: false
+          description: >
+            Mes calendario en America/Bogota con formato YYYY-MM. Por defecto el mes en curso.
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            x-go-type: string
+      responses:
+        "200":
+          description: Gasto del mes por categoria y la referencia de los meses completos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaResumenResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/movimientos/{transaccion_id}/correcciones:
+    post:
+      operationId: corregirMovimientoInteligencia
+      summary: Corrige la categoria o el nombre visible de un movimiento propio y reaplica la memoria privada.
+      tags: [inteligencia]
+      parameters:
+        - name: transaccion_id
+          in: path
+          required: true
+          description: >
+            Se declara como texto simple para que un identificador malformado llegue al handler
+            y salga como ValidationError en el sobre, no como error del binding generado.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InteligenciaCorreccionRequest"
+      responses:
+        "200":
+          description: Movimiento actualizado y cuantas filas de la copia cambiaron.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaCorreccionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/avisos:
+    get:
+      operationId: listarAvisosInteligencia
+      summary: Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+      tags: [inteligencia]
+      parameters:
+        - name: mes
+          in: query
+          required: false
+          description: >
+            Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del
+            aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido
+            llegue al handler y salga como ValidationError.
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            x-go-type: string
+      responses:
+        "200":
+          description: Tarjetas vigentes del mes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaAvisosResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/avisos/{id}/descartar:
+    post:
+      operationId: descartarAvisoInteligencia
+      summary: Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+      tags: [inteligencia]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: >
+            Identificador del aviso. Se declara como texto para que un valor malformado llegue al
+            handler y salga como ValidationError.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Aviso descartado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaAvisoDescarteResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
           $ref: "#/components/responses/Error"
         "429":
           $ref: "#/components/responses/Error"
@@ -1849,6 +2043,8 @@ components:
             DepositNotFound (404, la confirmacion del custodio apunta a un deposito inexistente),
             ConfirmationConflict (409, la confirmacion no coincide con el deposito),
             LateConfirmation (409, el deposito ya no esta pendiente),
+            CopiaSinReconstruir (409, la fila no tiene destino hasta reconstruir la copia),
+            CorreccionEnCurso (409, el lote de enriquecimiento tiene el candado),
             NotReady (503, solo en GET /readyz cuando una dependencia no responde),
             LimitsUnavailable (503, falta configuracion vigente de limites, UVT, GMF o KYC),
             AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
@@ -2891,6 +3087,289 @@ components:
           nullable: true
         meta:
           $ref: "#/components/schemas/Meta"
+
+    InteligenciaMovimiento:
+      type: object
+      required:
+        [transaccion_id, ocurrido_en, moneda, direccion, monto_centavos, contraparte,
+         contraparte_resuelta, descripcion, categoria, categoria_nombre, origen_categoria]
+      properties:
+        transaccion_id:
+          type: string
+          format: uuid
+        ocurrido_en:
+          type: string
+          format: date-time
+        moneda:
+          type: string
+          enum: [COP]
+        direccion:
+          type: string
+          enum: [entrada, salida]
+        monto_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+          description: Monto en centavos, mayor que cero. La direccion del dinero viaja en su propio campo.
+        contraparte:
+          type: string
+          description: Texto legible de la contraparte, nunca una llave ni un identificador de cuenta.
+        contraparte_resuelta:
+          type: boolean
+        descripcion:
+          type: string
+          nullable: true
+        categoria:
+          type: string
+        categoria_nombre:
+          type: string
+        origen_categoria:
+          type: string
+          enum:
+            [memoria, contraparte_interna, mcc, catalogo, lexico, tfidf, llm, sin_categoria,
+             manual]
+
+    MetaCursor:
+      type: object
+      nullable: true
+      required: [limit, next_cursor, has_more]
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    InteligenciaMovimientosResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaMovimiento"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/MetaCursor"
+
+    InteligenciaResumenCategoria:
+      type: object
+      required: [codigo, nombre, total_centavos, mediana_centavos, meses_con_gasto]
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        total_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+        mediana_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+          nullable: true
+          description: >
+            Mediana de los meses completos con gasto, redondeada medio a par. Nula cuando la
+            categoria no tiene al menos tres meses completos con gasto.
+        meses_con_gasto:
+          type: integer
+
+    InteligenciaResumen:
+      type: object
+      required:
+        [mes, desde, hasta, alcance, moneda, evaluable, meses_completos, meses_requeridos,
+         total_centavos, cupo_avisos, avisos_emitidos, categorias]
+      properties:
+        mes:
+          type: string
+        desde:
+          type: string
+          format: date-time
+        hasta:
+          type: string
+          format: date-time
+        alcance:
+          type: string
+          enum: [billetera]
+          description: El resumen solo ve los movimientos de la billetera y no los de otras entidades.
+        moneda:
+          type: string
+          enum: [COP]
+        evaluable:
+          type: boolean
+        meses_completos:
+          type: integer
+        meses_requeridos:
+          type: integer
+        total_centavos:
+          type: string
+          pattern: "^-?[0-9]+$"
+        cupo_avisos:
+          type: integer
+        avisos_emitidos:
+          type: integer
+        categorias:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaResumenCategoria"
+
+    InteligenciaResumenResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/InteligenciaResumen"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    InteligenciaCorreccionRequest:
+      type: object
+      description: >
+        Al menos uno de los dos campos. Una correccion de categoria no renombra y una correccion
+        de nombre no categoriza. sin_categoria no se ofrece.
+      properties:
+        categoria:
+          type: string
+          maxLength: 64
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=64"
+        nombre_comercio:
+          type: string
+          maxLength: 80
+          description: Nombre visible del comercio, de 1 a 80 puntos de codigo, sin espacios en los extremos.
+          x-oapi-codegen-extra-tags:
+            validate: "omitempty,max=80"
+
+    InteligenciaCorreccion:
+      type: object
+      required: [movimiento, filas_cambiadas]
+      properties:
+        movimiento:
+          $ref: "#/components/schemas/InteligenciaMovimiento"
+        filas_cambiadas:
+          type: integer
+          description: >
+            Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila
+            aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
+
+    InteligenciaAviso:
+      type: object
+      description: >
+        Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no
+        sean sus montos ni fechas que no sean la suya.
+      required:
+        [id, tipo, clave, periodo, severidad_centavos, prioridad, titulo, texto, porque, accion, transaccion_id, creado_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo:
+          type: string
+          enum: [pago_no_alcanza, caida_ingreso, cobro_nuevo, presupuesto_anticipado, categoria_sobre_media]
+        clave:
+          type: string
+          description: Identidad estable del aviso dentro de su tipo y periodo.
+        periodo:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: >
+            Primer dia del mes en los avisos mensuales, o la fecha del pago o del primer cobro en los
+            demas.
+        severidad_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+        prioridad:
+          type: integer
+          minimum: 1
+          maximum: 5
+        titulo:
+          type: string
+        texto:
+          type: string
+        porque:
+          type: string
+        accion:
+          type: string
+        transaccion_id:
+          type: string
+          format: uuid
+          nullable: true
+        creado_en:
+          type: string
+          format: date-time
+
+    InteligenciaAvisosResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaAviso"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    InteligenciaAvisoDescarte:
+      type: object
+      required: [id, descartado_en]
+      properties:
+        id:
+          type: string
+          format: uuid
+        descartado_en:
+          type: string
+          format: date-time
+
+    InteligenciaAvisoDescarteResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/InteligenciaAvisoDescarte"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    InteligenciaCorreccionResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/InteligenciaCorreccion"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
 
     CrearDepositoRequest:
       type: object

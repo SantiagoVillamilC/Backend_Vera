@@ -1,2 +1,9 @@
 # El entrypoint se ejecuta en Linux aunque el checkout del laboratorio sea Windows.
 infra/voz-local/iniciar.sh text eol=lf
+
+# Artefactos con SHA-256: conservar sus bytes en Windows y Linux.
+internal/inteligencia/modelo/*.json -text
+internal/inteligencia/testdata/*.json -text
+internal/inteligencia/avisos/testdata/*.json -text
+# Este catálogo se publicó con CRLF; su manifiesto comprueba esos mismos bytes.
+internal/inteligencia/lexico/*.csv -text whitespace=cr-at-eol

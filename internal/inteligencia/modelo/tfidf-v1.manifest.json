@@ -1,0 +1,77 @@
+{
+  "archivo": "tfidf-v1.json",
+  "artefacto_version": "tfidf-1",
+  "bytes": 1228228,
+  "catalogo_firmado": [
+    "alimentos_mercado",
+    "comisiones_costos_financieros",
+    "compras",
+    "educacion",
+    "entretenimiento",
+    "otros_gastos",
+    "otros_ingresos",
+    "reembolso",
+    "restaurantes_domicilios",
+    "salario",
+    "salud",
+    "transferencia_recibida",
+    "transporte",
+    "vivienda_servicios"
+  ],
+  "categorias": [
+    "alimentos_mercado",
+    "comisiones_costos_financieros",
+    "compras",
+    "entretenimiento",
+    "otros_gastos",
+    "restaurantes_domicilios",
+    "salud",
+    "transporte",
+    "vivienda_servicios"
+  ],
+  "conteos": {
+    "centroides": 9,
+    "idf": 11813,
+    "lexico": 33,
+    "nombres_entrenados": 11862,
+    "nombres_leidos": 11862,
+    "poda_por_centroide": 0
+  },
+  "filtro": {
+    "categorias": [
+      "alimentos_mercado",
+      "comisiones_costos_financieros",
+      "compras",
+      "educacion",
+      "entretenimiento",
+      "otros_gastos",
+      "restaurantes_domicilios",
+      "salud",
+      "transporte",
+      "vivienda_servicios"
+    ],
+    "excluidas": []
+  },
+  "fuente": {
+    "catalogo": "catalogo/v2/catalogo_v2.csv",
+    "sha256_catalogo": "d801cb9e9d5239f1f02579d5c5db252e71efd4bbfbdb1229992c020c83262c94",
+    "version_catalogo": "v1"
+  },
+  "generado_por": "generar_artefacto_tfidf.py",
+  "lexico_descartado": {
+    "ACADEMIA": "educacion",
+    "COLEGIO": "educacion",
+    "ESCUELA": "educacion",
+    "INSTITUTO": "educacion",
+    "LICEO": "educacion",
+    "UNIVERSIDAD": "educacion"
+  },
+  "nota": "Sin marca de tiempo: la misma fuente produce los mismos bytes.",
+  "sha256_artefacto": "8382898374ebe8f1ba3396a326a1e1d2ff2f83989bacd9884cee8c7155e793d0",
+  "umbrales": {
+    "coseno": "0.1",
+    "coseno_fuerte": "0.5",
+    "jw": "0.85"
+  },
+  "version": 1
+}
