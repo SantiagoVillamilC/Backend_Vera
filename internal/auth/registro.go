@@ -132,6 +132,11 @@ func (s *RegistradorDePersonas) persistir(ctx context.Context, entrada entradaDe
 // verificarCatalogoDeConsentimientos falla con ErrConsentimientoRequerido si algún texto no existe, antes de insertar la persona.
 func verificarCatalogoDeConsentimientos(ctx context.Context, q *repositorio.Queries, consentimientos []consentimientoResuelto) error {
 	for _, consentimiento := range consentimientos {
+		if consentimiento.tipo == TipoConsentimientoAsistente {
+			if err := validarVersionAsistente(ctx, q, consentimiento.versionTexto); err != nil {
+				return err
+			}
+		}
 		_, err := q.TextoDeConsentimiento(ctx, repositorio.TextoDeConsentimientoParams{Tipo: consentimiento.tipo, Version: consentimiento.versionTexto})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrConsentimientoRequerido

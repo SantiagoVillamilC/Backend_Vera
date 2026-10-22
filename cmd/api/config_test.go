@@ -20,8 +20,6 @@ func TestConfigLogValueNoImprimeSecretos(t *testing.T) {
 		AppDatabaseURL: "postgres://nucleo:dsn-secreto@localhost:5432/centinela",
 		JWTSecret:      "jwt-secreto-de-al-menos-treinta-y-dos-bytes",
 		CustodioToken:  "custodio-secreto-de-al-menos-treinta-y-dos",
-		GroqAPIKey:     "groq-secreta",
-		OpenAIAPIKey:   "openai-secreta",
 		OCRWorkerURL:   "http://usuario:clave-secreta@ocr",
 		LogLevel:       "info",
 		LogFormat:      "json",
@@ -35,8 +33,6 @@ func TestConfigLogValueNoImprimeSecretos(t *testing.T) {
 		"AppDatabaseURL": cfg.AppDatabaseURL,
 		"JWTSecret":      cfg.JWTSecret,
 		"CustodioToken":  cfg.CustodioToken,
-		"GroqAPIKey":     cfg.GroqAPIKey,
-		"OpenAIAPIKey":   cfg.OpenAIAPIKey,
 		"OCRWorkerURL":   cfg.OCRWorkerURL,
 	} {
 		if strings.Contains(salida, secreto) {

@@ -1,0 +1,34 @@
+{
+  "fecha": "2026-10-21",
+  "alcance": "Comprobación puntual en navegador con Gemini y Cartesia reales, herramientas financieras ficticias. No mide micrófono físico, calidad subjetiva, tasa de éxito a escala ni compatibilidad móvil.",
+  "instrucciones": "vera-2026-10-21-v8",
+  "modelo_chat": "gemini-3.5-flash-lite",
+  "modelo_voz": "sonic-3.6-2026-08-27",
+  "voz": "Catalina",
+  "locale_voz": "es-CO",
+  "turnos": [
+    {
+      "pregunta": "Hola Vera, ¿cómo estás?",
+      "respuesta": "Hola. Estoy muy bien, lista para ayudarte con tus consultas o movimientos en Vera. ¿Qué necesitas hoy?",
+      "latencia_respuesta_ui_segundos": 1.5,
+      "funciones": []
+    },
+    {
+      "pregunta": "¿Cuánto tengo disponible y cuánto está retenido?",
+      "respuesta": "Tienes disponible 120000.00 COP y 5000.00 COP retenidos.",
+      "latencia_respuesta_ui_segundos": 1.7,
+      "funciones": ["consultar_saldo"],
+      "caracteres_reservados_cartesia": 56,
+      "latencia_primera_voz_ui_segundos": 2.2,
+      "audio_cartesia_completo": true,
+      "reproduccion_repetida_desde_cache_navegador": true
+    }
+  ],
+  "consumo_observado": {
+    "solicitudes_google": 3,
+    "generaciones_cartesia": 1,
+    "caracteres_cartesia_reservados": 56,
+    "generaciones_adicionales_al_repetir": 0
+  },
+  "nota": "Tiempos redondeados mostrados por la interfaz; no son garantías futuras. La selección de Catalina se conserva al cargar voces del sistema. Se verificaron presupuestos, 429, credenciales y caché con dobles de prueba sin red. No se añadió conversión de montos a palabras."
+}

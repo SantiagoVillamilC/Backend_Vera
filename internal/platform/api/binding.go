@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -20,6 +21,68 @@ func init() {
 	validate.RegisterTagNameFunc(nombreDeCampoJSON)
 	_ = validate.RegisterValidation("nit", validarNIT)
 	_ = validate.RegisterValidation("e164", validarE164)
+	_ = validate.RegisterValidation("textoasistente", func(fl validator.FieldLevel) bool {
+		v := fl.Field().String()
+		return strings.TrimSpace(v) != "" && !strings.ContainsRune(v, 0)
+	})
+}
+
+// DecodeAndValidateClosed exige un objeto cerrado, sin claves repetidas ni UTF-8 inválido.
+// Los contratos del asistente clasifican estos cuerpos como ValidationError.
+func DecodeAndValidateClosed(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	b, err := io.ReadAll(r.Body)
+	var big *http.MaxBytesError
+	if errors.As(err, &big) {
+		WriteError(w, 413, "PayloadTooLarge", "Request body exceeds 1 MiB.", nil)
+		return false
+	}
+	invalid := func() bool {
+		WriteError(w, 422, "ValidationError", "El cuerpo debe ser un objeto JSON válido con los campos permitidos.", nil)
+		return false
+	}
+	if err != nil || !utf8.Valid(b) {
+		return invalid()
+	}
+	d := json.NewDecoder(bytes.NewReader(b))
+	t, err := d.Token()
+	if err != nil || t != json.Delim('{') {
+		return invalid()
+	}
+	seen := map[string]bool{}
+	allowed := map[string]bool{}
+	tipo := reflect.TypeOf(dst)
+	if tipo.Kind() != reflect.Pointer || tipo.Elem().Kind() != reflect.Struct {
+		return invalid()
+	}
+	tipo = tipo.Elem()
+	for i := range tipo.NumField() {
+		allowed[strings.Split(tipo.Field(i).Tag.Get("json"), ",")[0]] = true
+	}
+	for d.More() {
+		t, err = d.Token()
+		key, ok := t.(string)
+		if err != nil || !ok || seen[key] || !allowed[key] {
+			return invalid()
+		}
+		seen[key] = true
+		var value json.RawMessage
+		if d.Decode(&value) != nil {
+			return invalid()
+		}
+	}
+	if _, err = d.Token(); err != nil {
+		return invalid()
+	}
+	if d.Decode(new(any)) != io.EOF {
+		return invalid()
+	}
+	d = json.NewDecoder(bytes.NewReader(b))
+	d.DisallowUnknownFields()
+	if d.Decode(dst) != nil {
+		return invalid()
+	}
+	return validateStruct(w, dst)
 }
 
 // nombreDeCampoJSON usa la etiqueta json, sin opciones, como nombre del campo en los detalles.

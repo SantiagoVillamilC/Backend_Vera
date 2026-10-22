@@ -88,14 +88,22 @@ type InsertarLineaParams struct {
 	Moneda   string `json:"moneda"`
 }
 
-func (q *Queries) InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error) {
+type InsertarLineaRow struct {
+	ID       int64  `json:"id"`
+	EntryID  int64  `json:"entry_id"`
+	CuentaID string `json:"cuenta_id"`
+	Monto    int64  `json:"monto"`
+	Moneda   string `json:"moneda"`
+}
+
+func (q *Queries) InsertarLinea(ctx context.Context, arg InsertarLineaParams) (InsertarLineaRow, error) {
 	row := q.db.QueryRow(ctx, insertarLinea,
 		arg.EntryID,
 		arg.CuentaID,
 		arg.Monto,
 		arg.Moneda,
 	)
-	var i Posting
+	var i InsertarLineaRow
 	err := row.Scan(
 		&i.ID,
 		&i.EntryID,

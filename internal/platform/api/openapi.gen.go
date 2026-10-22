@@ -249,6 +249,21 @@ func (e ConsentsResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for ConsultaConsentsResponseSuccess.
+const (
+	ConsultaConsentsResponseSuccessTrue ConsultaConsentsResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the ConsultaConsentsResponseSuccess enum.
+func (e ConsultaConsentsResponseSuccess) Valid() bool {
+	switch e {
+	case ConsultaConsentsResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContextoTipo.
 const (
 	ContextoTipoEmpresa ContextoTipo = "empresa"
@@ -543,12 +558,15 @@ func (e EmpresaCreadaResponseSuccess) Valid() bool {
 // Defines values for EnviarAudioVeraRequestFormato.
 const (
 	M4a EnviarAudioVeraRequestFormato = "m4a"
+	Wav EnviarAudioVeraRequestFormato = "wav"
 )
 
 // Valid indicates whether the value is a known member of the EnviarAudioVeraRequestFormato enum.
 func (e EnviarAudioVeraRequestFormato) Valid() bool {
 	switch e {
 	case M4a:
+		return true
+	case Wav:
 		return true
 	default:
 		return false
@@ -627,6 +645,21 @@ const (
 func (e ErrorResponseSuccess) Valid() bool {
 	switch e {
 	case False:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EstadoConsentimientoAsistenteTipo.
+const (
+	EstadoConsentimientoAsistenteTipoAsistenteIa EstadoConsentimientoAsistenteTipo = "asistente_ia"
+)
+
+// Valid indicates whether the value is a known member of the EstadoConsentimientoAsistenteTipo enum.
+func (e EstadoConsentimientoAsistenteTipo) Valid() bool {
+	switch e {
+	case EstadoConsentimientoAsistenteTipoAsistenteIa:
 		return true
 	default:
 		return false
@@ -1422,6 +1455,21 @@ func (e VerificacionResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for ListConsentsParamsTipo.
+const (
+	ListConsentsParamsTipoAsistenteIa ListConsentsParamsTipo = "asistente_ia"
+)
+
+// Valid indicates whether the value is a known member of the ListConsentsParamsTipo enum.
+func (e ListConsentsParamsTipo) Valid() bool {
+	switch e {
+	case ListConsentsParamsTipoAsistenteIa:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIError defines model for APIError.
 type APIError struct {
 	// Code Identificador estable del catalogo de errores, en PascalCase. Nunca se compara el
@@ -1450,7 +1498,9 @@ type APIError struct {
 	// CopiaSinReconstruir (409, la fila no tiene destino hasta reconstruir la copia),
 	// CorreccionEnCurso (409, el lote de enriquecimiento tiene el candado),
 	// NotReady (503, solo en GET /readyz cuando una dependencia no responde),
-	// AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
+	// LimitsUnavailable (503, falta configuracion vigente de limites, UVT, GMF o KYC),
+	// AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
+	// ConversationBusy (409, conversación con un turno en procesamiento),
 	// AudioNotUnderstood (422, el audio no tiene voz reconocible),
 	// ActionExpired (410, la accion pendiente supero su vigencia),
 	// ActionNotPending (409, la accion no esta pendiente ni confirmada),
@@ -1513,7 +1563,7 @@ type AccionResueltaResponseSuccess bool
 
 // ConfirmarAccionVeraRequest defines model for ConfirmarAccionVeraRequest.
 type ConfirmarAccionVeraRequest struct {
-	Codigo               *string             `json:"codigo,omitempty" validate:"omitempty,max=10"`
+	Codigo               *string             `json:"codigo,omitempty" validate:"omitempty,len=6,numeric"`
 	DesafioId            *openapi_types.UUID `json:"desafio_id,omitempty"`
 	SinVerificacionLocal *bool               `json:"sin_verificacion_local,omitempty"`
 }
@@ -1553,11 +1603,13 @@ type ConsentAccion string
 
 // ConsentRequest defines model for ConsentRequest.
 type ConsentRequest struct {
-	Accion       *ConsentRequestAccion `json:"accion,omitempty" validate:"omitempty,oneof=otorgar revocar"`
-	Aceptado     *bool                 `json:"aceptado" validate:"required"`
-	Metodo       *string               `json:"metodo,omitempty" validate:"omitempty,max=64"`
-	Tipo         ConsentRequestTipo    `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
-	VersionTexto string                `json:"version_texto" validate:"required,max=64"`
+	Accion   *ConsentRequestAccion `json:"accion,omitempty" validate:"omitempty,oneof=otorgar revocar"`
+	Aceptado *bool                 `json:"aceptado" validate:"required"`
+	Metodo   *string               `json:"metodo,omitempty" validate:"omitempty,max=64"`
+	Tipo     ConsentRequestTipo    `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
+
+	// VersionTexto Para asistente_ia debe ser la version vigente devuelta por la consulta filtrada.
+	VersionTexto string `json:"version_texto" validate:"required,max=64"`
 }
 
 // ConsentRequestAccion defines model for ConsentRequest.Accion.
@@ -1573,7 +1625,7 @@ type Consentimiento struct {
 	// Tipo Tipo de consentimiento. tratamiento_datos y whatsapp_optin son obligatorios en el registro, biometricos y asistente_ia son opcionales.
 	Tipo ConsentimientoTipo `json:"tipo" validate:"required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"`
 
-	// VersionTexto Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y biometricos usan la version v1 hoy. asistente_ia usa la version que fije su tarjeta.
+	// VersionTexto Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y biometricos usan la version v1 hoy. asistente_ia exige la version vigente devuelta por GET /v1/auth/consents?tipo=asistente_ia (inicialmente v1).
 	VersionTexto string `json:"version_texto" validate:"required,max=64"`
 }
 
@@ -1590,6 +1642,25 @@ type ConsentsResponse struct {
 
 // ConsentsResponseSuccess defines model for ConsentsResponse.Success.
 type ConsentsResponseSuccess bool
+
+// ConsultaConsentsResponse defines model for ConsultaConsentsResponse.
+type ConsultaConsentsResponse struct {
+	Data    ConsultaConsentsResponse_Data   `json:"data"`
+	Error   *map[string]interface{}         `json:"error"`
+	Meta    *Meta                           `json:"meta"`
+	Success ConsultaConsentsResponseSuccess `json:"success"`
+}
+
+// ConsultaConsentsResponseData0 defines model for ConsultaConsentsResponse.Data.0.
+type ConsultaConsentsResponseData0 = []Consent
+
+// ConsultaConsentsResponse_Data defines model for ConsultaConsentsResponse.Data.
+type ConsultaConsentsResponse_Data struct {
+	union json.RawMessage
+}
+
+// ConsultaConsentsResponseSuccess defines model for ConsultaConsentsResponse.Success.
+type ConsultaConsentsResponseSuccess bool
 
 // Contexto defines model for Contexto.
 type Contexto struct {
@@ -1651,7 +1722,7 @@ type ConversacionVera struct {
 type ConversacionesVeraResponse struct {
 	Data    []ConversacionVera                `json:"data"`
 	Error   *map[string]interface{}           `json:"error"`
-	Meta    *Meta                             `json:"meta"`
+	Meta    MetaHistorialVera                 `json:"meta"`
 	Success ConversacionesVeraResponseSuccess `json:"success"`
 }
 
@@ -1848,10 +1919,10 @@ type EmpresaCreadaResponseSuccess bool
 
 // EnviarAudioVeraRequest defines model for EnviarAudioVeraRequest.
 type EnviarAudioVeraRequest struct {
-	// Audio Audio del clip en base64. No puede superar los 700 KB decodificados ni los 60 segundos. El tope de longitud es 960000 caracteres en base64.
+	// Audio Audio del clip en base64. No puede superar los 700 KiB decodificados ni los 60 segundos. WAV PCM/float o M4A AAC no fragmentado. El tope de longitud es 960000 caracteres en base64.
 	Audio          string                        `json:"audio" validate:"required,max=960000"`
 	ConversacionId *openapi_types.UUID           `json:"conversacion_id,omitempty"`
-	Formato        EnviarAudioVeraRequestFormato `json:"formato" validate:"required,oneof=m4a"`
+	Formato        EnviarAudioVeraRequestFormato `json:"formato" validate:"required,oneof=m4a wav"`
 }
 
 // EnviarAudioVeraRequestFormato defines model for EnviarAudioVeraRequest.Formato.
@@ -1860,7 +1931,7 @@ type EnviarAudioVeraRequestFormato string
 // EnviarMensajeVeraRequest defines model for EnviarMensajeVeraRequest.
 type EnviarMensajeVeraRequest struct {
 	ConversacionId *openapi_types.UUID `json:"conversacion_id,omitempty"`
-	Texto          string              `json:"texto" validate:"required,min=1,max=1000"`
+	Texto          string              `json:"texto" validate:"required,min=1,max=1000,textoasistente"`
 }
 
 // EnvioPorLlave defines model for EnvioPorLlave.
@@ -1902,6 +1973,20 @@ type ErrorResponse struct {
 
 // ErrorResponseSuccess defines model for ErrorResponse.Success.
 type ErrorResponseSuccess bool
+
+// EstadoConsentimientoAsistente defines model for EstadoConsentimientoAsistente.
+type EstadoConsentimientoAsistente struct {
+	// Autorizado Ultimo evento otorgado para la version actualmente vigente.
+	Autorizado bool `json:"autorizado"`
+
+	// Texto Texto vigente del servidor, incluso si nunca fue aceptado.
+	Texto        string                            `json:"texto"`
+	Tipo         EstadoConsentimientoAsistenteTipo `json:"tipo"`
+	VersionTexto string                            `json:"version_texto"`
+}
+
+// EstadoConsentimientoAsistenteTipo defines model for EstadoConsentimientoAsistente.Tipo.
+type EstadoConsentimientoAsistenteTipo string
 
 // FieldError defines model for FieldError.
 type FieldError struct {
@@ -2142,7 +2227,7 @@ type MensajeVeraRol string
 type MensajesVeraResponse struct {
 	Data    []MensajeVera               `json:"data"`
 	Error   *map[string]interface{}     `json:"error"`
-	Meta    *Meta                       `json:"meta"`
+	Meta    MetaHistorialVera           `json:"meta"`
 	Success MensajesVeraResponseSuccess `json:"success"`
 }
 
@@ -2160,6 +2245,15 @@ type Meta struct {
 type MetaCursor struct {
 	HasMore    bool    `json:"has_more"`
 	Limit      int     `json:"limit"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+// MetaHistorialVera defines model for MetaHistorialVera.
+type MetaHistorialVera struct {
+	HasMore bool `json:"has_more"`
+	Limit   int  `json:"limit"`
+
+	// NextCursor Cursor opaco; no se interpreta en el cliente.
 	NextCursor *string `json:"next_cursor"`
 }
 
@@ -2225,6 +2319,9 @@ type OkResponse struct {
 
 // OkResponseSuccess defines model for OkResponse.Success.
 type OkResponseSuccess bool
+
+// OperacionAccionVeraRequest Cuerpo opcional vacío; no admite destino, monto ni datos del desafío.
+type OperacionAccionVeraRequest = struct{}
 
 // PhoneChangeRequest defines model for PhoneChangeRequest.
 type PhoneChangeRequest struct {
@@ -2544,6 +2641,17 @@ type VerifyPhoneRequest struct {
 // Error defines model for Error.
 type Error = ErrorResponse
 
+// LimiteUsoAsistente defines model for LimiteUsoAsistente.
+type LimiteUsoAsistente = ErrorResponse
+
+// ListConsentsParams defines parameters for ListConsents.
+type ListConsentsParams struct {
+	Tipo *ListConsentsParamsTipo `form:"tipo,omitempty" json:"tipo,omitempty"`
+}
+
+// ListConsentsParamsTipo defines parameters for ListConsents.
+type ListConsentsParamsTipo string
+
 // ConsultarDestinatarioParams defines parameters for ConsultarDestinatario.
 type ConsultarDestinatarioParams struct {
 	Celular string `form:"celular" json:"celular"`
@@ -2584,7 +2692,7 @@ type ListarConversacionesVeraParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50.
 	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Ancla de la ultima conversacion de la pagina anterior.
+	// Cursor Cursor opaco devuelto por meta.next_cursor, ligado al contexto activo.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
@@ -2593,8 +2701,20 @@ type ListarMensajesConversacionVeraParams struct {
 	// Limit Tamano de pagina, de 1 a 100. Por defecto 50.
 	Limit *string `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Ancla del ultimo mensaje de la pagina anterior.
+	// Cursor Cursor opaco devuelto por meta.next_cursor, ligado a esta conversacion.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// EnviarMensajeVeraParams defines parameters for EnviarMensajeVera.
+type EnviarMensajeVeraParams struct {
+	// IdempotencyKey UUID único por envío; reutilizar con el mismo cuerpo en los reintentos.
+	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
+}
+
+// EnviarMensajeVozVeraParams defines parameters for EnviarMensajeVozVera.
+type EnviarMensajeVozVeraParams struct {
+	// IdempotencyKey UUID único por envío de voz; reutilizarlo sólo con el mismo audio y conversación.
+	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
 }
 
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
@@ -2630,6 +2750,12 @@ type TransferirJSONRequestBody = CrearTransferenciaRequest
 // TransferirInterbancariaJSONRequestBody defines body for TransferirInterbancaria for application/json ContentType.
 type TransferirInterbancariaJSONRequestBody = CrearTransferenciaInterbancariaRequest
 
+// CancelarAccionVeraJSONRequestBody defines body for CancelarAccionVera for application/json ContentType.
+type CancelarAccionVeraJSONRequestBody = OperacionAccionVeraRequest
+
+// SolicitarCodigoAccionVeraJSONRequestBody defines body for SolicitarCodigoAccionVera for application/json ContentType.
+type SolicitarCodigoAccionVeraJSONRequestBody = OperacionAccionVeraRequest
+
 // ConfirmarAccionVeraJSONRequestBody defines body for ConfirmarAccionVera for application/json ContentType.
 type ConfirmarAccionVeraJSONRequestBody = ConfirmarAccionVeraRequest
 
@@ -2638,6 +2764,68 @@ type EnviarMensajeVeraJSONRequestBody = EnviarMensajeVeraRequest
 
 // EnviarMensajeVozVeraJSONRequestBody defines body for EnviarMensajeVozVera for application/json ContentType.
 type EnviarMensajeVozVeraJSONRequestBody = EnviarAudioVeraRequest
+
+// AsConsultaConsentsResponseData0 returns the union data inside the ConsultaConsentsResponse_Data as a ConsultaConsentsResponseData0
+func (t ConsultaConsentsResponse_Data) AsConsultaConsentsResponseData0() (ConsultaConsentsResponseData0, error) {
+	var body ConsultaConsentsResponseData0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromConsultaConsentsResponseData0 overwrites any union data inside the ConsultaConsentsResponse_Data as the provided ConsultaConsentsResponseData0
+func (t *ConsultaConsentsResponse_Data) FromConsultaConsentsResponseData0(v ConsultaConsentsResponseData0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeConsultaConsentsResponseData0 performs a merge with any union data inside the ConsultaConsentsResponse_Data, using the provided ConsultaConsentsResponseData0
+func (t *ConsultaConsentsResponse_Data) MergeConsultaConsentsResponseData0(v ConsultaConsentsResponseData0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsEstadoConsentimientoAsistente returns the union data inside the ConsultaConsentsResponse_Data as a EstadoConsentimientoAsistente
+func (t ConsultaConsentsResponse_Data) AsEstadoConsentimientoAsistente() (EstadoConsentimientoAsistente, error) {
+	var body EstadoConsentimientoAsistente
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromEstadoConsentimientoAsistente overwrites any union data inside the ConsultaConsentsResponse_Data as the provided EstadoConsentimientoAsistente
+func (t *ConsultaConsentsResponse_Data) FromEstadoConsentimientoAsistente(v EstadoConsentimientoAsistente) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeEstadoConsentimientoAsistente performs a merge with any union data inside the ConsultaConsentsResponse_Data, using the provided EstadoConsentimientoAsistente
+func (t *ConsultaConsentsResponse_Data) MergeEstadoConsentimientoAsistente(v EstadoConsentimientoAsistente) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ConsultaConsentsResponse_Data) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ConsultaConsentsResponse_Data) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsRegisterPersonaRequest returns the union data inside the RegisterRequest as a RegisterPersonaRequest
 func (t RegisterRequest) AsRegisterPersonaRequest() (RegisterPersonaRequest, error) {
@@ -2747,7 +2935,7 @@ type ServerInterface interface {
 	CreateCompany(w http.ResponseWriter, r *http.Request)
 	// ListConsents Lista los consentimientos del usuario.
 	// (GET /v1/auth/consents)
-	ListConsents(w http.ResponseWriter, r *http.Request)
+	ListConsents(w http.ResponseWriter, r *http.Request, params ListConsentsParams)
 	// CreateConsent Registra un consentimiento.
 	// (POST /v1/auth/consents)
 	CreateConsent(w http.ResponseWriter, r *http.Request)
@@ -2843,10 +3031,10 @@ type ServerInterface interface {
 	ListarMensajesConversacionVera(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ListarMensajesConversacionVeraParams)
 	// EnviarMensajeVera Envia un mensaje de texto al asistente y devuelve su respuesta.
 	// (POST /v1/vera/mensajes)
-	EnviarMensajeVera(w http.ResponseWriter, r *http.Request)
+	EnviarMensajeVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVeraParams)
 	// EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
 	// (POST /v1/vera/mensajes/voz)
-	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request)
+	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -2861,7 +3049,7 @@ func (_ Unimplemented) CreateCompany(w http.ResponseWriter, r *http.Request) {
 
 // ListConsents Lista los consentimientos del usuario.
 // (GET /v1/auth/consents)
-func (_ Unimplemented) ListConsents(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) ListConsents(w http.ResponseWriter, r *http.Request, params ListConsentsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3053,13 +3241,13 @@ func (_ Unimplemented) ListarMensajesConversacionVera(w http.ResponseWriter, r *
 
 // EnviarMensajeVera Envia un mensaje de texto al asistente y devuelve su respuesta.
 // (POST /v1/vera/mensajes)
-func (_ Unimplemented) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) EnviarMensajeVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVeraParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
 // (POST /v1/vera/mensajes/voz)
-func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3089,8 +3277,27 @@ func (siw *ServerInterfaceWrapper) CreateCompany(w http.ResponseWriter, r *http.
 // ListConsents operation middleware
 func (siw *ServerInterfaceWrapper) ListConsents(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConsentsParams
+
+	// ------------- Optional query parameter "tipo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tipo", r.URL.Query(), &params.Tipo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tipo"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tipo", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListConsents(w, r)
+		siw.Handler.ListConsents(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3721,7 +3928,7 @@ func (siw *ServerInterfaceWrapper) ListarConversacionesVera(w http.ResponseWrite
 
 	// ------------- Optional query parameter "cursor" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -3802,7 +4009,7 @@ func (siw *ServerInterfaceWrapper) ListarMensajesConversacionVera(w http.Respons
 
 	// ------------- Optional query parameter "cursor" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -3827,8 +4034,35 @@ func (siw *ServerInterfaceWrapper) ListarMensajesConversacionVera(w http.Respons
 // EnviarMensajeVera operation middleware
 func (siw *ServerInterfaceWrapper) EnviarMensajeVera(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EnviarMensajeVeraParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey openapi_types.UUID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.EnviarMensajeVera(w, r)
+		siw.Handler.EnviarMensajeVera(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3841,8 +4075,35 @@ func (siw *ServerInterfaceWrapper) EnviarMensajeVera(w http.ResponseWriter, r *h
 // EnviarMensajeVozVera operation middleware
 func (siw *ServerInterfaceWrapper) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EnviarMensajeVozVeraParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey openapi_types.UUID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.EnviarMensajeVozVera(w, r)
+		siw.Handler.EnviarMensajeVozVera(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

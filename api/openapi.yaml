@@ -659,18 +659,33 @@ paths:
       operationId: listConsents
       summary: Lista los consentimientos del usuario.
       tags: [consentimiento]
+      description: >
+        Sin filtro devuelve el historial existente. Con tipo=asistente_ia devuelve
+        texto y version vigentes, y autorizado segun el ultimo evento de la parte
+        autenticada y la version actual. Un cambio de version exige nueva aceptacion.
+      parameters:
+        - name: tipo
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asistente_ia]
       responses:
         "200":
           description: Consentimientos con su version y fecha.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ConsentsResponse"
+                $ref: "#/components/schemas/ConsultaConsentsResponse"
         "401":
+          $ref: "#/components/responses/Error"
+        "422":
           $ref: "#/components/responses/Error"
         "429":
           $ref: "#/components/responses/Error"
         "500":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -750,6 +765,8 @@ paths:
         "429":
           $ref: "#/components/responses/Error"
         "500":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -1278,6 +1295,19 @@ paths:
       operationId: enviarMensajeVera
       summary: Envia un mensaje de texto al asistente y devuelve su respuesta.
       tags: [asistente]
+      description: >
+        Historial construido por el servidor. Plazo total de 45 segundos. Una clave
+        de idempotencia permite recuperar la misma respuesta al reintentar exactamente
+        el cuerpo original. Tras persistir la entrada, las cabeceras X-Conversacion-Id
+        y X-Mensaje-Usuario-Id permiten recuperar una solicitud incluso ante un 503/504.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: UUID único por envío; reutilizar con el mismo cuerpo en los reintentos.
       requestBody:
         required: true
         content:
@@ -1285,7 +1315,7 @@ paths:
             schema:
               $ref: "#/components/schemas/EnviarMensajeVeraRequest"
       responses:
-        "201":
+        "200":
           description: Respuesta del asistente.
           content:
             application/json:
@@ -1317,7 +1347,7 @@ paths:
                         destinatario:
                           nombre: "Laura R."
                           celular_parcial: "******4321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         requiere_codigo: true
                         expira_en: "2026-10-15T14:21:00-05:00"
@@ -1344,12 +1374,18 @@ paths:
                     meta: null
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          description: ConversationBusy o IdempotencyConflict; no se inicia otra ejecución.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "413":
           $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
         "429":
-          $ref: "#/components/responses/Error"
+          $ref: "#/components/responses/LimiteUsoAsistente"
         "500":
           $ref: "#/components/responses/Error"
         "503":
@@ -1362,6 +1398,19 @@ paths:
       operationId: enviarMensajeVozVera
       summary: Envia un audio al asistente y devuelve la transcripcion y la respuesta.
       tags: [asistente]
+      description: >
+        Transcribe el audio en memoria, sin herramientas, y procesa la transcripción
+        con el mismo ciclo del chat. Plazo total de 45 segundos. Nunca conserva audio.
+        Idempotency-Key se reutiliza con el cuerpo original. Tras guardar el turno,
+        X-Conversacion-Id y X-Mensaje-Usuario-Id permiten recuperar fallos 503/504.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: UUID único por envío de voz; reutilizarlo sólo con el mismo audio y conversación.
       requestBody:
         required: true
         content:
@@ -1369,7 +1418,7 @@ paths:
             schema:
               $ref: "#/components/schemas/EnviarAudioVeraRequest"
       responses:
-        "201":
+        "200":
           description: Respuesta del asistente con la transcripcion.
           content:
             application/json:
@@ -1408,10 +1457,16 @@ paths:
                     meta: null
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          description: ConversationBusy o IdempotencyConflict.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "413":
           $ref: "#/components/responses/Error"
         "422":
-          description: El audio no tiene voz reconocible.
+          description: ValidationError con detalle de formato, base64, contenedor, tamaño o duración; AudioNotUnderstood si no hay voz.
           content:
             application/json:
               schema:
@@ -1426,7 +1481,7 @@ paths:
                       message: "No entendi el audio, repite o escribe."
                     meta: null
         "429":
-          $ref: "#/components/responses/Error"
+          $ref: "#/components/responses/LimiteUsoAsistente"
         "500":
           $ref: "#/components/responses/Error"
         "503":
@@ -1438,6 +1493,7 @@ paths:
     get:
       operationId: listarConversacionesVera
       summary: Lista una pagina de las conversaciones del usuario.
+      description: Historial del actor y contexto financiero activos. Disponible sin consentimiento de IA.
       tags: [asistente]
       parameters:
         - name: limit
@@ -1450,11 +1506,10 @@ paths:
         - name: cursor
           in: query
           required: false
-          description: Ancla de la ultima conversacion de la pagina anterior.
+          description: Cursor opaco devuelto por meta.next_cursor, ligado al contexto activo.
           schema:
-            type: integer
-            format: int64
-            x-go-type: string
+            type: string
+            maxLength: 512
       responses:
         "200":
           description: Pagina de conversaciones, de la mas reciente a la mas antigua.
@@ -1497,11 +1552,14 @@ paths:
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
     delete:
       operationId: borrarConversacionesVera
       summary: Borra todas las conversaciones del usuario y cancela sus acciones pendientes.
+      description: Borra el historial del contexto financiero activo. Conserva auditoria minima y transferencias.
       tags: [asistente]
       responses:
         "204":
@@ -1511,6 +1569,8 @@ paths:
         "429":
           $ref: "#/components/responses/Error"
         "500":
+          $ref: "#/components/responses/Error"
+        "503":
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
@@ -1538,6 +1598,8 @@ paths:
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
 
@@ -1563,11 +1625,10 @@ paths:
         - name: cursor
           in: query
           required: false
-          description: Ancla del ultimo mensaje de la pagina anterior.
+          description: Cursor opaco devuelto por meta.next_cursor, ligado a esta conversacion.
           schema:
-            type: integer
-            format: int64
-            x-go-type: string
+            type: string
+            maxLength: 512
       responses:
         "200":
           description: Pagina de mensajes, del mas nuevo al mas viejo.
@@ -1616,6 +1677,8 @@ paths:
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
 
@@ -1631,6 +1694,12 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperacionAccionVeraRequest"
       responses:
         "200":
           description: Desafio creado para el codigo, con su vigencia.
@@ -1648,6 +1717,18 @@ paths:
                       proposito: "confirmacion_transferencia"
                     error: null
                     meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "410":
+          description: ActionExpired; la acción fue marcada como vencida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
         "403":
@@ -1683,7 +1764,7 @@ paths:
       operationId: confirmarAccionVera
       summary: Confirma y ejecuta una accion pendiente.
       description: >
-        Si la accion no esta pendiente responde 409 ActionNotPending. Si supero su vigencia
+        Una acción ya confirmada devuelve la misma transferencia, sin repetir el código. Si no está pendiente ni confirmada responde 409 ActionNotPending. Si supero su vigencia
         responde 410 ActionExpired. Si el monto o el dispositivo exigen codigo y no viene
         valido, responde 403 SecondFactorRequired. Un 403 ConsentRequired ademas cancela la
         accion, asi que el cliente debe refrescar la tarjeta al recibirlo.
@@ -1720,14 +1801,14 @@ paths:
                         destinatario:
                           nombre: "Laura R."
                           celular_parcial: "******4321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         requiere_codigo: true
                         expira_en: "2026-10-15T14:21:00-05:00"
                       transferencia:
                         id: "9c8b7a6d-0000-4000-8000-000000000010"
                         destino: "3001234321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         estado: "confirmada"
                         creada_en: "2026-10-15T14:18:00-05:00"
@@ -1823,6 +1904,12 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperacionAccionVeraRequest"
       responses:
         "200":
           description: Accion cancelada.
@@ -1842,12 +1929,24 @@ paths:
                         destinatario:
                           nombre: "Laura R."
                           celular_parcial: "******4321"
-                        monto: "150000"
+                        monto: "15000000"
                         moneda: "COP"
                         requiere_codigo: true
                         expira_en: "2026-10-15T14:21:00-05:00"
                     error: null
                     meta: null
+        "400":
+          $ref: "#/components/responses/Error"
+        "410":
+          description: ActionExpired; la acción fue marcada como vencida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
         "404":
@@ -1890,6 +1989,22 @@ components:
         de bearerAuth.
 
   responses:
+    LimiteUsoAsistente:
+      description: >
+        TooManyRequests por cuota de texto, voz o presupuesto diario compartido de tokens.
+        Para las cuotas del asistente, Retry-After indica segundos hasta poder reintentar;
+        el presupuesto diario reinicia a medianoche de Colombia. Los intentos cuentan.
+        El limite general por IP puede responder 429 antes de estos controles.
+      headers:
+        Retry-After:
+          description: Segundos de espera para la cuota del asistente que bloqueo la solicitud.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     Error:
       description: Envelope de error. Misma forma en cualquier status.
       content:
@@ -1931,7 +2046,9 @@ components:
             CopiaSinReconstruir (409, la fila no tiene destino hasta reconstruir la copia),
             CorreccionEnCurso (409, el lote de enriquecimiento tiene el candado),
             NotReady (503, solo en GET /readyz cuando una dependencia no responde),
-            AssistantUnavailable (503, el proveedor de IA fallo tras los reintentos),
+            LimitsUnavailable (503, falta configuracion vigente de limites, UVT, GMF o KYC),
+            AssistantUnavailable (503, proveedor de IA o controles de consentimiento y uso no disponibles),
+            ConversationBusy (409, conversación con un turno en procesamiento),
             AudioNotUnderstood (422, el audio no tiene voz reconocible),
             ActionExpired (410, la accion pendiente supero su vigencia),
             ActionNotPending (409, la accion no esta pendiente ni confirmada),
@@ -2061,7 +2178,8 @@ components:
           type: string
           description: >
             Version del texto legal que la persona acepto. tratamiento_datos, whatsapp_optin y
-            biometricos usan la version v1 hoy. asistente_ia usa la version que fije su tarjeta.
+            biometricos usan la version v1 hoy. asistente_ia exige la version vigente
+            devuelta por GET /v1/auth/consents?tipo=asistente_ia (inicialmente v1).
           x-oapi-codegen-extra-tags:
             validate: "required,max=64"
         aceptado:
@@ -2737,6 +2855,7 @@ components:
             validate: "required,oneof=tratamiento_datos whatsapp_optin biometricos asistente_ia"
         version_texto:
           type: string
+          description: Para asistente_ia debe ser la version vigente devuelta por la consulta filtrada.
           x-oapi-codegen-extra-tags:
             validate: "required,max=64"
         aceptado:
@@ -2789,6 +2908,41 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Consent"
+        error:
+          type: object
+          nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    EstadoConsentimientoAsistente:
+      type: object
+      required: [tipo, version_texto, texto, autorizado]
+      properties:
+        tipo:
+          type: string
+          enum: [asistente_ia]
+        version_texto:
+          type: string
+        texto:
+          type: string
+          description: Texto vigente del servidor, incluso si nunca fue aceptado.
+        autorizado:
+          type: boolean
+          description: Ultimo evento otorgado para la version actualmente vigente.
+
+    ConsultaConsentsResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          oneOf:
+            - type: array
+              items:
+                $ref: "#/components/schemas/Consent"
+            - $ref: "#/components/schemas/EstadoConsentimientoAsistente"
         error:
           type: object
           nullable: true
@@ -3509,6 +3663,7 @@ components:
 
     EnviarMensajeVeraRequest:
       type: object
+      additionalProperties: false
       required: [texto]
       properties:
         conversacion_id:
@@ -3520,10 +3675,11 @@ components:
           minLength: 1
           maxLength: 1000
           x-oapi-codegen-extra-tags:
-            validate: "required,min=1,max=1000"
+            validate: "required,min=1,max=1000,textoasistente"
 
     EnviarAudioVeraRequest:
       type: object
+      additionalProperties: false
       required: [audio, formato]
       properties:
         conversacion_id:
@@ -3534,15 +3690,15 @@ components:
           type: string
           maxLength: 960000
           description: >
-            Audio del clip en base64. No puede superar los 700 KB decodificados ni los 60
-            segundos. El tope de longitud es 960000 caracteres en base64.
+            Audio del clip en base64. No puede superar los 700 KiB decodificados ni los 60
+            segundos. WAV PCM/float o M4A AAC no fragmentado. El tope de longitud es 960000 caracteres en base64.
           x-oapi-codegen-extra-tags:
             validate: "required,max=960000"
         formato:
           type: string
-          enum: [m4a]
+          enum: [m4a, wav]
           x-oapi-codegen-extra-tags:
-            validate: "required,oneof=m4a"
+            validate: "required,oneof=m4a wav"
 
     MensajeVera:
       type: object
@@ -3684,8 +3840,15 @@ components:
           type: object
           nullable: true
 
+    OperacionAccionVeraRequest:
+      type: object
+      x-go-type: "struct{}"
+      additionalProperties: false
+      description: Cuerpo opcional vacío; no admite destino, monto ni datos del desafío.
+
     ConfirmarAccionVeraRequest:
       type: object
+      additionalProperties: false
       properties:
         desafio_id:
           type: string
@@ -3695,7 +3858,7 @@ components:
           type: string
           nullable: true
           x-oapi-codegen-extra-tags:
-            validate: "omitempty,max=10"
+            validate: "omitempty,len=6,numeric"
         sin_verificacion_local:
           type: boolean
           default: false
@@ -3728,6 +3891,21 @@ components:
           type: object
           nullable: true
 
+    MetaHistorialVera:
+      type: object
+      required: [limit, next_cursor, has_more]
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor opaco; no se interpreta en el cliente.
+        has_more:
+          type: boolean
+
     ConversacionesVeraResponse:
       type: object
       required: [success, data, error, meta]
@@ -3743,7 +3921,7 @@ components:
           type: object
           nullable: true
         meta:
-          $ref: "#/components/schemas/Meta"
+          $ref: "#/components/schemas/MetaHistorialVera"
 
     MensajesVeraResponse:
       type: object
@@ -3760,4 +3938,4 @@ components:
           type: object
           nullable: true
         meta:
-          $ref: "#/components/schemas/Meta"
+          $ref: "#/components/schemas/MetaHistorialVera"

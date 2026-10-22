@@ -67,6 +67,7 @@ type Consentimiento struct {
 	UserAgent    string             `json:"user_agent"`
 	Metodo       string             `json:"metodo"`
 	OcurridoEn   pgtype.Timestamptz `json:"ocurrido_en"`
+	Orden        pgtype.Int8        `json:"orden"`
 }
 
 type Credencial struct {

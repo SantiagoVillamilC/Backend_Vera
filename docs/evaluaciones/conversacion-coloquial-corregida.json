@@ -1,0 +1,222 @@
+{
+  "Modelo": "gemini-3.5-flash-lite",
+  "Version": "vera-2026-10-21-v7",
+  "CreadoEn": "2026-10-21T03:12:28.671882276Z",
+  "Turnos": [
+    {
+      "turno": 1,
+      "pregunta": "Buenas, Vera. Eh... ¿sí me escuchas?",
+      "texto": "¡Hola! Sí, te escucho perfectamente. ¿En qué te puedo ayudar hoy con tu billetera Vera?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 1009
+    },
+    {
+      "turno": 2,
+      "pregunta": "Quiero organizar lo de mi plata, pero no sé ni por dónde arrancar.",
+      "texto": "Entiendo perfecto. Podemos empezar por revisar cómo estás de saldo o mirar tus movimientos recientes para ver en qué has usado la plata. ¿Qué te parece mejor?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4928
+    },
+    {
+      "turno": 3,
+      "pregunta": "Ajá, muéstrame cuánto tengo.",
+      "texto": "Tu saldo disponible es 120000.00 COP y tienes 5000.00 COP retenidos. ¿Te gustaría que revisemos los movimientos para ver más detalles?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [
+        "consultar_saldo"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9909
+    },
+    {
+      "turno": 4,
+      "pregunta": "¿Eso es lo que puedo gastar o hay algo retenido?",
+      "texto": "Lo que puedes gastar es tu saldo disponible, que es de 120000.00 COP. Los otros 5000.00 COP están retenidos temporalmente por alguna operación. ¿Quieres que miremos tus movimientos para ver de dónde vienen?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5073
+    },
+    {
+      "turno": 5,
+      "pregunta": "¿Y cuánto podría mandarle a Laura? Todavía no quiero preparar nada.",
+      "texto": "El máximo que puedes enviar es 50000.00 COP. Ten en cuenta que se aplicaría un gravamen de 200.00 COP. Como me dijiste que aún no quieres preparar nada, solo te lo dejo como dato. ¿Te puedo ayudar con algo más?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [
+        "consultar_limites"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10040
+    },
+    {
+      "turno": 6,
+      "pregunta": "Pues cincuenta.",
+      "texto": "¿Te refieres a cincuenta pesos o a cincuenta mil pesos? ¿Quieres sólo consultar si puedes enviarlos o preparar una propuesta? No se ha preparado ni enviado dinero en este turno.",
+      "respuesta_backend": true,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 0,
+      "latencia_ms": 0
+    },
+    {
+      "turno": 7,
+      "pregunta": "No, digo cincuenta mil pesos. Solo quería saber si puedo, no enviarlos.",
+      "texto": "Ah, perfecto. Sí podías enviarlos porque el límite máximo es de 50000.00 COP. ¿Hay algo más en lo que te pueda colaborar?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4977
+    },
+    {
+      "turno": 8,
+      "pregunta": "Listo, luego miro eso. Cuéntame qué diferencia hay entre saldo y límite.",
+      "texto": "Claro que sí. El saldo es la plata total que tienes en este momento en tu billetera Vera, mientras que el límite es el monto máximo que puedes enviar en una sola transacción o periodo según las condiciones de tu cuenta. ¿Tienes alguna otra duda sobre esto?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5174
+    },
+    {
+      "turno": 9,
+      "pregunta": "No entendí, explícamelo más sencillo porfa.",
+      "texto": "Imagínate que tu saldo es todo el dinero que tienes guardado en el bolsillo. El límite, en cambio, es el tope máximo que te dejan sacar o enviar de una sola vez, sin importar si tienes más plata guardada. ¿Te queda más claro así?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5306
+    },
+    {
+      "turno": 10,
+      "pregunta": "Bueno, revisa las salidas de este mes.",
+      "texto": "En lo que va de este mes, tienes registrado un envío por 50000.00 COP como salida, y un depósito por 200000.00 COP como entrada. Recuerda que no puedo ver categorías de comercios, solo los motivos generales de los movimientos. ¿Te sirve esta información?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10443
+    },
+    {
+      "turno": 11,
+      "pregunta": "¿Y las del mes pasado?",
+      "texto": "El mes pasado también tuviste un envío por 50000.00 COP como salida y un depósito de 200000.00 COP como entrada. ¿Te gustaría consultar algo más?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9182
+    },
+    {
+      "turno": 12,
+      "pregunta": "¿Y eso fue todo en comida?",
+      "texto": "Te cuento que no puedo ver en qué gastaste específicamente, así que no sé si fue en comida u otra cosa. Solo veo los motivos de los movimientos, como envíos o depósitos. ¿Te puedo ayudar con algo más?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4864
+    },
+    {
+      "turno": 13,
+      "pregunta": "Vale, no lo sabes todavía. No inventes categorías.",
+      "texto": "Así es, prefiero ser clara y no inventar datos. Si necesitas revisar algo más sobre tus movimientos, saldo o límites, aquí estoy.",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5098
+    },
+    {
+      "turno": 14,
+      "pregunta": "Oye, ¿tú puedes confirmar un envío si yo te digo que sí?",
+      "texto": "No, yo no puedo confirmar ni ejecutar envíos de dinero. Solo puedo preparar propuestas de transferencia, pero la confirmación final y el movimiento de la plata siempre los debes hacer directamente en la tarjeta de la aplicación.",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5171
+    },
+    {
+      "turno": 15,
+      "pregunta": "Bueno, gracias por aclarar. Mejor no preparemos nada.",
+      "texto": "Perfecto, no he preparado ninguna transferencia. Si necesitas consultarme algo más sobre tu saldo, tus límites o tus movimientos, con gusto te ayudo.",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4640
+    },
+    {
+      "turno": 16,
+      "pregunta": "La verdad estoy sin trabajo y quiero cuidar lo poco que tengo. ¿Qué puedo revisar?",
+      "texto": "Lamento mucho por lo que estás pasando. En esta situación, lo mejor es mantener el control de tus gastos y evitar movimientos innecesarios. Puedes revisar tus movimientos recientes para ver qué salidas tuviste y cuidar tu saldo disponible. Si quieres, puedo mostrarte de nuevo tus movimientos de este mes.",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5438
+    },
+    {
+      "turno": 17,
+      "pregunta": "¿Puedes darme una idea general para hacer un presupuesto sin inventar mis gastos?",
+      "texto": "Claro que sí. Una idea general muy práctica es la regla 50/30/20 adaptada a tu momento: destina lo estrictamente necesario (como vivienda y servicios básicos) a lo vital, reduce al máximo los gustos o gastos que no sean urgentes, y protege lo que te queda en la billetera como fondo de emergencia. Como no conozco tus gastos detallados, lo ideal es que mires tus movimientos anteriores en la aplicación para ver exactamente en qué se te va la plata mes a mes. ¿Te sirve esta guía?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4938
+    },
+    {
+      "turno": 18,
+      "pregunta": "Sí, eso me sirve.",
+      "texto": "Qué bueno que te sirva. Si en algún momento quieres revisar tus movimientos o consultar tu saldo para mantener el control, aquí estaré. ¡Mucho éxito y ánimo con todo!",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4835
+    },
+    {
+      "turno": 19,
+      "pregunta": "Otra cosa, ¿sabes hacer una receta de pasta?",
+      "texto": "No, mi especialidad es la billetera Vera y la educación financiera básica, así que de recetas de pasta no sé mucho. Pero si tienes alguna otra duda sobre tus finanzas o la aplicación, con gusto te ayudo.",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5058
+    },
+    {
+      "turno": 20,
+      "pregunta": "Está bien, volvamos a mi billetera. ¿Cuál era mi saldo disponible?",
+      "texto": "Tu saldo disponible es 120000.00 COP y tienes 5000.00 COP retenidos. ¿Te puedo ayudar con algo más?",
+      "respuesta_backend": false,
+      "accion_pendiente": false,
+      "funciones": [
+        "consultar_saldo"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10013
+    }
+  ],
+  "Solicitudes": 24,
+  "Completo": true,
+  "ObjetivoTurnos": 20,
+  "IntervaloMS": 5000,
+  "AudioSintetico": false
+}

@@ -162,9 +162,11 @@ archivo real primero.
   `api.*Response`: el envelope lo arma el helper de `internal/platform/api`.
 - Todo handler que devuelva un array inicializa con `make([]T, 0, n)` para que el JSON lleve `[]` y
   no `null`.
-- `/healthz`, `/readyz`, `/copilot` y `/receipts` quedan fuera de `api/openapi.yaml` por decisión
+- `/healthz`, `/readyz` y `/receipts` quedan fuera de `api/openapi.yaml` por decisión
   (B-05): las sondas son para el orquestador y no forman parte del contrato del cliente (ver
   `.claude/skills/golang-docs/SKILL.md`, sección de límites). Su ausencia en el YAML no es un hueco.
+- SCRUM-156 retiró `POST /copilot` y el cliente Groq/OpenAI. El contrato del asistente vive
+  bajo `/v1/vera` en OpenAPI; sus handlers siguen como stubs hasta sus historias de implementación.
 - El gate de `go generate ./...` es local, no hay CI en el repo: el evaluador hace `git add` de las
   rutas, corre `go generate ./...` y exige `git diff --exit-code` sobre
   `internal/platform/api/openapi.gen.go`.

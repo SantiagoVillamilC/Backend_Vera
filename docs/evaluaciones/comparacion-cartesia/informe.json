@@ -1,0 +1,36 @@
+{
+  "fecha_utc": "2026-10-21T06:02:09Z",
+  "texto_identico": "Hola, soy Vera. Qué bueno hablar contigo. Tu saldo disponible es 120000.00 COP. Puedo preparar un envío de 30000.00 COP para Laura. Tú revisas los datos y confirmas en la aplicación. ¿Qué te gustaría hacer?",
+  "version_api_cartesia": "2026-08-14",
+  "caracteres_cartesia_enviados": 618,
+  "alcance": "Comparación para audición humana. Latencia hasta WAV completo; no mide primer fragmento ni calidad subjetiva. No cambia la voz del laboratorio ni su respaldo.",
+  "muestras": [
+    {
+      "proveedor": "cartesia",
+      "voz": "Catalina",
+      "locale": "es-CO",
+      "modelo": "sonic-3.6-2026-08-27",
+      "archivo": "cartesia-Catalina.wav",
+      "audio_bytes": 825678,
+      "generacion_completa_ms": 3484
+    },
+    {
+      "proveedor": "cartesia",
+      "voz": "Mariana",
+      "locale": "es-CO",
+      "modelo": "sonic-3.6-2026-08-27",
+      "archivo": "cartesia-Mariana.wav",
+      "audio_bytes": 833358,
+      "generacion_completa_ms": 2240
+    },
+    {
+      "proveedor": "cartesia",
+      "voz": "Ximena",
+      "locale": "es-MX",
+      "modelo": "sonic-3.6-2026-08-27",
+      "archivo": "cartesia-Ximena.wav",
+      "audio_bytes": 864078,
+      "generacion_completa_ms": 1864
+    }
+  ]
+}

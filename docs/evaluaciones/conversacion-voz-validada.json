@@ -1,0 +1,56 @@
+{
+  "Modelo": "gemini-3.5-flash-lite",
+  "Version": "vera-2026-10-21-v7",
+  "CreadoEn": "2026-10-21T03:02:56.938761386Z",
+  "Turnos": [
+    {
+      "turno": 1,
+      "pregunta": "Hola Vera, ¿cómo estás?",
+      "texto": "¡Hola! Estoy muy bien, gracias por preguntar. ¿En qué te puedo ayudar hoy con tu billetera Vera?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 4,
+      "latencia_ms": 15270,
+      "audio": {
+        "transcripcion": "Hola Vera, ¿cómo estás?",
+        "error_salida": "ProviderLimit",
+        "bytes_salida": 0
+      }
+    },
+    {
+      "turno": 2,
+      "pregunta": "¿Podría pasarle 30 mil pesos a Laura? Solo estoy preguntando, no prepares nada todavía.",
+      "texto": "¡Hola! Sí es posible enviar dinero a otra persona desde tu billetera Vera. Para hacerlo, necesitaría el número de celular o la llave Bre-B de Laura, y luego prepararíamos la transferencia para que puedas confirmarla directamente en la aplicación. ¿Te gustaría que busquemos a Laura para avanzar?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5736,
+      "audio": {
+        "error_entrada": "ProviderLimit",
+        "error_salida": "ProviderLimit",
+        "bytes_salida": 0
+      }
+    },
+    {
+      "turno": 3,
+      "pregunta": "Eh, ¿cuánto dinero me gasté entre el 11 de octubre y el 15 de octubre de 2026, sabes?",
+      "texto": "Entre el 11 de octubre y el 15 de octubre de 2026 tuviste salidas totales de 50000.00 COP por el motivo envío. Ten en cuenta que puedo mostrarte los movimientos agrupados por motivo o contraparte, pero no puedo distinguir categorías como comida o transporte.",
+      "respuesta_backend": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10047,
+      "audio": {
+        "error_entrada": "ProviderLimit",
+        "error_salida": "ProviderLimit",
+        "bytes_salida": 0
+      }
+    }
+  ],
+  "Solicitudes": 7,
+  "Completo": true,
+  "ObjetivoTurnos": 3,
+  "IntervaloMS": 5000,
+  "AudioSintetico": true
+}

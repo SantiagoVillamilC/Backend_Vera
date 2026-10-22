@@ -19,6 +19,7 @@ const (
 	TipoConsentimientoTratamiento = "tratamiento_datos"
 	TipoConsentimientoWhatsApp    = "whatsapp_optin"
 	TipoConsentimientoBiometricos = "biometricos"
+	TipoConsentimientoAsistente   = "asistente_ia"
 )
 
 // Acciones del consentimiento: cada otorgamiento o revocacion es una fila nueva.
@@ -169,6 +170,11 @@ func (s *ServicioDeConsentimientos) exigirRevocacionPermitida(_ context.Context,
 
 // insertar lee el texto exacto del catalogo y agrega la fila append-only con el actor y el origen.
 func (s *ServicioDeConsentimientos) insertar(ctx context.Context, q *repositorio.Queries, solicitud SolicitudDeConsentimientoNuevo) (repositorio.Consentimiento, error) {
+	if solicitud.Tipo == TipoConsentimientoAsistente {
+		if err := validarVersionAsistente(ctx, q, solicitud.VersionTexto); err != nil {
+			return repositorio.Consentimiento{}, err
+		}
+	}
 	texto, err := q.TextoDeConsentimiento(ctx, repositorio.TextoDeConsentimientoParams{
 		Tipo:    solicitud.Tipo,
 		Version: solicitud.VersionTexto,

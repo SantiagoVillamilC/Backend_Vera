@@ -11,11 +11,18 @@ import (
 )
 
 type Querier interface {
+	// Página de asientos propios por fecha, no de postings ni de subcuentas.
+	// Los asientos sólo retenidos no agregan gasto: la salida ya se vio en la reserva.
+	ApuntesDePeriodo(ctx context.Context, arg ApuntesDePeriodoParams) ([]ApuntesDePeriodoRow, error)
 	AvanzarEstadoTransferencia(ctx context.Context, arg AvanzarEstadoTransferenciaParams) (Transferencia, error)
 	AvanzarVentanaOutbox(ctx context.Context, arg AvanzarVentanaOutboxParams) (int64, error)
 	BloquearCuentasOrdenadas(ctx context.Context, cuentas []string) ([]string, error)
 	BuscarDescuadresAbiertos(ctx context.Context, arg BuscarDescuadresAbiertosParams) ([]Descuadre, error)
 	ConfirmarDeposito(ctx context.Context, arg ConfirmarDepositoParams) (Deposito, error)
+	// Sin FOR UPDATE: la preparación no reserva ni bloquea el disponible.
+	CuentasParaPrevalidacion(ctx context.Context, cuentas []string) ([]string, error)
+	// El receptor sale del asiento liquidado, nunca de resolver hoy una llave antigua.
+	DestinatariosPrevios(ctx context.Context, arg DestinatariosPreviosParams) ([]pgtype.Text, error)
 	ExpiarDeposito(ctx context.Context, id pgtype.UUID) (int64, error)
 	ExpiarDepositosVencidos(ctx context.Context, segundos float64) (int64, error)
 	ExtractoPorCorte(ctx context.Context, corteEn pgtype.Timestamptz) (ExtractoCustodio, error)
@@ -29,7 +36,7 @@ type Querier interface {
 	// transacción (HU-NF-08, criterio 10.3).
 	InsertarDescuadreSiNoHayAbierto(ctx context.Context, arg InsertarDescuadreSiNoHayAbiertoParams) (Descuadre, error)
 	InsertarExtractoCustodio(ctx context.Context, arg InsertarExtractoCustodioParams) error
-	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (Posting, error)
+	InsertarLinea(ctx context.Context, arg InsertarLineaParams) (InsertarLineaRow, error)
 	InsertarOutbox(ctx context.Context, arg InsertarOutboxParams) (Outbox, error)
 	InsertarSubcuentasDeUsuario(ctx context.Context, arg InsertarSubcuentasDeUsuarioParams) (int64, error)
 	InsertarTransferencia(ctx context.Context, arg InsertarTransferenciaParams) (Transferencia, error)

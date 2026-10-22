@@ -138,36 +138,43 @@ func (s *Servicio) reintentoDeTransferencia(ctx context.Context, solicitud Solic
 
 // ejecutarTransferencia resuelve el destino y el nivel de KYC antes de abrir la transacción de la reserva.
 func (s *Servicio) ejecutarTransferencia(ctx context.Context, solicitud SolicitudTransferencia) (Transferencia, error) {
+	destinoID, nivel, err := s.resolverTransferenciaInterna(ctx, solicitud)
+	if err != nil {
+		return Transferencia{}, err
+	}
+	return s.reservarYTransferir(ctx, solicitud, destinoID, nivel, time.Now().UTC())
+}
+func (s *Servicio) resolverTransferenciaInterna(ctx context.Context, solicitud SolicitudTransferencia) (string, string, error) {
 	if solicitud.Monto <= 0 {
-		return Transferencia{}, ErrMontoInvalido
+		return "", "", ErrMontoInvalido
 	}
 	if solicitud.Moneda != "" && solicitud.Moneda != MonedaCOP {
-		return Transferencia{}, ErrMonedaInvalida
+		return "", "", ErrMonedaInvalida
 	}
 	if strings.TrimSpace(solicitud.LlaveDestino) == "" {
-		return Transferencia{}, ErrDestinoObligatorio
+		return "", "", ErrDestinoObligatorio
 	}
 	if s.destinos == nil {
-		return Transferencia{}, ErrResolutorDestinoNoDisponible
+		return "", "", ErrResolutorDestinoNoDisponible
 	}
 	destinoID, existe, err := s.destinos.UsuarioIDDeDestino(ctx, solicitud.LlaveDestino)
 	if err != nil {
-		return Transferencia{}, fmt.Errorf("nucleo: no se pudo resolver el destino: %w", err)
+		return "", "", fmt.Errorf("nucleo: no se pudo resolver el destino: %w", err)
 	}
 	if !existe {
-		return Transferencia{}, ErrDestinoNoExiste
+		return "", "", ErrDestinoNoExiste
 	}
 	if destinoID == solicitud.UsuarioID {
-		return Transferencia{}, ErrDestinoPropio
+		return "", "", ErrDestinoPropio
 	}
 	if s.kyc == nil {
-		return Transferencia{}, ErrKYCNoDisponible
+		return "", "", ErrKYCNoDisponible
 	}
 	nivel, err := s.kyc.NivelKYC(ctx, solicitud.UsuarioID)
 	if err != nil {
-		return Transferencia{}, fmt.Errorf("nucleo: leer el nivel de KYC de %q: %w", solicitud.UsuarioID, err)
+		return "", "", fmt.Errorf("nucleo: leer el nivel de KYC de %q: %w", solicitud.UsuarioID, err)
 	}
-	return s.reservarYTransferir(ctx, solicitud, destinoID, nivel, time.Now().UTC())
+	return destinoID, nivel, nil
 }
 
 // reservarYTransferir abre la única transacción: candado, fila creada, límites, saldo, retención, transferencia interna y confirmación.

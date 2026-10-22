@@ -137,6 +137,10 @@ func (h *Handler) MontoMaximo(w http.ResponseWriter, r *http.Request) {
 	momento := time.Now().UTC()
 	monto, err := h.servicio.MontoMaximoEnviable(r.Context(), usuarioID, momento)
 	if err != nil {
+		if errors.Is(err, ErrReglaLimiteNoVigente) || errors.Is(err, ErrValorUVTNoVigente) || errors.Is(err, ErrReglaGMFNoVigente) || errors.Is(err, ErrKYCNoDisponible) {
+			api.WriteError(w, http.StatusServiceUnavailable, "LimitsUnavailable", "The sending limits are temporarily unavailable.", nil)
+			return
+		}
 		api.WriteAPIError(w, r, err)
 		return
 	}
