@@ -1,11 +1,13 @@
 package inteligencia
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"strconv"
@@ -20,7 +22,7 @@ var (
 )
 
 // VersionArtefacto es la única versión que esta implementación sabe leer.
-const VersionArtefacto = "tfidf-1"
+const VersionArtefacto = "tfidf-2"
 
 // LargoHuellaCorta es el prefijo del sha256 que viaja en `version_modelo`.
 const LargoHuellaCorta = 12
@@ -36,21 +38,24 @@ type Modelo struct {
 	UmbralCosenoFuerte float64
 	UmbralJW           float64
 	Huella             string
+	Prohibidas         map[Categoria]bool
 
 	idfMaximo   float64
 	categorias  []Categoria
 	semillas    []string
 	centroidesO map[Categoria][]caracteristica
+	prohibidas  []Categoria
 }
 
 type documentoDeModelo struct {
-	Version            string                       `json:"version"`
-	IDF                map[string]string            `json:"idf"`
-	Centroides         map[string]map[string]string `json:"centroides"`
-	Lexico             map[string]string            `json:"lexico"`
-	UmbralCoseno       string                       `json:"umbral_coseno"`
-	UmbralCosenoFuerte string                       `json:"umbral_coseno_fuerte"`
-	UmbralJW           string                       `json:"umbral_jw"`
+	Version              string                       `json:"version"`
+	IDF                  map[string]string            `json:"idf"`
+	Centroides           map[string]map[string]string `json:"centroides"`
+	Lexico               map[string]string            `json:"lexico"`
+	CategoriasProhibidas *[]string                    `json:"categorias_prohibidas"`
+	UmbralCoseno         string                       `json:"umbral_coseno"`
+	UmbralCosenoFuerte   string                       `json:"umbral_coseno_fuerte"`
+	UmbralJW             string                       `json:"umbral_jw"`
 }
 
 // CargarModelo valida los bytes del artefacto y devuelve el modelo listo para inferir.
@@ -60,8 +65,13 @@ type documentoDeModelo struct {
 // clasificador no ajusta ni corrige lo que trae el artefacto.
 func CargarModelo(datos []byte) (*Modelo, error) {
 	var documento documentoDeModelo
-	if err := json.Unmarshal(datos, &documento); err != nil {
+	decodificador := json.NewDecoder(bytes.NewReader(datos))
+	decodificador.DisallowUnknownFields()
+	if err := decodificador.Decode(&documento); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrArtefactoInvalido, err)
+	}
+	if err := decodificador.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("%w: hay datos después del JSON", ErrArtefactoInvalido)
 	}
 	if documento.Version != VersionArtefacto {
 		return nil, fmt.Errorf("%w: %q", ErrVersionDesconocida, documento.Version)
@@ -94,10 +104,25 @@ func CargarModelo(datos []byte) (*Modelo, error) {
 		}
 		modelo.Centroides[categoria] = convertidos
 	}
+
+	if documento.CategoriasProhibidas == nil {
+		return nil, fmt.Errorf("%w: falta categorias_prohibidas", ErrArtefactoInvalido)
+	}
+	prohibidas, ordenadas, err := validarProhibidas(*documento.CategoriasProhibidas, modelo.categoriasDeCentroide())
+	if err != nil {
+		return nil, err
+	}
+	modelo.Prohibidas = prohibidas
+	modelo.prohibidas = ordenadas
+
 	for palabra, codigo := range documento.Lexico {
 		categoria := Categoria(codigo)
 		if !EsCategoriaVisible(categoria) {
 			return nil, fmt.Errorf("%w: léxico %q apunta a %q", ErrCategoriaDesconocida, palabra, codigo)
+		}
+		if modelo.Prohibidas[categoria] {
+			return nil, fmt.Errorf("%w: el léxico %q apunta a la categoría prohibida %q",
+				ErrArtefactoInvalido, palabra, codigo)
 		}
 		if _, existe := modelo.Centroides[categoria]; !existe {
 			return nil, fmt.Errorf("%w: el léxico %q apunta a %q, que no tiene centroide",
@@ -124,6 +149,61 @@ func CargarModelo(datos []byte) (*Modelo, error) {
 	modelo.Huella = hex.EncodeToString(suma[:])
 	modelo.ordenar()
 	return modelo, nil
+}
+
+// validarProhibidas convierte la lista del artefacto en un conjunto y en el corte ordenado.
+//
+// La lista se escribe ordenada y sin repetidos para que el artefacto sea diffeable, así que una lista
+// desordenada o con duplicados es un error de formato, no una variante válida. La categoría prohibida
+// no necesita centroide: puede ser una clase que el modelo nunca va a predecir y aun así se declara.
+// Si todas las categorías con centroide estuvieran prohibidas, el clasificador no podría decidir
+// nada, de modo que ese caso también es error.
+func validarProhibidas(lista []string, conCentroide []Categoria) (map[Categoria]bool, []Categoria, error) {
+	if !sort.StringsAreSorted(lista) {
+		return nil, nil, fmt.Errorf("%w: categorias_prohibidas no está ordenada", ErrArtefactoInvalido)
+	}
+	conjunto := make(map[Categoria]bool, len(lista))
+	ordenadas := make([]Categoria, 0, len(lista))
+	for _, codigo := range lista {
+		categoria := Categoria(codigo)
+		if categoria == "" {
+			return nil, nil, fmt.Errorf("%w: categorias_prohibidas trae un código vacío", ErrArtefactoInvalido)
+		}
+		if !EsCategoriaVisible(categoria) {
+			return nil, nil, fmt.Errorf("%w: categorías prohibidas: %q", ErrCategoriaDesconocida, codigo)
+		}
+		if conjunto[categoria] {
+			return nil, nil, fmt.Errorf("%w: la categoría prohibida %q está repetida", ErrArtefactoInvalido, codigo)
+		}
+		if entrada, existe := BuscarCategoria(categoria); existe && entrada.Grupo == "ingreso" {
+			return nil, nil, fmt.Errorf("%w: la categoría prohibida %q es de ingreso", ErrArtefactoInvalido, codigo)
+		}
+		conjunto[categoria] = true
+		ordenadas = append(ordenadas, categoria)
+	}
+	if len(conCentroide) > 0 {
+		todas := true
+		for _, categoria := range conCentroide {
+			if !conjunto[categoria] {
+				todas = false
+				break
+			}
+		}
+		if todas {
+			return nil, nil, fmt.Errorf("%w: todas las categorías con centroide están prohibidas", ErrArtefactoInvalido)
+		}
+	}
+	return conjunto, ordenadas, nil
+}
+
+// categoriasDeCentroide devuelve, ordenadas, las categorías que el modelo puede predecir.
+func (m *Modelo) categoriasDeCentroide() []Categoria {
+	salida := make([]Categoria, 0, len(m.Centroides))
+	for categoria := range m.Centroides {
+		salida = append(salida, categoria)
+	}
+	sort.Slice(salida, func(i, j int) bool { return salida[i] < salida[j] })
+	return salida
 }
 
 // VerificarHuella compara la huella del modelo con la esperada.
@@ -174,6 +254,10 @@ func (m *Modelo) ordenar() {
 		m.semillas = append(m.semillas, palabra)
 	}
 	sort.Strings(m.semillas)
+
+	if m.prohibidas != nil {
+		sort.Slice(m.prohibidas, func(i, j int) bool { return m.prohibidas[i] < m.prohibidas[j] })
+	}
 
 	if len(m.IDF) > 0 {
 		m.idfMaximo = 0
