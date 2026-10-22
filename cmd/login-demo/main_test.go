@@ -26,7 +26,7 @@ func TestNormalizarCelular(t *testing.T) {
 // TestValidarAceptaElUsuarioCompleto comprueba el correo derivado y el E.164.
 func TestValidarAceptaElUsuarioCompleto(t *testing.T) {
 	t.Parallel()
-	pedido, err := validar("123e4567-e89b-12d3-a456-426614174000", "3001234567", "Vera-Demo-2026", "Christian", "")
+	pedido, err := validar("123e4567-e89b-12d3-a456-426614174000", "3001234567", "clave-de-prueba", "Christian", "")
 	if err != nil {
 		t.Fatalf("validar: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestValidarAceptaElUsuarioCompleto(t *testing.T) {
 	if pedido.Correo != "demo-123e4567@centinela.test" {
 		t.Fatalf("correo = %q", pedido.Correo)
 	}
-	if pedido.Nombre != "Christian" || pedido.Contrasena != "Vera-Demo-2026" {
+	if pedido.Nombre != "Christian" || pedido.Contrasena != "clave-de-prueba" {
 		t.Fatalf("pedido = %+v", pedido)
 	}
 }
@@ -48,8 +48,8 @@ func TestValidarFallaCerrado(t *testing.T) {
 	casos := map[string]struct {
 		usuario, celular, contrasena, nombre string
 	}{
-		"usuario no uuid": {usuario: "no-es-uuid", celular: "3001234567", contrasena: "Vera-Demo-2026", nombre: "Christian"},
-		"celular corto":   {usuario: base, celular: "300123456", contrasena: "Vera-Demo-2026", nombre: "Christian"},
+		"usuario no uuid": {usuario: "no-es-uuid", celular: "3001234567", contrasena: "clave-de-prueba", nombre: "Christian"},
+		"celular corto":   {usuario: base, celular: "300123456", contrasena: "clave-de-prueba", nombre: "Christian"},
 		"contrasena corta": {
 			usuario: base, celular: "3001234567", contrasena: "corta", nombre: "Christian",
 		},
@@ -58,7 +58,7 @@ func TestValidarFallaCerrado(t *testing.T) {
 			contrasena: "12345678901234567890123456789012345678901234567890123456789012345",
 			nombre:     "Christian",
 		},
-		"nombre vacio": {usuario: base, celular: "3001234567", contrasena: "Vera-Demo-2026", nombre: "  "},
+		"nombre vacio": {usuario: base, celular: "3001234567", contrasena: "clave-de-prueba", nombre: "  "},
 	}
 	for caso, datos := range casos {
 		t.Run(caso, func(t *testing.T) {
