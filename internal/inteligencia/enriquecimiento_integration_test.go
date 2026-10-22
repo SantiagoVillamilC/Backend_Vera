@@ -105,6 +105,27 @@ func sembrarAsiento(t *testing.T, pool *pgxpool.Pool, tipo string, transferencia
 	return id
 }
 
+// saldoEnCentavos lee el saldo con el signo del usuario, igual que nucleo.Saldo: cero menos la suma.
+func saldoEnCentavos(t *testing.T, pool *pgxpool.Pool, cuenta string) int64 {
+	t.Helper()
+	ctx := t.Context()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("abrir transacción: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SET LOCAL ROLE rol_nucleo"); err != nil {
+		t.Fatalf("bajar a rol_nucleo: %v", err)
+	}
+	var saldo int64
+	if err := tx.QueryRow(ctx,
+		"SELECT COALESCE(-SUM(monto), 0)::bigint FROM nucleo.posting WHERE cuenta_id = $1",
+		cuenta).Scan(&saldo); err != nil {
+		t.Fatalf("leer el saldo de %q: %v", cuenta, err)
+	}
+	return saldo
+}
+
 type movimientoLeido struct {
 	Direccion   string
 	Monto       int64
@@ -161,32 +182,39 @@ func TestEnriquecimientoDeUnaTransferenciaUnFondeoYUnGMF(t *testing.T) {
 
 	idFondeo := sembrarAsiento(t, pool, "deposito", nil, "fondeo", base,
 		[]lineaDePrueba{
-			{"activo:custodia:banco", -1000000},
-			{"pasivo:usuario:" + u1 + ":disponible", 1000000},
+			{"activo:custodia:banco", 1000000},
+			{"pasivo:usuario:" + u1 + ":disponible", -1000000},
 		})
 
 	transferencia := uuid.New()
 	sembrarAsiento(t, pool, "retencion", &transferencia, "", base.Add(time.Minute),
 		[]lineaDePrueba{
-			{"pasivo:usuario:" + u1 + ":disponible", -500000},
-			{"pasivo:usuario:" + u1 + ":retenido", 500000},
+			{"pasivo:usuario:" + u1 + ":disponible", 500000},
+			{"pasivo:usuario:" + u1 + ":retenido", -500000},
 		})
 	sembrarAsiento(t, pool, "despacho_riel", &transferencia, "", base.Add(2*time.Minute),
 		[]lineaDePrueba{
-			{"pasivo:usuario:" + u1 + ":retenido", -500000},
-			{"pasivo:liquidacion_pendiente:riel", 500000},
+			{"pasivo:usuario:" + u1 + ":retenido", 500000},
+			{"pasivo:liquidacion_pendiente:riel", -500000},
 		})
 	sembrarAsiento(t, pool, "liquidacion_confirmada", &transferencia, "", base.Add(3*time.Minute),
 		[]lineaDePrueba{
-			{"pasivo:liquidacion_pendiente:riel", -500000},
-			{"pasivo:usuario:" + u2 + ":disponible", 500000},
+			{"pasivo:liquidacion_pendiente:riel", 500000},
+			{"pasivo:usuario:" + u2 + ":disponible", -500000},
 		})
 
 	idGMF := sembrarAsiento(t, pool, "retencion", nil, "GMF", base.Add(4*time.Minute),
 		[]lineaDePrueba{
-			{"pasivo:usuario:" + u1 + ":disponible", -2000},
-			{"pasivo:gmf_por_pagar", 2000},
+			{"pasivo:usuario:" + u1 + ":disponible", 2000},
+			{"pasivo:gmf_por_pagar", -2000},
 		})
+
+	// El fixture tiene que seguir el convenio del diario: un monto negativo en la subcuenta del
+	// usuario es plata que le entró (nucleo.Saldo devuelve -SUM(monto)). Con los signos invertidos
+	// esta comprobación falla antes de mirar la copia.
+	if saldo := saldoEnCentavos(t, pool, "pasivo:usuario:"+u1+":disponible"); saldo != 498000 {
+		t.Fatalf("saldo del disponible de u1 = %d, want 498000", saldo)
+	}
 
 	servicio := NuevoServicio(pool)
 	if _, err := servicio.Reconstruir(ctx, 1000); err != nil {

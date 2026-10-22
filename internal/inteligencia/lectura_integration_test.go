@@ -15,17 +15,17 @@ func sembrarTransferencia(t *testing.T, pool *pgxpool.Pool, desde, hacia string,
 	t.Helper()
 	transferencia := uuid.New()
 	sembrarAsiento(t, pool, "retencion", &transferencia, "", momento, []lineaDePrueba{
-		{"pasivo:usuario:" + desde + ":disponible", -monto},
-		{"pasivo:usuario:" + desde + ":retenido", monto},
+		{"pasivo:usuario:" + desde + ":disponible", monto},
+		{"pasivo:usuario:" + desde + ":retenido", -monto},
 	})
 	sembrarAsiento(t, pool, "despacho_riel", &transferencia, "", momento.Add(time.Minute), []lineaDePrueba{
-		{"pasivo:usuario:" + desde + ":retenido", -monto},
-		{"pasivo:liquidacion_pendiente:riel", monto},
+		{"pasivo:usuario:" + desde + ":retenido", monto},
+		{"pasivo:liquidacion_pendiente:riel", -monto},
 	})
 	sembrarAsiento(t, pool, "liquidacion_confirmada", &transferencia, "", momento.Add(2*time.Minute),
 		[]lineaDePrueba{
-			{"pasivo:liquidacion_pendiente:riel", -monto},
-			{"pasivo:usuario:" + hacia + ":disponible", monto},
+			{"pasivo:liquidacion_pendiente:riel", monto},
+			{"pasivo:usuario:" + hacia + ":disponible", -monto},
 		})
 	return transferencia
 }
@@ -34,8 +34,8 @@ func sembrarPagoExterno(t *testing.T, pool *pgxpool.Pool, usuario, descripcion s
 	momento time.Time) int64 {
 	t.Helper()
 	return sembrarAsiento(t, pool, "pago_qr", nil, descripcion, momento, []lineaDePrueba{
-		{"pasivo:usuario:" + usuario + ":disponible", -monto},
-		{"pasivo:liquidacion_pendiente:riel", monto},
+		{"pasivo:usuario:" + usuario + ":disponible", monto},
+		{"pasivo:liquidacion_pendiente:riel", -monto},
 	})
 }
 
