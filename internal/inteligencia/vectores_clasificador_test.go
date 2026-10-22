@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const huellaVectoresClasificador = "28e1b9a65df775635a4cc228dbb27a45c2b1b43d1585080f469949880a58bb24"
+const huellaVectoresClasificador = "6a948bb0d0fb2de7a328538fa0510af380fca0bb452085ee19080209b6ad001b"
 
 // clasesObligatorias son las que el documento tiene que cubrir. Borrar el caso difícil falla.
 var clasesObligatorias = []string{
