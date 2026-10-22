@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#eef3f8"><title>Vera · Laboratorio de voz</title><link rel="preload" href="/fuentes/plus-jakarta-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/estilos.css"><script type="module" src="/app.js"></script></head>
+<body>
+<header class="cabecera"><a class="marca" href="/" aria-label="Vera, laboratorio"><span class="abanico" aria-hidden="true"><i></i><i></i><i></i></span><span class="nombre-marca">vera</span><span class="nombre-entorno">Laboratorio</span></a><div class="sesion"><span id="modo">Conectando…</span><span id="cuota">— llamadas</span></div></header>
+<main>
+<div class="introduccion"><div><h1>Habla con <span>Vera.</span></h1><p>Un espacio para conversar, escuchar y entender cómo te ayuda.</p></div><button id="nueva" class="secundario" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nueva conversación</button></div>
+<div class="aviso-entorno"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m12 3 8 4v5c0 5-8 9-8 9s-8-4-8-9V7z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg><p class="aviso" id="aviso">Herramientas con datos ficticios. Las propuestas de transferencia son simuladas.</p></div>
+<div class="paneles">
+<section class="conversacion" aria-label="Conversación">
+<div class="cabecera-conversacion"><h2>Tu conversación</h2><span>Texto y voz</span></div>
+<div id="mensajes" class="mensajes" role="log" aria-live="polite" aria-relevant="additions">
+<div id="bienvenida" class="bienvenida"><div class="orbe" aria-hidden="true"><span class="abanico-orbe"><i></i><i></i></span></div><h2>¿En qué te ayudo hoy?</h2><p>Consulta un saldo, revisa movimientos o prepara una propuesta de prueba.</p><button id="ejemplo" class="ejemplo" disabled>¿Cuánto tengo disponible?<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button></div>
+</div>
+<div class="entrada">
+<p id="estado" role="status" aria-live="polite">Preparando la sesión…</p><p id="error" class="error" role="alert" hidden></p>
+<p id="espera" class="nota" hidden></p>
+<div class="controles"><button id="reintentar" class="secundario" hidden>Reintentar respuesta</button><button id="reintentar-audio" class="secundario" hidden>Reintentar transcripción</button><button id="cancelar" class="texto" hidden>Cancelar consulta</button></div>
+<div id="transcripcion" class="transcripcion" hidden><strong>Lo que entendió Vera</strong><p id="texto-transcripcion"></p></div>
+<audio id="clip" controls hidden aria-label="Tu grabación"></audio>
+<form id="formulario"><label for="pregunta">Tu pregunta</label><div class="fila-pregunta"><textarea id="pregunta" rows="2" maxlength="2000" placeholder="Por ejemplo: ¿cuánto puedo enviar?" disabled></textarea><button id="enviar" class="primario" disabled>Enviar<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 12 14 0m-6-6 6 6-6 6"/></svg></button></div></form>
+<div class="controles"><button id="microfono" class="microfono" disabled><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg><span id="texto-microfono">Hablar</span><span id="reloj" hidden>00:00</span></button><span class="nota" id="nota-audio">Hasta 20 s · al detener, se envía a Gemini</span></div>
+<div class="lectura"><button id="escuchar" class="secundario" disabled>Escuchar respuesta</button><button id="silenciar" class="texto" disabled>Detener voz</button><label class="automatica"><input id="automatica" type="checkbox" checked> Leer automáticamente</label><label class="voz">Voz<select id="voz" aria-label="Voz para leer las respuestas"><option value="cartesia:Catalina">Catalina · Colombia · Cartesia</option><option value="gemini:Aoede">Aoede · Gemini + respaldo neural</option><option value="gemini:Kore">Kore · Gemini + respaldo neural</option><option value="gemini:Puck">Puck · Gemini + respaldo neural</option><option value="local:Dora">Dora · neural local, sin cuota</option><option value="navegador">Voz del navegador</option></select></label></div>
+<p id="nota-voz" class="nota" role="status">Comprobando las voces disponibles…</p>
+<label class="automatica"><input id="respaldo" type="checkbox" checked> Usar voz del navegador si falla la voz natural</label>
+<p id="resultado-voz" class="nota" role="status"></p>
+<details class="detalles-audio"><summary>Consumo de audio</summary><p id="estadistica-voz" class="nota"></p></details>
+<p id="tiempos" class="nota" aria-label="Tiempos del último turno" hidden></p>
+</div>
+</section>
+<aside class="traza" aria-labelledby="titulo-traza"><div class="cabecera-traza"><h2 id="titulo-traza">Dentro de este turno</h2><span id="cantidad-traza">Sin llamadas</span></div><p class="explicacion-traza">El modelo propone la función. El backend valida sus argumentos y devuelve los datos.</p><div id="eventos"><div class="traza-vacia"><svg viewBox="0 0 64 48" width="64" height="48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="14" width="17" height="20" rx="5"/><path d="M20 24h23m-6-6 6 6-6 6"/><rect x="44" y="5" width="17" height="38" rx="5"/><path d="M49 15h7m-7 8h7m-7 8h4"/></svg><p class="vacio">Aquí aparecerán los argumentos y los resultados cuando Vera utilice una herramienta.</p></div></div><footer><span id="modelo">Modelo: —</span><span id="version">Instrucciones: —</span><p>La voz seleccionada lee el texto final de Vera. El audio y la conversación se mantienen en memoria; esta herramienta no crea archivos con ellos.</p></footer></aside>
+</div>
+</main>
+</body></html>

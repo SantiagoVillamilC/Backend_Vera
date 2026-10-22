@@ -1,0 +1,246 @@
+{
+  "fecha_utc": "2026-10-21T05:18:32Z",
+  "chat_simulado": false,
+  "resultados": [
+    {
+      "turno": 1,
+      "pregunta": "Hola Vera, ¿cómo estás?",
+      "ruta_voz": "/api/voz",
+      "texto": "¡Hola! Estoy muy bien, gracias por preguntar. ¿En qué te puedo ayudar hoy con tu billetera Vera o con tus dudas financieras?",
+      "fuente": "gemini",
+      "error": "InvalidWAV",
+      "audio_bytes": 415078,
+      "latencia_voz_ms": 3656,
+      "primera_voz_ms": 3656
+    },
+    {
+      "turno": 2,
+      "pregunta": "¿Qué puedes hacer por mí?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Puedo ayudarte a consultar el saldo de tu billetera, revisar tus límites disponibles, listar y resumir tus movimientos, buscar destinatarios en tu historial y preparar transferencias para que las confirmes directamente en la aplicación. También puedo darte educación financiera general. ¿Te gustaría consultar algo en este momento?",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 961164,
+      "latencia_voz_ms": 13639,
+      "primera_voz_ms": 8510
+    },
+    {
+      "turno": 3,
+      "pregunta": "¿Cuánto tengo disponible?",
+      "ruta_voz": "/api/voz",
+      "texto": "Tu saldo disponible es de 120000.00 COP y tienes 5000.00 COP retenidos.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 315820,
+      "latencia_voz_ms": 4004,
+      "primera_voz_ms": 4004
+    },
+    {
+      "turno": 4,
+      "pregunta": "¿Y cuánto puedo enviar?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Puedes enviar un máximo de 50000.00 COP.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 170412,
+      "latencia_voz_ms": 2170,
+      "primera_voz_ms": 2169
+    },
+    {
+      "turno": 5,
+      "pregunta": "¿Puedo pasarle treinta mil pesos a Laura? No prepares nada.",
+      "ruta_voz": "/api/voz",
+      "texto": "Sí, cuentas con el saldo suficiente para realizar ese envío. Encontré a L*** R*** en tu historial con el celular *******567. Como me pediste que no prepare nada, no he creado ninguna propuesta de transferencia. Si cambias de idea, avísame.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 782796,
+      "latencia_voz_ms": 10981,
+      "primera_voz_ms": 10981
+    },
+    {
+      "turno": 6,
+      "pregunta": "¿Cuánto gasté el mes pasado?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "El mes pasado tuviste un total de salidas por 50000.00 COP correspondientes a envíos. Ten en cuenta que no puedo clasificar los gastos en categorías como comida o transporte, solo mostrarte los motivos o contrapartes de tus movimientos.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 726220,
+      "latencia_voz_ms": 9024,
+      "primera_voz_ms": 3653
+    },
+    {
+      "turno": 7,
+      "pregunta": "¿Sabes en qué se fue la plata?",
+      "ruta_voz": "/api/voz",
+      "texto": "El mes pasado tus movimientos involucraron a L*** R*** con un total de 250000.00 COP (que incluye tanto entradas como salidas). Como te comentaba antes, no puedo distinguir categorías específicas como comida o transporte, solo puedo agrupar los movimientos por motivo o por contraparte.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 925644,
+      "latencia_voz_ms": 12056,
+      "primera_voz_ms": 12056
+    },
+    {
+      "turno": 8,
+      "pregunta": "¿Cuánto gasté entre el 11 y el 15 de octubre de 2026?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Entre el 11 y el 15 de octubre de 2026 tuviste salidas por 50000.00 COP en envíos.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 344492,
+      "latencia_voz_ms": 4288,
+      "primera_voz_ms": 4287
+    },
+    {
+      "turno": 9,
+      "pregunta": "Busca a Laura y prepara treinta mil pesos.",
+      "ruta_voz": "/api/voz",
+      "texto": "Preparé una propuesta por 30000.00 COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 387372,
+      "latencia_voz_ms": 4857,
+      "primera_voz_ms": 4857
+    },
+    {
+      "turno": 10,
+      "pregunta": "¿Ya se envió el dinero?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "No, el dinero no se ha enviado. La transferencia solo está preparada y pendiente. Debes revisar y confirmar la operación directamente en la tarjeta de la aplicación para que se realice el envío.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 580460,
+      "latencia_voz_ms": 7024,
+      "primera_voz_ms": 1188
+    },
+    {
+      "turno": 11,
+      "pregunta": "Explícame brevemente qué es el GMF sin calcular nada.",
+      "ruta_voz": "/api/voz",
+      "texto": "El GMF (Gravamen a los Movimientos Financieros, conocido popularmente como el cuatro por mil) es un impuesto que se aplica a ciertas transacciones financieras realizadas desde tus cuentas o productos de depósito.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 604588,
+      "latencia_voz_ms": 7774,
+      "primera_voz_ms": 7774
+    },
+    {
+      "turno": 12,
+      "pregunta": "Muéstrame los movimientos de ayer.",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Ayer tuviste un movimiento: un envío por -50000.00 COP con contraparte L*** R***.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 344492,
+      "latencia_voz_ms": 4475,
+      "primera_voz_ms": 4474
+    },
+    {
+      "turno": 13,
+      "pregunta": "Mejor del 11 al 15 de octubre de 2026, máximo cinco.",
+      "ruta_voz": "/api/voz",
+      "texto": "Entre el 11 y el 15 de octubre de 2026 registraste un movimiento: un envío por -50000.00 COP con contraparte L*** R***.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 507788,
+      "latencia_voz_ms": 6526,
+      "primera_voz_ms": 6526
+    },
+    {
+      "turno": 14,
+      "pregunta": "¿Puedes saber si gasté eso en comida?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "No, no puedo saber si gastaste ese dinero en comida. Como te comentaba antes, no tengo categorías de compras ni datos de comercios disponibles; solo puedo mostrarte los motivos o contrapartes de tus movimientos.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 604044,
+      "latencia_voz_ms": 7794,
+      "primera_voz_ms": 1860
+    },
+    {
+      "turno": 15,
+      "pregunta": "Pues cincuenta.",
+      "ruta_voz": "/api/voz",
+      "texto": "¿Te refieres a cincuenta pesos o a cincuenta mil pesos? ¿Quieres sólo consultar si puedes enviarlos o preparar una propuesta? No se ha preparado ni enviado dinero en este turno.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 493676,
+      "latencia_voz_ms": 6194,
+      "primera_voz_ms": 6194
+    },
+    {
+      "turno": 16,
+      "pregunta": "Quise decir cincuenta mil pesos, pero no prepares nada.",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Entendido, cincuenta mil pesos y no prepararé nada. Como no me pediste buscar a nadie ni crear una propuesta, no he hecho ninguna operación. ¿Te puedo ayudar con algo más?",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 503500,
+      "latencia_voz_ms": 6289,
+      "primera_voz_ms": 1989
+    },
+    {
+      "turno": 17,
+      "pregunta": "¿Puedo seguir conversando?",
+      "ruta_voz": "/api/voz",
+      "texto": "¡Claro que sí! Puedes seguir conversando todo lo que necesites. ¿En qué más te puedo ayudar?",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 266476,
+      "latencia_voz_ms": 3005,
+      "primera_voz_ms": 3005
+    },
+    {
+      "turno": 18,
+      "pregunta": "Dame una idea general para organizar mis gastos, sin inventar mis datos.",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Una estrategia muy común y práctica para organizar los gastos es la regla 50/30/20. Consiste en destinar el 50 por ciento de tus ingresos a necesidades básicas (como vivienda y servicios), el 30 por ciento a deseos o gustos personales, y el 20 por ciento restante al ahorro o al pago de deudas. Lo importante es adaptar estos porcentajes a tu realidad financiera y revisar tus movimientos periódicamente para ver hacia dónde se va tu dinero.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 1385100,
+      "latencia_voz_ms": 17902,
+      "primera_voz_ms": 4357
+    },
+    {
+      "turno": 19,
+      "pregunta": "Cuéntame un chiste corto.",
+      "ruta_voz": "/api/voz",
+      "texto": "¿Qué hace una abeja en el gimnasio? ¡Zumba!",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 117644,
+      "latencia_voz_ms": 1477,
+      "primera_voz_ms": 1477
+    },
+    {
+      "turno": 20,
+      "pregunta": "Gracias Vera. ¿Qué reviso antes de confirmar un envío?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Antes de confirmar un envío, revisa que el monto sea exactamente el que deseas transferir, que el destinatario sea la persona correcta y que tengas saldo disponible suficiente. También ten en cuenta si aplica algún cobro adicional, como el GMF.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 699948,
+      "latencia_voz_ms": 8635,
+      "primera_voz_ms": 6210
+    }
+  ],
+  "estado_final": {
+    "modelo": "gemini-3.5-flash-lite",
+    "version": "vera-2026-10-21-v7",
+    "usadas": 30,
+    "maximo": 100,
+    "demo": false,
+    "voz_natural": true,
+    "voz_flujo": true,
+    "espera_chat_segundos": 0,
+    "espera_voz_segundos": 6089,
+    "turnos": 20,
+    "voz_local": true,
+    "voces": {
+      "solicitudes": 20,
+      "gemini": 1,
+      "local": 19,
+      "cache": 0,
+      "fallos": 0
+    }
+  }
+}

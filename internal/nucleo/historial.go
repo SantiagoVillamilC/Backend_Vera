@@ -216,6 +216,8 @@ func motivoDelApunte(a apunte, contrapartes map[string]map[int64]bool, retenido 
 		return MotivoDeposito, nil
 	case TipoAsientoTransferenciaInterna:
 		return MotivoTransferenciaRecibida, nil
+	case TipoAsientoLiquidacionConfirmada:
+		return MotivoEnvio, nil
 	case TipoAsientoRetencion:
 		if contrapartes[retenido][abs] {
 			return MotivoEnvio, nil

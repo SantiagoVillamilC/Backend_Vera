@@ -26,7 +26,8 @@ type caracteristica struct {
 // El orden es el de `analisis/clasificador_tfidf.py:predecir`. Si el mejor coseno alcanza el umbral
 // fuerte, esa categoría decide y el léxico no la sobreescribe. Si es débil, el léxico puede decidir
 // por Jaro-Winkler. Si el léxico no aplica, decide el coseno solo cuando alcanza el umbral débil. Si
-// no, el clasificador se abstiene.
+// no, el clasificador se abstiene. Antes de devolver, la categoría ganadora pasa por `decidir`: una
+// categoría prohibida por el artefacto se convierte en abstención y no en el segundo lugar.
 func Predecir(modelo *Modelo, nombre, mccCategoria string) (Categoria, bool) {
 	if modelo == nil || nombre == "" {
 		return "", false
@@ -48,15 +49,26 @@ func Predecir(modelo *Modelo, nombre, mccCategoria string) (Categoria, bool) {
 		}
 	}
 	if mejor != "" && alcanza(mejorPuntaje, modelo.UmbralCosenoFuerte) {
-		return mejor, true
+		return decidir(modelo, mejor)
 	}
 	if categoria, encontrada := categoriaPorLexico(nombre, modelo); encontrada {
-		return categoria, true
+		return decidir(modelo, categoria)
 	}
 	if mejor == "" || !alcanza(mejorPuntaje, modelo.UmbralCoseno) {
 		return "", false
 	}
-	return mejor, true
+	return decidir(modelo, mejor)
+}
+
+// decidir aplica la lista de categorías prohibidas del artefacto antes de devolver una categoría.
+// Si la ganadora está prohibida, el clasificador se abstiene en vez de entregar la decisión al
+// segundo centroide, que daría otra categoría. El centroide prohibido se queda en el modelo para que
+// pueda ganar y forzar la abstención.
+func decidir(modelo *Modelo, categoria Categoria) (Categoria, bool) {
+	if modelo == nil || categoria == "" || modelo.Prohibidas[categoria] {
+		return "", false
+	}
+	return categoria, true
 }
 
 // categoriaPorLexico aplica el léxico del clasificador, que es otro que el de la cascada.

@@ -1,0 +1,226 @@
+{
+  "fecha_utc": "2026-10-21T05:13:37Z",
+  "chat_simulado": false,
+  "resultados": [
+    {
+      "turno": 1,
+      "pregunta": "Hola Vera, ¿cómo estás?",
+      "ruta_voz": "/api/voz",
+      "texto": "¡Hola! Estoy muy bien, gracias por preguntar. ¿En qué te puedo ayudar hoy con tu billetera Vera?",
+      "fuente": "gemini",
+      "error": "InvalidWAV",
+      "audio_bytes": 0,
+      "latencia_voz_ms": 3397
+    },
+    {
+      "turno": 2,
+      "pregunta": "¿Qué puedes hacer por mí?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Te puedo ayudar a consultar tu saldo disponible y tus límites para envíos, revisar los movimientos de tu cuenta entre las fechas que necesites, y preparar transferencias a tus contactos o a llaves Bre-B para que luego las confirmes directamente en la aplicación. También respondo tus dudas sobre educación financiera. ¿Hay algo en lo que te pueda colaborar ahora?",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 954732,
+      "latencia_voz_ms": 13966
+    },
+    {
+      "turno": 3,
+      "pregunta": "¿Cuánto tengo disponible?",
+      "ruta_voz": "/api/voz",
+      "texto": "Tu saldo disponible es de 120000.00 COP y tienes 5000.00 COP retenidos.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 315820,
+      "latencia_voz_ms": 4003
+    },
+    {
+      "turno": 4,
+      "pregunta": "¿Y cuánto puedo enviar?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "El máximo que puedes enviar es de 50000.00 COP. Ese monto incluye un gravamen (GMF) de 200.00 COP y está limitado por tu cupo mensual restante.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 521644,
+      "latencia_voz_ms": 6684
+    },
+    {
+      "turno": 5,
+      "pregunta": "¿Puedo pasarle treinta mil pesos a Laura? No prepares nada.",
+      "ruta_voz": "/api/voz",
+      "texto": "Sí, puedes hacerlo. Encontré a L*** R*** (celular *******567). Como me pediste que no prepare nada, no he creado ninguna propuesta de transferencia. Cuando quieras hacer el envío, avísame y con gusto lo preparamos.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 708460,
+      "latencia_voz_ms": 9081
+    },
+    {
+      "turno": 6,
+      "pregunta": "¿Cuánto gasté el mes pasado?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "El mes pasado tuviste una salida total por envíos de 50000.00 COP. Ten en cuenta que no puedo distinguir en qué gastaste la plata por categorías como comida o transporte, solo veo los motivos de las transacciones.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 650188,
+      "latencia_voz_ms": 8416
+    },
+    {
+      "turno": 7,
+      "pregunta": "¿Sabes en qué se fue la plata?",
+      "ruta_voz": "/api/voz",
+      "texto": "El mes pasado las salidas y entradas de dinero estuvieron asociadas con L*** R***. Recuerda que no tengo categorías de compras ni datos de comercios, por lo que no puedo decirte si fue para comida, transporte u otros conceptos específicos, solo veo las contrapartes y los motivos de las operaciones.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 877516,
+      "latencia_voz_ms": 11451
+    },
+    {
+      "turno": 8,
+      "pregunta": "¿Cuánto gasté entre el 11 y el 15 de octubre de 2026?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Entre el 11 y el 15 de octubre de 2026 tuviste salidas por envíos de 50000.00 COP. Recuerda que no puedo distinguir en qué gastaste la plata por categorías como comida o transporte, solo veo los motivos de las operaciones.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 729516,
+      "latencia_voz_ms": 9602
+    },
+    {
+      "turno": 9,
+      "pregunta": "Busca a Laura y prepara treinta mil pesos.",
+      "ruta_voz": "/api/voz",
+      "texto": "Preparé una propuesta por 30000.00 COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 385452,
+      "latencia_voz_ms": 5083
+    },
+    {
+      "turno": 10,
+      "pregunta": "¿Ya se envió el dinero?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "No, el dinero no se ha enviado. La transferencia solo está preparada. Para que se realice, debes revisar y confirmar la propuesta directamente en la tarjeta de la aplicación.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 489612,
+      "latencia_voz_ms": 5993
+    },
+    {
+      "turno": 11,
+      "pregunta": "Explícame brevemente qué es el GMF sin calcular nada.",
+      "ruta_voz": "/api/voz",
+      "texto": "El GMF es el Gravamen a los Movimientos Financieros, un impuesto nacional que se aplica a las transacciones financieras que realizas desde tus cuentas.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 433036,
+      "latencia_voz_ms": 5622
+    },
+    {
+      "turno": 12,
+      "pregunta": "Muéstrame los movimientos de ayer.",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Ayer tuviste un movimiento: un envío por un monto de -50000.00 COP con contraparte L*** R***.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 371660,
+      "latencia_voz_ms": 4612
+    },
+    {
+      "turno": 13,
+      "pregunta": "Mejor del 11 al 15 de octubre de 2026, máximo cinco.",
+      "ruta_voz": "/api/voz",
+      "texto": "Entre el 11 y el 15 de octubre de 2026 registraste un movimiento: un envío por un monto de -50000.00 COP con contraparte L*** R***.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 539596,
+      "latencia_voz_ms": 7349
+    },
+    {
+      "turno": 14,
+      "pregunta": "¿Puedes saber si gasté eso en comida?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "No, no puedo saber si gastaste ese dinero en comida. No tengo categorías de compras ni datos de comercios, por lo que solo puedo ver los motivos de las operaciones y las contrapartes, pero no en qué tipo de bienes o servicios se usó.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 647276,
+      "latencia_voz_ms": 8369
+    },
+    {
+      "turno": 15,
+      "pregunta": "Pues cincuenta.",
+      "ruta_voz": "/api/voz",
+      "texto": "¿Te refieres a cincuenta pesos o a cincuenta mil pesos? ¿Quieres sólo consultar si puedes enviarlos o preparar una propuesta? No se ha preparado ni enviado dinero en este turno.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 493676,
+      "latencia_voz_ms": 6148
+    },
+    {
+      "turno": 16,
+      "pregunta": "Quise decir cincuenta mil pesos, pero no prepares nada.",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Entendido, cincuenta mil pesos y no prepararé nada. ¿Hay algo más en lo que te pueda ayudar?",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 253100,
+      "latencia_voz_ms": 3047
+    },
+    {
+      "turno": 17,
+      "pregunta": "¿Puedo seguir conversando?",
+      "ruta_voz": "/api/voz",
+      "texto": "¡Claro que sí! Puedes seguir conversando todo lo que quieras. ¿En qué más te puedo ayudar?",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 258028,
+      "latencia_voz_ms": 2784
+    },
+    {
+      "turno": 18,
+      "pregunta": "Dame una idea general para organizar mis gastos, sin inventar mis datos.",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Una buena idea general para organizar tus gastos es la regla del 50/30/20: destinar el 50% de tus ingresos a tus necesidades básicas (como vivienda y servicios), el 30% a tus gustos o deseos personales, y el 20% a ahorrar o pagar deudas. Lo importante es adaptar estos porcentajes a tu realidad y revisar tus movimientos periódicamente para ver en qué se va el dinero.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 1139116,
+      "latencia_voz_ms": 14396
+    },
+    {
+      "turno": 19,
+      "pregunta": "Cuéntame un chiste corto.",
+      "ruta_voz": "/api/voz",
+      "texto": "¿Qué hace una abeja en el gimnasio? ¡Zumba!",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 117644,
+      "latencia_voz_ms": 1488
+    },
+    {
+      "turno": 20,
+      "pregunta": "Gracias Vera. ¿Qué reviso antes de confirmar un envío?",
+      "ruta_voz": "/api/voz/flujo",
+      "texto": "Antes de confirmar un envío, revisa que el monto sea el correcto, que el destinatario sea la persona o llave a la que realmente le quieres enviar, y ten en cuenta los costos adicionales como el gravamen (GMF) que se te muestren en la tarjeta de la aplicación.",
+      "fuente": "kokoro",
+      "motivo_respaldo": "GeminiQuota",
+      "audio_bytes": 690060,
+      "latencia_voz_ms": 8733
+    }
+  ],
+  "estado_final": {
+    "modelo": "gemini-3.5-flash-lite",
+    "version": "vera-2026-10-21-v7",
+    "usadas": 31,
+    "maximo": 100,
+    "demo": false,
+    "voz_natural": true,
+    "voz_flujo": true,
+    "espera_chat_segundos": 0,
+    "espera_voz_segundos": 6384,
+    "turnos": 20,
+    "voz_local": true,
+    "voces": {
+      "solicitudes": 20,
+      "gemini": 1,
+      "local": 19,
+      "cache": 0,
+      "fallos": 0
+    }
+  }
+}

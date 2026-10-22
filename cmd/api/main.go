@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
@@ -54,12 +55,18 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	proveedorIA, err := nuevoProveedorIA(ctx, cfg.Vera)
+	if err != nil {
+		return fmt.Errorf("proveedor IA: %w", err)
+	}
 
 	pool, err := database.NewPool(ctx, cfg.AppDatabaseURL)
 	if err != nil {
 		return fmt.Errorf("pool: %w", err)
 	}
 	defer pool.Close()
+	consentimientos := auth.NuevoServicioDeConsentimientos(pool)
+	controlIA := copilot.NuevoControlConsentimiento(consentimientos, copilot.NuevoCanceladorConsentimiento(pool))
 
 	// Rellenos de lo que aún no existe (KYC real); el directorio, el extracto del custodio y el riel son reales cuando hay URL.
 	var riel nucleo.Riel = nucleo.RielNoDisponible{}
@@ -130,11 +137,61 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("claves de contadores: %w", err)
 	}
+	referenciasDestinatario, err := copilot.NuevasReferenciasDestinatario(cfg.Auth.ContadoresPepper)
+	if err != nil {
+		return fmt.Errorf("referencias de destinatario: %w", err)
+	}
+
+	limiteDestinatarios := auth.NuevoLimiteDestinatarios(contadoresAuth, clavesContadores, cfg.Auth.DestinatariosLimite, cfg.Auth.DestinatariosVentana)
+	preparadorIA, err := copilot.NuevoPreparadorTransferencias(servicio, resolutorDestino, copilot.NuevasPropuestasPostgres(pool), referenciasDestinatario, limiteDestinatarios, contadoresAuth, clavesContadores, cfg.Vera.Preparacion)
+	if err != nil {
+		return fmt.Errorf("preparación IA: %w", err)
+	}
+	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
+		"preparar_transferencia":  preparadorIA.Manejar,
+		"buscar_destinatario":     copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, limiteDestinatarios, referenciasDestinatario),
+		"consultar_saldo":         copilot.ConsultaSaldoIA(servicio),
+		"consultar_limites":       copilot.ConsultaLimitesIA(servicio),
+		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
+		"resumir_movimientos":     copilot.ResumenMovimientosIA(servicio, resolutorDestino),
+		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
+	}, slog.Default(), copilot.ConAuditoriaLlamadas(copilot.NuevaAuditoriaPostgres(pool)))
+	if err != nil {
+		return fmt.Errorf("catálogo IA: %w", err)
+	}
+
+	presupuestoIA, err := copilot.NuevoPresupuestoRedis(clienteRedisAuth)
+	if err != nil {
+		return fmt.Errorf("presupuesto IA: %w", err)
+	}
+	usoIA, err := copilot.NuevoControlUso(contadoresAuth, clavesContadores, presupuestoIA, cfg.Vera.Limites)
+	if err != nil {
+		return fmt.Errorf("límites IA: %w", err)
+	}
+	proveedorIA = controlIA.ProtegerProveedor(usoIA.ProtegerProveedor(proveedorIA))
+	modeloIA := cfg.Vera.Modelo
+	if modeloIA == "" {
+		modeloIA = "simulado"
+	}
+	orquestadorIA, err := copilot.NuevoOrquestador(proveedorIA, catalogoIA, copilot.NuevaMemoriaCicloPostgres(pool), controlIA, modeloIA, slog.Default())
+	if err != nil {
+		return fmt.Errorf("orquestador IA: %w", err)
+	}
+	textoIA := copilot.NuevoServicioTexto(pool, orquestadorIA)
+	vozIA := copilot.NuevoServicioVoz(textoIA, proveedorIA)
+	historialIA, err := copilot.NuevoServicioHistorial(pool, cfg.Vera.RetencionDias)
+	if err != nil {
+		return fmt.Errorf("historial IA: %w", err)
+	}
 	lectorOptIn := auth.NuevoLectorOptInDeConsentimientos(pool)
 	gestorDesafios, err := auth.NuevoGestorDesafios(pool, canal, auth.NuevoRegistradorEventos(pool), lectorOptIn, cfg.Auth.OTPPepper,
 		auth.ConRacionamiento(contadoresAuth, clavesContadores))
 	if err != nil {
 		return fmt.Errorf("gestor de desafíos: %w", err)
+	}
+	accionesIA, err := copilot.NuevoControlAcciones(pool, servicio, gestorDesafios, controlIA, cfg.Vera.Preparacion.UmbralCodigo)
+	if err != nil {
+		return fmt.Errorf("acciones IA: %w", err)
 	}
 	gestorEstados := auth.NuevoGestorDeEstados(auth.NuevoRegistradorEventos(pool))
 	activador, err := auth.NuevoActivadorDeCuenta(pool, gestorDesafios, gestorEstados, cfg.Auth.OTPPepper)
@@ -191,7 +248,7 @@ func run() error {
 		Identidad:     identidadPeticion,
 		Auth:          httpserver.NuevoDispositivosHandler(servicioSesion),
 		KYC:           handlerKYC,
-		Consent:       httpserver.NuevoConsentimientosHandler(auth.NuevoServicioDeConsentimientos(pool)),
+		Consent:       httpserver.NuevoConsentimientosHandler(consentimientos),
 		Redis:         clienteRedisAuth,
 		CanalOTP:      canal,
 		Contadores:    contadoresAuth,
@@ -244,7 +301,7 @@ func run() error {
 	if cfg.AvisosActivo {
 		configuracionDeJobs.Avisos = servicioInteligencia
 	}
-	riverClient, err := jobs.NewClient(pool, servicio, configuracionDeJobs, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox)
+	riverClient, err := jobs.NewClient(pool, servicio, configuracionDeJobs, opcionLimpiezaDeAuth(pool, cfg), opcionOutbox, copilot.OpcionExpiracionAcciones(accionesIA), copilot.OpcionRetencionHistorial(historialIA))
 	if err != nil {
 		return fmt.Errorf("river: %w", err)
 	}
@@ -254,7 +311,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouter(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA, Historial: historialIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

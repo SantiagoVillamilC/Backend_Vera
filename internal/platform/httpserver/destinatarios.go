@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -19,10 +20,7 @@ type ConsultadorDestinatarios interface {
 // DestinatariosHandler limita consultas por usuario antes de leer el destino.
 type DestinatariosHandler struct {
 	consultador ConsultadorDestinatarios
-	contadores  auth.Contadores
-	claves      *auth.Claves
-	limite      int64
-	ventana     time.Duration
+	limite      *auth.LimiteDestinatarios
 }
 
 // NuevoDestinatariosHandler exige las dependencias necesarias para cerrar ante fallos.
@@ -30,7 +28,7 @@ func NuevoDestinatariosHandler(consultador ConsultadorDestinatarios, contadores 
 	if consultador == nil || contadores == nil || claves == nil || limite <= 0 || ventana <= 0 {
 		panic("destinatarios: configuracion incompleta")
 	}
-	return &DestinatariosHandler{consultador: consultador, contadores: contadores, claves: claves, limite: int64(limite), ventana: ventana}
+	return &DestinatariosHandler{consultador: consultador, limite: auth.NuevoLimiteDestinatarios(contadores, claves, limite, ventana)}
 }
 
 // ConsultarDestinatario devuelve solo el nombre visible de una cuenta interna.
@@ -45,14 +43,13 @@ func (h *DestinatariosHandler) ConsultarDestinatario(w http.ResponseWriter, r *h
 		api.WriteError(w, http.StatusBadRequest, "BadRequest", "A required parameter is missing.", []api.FieldError{{Field: "celular", Rule: "required"}})
 		return
 	}
-	clave := "destinatarios:usuario:" + h.claves.ClaveDeParte(usuarioID)
-	conteo, err := h.contadores.Incrementar(r.Context(), clave, h.ventana)
-	if err != nil {
-		api.WriteError(w, http.StatusServiceUnavailable, "AuthUnavailable", "Recipient lookup is temporarily unavailable.", nil)
+	err := h.limite.Exigir(r.Context(), usuarioID)
+	if errors.Is(err, auth.ErrConsultaDestinatariosLimitada) {
+		api.WriteError(w, http.StatusTooManyRequests, "TooManyRequests", "Too many recipient lookups.", nil)
 		return
 	}
-	if conteo > h.limite {
-		api.WriteError(w, http.StatusTooManyRequests, "TooManyRequests", "Too many recipient lookups.", nil)
+	if err != nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "AuthUnavailable", "Recipient lookup is temporarily unavailable.", nil)
 		return
 	}
 	nombre, existe, propio, err := h.consultador.NombreDeDestinoPorCelular(r.Context(), celular, usuarioID)

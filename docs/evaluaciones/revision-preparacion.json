@@ -1,0 +1,15 @@
+{
+  "accion_pendiente": true,
+  "correcto": true,
+  "datos_ficticios": true,
+  "fecha": "2026-10-20T13:39:20Z",
+  "funciones": [
+    "buscar_destinatario",
+    "preparar_transferencia"
+  ],
+  "latencia_ms": 16821,
+  "modelo": "gemini-3.5-flash-lite",
+  "respuesta": "Preparé una propuesta por 30000.00 COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero.",
+  "respuesta_del_backend": true,
+  "solicitudes": 2
+}
