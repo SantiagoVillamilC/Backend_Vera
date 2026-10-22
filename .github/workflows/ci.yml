@@ -178,14 +178,22 @@ jobs:
           '
 
       # Un skip en un paquete con pruebas de integración casi siempre es una
-      # variable de entorno mal puesta. Solo se permite el helper de subproceso,
-      # que corre dentro de otra prueba y se omite por diseño en la corrida directa.
+      # variable de entorno mal puesta, por eso el job falla cuando aparece uno.
+      # Se exceptúan dos casos conocidos y documentados: el helper de subproceso,
+      # que corre dentro de otra prueba y se omite por diseño en la corrida
+      # directa, y las pruebas opt-in cuyo nombre termina en Manual, que exigen
+      # variables propias (por ejemplo VERA_PRUEBA_REAL=1) y nunca deberían correr
+      # en la suite normal. Cualquier otro skip sigue rompiendo el job.
       - name: Fail on unexpected skips
         if: success()
         run: |
           python3 - <<'PY'
           import json, os
           permitidos = {"TestProcesoQueMuereEnElDespacho"}
+
+          def es_opt_in(nombre):
+              return nombre.endswith("Manual")
+
           inesperados = []
           with open(os.path.join(os.environ["RUNNER_TEMP"], "integration.json")) as f:
               for linea in f:
@@ -193,8 +201,11 @@ jobs:
                       e = json.loads(linea)
                   except ValueError:
                       continue
-                  if e.get("Action") == "skip" and e.get("Test") and e["Test"] not in permitidos:
-                      inesperados.append(e["Package"] + " " + e["Test"])
+                  if e.get("Action") != "skip" or not e.get("Test"):
+                      continue
+                  if e["Test"] in permitidos or es_opt_in(e["Test"]):
+                      continue
+                  inesperados.append(e["Package"] + " " + e["Test"])
           if inesperados:
               print("Pruebas omitidas sin explicación:")
               print("\n".join(inesperados))
