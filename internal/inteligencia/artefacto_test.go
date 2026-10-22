@@ -41,6 +41,12 @@ func TestElArtefactoEmbebidoCarga(t *testing.T) {
 	if len(modelo.Lexico) != declarado.Conteos.Lexico {
 		t.Fatalf("léxico = %d, want %d", len(modelo.Lexico), declarado.Conteos.Lexico)
 	}
+	if modelo.UmbralCoseno != 0.16 {
+		t.Fatalf("umbral_coseno = %v, want 0.16", modelo.UmbralCoseno)
+	}
+	if !declarado.SinLexico {
+		t.Fatalf("el manifiesto no declara sin_lexico")
+	}
 }
 
 func TestElManifiestoCoincideConElArtefacto(t *testing.T) {
@@ -93,5 +99,62 @@ func TestElArtefactoNoTraeCategoriasDeIngreso(t *testing.T) {
 		if !EsCategoriaVisible(categoriaDelLexico) {
 			t.Fatalf("la semilla %q apunta a %q, que no es visible", categoria, categoriaDelLexico)
 		}
+	}
+}
+
+func TestElArtefactoProhibeComisiones(t *testing.T) {
+	modelo, err := ModeloTFIDFEmbebido()
+	if err != nil {
+		t.Fatalf("cargar: %v", err)
+	}
+	if !modelo.Prohibidas[CategoriaComisiones] {
+		t.Fatalf("el artefacto no prohíbe %q", CategoriaComisiones)
+	}
+	if len(modelo.Prohibidas) != 1 {
+		t.Fatalf("el artefacto prohíbe %d categorías, want 1", len(modelo.Prohibidas))
+	}
+	if _, existe := modelo.Centroides[CategoriaComisiones]; !existe {
+		t.Fatalf("el centroide de %q no puede faltar: sin él la prohibición no fuerza la abstención",
+			CategoriaComisiones)
+	}
+}
+
+func TestElArtefactoTraeLexicoVacio(t *testing.T) {
+	modelo, err := ModeloTFIDFEmbebido()
+	if err != nil {
+		t.Fatalf("cargar: %v", err)
+	}
+	if len(modelo.Lexico) != 0 {
+		t.Fatalf("el artefacto trae %d semillas, want 0", len(modelo.Lexico))
+	}
+	if !manifiestoEmbebido(t).SinLexico {
+		t.Fatalf("el manifiesto no declara sin_lexico")
+	}
+}
+
+func TestCargarModeloVerificadoRechazaProhibidasDistintas(t *testing.T) {
+	declarado := manifiestoEmbebido(t)
+	declarado.CategoriasProhibidas = []string{string(CategoriaOtrosGastos)}
+	alterado, err := json.Marshal(declarado)
+	if err != nil {
+		t.Fatalf("serializar: %v", err)
+	}
+	if _, err := CargarModeloVerificado(artefactoTFIDF, alterado); !errors.Is(err, ErrArtefactoInvalido) {
+		t.Fatalf("err = %v, want ErrArtefactoInvalido", err)
+	}
+}
+
+func TestElManifiestoRechazaCampoDesconocido(t *testing.T) {
+	var documento map[string]any
+	if err := json.Unmarshal(manifiestoArtefactoTFIDF, &documento); err != nil {
+		t.Fatalf("decodificar el manifiesto: %v", err)
+	}
+	documento["campo_desconocido"] = true
+	alterado, err := json.Marshal(documento)
+	if err != nil {
+		t.Fatalf("serializar: %v", err)
+	}
+	if _, err := CargarModeloVerificado(artefactoTFIDF, alterado); !errors.Is(err, ErrArtefactoInvalido) {
+		t.Fatalf("err = %v, want ErrArtefactoInvalido", err)
 	}
 }

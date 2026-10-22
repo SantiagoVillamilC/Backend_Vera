@@ -11,20 +11,43 @@ import (
 func artefactoDePrueba(t *testing.T, version string, idf, umbrales map[string]string,
 	centroides map[string]map[string]string, lexico map[string]string) []byte {
 	t.Helper()
+	return artefactoConProhibidas(t, version, idf, umbrales, centroides, lexico,
+		[]string{string(CategoriaComisiones)})
+}
+
+func artefactoConProhibidas(t *testing.T, version string, idf, umbrales map[string]string,
+	centroides map[string]map[string]string, lexico map[string]string, prohibidas []string) []byte {
+	t.Helper()
 	documento := map[string]any{
-		"version":              version,
-		"idf":                  idf,
-		"centroides":           centroides,
-		"lexico":               lexico,
-		"umbral_coseno":        umbrales["coseno"],
-		"umbral_coseno_fuerte": umbrales["fuerte"],
-		"umbral_jw":            umbrales["jw"],
+		"version":               version,
+		"idf":                   idf,
+		"centroides":            centroides,
+		"lexico":                lexico,
+		"categorias_prohibidas": prohibidas,
+		"umbral_coseno":         umbrales["coseno"],
+		"umbral_coseno_fuerte":  umbrales["fuerte"],
+		"umbral_jw":             umbrales["jw"],
 	}
 	datos, err := json.Marshal(documento)
 	if err != nil {
 		t.Fatalf("serializar el artefacto de prueba: %v", err)
 	}
 	return datos
+}
+
+// sinCampo devuelve el artefacto con una clave quitada, para probar los campos obligatorios.
+func sinCampo(t *testing.T, datos []byte, campo string) []byte {
+	t.Helper()
+	var documento map[string]any
+	if err := json.Unmarshal(datos, &documento); err != nil {
+		t.Fatalf("decodificar el artefacto de prueba: %v", err)
+	}
+	delete(documento, campo)
+	alterado, err := json.Marshal(documento)
+	if err != nil {
+		t.Fatalf("serializar el artefacto de prueba: %v", err)
+	}
+	return alterado
 }
 
 func umbralesDePrueba() map[string]string {
@@ -58,7 +81,7 @@ func TestCargarModeloRechazaArtefactoInvalido(t *testing.T) {
 }
 
 func TestCargarModeloRechazaVersionDesconocida(t *testing.T) {
-	for _, version := range []string{"", "tfidf-2"} {
+	for _, version := range []string{"", "tfidf-3"} {
 		t.Run("version="+version, func(t *testing.T) {
 			datos := artefactoDePrueba(t, version, map[string]string{"w:A": "1"}, umbralesDePrueba(),
 				map[string]map[string]string{"compras": {"w:A": "1"}}, nil)
@@ -138,4 +161,85 @@ func TestUmbralesDelModeloSalenDelArtefacto(t *testing.T) {
 		math.Abs(modelo.UmbralJW-0.9) > 1e-12 {
 		t.Fatalf("umbrales = %v %v %v", modelo.UmbralCoseno, modelo.UmbralCosenoFuerte, modelo.UmbralJW)
 	}
+}
+
+func exigirRechazoDeModelo(t *testing.T, datos []byte, esperado error) {
+	t.Helper()
+	if _, err := CargarModelo(datos); !errors.Is(err, esperado) {
+		t.Fatalf("err = %v, want %v", err, esperado)
+	}
+}
+
+func artefactoBase(t *testing.T) []byte {
+	t.Helper()
+	return artefactoDePrueba(t, VersionArtefacto, map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}}, nil)
+}
+
+func TestCargarModeloRechazaCampoDesconocido(t *testing.T) {
+	datos := artefactoBase(t)
+	var documento map[string]any
+	if err := json.Unmarshal(datos, &documento); err != nil {
+		t.Fatalf("decodificar: %v", err)
+	}
+	documento["campo_desconocido"] = "x"
+	alterado, err := json.Marshal(documento)
+	if err != nil {
+		t.Fatalf("serializar: %v", err)
+	}
+	exigirRechazoDeModelo(t, alterado, ErrArtefactoInvalido)
+}
+
+func TestCargarModeloRechazaSinCategoriasProhibidas(t *testing.T) {
+	exigirRechazoDeModelo(t, sinCampo(t, artefactoBase(t), "categorias_prohibidas"), ErrArtefactoInvalido)
+}
+
+func TestCargarModeloRechazaProhibidaFueraDelCatalogo(t *testing.T) {
+	datos := artefactoConProhibidas(t, VersionArtefacto, map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}}, nil, []string{"categoria_inventada"})
+	exigirRechazoDeModelo(t, datos, ErrCategoriaDesconocida)
+}
+
+func TestCargarModeloRechazaProhibidaDuplicada(t *testing.T) {
+	datos := artefactoConProhibidas(t, VersionArtefacto, map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}}, nil,
+		[]string{string(CategoriaComisiones), string(CategoriaComisiones)})
+	exigirRechazoDeModelo(t, datos, ErrArtefactoInvalido)
+}
+
+func TestCargarModeloRechazaProhibidasDesordenadas(t *testing.T) {
+	datos := artefactoConProhibidas(t, VersionArtefacto, map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}}, nil,
+		[]string{string(CategoriaOtrosGastos), string(CategoriaComisiones)})
+	exigirRechazoDeModelo(t, datos, ErrArtefactoInvalido)
+}
+
+func TestCargarModeloRechazaProhibidaDeIngreso(t *testing.T) {
+	datos := artefactoConProhibidas(t, VersionArtefacto, map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}}, nil, []string{string(CategoriaSalario)})
+	exigirRechazoDeModelo(t, datos, ErrArtefactoInvalido)
+}
+
+func TestCargarModeloRechazaTodasProhibidas(t *testing.T) {
+	datos := artefactoConProhibidas(t, VersionArtefacto, map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}}, nil, []string{string(CategoriaCompras)})
+	exigirRechazoDeModelo(t, datos, ErrArtefactoInvalido)
+}
+
+func TestCargarModeloRechazaLexicoHaciaProhibida(t *testing.T) {
+	datos := artefactoDePrueba(t, VersionArtefacto, map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}},
+		map[string]string{"BANCO": string(CategoriaComisiones)})
+	exigirRechazoDeModelo(t, datos, ErrArtefactoInvalido)
+}
+
+func TestCargarModeloRechazaVersionTfidf1(t *testing.T) {
+	datos := artefactoDePrueba(t, "tfidf-1", map[string]string{"w:ALFA": "1"}, umbralesDePrueba(),
+		map[string]map[string]string{"compras": {"w:ALFA": "1"}}, nil)
+	exigirRechazoDeModelo(t, datos, ErrVersionDesconocida)
+}
+
+func TestCargarModeloRechazaDatosDespuesDelJSON(t *testing.T) {
+	datos := append(artefactoBase(t), []byte(`{"version":"otra"}`)...)
+	exigirRechazoDeModelo(t, datos, ErrArtefactoInvalido)
 }

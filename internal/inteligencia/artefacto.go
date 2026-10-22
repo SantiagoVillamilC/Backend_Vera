@@ -1,26 +1,29 @@
 package inteligencia
 
 import (
+	"bytes"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sort"
 )
 
 // El artefacto y su manifiesto viajan dentro del binario. Se entrenan con el catálogo público v2 y
 // se copian byte a byte, así que el sha256 del archivo es la identidad del modelo.
 //
-//go:embed modelo/tfidf-v1.json
+//go:embed modelo/tfidf-v2.json
 var artefactoTFIDF []byte
 
-//go:embed modelo/tfidf-v1.manifest.json
+//go:embed modelo/tfidf-v2.manifest.json
 var manifiestoArtefactoTFIDF []byte
 
 // HuellaArtefactoTFIDF es el sha256 del artefacto congelado. Una prueba lo recalcula sobre los bytes
 // embebidos, así que editar el artefacto a mano falla aunque esta constante se actualice.
-const HuellaArtefactoTFIDF = "8382898374ebe8f1ba3396a326a1e1d2ff2f83989bacd9884cee8c7155e793d0"
+const HuellaArtefactoTFIDF = "fe69c5efda1f885cb9bd0de0fcd835d7cf098c976f9eb868fddf29d79e864253"
 
 // Manifiesto describe el artefacto embebido: de dónde salió y qué contiene.
 type Manifiesto struct {
@@ -47,10 +50,13 @@ type Manifiesto struct {
 		Lexico            int `json:"lexico"`
 		PodaPorCentroide  int `json:"poda_por_centroide"`
 	} `json:"conteos"`
-	Categorias       []string          `json:"categorias"`
-	LexicoDescartado map[string]string `json:"lexico_descartado"`
-	Umbrales         map[string]string `json:"umbrales"`
-	Nota             string            `json:"nota"`
+	Categorias           []string          `json:"categorias"`
+	CategoriasProhibidas []string          `json:"categorias_prohibidas"`
+	SinLexico            bool              `json:"sin_lexico"`
+	CatalogoFirmado      []string          `json:"catalogo_firmado"`
+	LexicoDescartado     map[string]string `json:"lexico_descartado"`
+	Umbrales             map[string]string `json:"umbrales"`
+	Nota                 string            `json:"nota"`
 }
 
 // ModeloTFIDFEmbebido carga el artefacto embebido y comprueba que coincida con su manifiesto.
@@ -61,9 +67,9 @@ func ModeloTFIDFEmbebido() (*Modelo, error) {
 // CargarModeloVerificado carga el artefacto y exige que su sha256 y sus conteos sean los del
 // manifiesto. Un artefacto con otra huella no es el que se congeló, así que no se usa.
 func CargarModeloVerificado(artefacto, manifiesto []byte) (*Modelo, error) {
-	var declarado Manifiesto
-	if err := json.Unmarshal(manifiesto, &declarado); err != nil {
-		return nil, fmt.Errorf("%w: manifiesto: %w", ErrArtefactoInvalido, err)
+	declarado, err := cargarManifiesto(manifiesto)
+	if err != nil {
+		return nil, err
 	}
 	suma := sha256.Sum256(artefacto)
 	huella := hex.EncodeToString(suma[:])
@@ -101,5 +107,48 @@ func CargarModeloVerificado(artefacto, manifiesto []byte) (*Modelo, error) {
 				ErrCategoriaDesconocida, declaradas[i], categoria)
 		}
 	}
+	if err := verificarProhibidasDeclaradas(declarado, modelo); err != nil {
+		return nil, err
+	}
 	return modelo, nil
+}
+
+// cargarManifiesto decodifica el manifiesto y rechaza campos que el contrato no conoce. Un campo
+// nuevo sin dueño en el struct pasaría inadvertido con `json.Unmarshal`, que es justo lo que se
+// quiere evitar con `sin_lexico` y `categorias_prohibidas`.
+func cargarManifiesto(datos []byte) (Manifiesto, error) {
+	var declarado Manifiesto
+	decodificador := json.NewDecoder(bytes.NewReader(datos))
+	decodificador.DisallowUnknownFields()
+	if err := decodificador.Decode(&declarado); err != nil {
+		return Manifiesto{}, fmt.Errorf("%w: manifiesto: %w", ErrArtefactoInvalido, err)
+	}
+	if err := decodificador.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return Manifiesto{}, fmt.Errorf("%w: manifiesto: hay datos después del JSON", ErrArtefactoInvalido)
+	}
+	return declarado, nil
+}
+
+// verificarProhibidasDeclaradas exige que el manifiesto describa la misma lista de prohibidas que el
+// artefacto y que un manifiesto con `sin_lexico` no conviva con semillas cargadas.
+func verificarProhibidasDeclaradas(declarado Manifiesto, modelo *Modelo) error {
+	reales := make([]string, len(modelo.prohibidas))
+	for i, categoria := range modelo.prohibidas {
+		reales[i] = string(categoria)
+	}
+	if len(declarado.CategoriasProhibidas) != len(reales) {
+		return fmt.Errorf("%w: el manifiesto declara %d categorías prohibidas y el artefacto %d",
+			ErrArtefactoInvalido, len(declarado.CategoriasProhibidas), len(reales))
+	}
+	for i := range reales {
+		if declarado.CategoriasProhibidas[i] != reales[i] {
+			return fmt.Errorf("%w: el manifiesto declara prohibida %q y el artefacto %q",
+				ErrArtefactoInvalido, declarado.CategoriasProhibidas[i], reales[i])
+		}
+	}
+	if declarado.SinLexico && len(modelo.Lexico) != 0 {
+		return fmt.Errorf("%w: el manifiesto declara sin_lexico y el artefacto trae %d semillas",
+			ErrArtefactoInvalido, len(modelo.Lexico))
+	}
+	return nil
 }

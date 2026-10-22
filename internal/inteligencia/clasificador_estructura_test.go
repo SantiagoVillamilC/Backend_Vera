@@ -20,12 +20,14 @@ var archivosDelClasificador = []string{
 // importsPermitidos es una lista blanca, no una lista negra: si aparece red, reloj, entorno o el
 // repositorio, la prueba falla aunque el paquete siga compilando.
 var importsPermitidos = map[string]struct{}{
+	"bytes":         {},
 	"crypto/sha256": {},
 	"embed":         {},
 	"encoding/hex":  {},
 	"encoding/json": {},
 	"errors":        {},
 	"fmt":           {},
+	"io":            {},
 	"math":          {},
 	"sort":          {},
 	"strconv":       {},
