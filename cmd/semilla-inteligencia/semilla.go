@@ -176,7 +176,9 @@ func planDelBanco(opciones Opciones) ([]asientoSembrado, []lineaSembrada) {
 		usuario := usuarioDeIndice(opciones.Semilla, i)
 		siguiente := usuarioDeIndice(opciones.Semilla, (i+1)%usuarios)
 		disponible := cuentaDeUsuario(usuario, "disponible")
+		retenido := cuentaDeUsuario(usuario, "retenido")
 		destinoInterno := cuentaDeUsuario(siguiente, "disponible")
+		retenidoDestino := cuentaDeUsuario(siguiente, "retenido")
 		for mes := range meses {
 			ocurrido := time.Date(2026, time.Month(1+mes), 5, 12, 0, 0, 0, zona)
 			ingreso := generador.entre(2_000_000_00, 6_000_000_00)
@@ -188,11 +190,18 @@ func planDelBanco(opciones Opciones) ([]asientoSembrado, []lineaSembrada) {
 				ocurrido.AddDate(0, 0, 10+int(generador.siguiente()%8)),
 				"Compra en "+comercios[generador.indice(len(comercios))],
 				[][2]any{{disponible, gasto}, {comercio, -gasto}})
+			gastoCorto := generador.entre(30_000_00, 400_000_00)
+			comercioCorto := cuentaDeComercio(generador.indice(len(comercios)))
+			agregar("liquidacion_confirmada",
+				ocurrido.AddDate(0, 0, 14+int(generador.siguiente()%8)),
+				"Compra en "+comercios[generador.indice(len(comercios))],
+				[][2]any{{disponible, gastoCorto}, {comercioCorto, -gastoCorto}})
 			transferencia := generador.entre(50_000_00, 300_000_00)
-			agregar("transferencia_interna",
-				ocurrido.AddDate(0, 0, 20+int(generador.siguiente()%5)),
-				"Envío a contacto",
-				[][2]any{{disponible, transferencia}, {destinoInterno, -transferencia}})
+			cuando := ocurrido.AddDate(0, 0, 20+int(generador.siguiente()%5))
+			agregar("retencion", cuando, "Envío a contacto",
+				[][2]any{{disponible, transferencia}, {retenido, -transferencia}})
+			agregar("transferencia_interna", cuando, "Envío a contacto",
+				[][2]any{{retenidoDestino, transferencia}, {destinoInterno, -transferencia}})
 		}
 	}
 	for i := range opciones.AsientosExtra {
