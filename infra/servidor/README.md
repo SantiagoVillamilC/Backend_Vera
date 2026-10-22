@@ -457,7 +457,9 @@ Emite el certificado TLS con certbot y programa su renovación (tarjeta
 SCRUM-30). El dominio ya es definitivo (`veraapp.tech`, ver
 `dominio-fijado.sh`). Nunca toca el contenedor `nginx` ni escribe
 `raiz-http.conf`: solo deja archivos en disco (`compose.certbot.yaml`,
-`nginx/conf.d/centinela-tls.conf`, `nginx/snippets/raiz-redirigir.conf`) y
+`nginx/conf.d/centinela-tls.conf`, `nginx/conf.d/www-tls.conf`,
+`nginx/conf.d/api-tls.conf`, `nginx/conf.d/staging-tls.conf`,
+`nginx/snippets/cabeceras-seguridad.conf`, `nginx/snippets/raiz-redirigir.conf`) y
 gestiona el certificado y su timer de renovación. Es `30-nginx.sh` quien
 recoge esos archivos la próxima vez que corra completo: la activación real
 del puerto 443 y la redirección a HTTPS quedan diferidas una corrida
@@ -475,8 +477,23 @@ siendo el comodín `_`; (3) falta `CORREO_CERTBOT` en `aprovisionar.env`
 **Emisión**: contenedor efímero `docker run --rm` con el plugin webroot,
 montando `nginx/webroot` (sin `:ro`: certbot necesita escribir el reto ahí)
 y `/etc/letsencrypt` COMPLETO (no solo `live/`: son symlinks hacia
-`archive/`). Idempotente por existencia de `fullchain.pem`: si ya existe,
-no se vuelve a invocar `certonly`.
+`archive/`). El certificado cubre cuatro nombres (`DOMINIOS_TLS`): el apex,
+`www`, `api` y `staging`. Idempotente por existencia Y cobertura: si
+`fullchain.pem` existe y su `subjectAltName` incluye `www`, no se vuelve a
+invocar `certonly`. Si existe pero le faltan nombres (el caso de un
+certificado emitido antes de que existieran los alias), se reemite una sola
+vez con `--expand`, que reemplaza el linaje en lugar de gastar el cupo de
+certificados duplicados.
+
+**Cuatro nombres, tres vhosts**: `centinela-tls.conf` sirve el apex,
+`www-tls.conf` devuelve un 301 al apex sin servir contenido, y `api-tls.conf`
+y `staging-tls.conf` proxean al MISMO contenedor `api` con el mismo
+`raiz-http.conf`, porque `staging` y `main` comparten esta VM y entre ellos
+solo cambia la etiqueta de la imagen. No son ambientes aislados: lo que
+responda `staging.veraapp.tech` es lo que esté desplegado en ese momento. Los
+tres vhosts de la API incluyen `cabeceras-seguridad.conf` (HSTS,
+`X-Content-Type-Options`, `Referrer-Policy`); `pse-tls.conf` mantiene su
+propio HSTS y no lo incluye.
 
 **Trampa de `CERTBOT_STAGING`**: un certificado de staging queda en la
 MISMA ruta (`live/${DOMINIO_SERVIDOR}/fullchain.pem`) que uno real. Como la

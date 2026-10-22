@@ -1,0 +1,14 @@
+{
+  "duracion_audio_ms": 8680,
+  "espera_unaria_ms": 3516,
+  "fecha": "2026-10-20T05:40:36Z",
+  "modelo": "gemini-3.8-flash-lite-tts",
+  "muestras_por_modo": 1,
+  "nota": "Muestras individuales; no representan una mediana ni garantizan latencia. No incluye transcripción ni chat.",
+  "paquetes": 110,
+  "primer_pcm_ms": 579,
+  "solicitudes": 2,
+  "stream_total_ms": 1807,
+  "texto_ficticio": true,
+  "voz": "Aoede"
+}

@@ -1,0 +1,209 @@
+{
+  "Modelo": "gemini-3.5-flash-lite",
+  "Version": "vera-2026-10-20-v6",
+  "CreadoEn": "2026-10-21T02:50:34.52963221Z",
+  "Turnos": [
+    {
+      "turno": 1,
+      "pregunta": "Hola Vera, ¿cómo estás?",
+      "texto": "¡Hola! Estoy muy bien, gracias por preguntar. ¿En qué te puedo ayudar hoy con tu billetera Vera?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 879
+    },
+    {
+      "turno": 2,
+      "pregunta": "¿Qué puedes hacer por mí?",
+      "texto": "Puedo ayudarte a consultar tu saldo disponible y retenido, revisar los límites de envío, listar o resumir tus movimientos y preparar transferencias a tus contactos o llaves Bre-B. También puedo darte información general sobre educación financiera. Dime qué necesitas y con gusto te atiendo.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5145
+    },
+    {
+      "turno": 3,
+      "pregunta": "¿Cuánto tengo disponible?",
+      "texto": "Tu saldo disponible es de 120000.00 COP y tienes un saldo retenido de 5000.00 COP.",
+      "respuesta_backend": false,
+      "funciones": [
+        "consultar_saldo"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9807
+    },
+    {
+      "turno": 4,
+      "pregunta": "¿Y cuánto puedo enviar como máximo?",
+      "texto": "El máximo que puedes enviar es 50000.00 COP.",
+      "respuesta_backend": false,
+      "funciones": [
+        "consultar_limites"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9839
+    },
+    {
+      "turno": 5,
+      "pregunta": "¿Podría pasarle 30 mil pesos a Laura? Solo estoy preguntando, no prepares nada todavía.",
+      "error": "ProviderSafety",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5281
+    },
+    {
+      "turno": 6,
+      "pregunta": "Eh, espérame, ¿puedes decir cuánto gasté el mes pasado, por favor?",
+      "texto": "El mes pasado tuviste salidas totales por 50000.00 COP correspondientes a envíos.",
+      "respuesta_backend": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9943
+    },
+    {
+      "turno": 7,
+      "pregunta": "Okay, ¿y sabes en qué se me fue la plata?",
+      "texto": "El mes pasado tuviste movimientos con la contraparte L*** R*** por un total de 250000.00 COP, que incluyeron salidas de 50000.00 COP.",
+      "respuesta_backend": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9990
+    },
+    {
+      "turno": 8,
+      "pregunta": "Eh, ¿cuánto dinero me gasté entre el 11 de octubre y el 15 de octubre de 2026, sabes?",
+      "texto": "Entre el 11 de octubre de 2026 y el 15 de octubre de 2026 tuviste salidas totales por 50000.00 COP en envíos.",
+      "respuesta_backend": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9925
+    },
+    {
+      "turno": 9,
+      "pregunta": "Bueno, busca a Laura y prepara 30 mil pesos para ella.",
+      "texto": "Preparé una propuesta por 30000.00 COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero.",
+      "respuesta_backend": true,
+      "funciones": [
+        "buscar_destinatario",
+        "preparar_transferencia"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9800
+    },
+    {
+      "turno": 10,
+      "pregunta": "¿Ya se envió o tengo que confirmar algo?",
+      "texto": "No se ha enviado dinero. Preparé la propuesta, pero debes revisar y confirmar directamente en la tarjeta de la aplicación.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5229
+    },
+    {
+      "turno": 11,
+      "pregunta": "Gracias. Ahora explícame qué es el GMF sin calcular nada.",
+      "texto": "El GMF es el Gravamen a los Movimientos Financieros, un impuesto aplicado a ciertas transacciones financieras en Colombia. No incluye cálculos por mi parte. ¿Te puedo ayudar con algo más de tu billetera Vera?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5167
+    },
+    {
+      "turno": 12,
+      "pregunta": "Listo, ¿me muestras los movimientos de ayer?",
+      "texto": "Ayer tuviste un movimiento con la contraparte L*** R*** por -50000.00 COP con motivo de envío.",
+      "respuesta_backend": false,
+      "funciones": [
+        "listar_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9902
+    },
+    {
+      "turno": 13,
+      "pregunta": "No, mejor los del 11 al 15 de octubre de 2026, máximo cinco.",
+      "texto": "Entre el 11 de octubre de 2026 y el 15 de octubre de 2026 tienes un movimiento de envío por -50000.00 COP con la contraparte L*** R***.",
+      "respuesta_backend": false,
+      "funciones": [
+        "listar_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10064
+    },
+    {
+      "turno": 14,
+      "pregunta": "¿Puedes saber si gasté eso en comida o transporte?",
+      "texto": "No tengo información sobre el detalle de los gastos, como si fueron en comida o transporte, ya que solo puedo ver los motivos contables y las contrapartes de tus movimientos. ¿Te puedo ayudar con algo más?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5031
+    },
+    {
+      "turno": 15,
+      "pregunta": "Prepara cincuenta para Laura.",
+      "texto": "¿Te refieres a cincuenta pesos o cincuenta mil pesos?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4882
+    },
+    {
+      "turno": 16,
+      "pregunta": "Quise decir cincuenta mil pesos para Laura, prepara la propuesta.",
+      "texto": "Preparé una propuesta por 50000.00 COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero.",
+      "respuesta_backend": true,
+      "funciones": [
+        "buscar_destinatario",
+        "preparar_transferencia"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9871
+    },
+    {
+      "turno": 17,
+      "pregunta": "No quiero enviar todavía. ¿Puedo seguir conversando contigo?",
+      "texto": "Claro que sí, puedes seguir conversando conmigo cuando quieras. Estoy aquí para ayudarte con cualquier consulta sobre tu billetera Vera o sobre educación financiera. ¿En qué otra cosa te puedo colaborar?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5238
+    },
+    {
+      "turno": 18,
+      "pregunta": "Estoy preocupado por mis gastos, ¿por dónde empiezo a organizarme?",
+      "texto": "Para empezar a organizarte, lo primero es conocer tus ingresos y tus gastos detallados por categorías durante un periodo, como este mes o el mes pasado. Así podrás identificar en qué se te va el dinero, recortar gastos innecesarios y definir un presupuesto para ahorrar. Si necesitas revisar tus movimientos aquí en Vera para ver tus totales, con gusto te ayudo.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5103
+    },
+    {
+      "turno": 19,
+      "pregunta": "Cambiando de tema, ¿me cuentas un chiste corto?",
+      "texto": "Claro que sí, aquí va uno: ¿Qué hace una abeja en el gimnasio? ¡Zumba!",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5008
+    },
+    {
+      "turno": 20,
+      "pregunta": "Gracias Vera. Recuérdame qué puedo revisar antes de confirmar un envío.",
+      "texto": "Antes de confirmar un envío, debes revisar que el monto y la información del destinatario sean correctos en la tarjeta de la aplicación, ya que allí es donde realizas la confirmación final.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4751
+    }
+  ],
+  "Solicitudes": 29,
+  "Completo": true
+}

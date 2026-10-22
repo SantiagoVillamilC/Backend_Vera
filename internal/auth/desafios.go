@@ -308,7 +308,7 @@ func (s Solicitud) valida() error {
 // valido reporta si el propósito está en el catálogo cerrado de la columna.
 func (p Proposito) valido() bool {
 	switch p {
-	case PropositoRegistro, PropositoLogin, PropositoRecuperacion, PropositoCambioNumero, PropositoCambioNumeroViejo:
+	case PropositoRegistro, PropositoLogin, PropositoRecuperacion, PropositoCambioNumero, PropositoCambioNumeroViejo, PropositoConfirmacionTransferencia:
 		return true
 	default:
 		return false

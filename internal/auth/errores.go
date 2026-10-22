@@ -116,6 +116,10 @@ func MapearError(err error) error {
 	}
 	err = MapearErrorDeConsulta(err)
 	switch {
+	case errors.Is(err, ErrConsultaDestinatariosLimitada):
+		return platformerrors.New("TooManyRequests", "Too many recipient lookups.", http.StatusTooManyRequests)
+	case errors.Is(err, ErrConsultaDestinatariosNoDisponible):
+		return platformerrors.New("AuthUnavailable", "Recipient lookup is temporarily unavailable.", http.StatusServiceUnavailable)
 	case errors.Is(err, ErrSinIdentidad):
 		return platformerrors.New("Unauthorized", "Missing or invalid token.", http.StatusUnauthorized)
 	case errors.Is(err, ErrAccessInvalido):

@@ -1,9 +1,11 @@
 package httpserver
 
 import (
+	"context"
 	"net/http"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
@@ -11,6 +13,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/receipts"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -27,10 +30,68 @@ var RutasDeDinero = []string{
 	http.MethodPost + " /v1/depositos",
 	http.MethodPost + " /v1/transferencias/interbancarias",
 	http.MethodGet + " /v1/destinatarios",
+	http.MethodPost + " /v1/vera/mensajes",
+	http.MethodPost + " /v1/vera/mensajes/voz",
+	http.MethodPost + " /v1/vera/acciones/{id}/codigo",
+	http.MethodPost + " /v1/vera/acciones/{id}/confirmar",
+	http.MethodPost + " /v1/vera/acciones/{id}/cancelar",
+	http.MethodGet + " /v1/vera/conversaciones",
+	http.MethodGet + " /v1/vera/conversaciones/{id}/mensajes",
+	http.MethodDelete + " /v1/vera/conversaciones",
+	http.MethodDelete + " /v1/vera/conversaciones/{id}",
 }
 
 // NewRouter arma el árbol de rutas con la cadena de middleware, el envelope y las identidades inyectadas.
 func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, pseURL ...string) http.Handler {
+	return NewRouterConVera(pool, nucleoServicio, autenticadorCustodio, authDeps, DependenciasVera{}, pseURL...)
+}
+
+// LimitadorUsoVera admite una entrada sin contar de nuevo las vueltas del proveedor.
+type LimitadorUsoVera interface {
+	Admitir(context.Context, copilot.CanalAsistente) error
+}
+
+// DependenciasVera reúne los puertos del asistente y sus conversaciones por texto y voz.
+type DependenciasVera struct {
+	Proveedor      copilot.ProveedorIA
+	Catalogo       *copilot.Catalogo
+	Consentimiento *copilot.ControlConsentimiento
+	Uso            LimitadorUsoVera
+	Orquestador    *copilot.Orquestador
+	Texto          ConversacionTextoVera
+	Voz            ConversacionVozVera
+	Acciones       ControlAccionesVera
+	Historial      HistorialVera
+}
+
+// HistorialVera consulta y elimina conversaciones dentro de la identidad del servidor.
+type HistorialVera interface {
+	ListarConversaciones(context.Context, copilot.ConsultaHistorial) (copilot.PaginaHistorial[copilot.ConversacionHistorial], error)
+	ListarMensajes(context.Context, uuid.UUID, copilot.ConsultaHistorial) (copilot.PaginaHistorial[copilot.MensajeHistorial], error)
+	BorrarConversacion(context.Context, uuid.UUID) error
+	BorrarConversaciones(context.Context) error
+}
+
+// ControlAccionesVera sólo está disponible para las rutas de confirmación explícita.
+type ControlAccionesVera interface {
+	SolicitarCodigo(context.Context, uuid.UUID, string) (auth.Desafio, error)
+	Confirmar(context.Context, uuid.UUID, copilot.ConfirmacionAccion) (copilot.AccionResuelta, error)
+	Cancelar(context.Context, uuid.UUID) (copilot.AccionResuelta, error)
+}
+
+// ConversacionVozVera recibe sólo un clip validado en memoria y referencias de la sesión.
+type ConversacionVozVera interface {
+	EnviarVoz(context.Context, uuid.UUID, *copilot.AudioIA, uuid.UUID) (copilot.RespuestaTexto, error)
+}
+
+// ConversacionTextoVera procesa únicamente texto e IDs; construye el historial en el servidor.
+type ConversacionTextoVera interface {
+	EnviarTexto(context.Context, uuid.UUID, string, uuid.UUID) (copilot.RespuestaTexto, error)
+}
+
+// NewRouterConVera conecta el chat por texto y voz con los controles del asistente.
+// Las rutas de confirmación conservan su contrato pendiente de implementación.
+func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticadorCustodio AutenticadorDelCustodio, authDeps DependenciasAuth, vera DependenciasVera, pseURL ...string) http.Handler {
 	if autenticadorCustodio == nil {
 		panic(ErrCustodioNulo)
 	}
@@ -43,18 +104,18 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "Idempotency-Key"},
+		ExposedHeaders: []string{"Retry-After", "X-Conversacion-Id", "X-Mensaje-Usuario-Id"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz", "/metrics"}, rateLimitRequests, rateLimitWindow))
 	r.Use(MethodNotAllowedEnvelope)
 
-	// /copilot sigue con NewService(nil): decisión S7 pendiente, no se toca en esta unidad.
-	copilotHandler := copilot.NewHandler(copilot.NewService(nil))
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
 	health := NewHealthResource(pool)
 	nucleoHandler := nucleo.NewHandler(nucleoServicio, pseURL...)
 	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler, destinatarios: authDeps.Destinatarios, inteligencia: authDeps.Inteligencia}
+	srv.Vera = vera
 
 	// Grupo público: cada grupo declara su propio Timeout, nunca en la raíz.
 	r.Group(func(r chi.Router) {
@@ -75,7 +136,6 @@ func NewRouter(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, autenticador
 	r.Group(func(r chi.Router) {
 		r.Use(Timeout(authedTimeout))
 		r.Use(RequireAuth(authDeps.Identidad, RutasDeDinero))
-		r.Post("/copilot", copilotHandler.Chat)
 		r.Post("/receipts", receiptHandler.Create)
 		api.HandlerWithOptions(srv, api.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: api.ParamError})
 	})

@@ -1,0 +1,89 @@
+{
+  "alcance": "Prueba funcional acotada; no es una garantía de disponibilidad ni sustituye la línea base de calidad.",
+  "datos_ficticios": true,
+  "fecha": "2026-10-20T13:35:35Z",
+  "maximo": 18,
+  "modelo": "gemini-3.5-flash-lite",
+  "modelo_voz": "gemini-3.8-flash-lite-tts",
+  "resultados": [
+    {
+      "caso": "generar_entrada_sintetica",
+      "correcto": true,
+      "latencia_ms": 2842
+    },
+    {
+      "caso": "transcribir_audio_real",
+      "correcto": true,
+      "latencia_ms": 2722,
+      "transcripcion": "Hola Vera, ¿cómo estás?"
+    },
+    {
+      "caso": "responder_transcripcion",
+      "correcto": true,
+      "latencia_ms": 8835,
+      "respuesta": "¡Hola! Estoy muy bien, gracias por preguntar. ¿En qué te puedo ayudar hoy con tu billetera Vera?"
+    },
+    {
+      "caso": "voz_de_respuesta",
+      "correcto": true,
+      "latencia_ms": 1628,
+      "paquetes": 92,
+      "primer_pcm_ms": 743
+    },
+    {
+      "accion_pendiente": false,
+      "caso": "saldo",
+      "correcto": true,
+      "funciones": [
+        "consultar_saldo"
+      ],
+      "latencia_ms": 10791,
+      "respuesta": "Tu saldo disponible es de 120000.00 COP."
+    },
+    {
+      "accion_pendiente": false,
+      "caso": "limites",
+      "correcto": true,
+      "funciones": [
+        "consultar_limites"
+      ],
+      "latencia_ms": 30481,
+      "respuesta": "Tu máximo enviable es de 50000.00 COP, con un cupo mensual restante de 50000.00 COP y un tope por operación de 2000000.00 COP."
+    },
+    {
+      "accion_pendiente": false,
+      "caso": "movimientos",
+      "correcto": true,
+      "funciones": [
+        "listar_movimientos"
+      ],
+      "latencia_ms": 15061,
+      "respuesta": "Tu último movimiento en este mes es un envío de -50000.00 COP a L*** R*** con fecha 2026-10-01."
+    },
+    {
+      "accion_pendiente": false,
+      "caso": "resumen",
+      "correcto": true,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "latencia_ms": 16944,
+      "respuesta": "Este es el resumen de tus movimientos de este mes agrupados por motivo:\n\n- Depósito: 1 movimiento, con entradas por 200000.00 COP y un total de 200000.00 COP.\n- Envío: 1 movimiento, con salidas por 50000.00 COP y un total de 50000.00 COP.\n\nEn total tuviste 2 movimientos, con entradas de 200000.00 COP, salidas de 50000.00 COP y un neto de 150000.00 COP."
+    },
+    {
+      "accion_pendiente": false,
+      "caso": "preparacion",
+      "correcto": false,
+      "error": "respuesta bloqueada por seguridad",
+      "funciones": [
+        "buscar_destinatario",
+        "preparar_transferencia"
+      ],
+      "latencia_ms": 18609,
+      "motivo_bloqueo": "ProviderSafety",
+      "respuesta": ""
+    }
+  ],
+  "solicitudes": 15,
+  "version_instrucciones": "vera-2026-10-20-v6"
+}

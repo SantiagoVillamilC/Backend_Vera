@@ -1,0 +1,222 @@
+{
+  "Modelo": "gemini-3.5-flash-lite",
+  "Version": "vera-2026-10-21-v7",
+  "CreadoEn": "2026-10-21T02:58:15.368304413Z",
+  "Turnos": [
+    {
+      "turno": 1,
+      "pregunta": "Hola Vera, ¿cómo estás?",
+      "texto": "¡Hola! Estoy muy bien, gracias por preguntar. ¿En qué te puedo ayudar hoy con tu billetera Vera?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 4,
+      "latencia_ms": 17535,
+      "audio": {
+        "transcripcion": "Hola, Vera, \u0019c\u0013mo est\u0015s?",
+        "bytes_salida": 296038
+      }
+    },
+    {
+      "turno": 2,
+      "pregunta": "¿Qué puedes hacer por mí?",
+      "texto": "Con gusto te cuento. Puedo ayudarte a consultar tu saldo disponible y tus límites para envíos, revisar tus movimientos recientes o resumirlos por motivo o contraparte. También puedo prepararte transferencias para que las confirmes en la aplicación, y resolver tus dudas generales sobre cómo funciona la billetera Vera. ¿Te gustaría consultar algo en este momento?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 3448
+    },
+    {
+      "turno": 3,
+      "pregunta": "¿Cuánto tengo disponible?",
+      "texto": "Tu saldo disponible es 120000.00 COP y tienes un valor retenido de 5000.00 COP. ¿Hay algo más en lo que te pueda ayudar?",
+      "respuesta_backend": false,
+      "funciones": [
+        "consultar_saldo"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9870
+    },
+    {
+      "turno": 4,
+      "pregunta": "¿Y cuánto puedo enviar como máximo?",
+      "texto": "El máximo que puedes enviar es 50000.00 COP. Este monto incluye un gravamen (GMF) de 200.00 COP.",
+      "respuesta_backend": false,
+      "funciones": [
+        "consultar_limites"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9892
+    },
+    {
+      "turno": 5,
+      "pregunta": "¿Podría pasarle 30 mil pesos a Laura? Solo estoy preguntando, no prepares nada todavía.",
+      "texto": "Sí, con tu saldo disponible actual de 120000.00 COP y tu límite máximo de envío de 50000.00 COP, sí podrías hacer una transferencia de 30.000 pesos. Como me pediste que no prepare nada, no he hecho ninguna propuesta. Avísame cuando quieras que prepare el envío.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 4,
+      "latencia_ms": 22838,
+      "audio": {
+        "transcripcion": "¿Podría pasarle 30.000 pesos a Laura? Solo estoy preguntando, no prepares nada todavía.",
+        "bytes_salida": 781798
+      }
+    },
+    {
+      "turno": 6,
+      "pregunta": "Eh, espérame, ¿puedes decir cuánto gasté el mes pasado, por favor?",
+      "texto": "El mes pasado tuviste un total de salidas por 50000.00 COP correspondientes a envíos. Ten en cuenta que no puedo ver en qué gastaste específicamente, como comida o transporte, sino únicamente los motivos o las contrapartes de las transacciones.",
+      "respuesta_backend": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 7253
+    },
+    {
+      "turno": 7,
+      "pregunta": "Okay, ¿y sabes en qué se me fue la plata?",
+      "texto": "El mes pasado tuviste movimientos con L*** R*** por un total de 250000.00 COP (con entradas por 200000.00 COP y salidas por 50000.00 COP). Recuerda que no puedo distinguir categorías específicas como comida o transporte, solo te puedo mostrar los motivos y las contrapartes de tus transacciones.",
+      "respuesta_backend": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10039
+    },
+    {
+      "turno": 8,
+      "pregunta": "Eh, ¿cuánto dinero me gasté entre el 11 de octubre y el 15 de octubre de 2026, sabes?",
+      "texto": "Entre el 11 de octubre de 2026 y el 15 de octubre de 2026 tuviste salidas totales por 50000.00 COP en envíos.",
+      "respuesta_backend": false,
+      "funciones": [
+        "resumir_movimientos"
+      ],
+      "solicitudes": 5,
+      "latencia_ms": 24371,
+      "audio": {
+        "transcripcion": "¿Cuánto dinero me gasté entre el 11 de octubre y el 15 de octubre de 2026, sabes?",
+        "error_salida": "ProviderLimit",
+        "bytes_salida": 0
+      }
+    },
+    {
+      "turno": 9,
+      "pregunta": "Bueno, busca a Laura y prepara 30 mil pesos para ella.",
+      "texto": "Preparé una propuesta por 30000.00 COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero.",
+      "respuesta_backend": true,
+      "funciones": [
+        "buscar_destinatario",
+        "preparar_transferencia"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10609
+    },
+    {
+      "turno": 10,
+      "pregunta": "¿Ya se envió o tengo que confirmar algo?",
+      "texto": "Todavía no se ha enviado dinero. La transferencia está pendiente y debes revisar y confirmar la operación directamente en la tarjeta de la aplicación.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5048
+    },
+    {
+      "turno": 11,
+      "pregunta": "Gracias. Ahora explícame qué es el GMF sin calcular nada.",
+      "texto": "El GMF es el Gravamen a los Movimientos Financieros, un impuesto nacional que se aplica a ciertas operaciones financieras, como los envíos o retiros de dinero. Por ley, se cobra un porcentaje sobre las transacciones que superen las exenciones vigentes. ¿Te puedo ayudar con algo más?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5286
+    },
+    {
+      "turno": 12,
+      "pregunta": "Listo, ¿me muestras los movimientos de ayer?",
+      "texto": "Ayer tuviste un movimiento: un envío por -50000.00 COP con L*** R***.",
+      "respuesta_backend": false,
+      "funciones": [
+        "listar_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9616
+    },
+    {
+      "turno": 13,
+      "pregunta": "No, mejor los del 11 al 15 de octubre de 2026, máximo cinco.",
+      "texto": "Entre el 11 de octubre de 2026 y el 15 de octubre de 2026 tienes un movimiento: un envío por -50000.00 COP con L*** R***.",
+      "respuesta_backend": false,
+      "funciones": [
+        "listar_movimientos"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 10459
+    },
+    {
+      "turno": 14,
+      "pregunta": "¿Puedes saber si gasté eso en comida o transporte?",
+      "texto": "No puedo saberlo. No tengo categorías de compras ni datos de comercios, por lo que no puedo distinguir si tus movimientos fueron en comida, transporte u otros rubros. Solo puedo mostrarte los motivos y las contrapartes de tus transacciones.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4915
+    },
+    {
+      "turno": 15,
+      "pregunta": "Prepara cincuenta para Laura.",
+      "texto": "Para preparar la transferencia, por favor indícame si los cincuenta son cincuenta pesos (50) o cincuenta mil (50000).",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 4712
+    },
+    {
+      "turno": 16,
+      "pregunta": "Quise decir cincuenta mil pesos para Laura, prepara la propuesta.",
+      "texto": "Preparé una propuesta por 50000.00 COP. Debes revisar y confirmar en la tarjeta de la aplicación. No se ha enviado dinero.",
+      "respuesta_backend": true,
+      "funciones": [
+        "buscar_destinatario",
+        "preparar_transferencia"
+      ],
+      "solicitudes": 2,
+      "latencia_ms": 9860
+    },
+    {
+      "turno": 17,
+      "pregunta": "No quiero enviar todavía. ¿Puedo seguir conversando contigo?",
+      "texto": "¡Por supuesto! Puedes seguir preguntándome lo que necesites sobre tus saldos, movimientos, límites o cualquier duda financiera general. Aquí estoy para ayudarte.",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5147
+    },
+    {
+      "turno": 18,
+      "pregunta": "Estoy preocupado por mis gastos, ¿por dónde empiezo a organizarme?",
+      "texto": "Es muy normal preocuparse por los gastos, pero dar el primer paso para organizarte ya es una gran ventaja. \n\nPuedes empezar por estos pasos sencillos:\n1. Revisa tus movimientos recientes para identificar en qué se te va la plata y qué gastos son fijos (como servicios o arriendo) versus los que son ocasionales.\n2. Define un presupuesto básico o una meta de ahorro mensual que se ajuste a tus ingresos y a tu saldo disponible.\n3. Intenta apartar un pequeño monto de dinero apenas recibas ingresos, antes de empezar a gastar.\n\nSi quieres, podemos revisar tus movimientos de este mes o de fechas anteriores para que veas un resumen de tus salidas y entradas. ¿Te gustaría que hagamos eso?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 23673
+    },
+    {
+      "turno": 19,
+      "pregunta": "Cambiando de tema, ¿me cuentas un chiste corto?",
+      "texto": "Claro que sí. Va uno corto:\n\n¿Qué hace una abeja en el gimnasio?\n¡Zumba!\n\n¿Te puedo ayudar con algo más de tu billetera o de educación financiera?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 1047
+    },
+    {
+      "turno": 20,
+      "pregunta": "Gracias Vera. Recuérdame qué puedo revisar antes de confirmar un envío.",
+      "texto": "Antes de confirmar un envío, recuerda revisar en la tarjeta de la aplicación los datos clave: el destinatario correcto, el monto exacto que vas a enviar y si aplica algún gravamen (GMF). Así te aseguras de que todo esté en orden antes de que el dinero se mueva. ¿Hay algo más en lo que te pueda colaborar?",
+      "respuesta_backend": false,
+      "funciones": [],
+      "solicitudes": 1,
+      "latencia_ms": 5233
+    }
+  ],
+  "Solicitudes": 38,
+  "Completo": true
+}

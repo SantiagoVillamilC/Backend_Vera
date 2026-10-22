@@ -9,3 +9,8 @@ var Migraciones embed.FS
 //
 //go:embed migraciones-auth/*.sql
 var MigracionesAuth embed.FS
+
+// MigracionesAsistente contiene la persistencia de Vera, aplicada después de auth.
+//
+//go:embed migraciones-asistente/*.sql
+var MigracionesAsistente embed.FS

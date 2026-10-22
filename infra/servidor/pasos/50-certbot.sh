@@ -33,6 +33,12 @@ ARCHIVO_COMPOSE_CERTBOT="${DIRECTORIO_SCRIPT}/compose.certbot.yaml"
 DIRECTORIO_LETSENCRYPT="/opt/centinela/letsencrypt"
 ARCHIVO_FULLCHAIN_TLS="${DIRECTORIO_LETSENCRYPT}/live/${DOMINIO_SERVIDOR}/fullchain.pem"
 
+# Nombres que viajan en el mismo certificado. www no sirve contenido, solo
+# redirige al apex. api y staging son alias del MISMO contenedor de la API:
+# staging y main comparten esta VM, así que entre ellos solo cambia la
+# etiqueta de la imagen y no son ambientes aislados (ver README.md).
+DOMINIOS_TLS=("${DOMINIO_SERVIDOR}" "www.${DOMINIO_SERVIDOR}" "api.${DOMINIO_SERVIDOR}" "staging.${DOMINIO_SERVIDOR}")
+
 ARCHIVO_SERVICE_RENOVACION="/etc/systemd/system/centinela-certbot-renovar.service"
 ARCHIVO_TIMER_RENOVACION="/etc/systemd/system/centinela-certbot-renovar.timer"
 
@@ -63,20 +69,36 @@ else
   # 30-nginx.sh haya creado este directorio alguna vez.
   asegurar_directorio "${DIRECTORIO_WEBROOT}"
 
-  if [[ -f "${ARCHIVO_FULLCHAIN_TLS}" ]]; then
-    info "El certificado para ${DOMINIO_SERVIDOR} ya existe en ${ARCHIVO_FULLCHAIN_TLS}: no se reemite. Igual que asegurar_archivo_con_secreto, es la existencia del archivo la que decide, no una variable de estado aparte."
+  # Un certificado puede existir y aun así no cubrir todos los nombres: la
+  # primera emisión pedía solo el apex, y www, api y staging quedaban con
+  # error de hostname. El predicado es "existe Y cubre www", no solo "existe".
+  falta_dominio_tls="no"
+  if [[ -f "${ARCHIVO_FULLCHAIN_TLS}" ]] && ! openssl x509 -in "${ARCHIVO_FULLCHAIN_TLS}" -noout -ext subjectAltName 2>/dev/null | grep -q "DNS:www.${DOMINIO_SERVIDOR}"; then
+    falta_dominio_tls="si"
+  fi
+
+  if [[ -f "${ARCHIVO_FULLCHAIN_TLS}" && "${falta_dominio_tls}" == "no" ]]; then
+    info "El certificado para ${DOMINIO_SERVIDOR} ya existe en ${ARCHIVO_FULLCHAIN_TLS} y cubre ${DOMINIOS_TLS[*]}: no se reemite. Igual que asegurar_archivo_con_secreto, es la existencia del archivo la que decide, no una variable de estado aparte."
   else
     # Contenedor efímero, no un servicio de compose de larga duración: el
     # plugin webroot solo necesita el puerto 80 ya servido por nginx (con
     # nginx/webroot montado sin :ro acá, a diferencia del mount de solo
     # lectura que compose.yaml le da a nginx sobre la misma ruta de host).
     comando_certonly=(certonly --webroot -w /var/www/certbot
-      -d "${DOMINIO_SERVIDOR}" -m "${CORREO_CERTBOT}" --agree-tos --non-interactive)
+      -m "${CORREO_CERTBOT}" --agree-tos --non-interactive)
+    for dominio in "${DOMINIOS_TLS[@]}"; do
+      comando_certonly+=(-d "${dominio}")
+    done
+    if [[ -f "${ARCHIVO_FULLCHAIN_TLS}" ]]; then
+      # Certificado previo al que le faltan nombres: --expand lo reemplaza por
+      # uno que los cubre todos sin gastar el cupo de certificados duplicados.
+      comando_certonly+=(--expand)
+    fi
     if [[ "${CERTBOT_STAGING}" == "si" ]]; then
       comando_certonly+=(--staging)
     fi
 
-    info "Emitiendo el certificado para ${DOMINIO_SERVIDOR} (correo ${CORREO_CERTBOT}, imagen ${IMAGEN_CERTBOT}, staging=${CERTBOT_STAGING})."
+    info "Emitiendo el certificado para ${DOMINIOS_TLS[*]} (correo ${CORREO_CERTBOT}, imagen ${IMAGEN_CERTBOT}, staging=${CERTBOT_STAGING})."
 
     # Monta /etc/letsencrypt COMPLETO, no solo live/: live/ son symlinks
     # hacia archive/, y montar solo live/ rompe esos symlinks dentro del
@@ -85,11 +107,11 @@ else
       -v "${DIRECTORIO_WEBROOT}:/var/www/certbot" \
       -v "${DIRECTORIO_LETSENCRYPT}:/etc/letsencrypt" \
       "${IMAGEN_CERTBOT}" "${comando_certonly[@]}"; then
-      error_fatal "certbot certonly falló al emitir el certificado para ${DOMINIO_SERVIDOR}. Revisa la salida de arriba antes de reintentar: Let's Encrypt real limita a 5 validaciones fallidas por hora y 5 certificados duplicados por semana (usa CERTBOT_STAGING=si para probar sin gastar ese límite)."
+      error_fatal "certbot certonly falló al emitir el certificado para ${DOMINIOS_TLS[*]}. Revisa la salida de arriba antes de reintentar: Let's Encrypt real limita a 5 validaciones fallidas por hora y 5 certificados duplicados por semana (usa CERTBOT_STAGING=si para probar sin gastar ese límite)."
     fi
 
     if [[ ! -f "${ARCHIVO_FULLCHAIN_TLS}" ]]; then
-      error_fatal "certbot certonly terminó sin error, pero ${ARCHIVO_FULLCHAIN_TLS} no existe. Revisa el volumen montado y que DOMINIO_SERVIDOR (${DOMINIO_SERVIDOR}) sea el dominio correcto y esté resolviendo hacia este servidor."
+      error_fatal "certbot certonly terminó sin error, pero ${ARCHIVO_FULLCHAIN_TLS} no existe. Revisa el volumen montado y que ${DOMINIOS_TLS[*]} resuelvan hacia este servidor."
     fi
 
     info "Certificado emitido: ${ARCHIVO_FULLCHAIN_TLS} existe."
@@ -132,11 +154,67 @@ server {
     ssl_certificate /etc/letsencrypt/live/${DOMINIO_SERVIDOR}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${DOMINIO_SERVIDOR}/privkey.pem;
 
+    include /etc/nginx/snippets/cabeceras-seguridad.conf;
     include /etc/nginx/snippets/raiz-http.conf;
 }
 EOF
   )"
   asegurar_archivo_con_contenido "${DIRECTORIO_NGINX}/conf.d/centinela-tls.conf" "${contenido_centinela_tls}"
+
+  # cabeceras-seguridad.conf: se incluye a nivel de server en los vhosts TLS
+  # de la API. Ninguno de sus locations declara add_header propias, así que
+  # heredan estas. PSE tiene su propio HSTS en pse-tls.conf y no lo incluye.
+  contenido_cabeceras="$(cat <<'EOF'
+# infra/servidor/nginx/snippets/cabeceras-seguridad.conf (generado por 50-certbot.sh, no editar a mano)
+add_header Strict-Transport-Security "max-age=31536000" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "no-referrer" always;
+EOF
+  )"
+  asegurar_archivo_con_contenido "${DIRECTORIO_NGINX}/snippets/cabeceras-seguridad.conf" "${contenido_cabeceras}"
+
+  # www-tls.conf: www no sirve contenido. El cliente móvil usa el apex como
+  # API_BASE_URL, así que el único trabajo de www es no romper TLS y mandar
+  # al apex con un 301.
+  contenido_www_tls="$(cat <<EOF
+# infra/servidor/nginx/conf.d/www-tls.conf (generado por 50-certbot.sh, no editar a mano)
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name www.${DOMINIO_SERVIDOR};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMINIO_SERVIDOR}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMINIO_SERVIDOR}/privkey.pem;
+
+    include /etc/nginx/snippets/cabeceras-seguridad.conf;
+    return 301 https://${DOMINIO_SERVIDOR}\$request_uri;
+}
+EOF
+  )"
+  asegurar_archivo_con_contenido "${DIRECTORIO_NGINX}/conf.d/www-tls.conf" "${contenido_www_tls}"
+
+  # api y staging: alias del mismo contenedor de la API, con el mismo proxy
+  # que el apex (raiz-http.conf). staging y main comparten esta VM y lo único
+  # que cambia entre ambos es la etiqueta de la imagen, así que estos dos
+  # nombres apuntan al proceso que esté desplegado en ese momento.
+  for nombre_alias in api staging; do
+    contenido_alias_tls="$(cat <<EOF
+# infra/servidor/nginx/conf.d/${nombre_alias}-tls.conf (generado por 50-certbot.sh, no editar a mano)
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${nombre_alias}.${DOMINIO_SERVIDOR};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMINIO_SERVIDOR}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMINIO_SERVIDOR}/privkey.pem;
+
+    include /etc/nginx/snippets/cabeceras-seguridad.conf;
+    include /etc/nginx/snippets/raiz-http.conf;
+}
+EOF
+    )"
+    asegurar_archivo_con_contenido "${DIRECTORIO_NGINX}/conf.d/${nombre_alias}-tls.conf" "${contenido_alias_tls}"
+  done
 
   # raiz-redirigir.conf: la redirección a HTTPS que 30-nginx.sh incluye
   # desde centinela.conf en cuanto su propio predicado detecta el

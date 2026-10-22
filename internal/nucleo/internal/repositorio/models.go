@@ -77,11 +77,12 @@ type Outbox struct {
 }
 
 type Posting struct {
-	ID       int64  `json:"id"`
-	EntryID  int64  `json:"entry_id"`
-	CuentaID string `json:"cuenta_id"`
-	Monto    int64  `json:"monto"`
-	Moneda   string `json:"moneda"`
+	ID         int64              `json:"id"`
+	EntryID    int64              `json:"entry_id"`
+	CuentaID   string             `json:"cuenta_id"`
+	Monto      int64              `json:"monto"`
+	Moneda     string             `json:"moneda"`
+	OcurridoEn pgtype.Timestamptz `json:"ocurrido_en"`
 }
 
 type ReglaLimite struct {

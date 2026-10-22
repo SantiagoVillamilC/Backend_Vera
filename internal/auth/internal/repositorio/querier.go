@@ -18,6 +18,9 @@ type Querier interface {
 	ActualizarReenvioDesafio(ctx context.Context, arg ActualizarReenvioDesafioParams) (AuthDesafio, error)
 	AsegurarEstadoKYC(ctx context.Context, arg AsegurarEstadoKYCParams) error
 	AvanzarVentanaAviso(ctx context.Context, arg AvanzarVentanaAvisoParams) (int64, error)
+	// Los IDs vienen exclusivamente de una página del historial propio o del resolvedor.
+	// La búsqueda usa el nombre visible (primer nombre e inicial), no apellidos privados.
+	BuscarDestinatariosPrevios(ctx context.Context, arg BuscarDestinatariosPreviosParams) ([]BuscarDestinatariosPreviosRow, error)
 	CodigosRespaldoPendientesDeCredencial(ctx context.Context, credencialID pgtype.UUID) ([]CodigosRespaldoPendientesDeCredencialRow, error)
 	ConsumirCodigoRespaldo(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
 	ConsumirTokenRestablecimiento(ctx context.Context, tokenHash []byte) (pgtype.UUID, error)
@@ -39,6 +42,8 @@ type Querier interface {
 	DesafioPorID(ctx context.Context, id pgtype.UUID) (DesafioPorIDRow, error)
 	EmpresaDeParte(ctx context.Context, parteID pgtype.UUID) (EmpresaDeParteRow, error)
 	EmpresaExistePorNit(ctx context.Context, nit string) (bool, error)
+	// Una única sentencia evita combinar un texto y un evento de snapshots distintos.
+	EstadoConsentimientoAsistente(ctx context.Context, parteID pgtype.UUID) (EstadoConsentimientoAsistenteRow, error)
 	FamiliasVigentesDeParte(ctx context.Context, parteID pgtype.UUID) ([]pgtype.UUID, error)
 	IncrementarIntentoDesafio(ctx context.Context, id pgtype.UUID) (IncrementarIntentoDesafioRow, error)
 	InsertarAviso(ctx context.Context, arg InsertarAvisoParams) (AvisoOutbox, error)
@@ -56,8 +61,14 @@ type Querier interface {
 	MarcarAvisoEntregado(ctx context.Context, arg MarcarAvisoEntregadoParams) (int64, error)
 	MarcarDesafioExpirado(ctx context.Context, id pgtype.UUID) (int64, error)
 	MarcarDesafioVerificado(ctx context.Context, id pgtype.UUID) (int64, error)
+	// Consulta interna por referencias que el núcleo obtuvo del historial propio.
+	// No resuelve celulares actuales: evita atribuir transferencias antiguas a un nuevo titular.
+	NombresDeContrapartes(ctx context.Context, ids []pgtype.UUID) ([]NombresDeContrapartesRow, error)
 	PendientesVencidasParaCierre(ctx context.Context, arg PendientesVencidasParaCierreParams) ([]pgtype.UUID, error)
 	PrimeraSesionDeFamilia(ctx context.Context, familiaID pgtype.UUID) (pgtype.Timestamptz, error)
+	// Sólo permite reintentar una entrega fallida sin intentos de verificación.
+	// Conserva enfriamiento y reenvíos; nunca recupera un desafío agotado o usado.
+	ReenviarEntregaConfirmacion(ctx context.Context, arg ReenviarEntregaConfirmacionParams) (AuthDesafio, error)
 	RegistrarEventoAutenticacion(ctx context.Context, arg RegistrarEventoAutenticacionParams) error
 	RegistrarTransicionCredencial(ctx context.Context, arg RegistrarTransicionCredencialParams) error
 	RehashCredencial(ctx context.Context, arg RehashCredencialParams) (int64, error)
@@ -72,6 +83,7 @@ type Querier interface {
 	RotarSesion(ctx context.Context, refreshHash []byte) (Sesion, error)
 	SesionPorRefreshHash(ctx context.Context, refreshHash []byte) (Sesion, error)
 	TextoDeConsentimiento(ctx context.Context, arg TextoDeConsentimientoParams) (TextoDeConsentimientoRow, error)
+	TextoVigenteAsistente(ctx context.Context) (TextoVigenteAsistenteRow, error)
 	TipoDeParte(ctx context.Context, id pgtype.UUID) (string, error)
 	TokenRestablecimientoVigente(ctx context.Context, tokenHash []byte) (TokenRestablecimientoVigenteRow, error)
 	TomarAvisosPendientes(ctx context.Context, limite int32) ([]AvisoOutbox, error)
