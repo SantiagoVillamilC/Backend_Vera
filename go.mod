@@ -6,7 +6,7 @@ toolchain go1.27.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.40.0
-	github.com/getkin/kin-openapi v0.142.0
+	github.com/getkin/kin-openapi v0.151.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-chi/httprate v0.16.1
@@ -66,7 +66,7 @@ require (
 	github.com/riverqueue/river/riverdriver v0.49.0 // indirect
 	github.com/riverqueue/river/rivershared v0.49.0 // indirect
 	github.com/riverqueue/river/rivertype v0.49.0 // indirect
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/sethvargo/go-retry v0.5.0 // indirect
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.24.0 // indirect
