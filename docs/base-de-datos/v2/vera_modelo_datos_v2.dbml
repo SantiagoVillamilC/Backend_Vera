@@ -1,0 +1,1009 @@
+// GENERADO por reconstruir_actual.py desde PostgreSQL, no desde el DBML v1.
+// Objetivo V2: incluye tablas propuestas aún no implementadas.
+// Índices completos, triggers, RLS y permisos: consultar el SQL e inventario de esta versión.
+Project vera_modelo {
+  database_type: 'PostgreSQL'
+}
+
+Table asistente.accion_pendiente {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  conversacion_id uuid [not null]
+  tipo text [not null]
+  destino text [not null]
+  tipo_llave text
+  nombre_mostrado text [not null]
+  celular_enmascarado text
+  entidad_destino text
+  monto bigint [not null, note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  moneda text [not null, default: `'COP'::text`]
+  requiere_codigo boolean [not null]
+  desafio_id uuid
+  estado text [not null, default: `'pendiente'::text`]
+  transferencia_id uuid
+  codigo_error text
+  creada_en timestamptz [not null, default: `now()`]
+  expira_en timestamptz [not null, default: `(now() + '00:05:00'::interval)`]
+  resuelta_en timestamptz
+  usuario_financiero_id text [not null]
+  indexes {
+    (conversacion_id, id) [unique, name: "accion_conversacion_id_uk"]
+  }
+  checks {
+    `((estado <> 'confirmada'::text) OR (NOT requiere_codigo) OR (desafio_id IS NOT NULL))` [name: "accion_confirmacion_codigo"]
+    `((desafio_id IS NULL) OR requiere_codigo)` [name: "accion_desafio"]
+    `(((tipo = 'transferencia_interna'::text) AND (tipo_llave IS NULL)) OR ((tipo = 'transferencia_llave'::text) AND (tipo_llave IS NOT NULL)))` [name: "accion_destino_tipo"]
+    `(((estado = 'fallida'::text) AND (codigo_error IS NOT NULL) AND (length(btrim(codigo_error)) > 0)) OR ((estado <> 'fallida'::text) AND (codigo_error IS NULL)))` [name: "accion_error"]
+    `(length(btrim(usuario_financiero_id)) > 0)` [name: "accion_origen_presente"]
+    `(length(btrim(destino)) > 0)` [name: "accion_pendiente_destino_check"]
+    `(estado = ANY (ARRAY['pendiente'::text, 'confirmada'::text, 'cancelada'::text, 'vencida'::text, 'fallida'::text]))` [name: "accion_pendiente_estado_check"]
+    `(moneda = 'COP'::text)` [name: "accion_pendiente_moneda_check"]
+    `(monto > 0)` [name: "accion_pendiente_monto_check"]
+    `(length(btrim(nombre_mostrado)) > 0)` [name: "accion_pendiente_nombre_mostrado_check"]
+    `(tipo = ANY (ARRAY['transferencia_interna'::text, 'transferencia_llave'::text]))` [name: "accion_pendiente_tipo_check"]
+    `(tipo_llave = ANY (ARRAY['documento'::text, 'celular'::text, 'correo'::text, 'alfanumerico'::text, 'comercio'::text]))` [name: "accion_pendiente_tipo_llave_check"]
+    `(((estado = 'pendiente'::text) AND (resuelta_en IS NULL)) OR ((estado <> 'pendiente'::text) AND (resuelta_en IS NOT NULL) AND (resuelta_en >= creada_en)))` [name: "accion_resolucion"]
+    `((estado = 'confirmada'::text) = (transferencia_id IS NOT NULL))` [name: "accion_transferencia"]
+    `(expira_en = (creada_en + '00:05:00'::interval))` [name: "accion_vigencia"]
+  }
+  Note: "ACTUAL. accion_confirmacion_codigo: CHECK (((estado <> 'confirmada'::text) OR (NOT requiere_codigo) OR (desafio_id IS NOT NULL)))\naccion_desafio: CHECK (((desafio_id IS NULL) OR requiere_codigo))\naccion_destino_tipo: CHECK ((((tipo = 'transferencia_interna'::text) AND (tipo_llave IS NULL)) OR ((tipo = 'transferencia_llave'::text) AND (tipo_llave IS NOT NULL))))\naccion_error: CHECK ((((estado = 'fallida'::text) AND (codigo_error IS NOT NULL) AND (length(btrim(codigo_error)) > 0)) OR ((estado <> 'fallida'::text) AND (codigo_error IS NULL))))\naccion_origen_presente: CHECK ((length(btrim(usuario_financiero_id)) > 0))\naccion_pendiente_destino_check: CHECK ((length(btrim(destino)) > 0))\naccion_pendiente_estado_check: CHECK ((estado = ANY (ARRAY['pendiente'::text, 'confirmada'::text, 'cancelada'::text, 'vencida'::text, 'fallida'::text])))\naccion_pendiente_moneda_check: CHECK ((moneda = 'COP'::text))\naccion_pendiente_monto_check: CHECK ((monto > 0))\naccion_pendiente_nombre_mostrado_check: CHECK ((length(btrim(nombre_mostrado)) > 0))\naccion_pendiente_tipo_check: CHECK ((tipo = ANY (ARRAY['transferencia_interna'::text, 'transferencia_llave'::text])))\naccion_pendiente_tipo_llave_check: CHECK ((tipo_llave = ANY (ARRAY['documento'::text, 'celular'::text, 'correo'::text, 'alfanumerico'::text, 'comercio'::text])))\naccion_resolucion: CHECK ((((estado = 'pendiente'::text) AND (resuelta_en IS NULL)) OR ((estado <> 'pendiente'::text) AND (resuelta_en IS NOT NULL) AND (resuelta_en >= creada_en))))\naccion_transferencia: CHECK (((estado = 'confirmada'::text) = (transferencia_id IS NOT NULL)))\naccion_vigencia: CHECK ((expira_en = (creada_en + '00:05:00'::interval)))\nINDICES FISICOS:\nCREATE UNIQUE INDEX accion_conversacion_id_uk ON asistente.accion_pendiente USING btree (conversacion_id, id)\nCREATE INDEX accion_expiracion_idx ON asistente.accion_pendiente USING btree (expira_en, id) WHERE (estado = 'pendiente'::text)\nCREATE UNIQUE INDEX accion_pendiente_conversacion_uk ON asistente.accion_pendiente USING btree (conversacion_id) WHERE (estado = 'pendiente'::text)\nCREATE UNIQUE INDEX accion_pendiente_pkey ON asistente.accion_pendiente USING btree (id)\nCREATE UNIQUE INDEX accion_transferencia_uk ON asistente.accion_pendiente USING btree (transferencia_id) WHERE (transferencia_id IS NOT NULL)\nCREATE INDEX accion_usuario_idx ON asistente.accion_pendiente USING btree (usuario_id, creada_en DESC, id DESC)"
+}
+
+Table asistente.conversacion {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  titulo varchar(120)
+  estado text [not null, default: `'activo'::text`]
+  cantidad_mensajes integer [not null, default: `0`]
+  creada_en timestamptz [not null, default: `clock_timestamp()`]
+  ultimo_mensaje_en timestamptz [not null, default: `clock_timestamp()`]
+  ciclo_token uuid
+  ciclo_expira_en timestamptz
+  usuario_financiero_id text [not null]
+  indexes {
+    (id, usuario_id) [unique, name: "conversacion_propietario_uk"]
+  }
+  checks {
+    `(cantidad_mensajes >= 0)` [name: "conversacion_cantidad_mensajes_check"]
+    `((ciclo_token IS NULL) = (ciclo_expira_en IS NULL))` [name: "conversacion_ciclo_completo"]
+    `(estado = ANY (ARRAY['activo'::text, 'archivado'::text]))` [name: "conversacion_estado_check"]
+    `(length(btrim(usuario_financiero_id)) > 0)` [name: "conversacion_origen_presente"]
+  }
+  Note: "ACTUAL. conversacion_cantidad_mensajes_check: CHECK ((cantidad_mensajes >= 0))\nconversacion_ciclo_completo: CHECK (((ciclo_token IS NULL) = (ciclo_expira_en IS NULL)))\nconversacion_estado_check: CHECK ((estado = ANY (ARRAY['activo'::text, 'archivado'::text])))\nconversacion_origen_presente: CHECK ((length(btrim(usuario_financiero_id)) > 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX conversacion_pkey ON asistente.conversacion USING btree (id)\nCREATE UNIQUE INDEX conversacion_propietario_uk ON asistente.conversacion USING btree (id, usuario_id)\nCREATE INDEX conversacion_reciente_idx ON asistente.conversacion USING btree (usuario_id, ultimo_mensaje_en DESC, id DESC)\nCREATE INDEX conversacion_retencion_idx ON asistente.conversacion USING btree (ultimo_mensaje_en)"
+}
+
+Table asistente.ejecucion_proveedor {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  turno_id uuid [not null]
+  usuario_id uuid [not null]
+  usuario_financiero_id text [not null]
+  conversacion_id uuid
+  mensaje_id uuid
+  operacion text [not null]
+  proveedor varchar(80) [not null]
+  modelo varchar(120) [not null]
+  version_instrucciones varchar(80)
+  intento smallint [not null]
+  resultado text [not null]
+  codigo_proveedor varchar(80)
+  reintentar_en timestamptz
+  tokens_entrada bigint
+  tokens_salida bigint
+  latencia_ms bigint [not null]
+  primer_audio_ms bigint
+  request_id varchar(128) [not null]
+  iniciada_en timestamptz [not null]
+  indexes {
+    (turno_id, operacion, intento) [unique, name: "ejecucion_proveedor_turno_id_operacion_intento_key"]
+  }
+  checks {
+    `((primer_audio_ms >= 0) AND (primer_audio_ms <= latencia_ms))` [name: "ejecucion_proveedor_check"]
+    `(intento > 0)` [name: "ejecucion_proveedor_intento_check"]
+    `(latencia_ms >= 0)` [name: "ejecucion_proveedor_latencia_ms_check"]
+    `(operacion = ANY (ARRAY['chat'::text, 'transcripcion'::text, 'sintesis'::text]))` [name: "ejecucion_proveedor_operacion_check"]
+    `(resultado = ANY (ARRAY['ok'::text, 'cuota'::text, 'seguridad'::text, 'timeout'::text, 'cancelada'::text, 'error'::text]))` [name: "ejecucion_proveedor_resultado_check"]
+    `(tokens_entrada >= 0)` [name: "ejecucion_proveedor_tokens_entrada_check"]
+    `(tokens_salida >= 0)` [name: "ejecucion_proveedor_tokens_salida_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. ejecucion_proveedor_check: CHECK (((primer_audio_ms >= 0) AND (primer_audio_ms <= latencia_ms)))\nejecucion_proveedor_intento_check: CHECK ((intento > 0))\nejecucion_proveedor_latencia_ms_check: CHECK ((latencia_ms >= 0))\nejecucion_proveedor_operacion_check: CHECK ((operacion = ANY (ARRAY['chat'::text, 'transcripcion'::text, 'sintesis'::text])))\nejecucion_proveedor_resultado_check: CHECK ((resultado = ANY (ARRAY['ok'::text, 'cuota'::text, 'seguridad'::text, 'timeout'::text, 'cancelada'::text, 'error'::text])))\nejecucion_proveedor_tokens_entrada_check: CHECK ((tokens_entrada >= 0))\nejecucion_proveedor_tokens_salida_check: CHECK ((tokens_salida >= 0))\nINDICES FISICOS:\nCREATE INDEX ejecucion_proveedor_fecha_idx ON asistente.ejecucion_proveedor USING btree (iniciada_en)\nCREATE UNIQUE INDEX ejecucion_proveedor_pkey ON asistente.ejecucion_proveedor USING btree (id)\nCREATE UNIQUE INDEX ejecucion_proveedor_turno_id_operacion_intento_key ON asistente.ejecucion_proveedor USING btree (turno_id, operacion, intento)\nCREATE INDEX ejecucion_proveedor_turno_idx ON asistente.ejecucion_proveedor USING btree (usuario_id, turno_id)"
+}
+
+Table asistente.llamada_funcion {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  llamada_id uuid [not null]
+  fase text [not null]
+  usuario_id uuid [not null]
+  conversacion_id uuid [not null]
+  mensaje_id uuid [not null]
+  funcion text [not null]
+  argumentos_saneados jsonb [not null]
+  resultado varchar(40) [not null]
+  duracion_ms bigint [not null]
+  request_id varchar(128) [not null]
+  version_instrucciones varchar(80) [not null]
+  ocurrida_en timestamptz [not null, default: `clock_timestamp()`]
+  indexes {
+    (llamada_id, fase) [unique, name: "llamada_fase_uk"]
+  }
+  checks {
+    `((jsonb_typeof(argumentos_saneados) = 'object'::text) AND (octet_length((argumentos_saneados)::text) <= 2048))` [name: "llamada_funcion_argumentos_saneados_check"]
+    `(duracion_ms >= 0)` [name: "llamada_funcion_duracion_ms_check"]
+    `(fase = ANY (ARRAY['inicio'::text, 'fin'::text]))` [name: "llamada_funcion_fase_check"]
+    `(funcion = ANY (ARRAY['consultar_saldo'::text, 'consultar_limites'::text, 'listar_movimientos'::text, 'resumir_movimientos'::text, 'buscar_destinatario'::text, 'consultar_transferencia'::text, 'preparar_transferencia'::text, 'desconocida'::text]))` [name: "llamada_funcion_funcion_check"]
+    `((resultado)::text ~ '^[A-Za-z][A-Za-z0-9]{0,39}$'::text)` [name: "llamada_funcion_resultado_check"]
+    `((fase <> 'inicio'::text) OR (((resultado)::text = 'InProgress'::text) AND (duracion_ms = 0)))` [name: "llamada_inicio"]
+  }
+  Note: "ACTUAL. llamada_funcion_argumentos_saneados_check: CHECK (((jsonb_typeof(argumentos_saneados) = 'object'::text) AND (octet_length((argumentos_saneados)::text) <= 2048)))\nllamada_funcion_duracion_ms_check: CHECK ((duracion_ms >= 0))\nllamada_funcion_fase_check: CHECK ((fase = ANY (ARRAY['inicio'::text, 'fin'::text])))\nllamada_funcion_funcion_check: CHECK ((funcion = ANY (ARRAY['consultar_saldo'::text, 'consultar_limites'::text, 'listar_movimientos'::text, 'resumir_movimientos'::text, 'buscar_destinatario'::text, 'consultar_transferencia'::text, 'preparar_transferencia'::text, 'desconocida'::text])))\nllamada_funcion_resultado_check: CHECK (((resultado)::text ~ '^[A-Za-z][A-Za-z0-9]{0,39}$'::text))\nllamada_inicio: CHECK (((fase <> 'inicio'::text) OR (((resultado)::text = 'InProgress'::text) AND (duracion_ms = 0))))\nINDICES FISICOS:\nCREATE UNIQUE INDEX llamada_fase_uk ON asistente.llamada_funcion USING btree (llamada_id, fase)\nCREATE INDEX llamada_fecha_idx ON asistente.llamada_funcion USING btree (ocurrida_en, id)\nCREATE UNIQUE INDEX llamada_funcion_pkey ON asistente.llamada_funcion USING btree (id)\nCREATE INDEX llamada_mensaje_idx ON asistente.llamada_funcion USING btree (conversacion_id, mensaje_id, ocurrida_en, id)"
+}
+
+Table asistente.mensaje {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  conversacion_id uuid [not null]
+  numero_orden integer [not null]
+  rol text [not null]
+  canal text [not null]
+  contenido text [not null]
+  nombre_modelo varchar(120)
+  version_instrucciones text
+  tokens_entrada integer
+  tokens_salida integer
+  latencia_ms integer
+  metadatos jsonb [not null, default: `'{}'::jsonb`]
+  respuesta_a uuid
+  creada_en timestamptz [not null, default: `clock_timestamp()`]
+  accion_id uuid
+  indexes {
+    (conversacion_id, id) [unique, name: "mensaje_conversacion_id_uk"]
+    (conversacion_id, numero_orden) [unique, name: "mensaje_orden_uk"]
+  }
+  checks {
+    `((accion_id IS NULL) OR ((rol = 'asistente'::text) AND (respuesta_a IS NOT NULL)))` [name: "mensaje_accion_final"]
+    `(canal = ANY (ARRAY['texto'::text, 'voz'::text]))` [name: "mensaje_canal_check"]
+    `(length(btrim(contenido)) > 0)` [name: "mensaje_contenido_check"]
+    `(latencia_ms >= 0)` [name: "mensaje_latencia_ms_check"]
+    `(jsonb_typeof(metadatos) = 'object'::text)` [name: "mensaje_metadatos_check"]
+    `(numero_orden > 0)` [name: "mensaje_numero_orden_check"]
+    `((respuesta_a IS NULL) OR (rol = 'asistente'::text))` [name: "mensaje_respuesta_rol"]
+    `(rol = ANY (ARRAY['usuario'::text, 'asistente'::text, 'herramienta'::text]))` [name: "mensaje_rol_check"]
+    `(tokens_entrada >= 0)` [name: "mensaje_tokens_entrada_check"]
+    `(tokens_salida >= 0)` [name: "mensaje_tokens_salida_check"]
+  }
+  Note: "ACTUAL. mensaje_accion_final: CHECK (((accion_id IS NULL) OR ((rol = 'asistente'::text) AND (respuesta_a IS NOT NULL))))\nmensaje_canal_check: CHECK ((canal = ANY (ARRAY['texto'::text, 'voz'::text])))\nmensaje_contenido_check: CHECK ((length(btrim(contenido)) > 0))\nmensaje_latencia_ms_check: CHECK ((latencia_ms >= 0))\nmensaje_metadatos_check: CHECK ((jsonb_typeof(metadatos) = 'object'::text))\nmensaje_numero_orden_check: CHECK ((numero_orden > 0))\nmensaje_respuesta_rol: CHECK (((respuesta_a IS NULL) OR (rol = 'asistente'::text)))\nmensaje_rol_check: CHECK ((rol = ANY (ARRAY['usuario'::text, 'asistente'::text, 'herramienta'::text])))\nmensaje_tokens_entrada_check: CHECK ((tokens_entrada >= 0))\nmensaje_tokens_salida_check: CHECK ((tokens_salida >= 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX mensaje_conversacion_id_uk ON asistente.mensaje USING btree (conversacion_id, id)\nCREATE UNIQUE INDEX mensaje_orden_uk ON asistente.mensaje USING btree (conversacion_id, numero_orden)\nCREATE UNIQUE INDEX mensaje_pkey ON asistente.mensaje USING btree (id)\nCREATE INDEX mensaje_respuesta_idx ON asistente.mensaje USING btree (respuesta_a) WHERE (respuesta_a IS NOT NULL)"
+}
+
+Table asistente.solicitud_texto {
+  usuario_id uuid [not null]
+  clave uuid [not null]
+  conversacion_id uuid [not null]
+  mensaje_id uuid [not null]
+  huella bytea [not null]
+  creada_en timestamptz [not null, default: `clock_timestamp()`]
+  indexes {
+    (usuario_id, clave) [pk]
+  }
+  checks {
+    `(octet_length(huella) = 32)` [name: "solicitud_texto_huella_check"]
+  }
+  Note: "ACTUAL. solicitud_texto_huella_check: CHECK ((octet_length(huella) = 32))\nINDICES FISICOS:\nCREATE UNIQUE INDEX solicitud_texto_pkey ON asistente.solicitud_texto USING btree (usuario_id, clave)"
+}
+
+Table auth.codigos_respaldo {
+  id uuid [pk, not null]
+  credencial_id uuid [not null]
+  codigo_hmac bytea [not null]
+  usado_en timestamptz
+  creado_en timestamptz [not null, default: `now()`]
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE INDEX codigos_respaldo_pendientes ON auth.codigos_respaldo USING btree (credencial_id) WHERE (usado_en IS NULL)\nCREATE UNIQUE INDEX codigos_respaldo_pkey ON auth.codigos_respaldo USING btree (id)"
+}
+
+Table auth.consentimientos {
+  id uuid [pk, not null]
+  parte_id uuid [not null]
+  tipo text [not null]
+  version_texto text [not null]
+  texto text [not null]
+  aceptado boolean [not null]
+  accion text [not null]
+  actor uuid
+  origen text [not null]
+  user_agent text [not null, default: `''::text`]
+  metodo text [not null]
+  ocurrido_en timestamptz [not null, default: `now()`]
+  orden bigint [not null, increment]
+  checks {
+    `(tipo = ANY (ARRAY['tratamiento_datos'::text, 'whatsapp_optin'::text, 'biometricos'::text, 'asistente_ia'::text]))` [name: "consentimientos_tipo_check"]
+  }
+  Note: "ACTUAL. consentimientos_tipo_check: CHECK ((tipo = ANY (ARRAY['tratamiento_datos'::text, 'whatsapp_optin'::text, 'biometricos'::text, 'asistente_ia'::text])))\nINDICES FISICOS:\nCREATE INDEX consentimientos_asistente_ultimo ON auth.consentimientos USING btree (parte_id, orden DESC) WHERE (tipo = 'asistente_ia'::text)\nCREATE INDEX consentimientos_parte ON auth.consentimientos USING btree (parte_id, tipo, ocurrido_en)\nCREATE UNIQUE INDEX consentimientos_pkey ON auth.consentimientos USING btree (id)"
+}
+
+Table auth.credenciales {
+  id uuid [pk, not null]
+  parte_id uuid [not null]
+  correo text [not null]
+  celular text [not null]
+  celular_verificado_en timestamptz
+  correo_verificado_en timestamptz
+  celular_cambiado_en timestamptz
+  valor_derivado text
+  estado text [not null]
+  creada_en timestamptz [not null, default: `now()`]
+  actualizada_en timestamptz [not null, default: `now()`]
+  indexes {
+    (parte_id) [unique, name: "credenciales_parte_id_uk"]
+  }
+  checks {
+    `(estado = ANY (ARRAY['pendiente_verificacion'::text, 'activo'::text, 'suspendido'::text, 'cerrado'::text, 'sin_login'::text]))` [name: "credenciales_estado_check"]
+    `((estado = 'sin_login'::text) OR (valor_derivado IS NOT NULL))` [name: "credenciales_valor_derivado_requerido"]
+  }
+  Note: "ACTUAL. credenciales_estado_check: CHECK ((estado = ANY (ARRAY['pendiente_verificacion'::text, 'activo'::text, 'suspendido'::text, 'cerrado'::text, 'sin_login'::text])))\ncredenciales_valor_derivado_requerido: CHECK (((estado = 'sin_login'::text) OR (valor_derivado IS NOT NULL)))\nINDICES FISICOS:\nCREATE UNIQUE INDEX credenciales_celular_uk ON auth.credenciales USING btree (celular) WHERE (estado <> 'cerrado'::text)\nCREATE UNIQUE INDEX credenciales_correo_uk ON auth.credenciales USING btree (correo) WHERE (estado <> 'cerrado'::text)\nCREATE UNIQUE INDEX credenciales_parte_id_uk ON auth.credenciales USING btree (parte_id)\nCREATE UNIQUE INDEX credenciales_pkey ON auth.credenciales USING btree (id)"
+}
+
+Table auth.desafios {
+  id uuid [pk, not null]
+  parte_id uuid
+  credencial_id uuid
+  proposito text [not null]
+  celular_destino text [not null]
+  codigo_hmac bytea [not null]
+  intentos integer [not null, default: `0`]
+  reenvios integer [not null, default: `0`]
+  estado text [not null]
+  creado_en timestamptz [not null]
+  expira_en timestamptz [not null]
+  ultimo_envio_en timestamptz [not null]
+  contexto_solicitado text
+  celular_nuevo text
+  desafio_padre_id uuid
+  checks {
+    `(estado = ANY (ARRAY['pendiente'::text, 'verificado'::text, 'invalidado'::text, 'expirado'::text]))` [name: "desafios_estado_check"]
+    `(proposito = ANY (ARRAY['registro'::text, 'login'::text, 'recuperacion'::text, 'cambio_numero'::text, 'cambio_numero_viejo'::text, 'confirmacion_transferencia'::text]))` [name: "desafios_proposito_check"]
+  }
+  Note: "ACTUAL. desafios_estado_check: CHECK ((estado = ANY (ARRAY['pendiente'::text, 'verificado'::text, 'invalidado'::text, 'expirado'::text])))\ndesafios_proposito_check: CHECK ((proposito = ANY (ARRAY['registro'::text, 'login'::text, 'recuperacion'::text, 'cambio_numero'::text, 'cambio_numero_viejo'::text, 'confirmacion_transferencia'::text])))\nINDICES FISICOS:\nCREATE INDEX desafios_pendientes ON auth.desafios USING btree (expira_en) WHERE (estado = 'pendiente'::text)\nCREATE UNIQUE INDEX desafios_pkey ON auth.desafios USING btree (id)"
+}
+
+Table auth.empresas {
+  parte_id uuid [pk, not null]
+  nit text [not null]
+  razon_social text [not null]
+  indexes {
+    (nit) [unique, name: "empresas_nit_uk"]
+  }
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE UNIQUE INDEX empresas_nit_uk ON auth.empresas USING btree (nit)\nCREATE UNIQUE INDEX empresas_pkey ON auth.empresas USING btree (parte_id)"
+}
+
+Table auth.eventos_autenticacion {
+  id bigint [pk, not null, increment]
+  tipo text [not null]
+  actor_parte_id uuid
+  credencial_id uuid
+  resultado text [not null]
+  ocurrido_en timestamptz [not null, default: `now()`]
+  origen text [not null]
+  contexto text [not null, default: `''::text`]
+  sesion_id uuid
+  detalle jsonb [not null, default: `'{}'::jsonb`]
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE INDEX eventos_autenticacion_actor ON auth.eventos_autenticacion USING btree (actor_parte_id, ocurrido_en)\nCREATE UNIQUE INDEX eventos_autenticacion_pkey ON auth.eventos_autenticacion USING btree (id)\nCREATE INDEX eventos_autenticacion_tipo ON auth.eventos_autenticacion USING btree (tipo, ocurrido_en)"
+}
+
+Table auth.kyc_estados {
+  parte_id uuid [pk, not null]
+  producto text [not null]
+  estado_kyc text [not null]
+  actualizado_en timestamptz [not null, default: `now()`]
+  checks {
+    `(producto = ANY (ARRAY['bajo_monto'::text, 'pleno'::text, 'deposito_ordinario'::text]))` [name: "kyc_estados_producto_check"]
+  }
+  Note: "ACTUAL. kyc_estados_producto_check: CHECK ((producto = ANY (ARRAY['bajo_monto'::text, 'pleno'::text, 'deposito_ordinario'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX kyc_estados_pkey ON auth.kyc_estados USING btree (parte_id)"
+}
+
+Table auth.kyc_verificaciones {
+  id bigint [pk, not null, increment]
+  parte_id uuid [not null]
+  nivel_solicitado text [not null]
+  medio text [not null]
+  proveedor text
+  resultado text [not null]
+  referencia_proveedor text
+  ocurrida_en timestamptz [not null, default: `now()`]
+  checks {
+    `(nivel_solicitado = ANY (ARRAY['bajo_monto'::text, 'pleno'::text]))` [name: "kyc_verificaciones_nivel_solicitado_check"]
+  }
+  Note: "ACTUAL. kyc_verificaciones_nivel_solicitado_check: CHECK ((nivel_solicitado = ANY (ARRAY['bajo_monto'::text, 'pleno'::text])))\nINDICES FISICOS:\nCREATE INDEX kyc_verificaciones_parte ON auth.kyc_verificaciones USING btree (parte_id, ocurrida_en)\nCREATE UNIQUE INDEX kyc_verificaciones_pkey ON auth.kyc_verificaciones USING btree (id)"
+}
+
+Table auth.outbox {
+  id bigint [pk, not null, increment]
+  tipo text [not null]
+  payload jsonb [not null]
+  disponible_en timestamptz [not null, default: `now()`]
+  intentos integer [not null, default: `0`]
+  ultimo_error text
+  despachado_en timestamptz
+  id_mensaje_proveedor text
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE INDEX outbox_pendientes ON auth.outbox USING btree (disponible_en) WHERE (despachado_en IS NULL)\nCREATE UNIQUE INDEX outbox_pkey ON auth.outbox USING btree (id)"
+}
+
+Table auth.partes {
+  id uuid [pk, not null]
+  tipo text [not null]
+  creada_en timestamptz [not null, default: `now()`]
+  checks {
+    `(tipo = ANY (ARRAY['persona'::text, 'empresa'::text]))` [name: "partes_tipo_check"]
+  }
+  Note: "ACTUAL. partes_tipo_check: CHECK ((tipo = ANY (ARRAY['persona'::text, 'empresa'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX partes_pkey ON auth.partes USING btree (id)"
+}
+
+Table auth.personas {
+  parte_id uuid [pk, not null]
+  tipo_documento text [not null]
+  documento text [not null]
+  nombre text [not null]
+  perfil_nombre text
+  nacida_en date
+  indexes {
+    (tipo_documento, documento) [unique, name: "personas_documento_uk"]
+  }
+  checks {
+    `(tipo_documento = ANY (ARRAY['CC'::text, 'CE'::text, 'PA'::text]))` [name: "personas_tipo_documento_check"]
+  }
+  Note: "ACTUAL. personas_tipo_documento_check: CHECK ((tipo_documento = ANY (ARRAY['CC'::text, 'CE'::text, 'PA'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX personas_documento_uk ON auth.personas USING btree (tipo_documento, documento)\nCREATE UNIQUE INDEX personas_pkey ON auth.personas USING btree (parte_id)"
+}
+
+Table auth.roles_de_parte {
+  id bigint [pk, not null, increment]
+  parte_id uuid [not null]
+  rol text [not null]
+  representada_id uuid [not null]
+  creado_en timestamptz [not null, default: `now()`]
+  revocado_en timestamptz
+  checks {
+    `(rol = ANY (ARRAY['representante_legal'::text, 'administrador'::text, 'beneficiario_final'::text]))` [name: "roles_de_parte_rol_check"]
+  }
+  Note: "ACTUAL. roles_de_parte_rol_check: CHECK ((rol = ANY (ARRAY['representante_legal'::text, 'administrador'::text, 'beneficiario_final'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX roles_de_parte_pkey ON auth.roles_de_parte USING btree (id)\nCREATE UNIQUE INDEX roles_de_parte_vigente_uk ON auth.roles_de_parte USING btree (parte_id, rol, representada_id) WHERE (revocado_en IS NULL)"
+}
+
+Table auth.sesiones {
+  id uuid [pk, not null]
+  familia_id uuid [not null]
+  parte_id uuid [not null]
+  contexto_activo text [not null, default: `''::text`]
+  dispositivo text [not null, default: `''::text`]
+  refresh_hash bytea [not null]
+  creada_en timestamptz [not null, default: `now()`]
+  ultimo_uso_en timestamptz [not null, default: `now()`]
+  usado_en timestamptz
+  revocada_en timestamptz
+  vence_en timestamptz [not null]
+  indexes {
+    (refresh_hash) [unique, name: "sesiones_refresh_hash_key"]
+  }
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE INDEX sesiones_familia ON auth.sesiones USING btree (familia_id)\nCREATE INDEX sesiones_parte_vigente ON auth.sesiones USING btree (parte_id, revocada_en)\nCREATE UNIQUE INDEX sesiones_pkey ON auth.sesiones USING btree (id)\nCREATE UNIQUE INDEX sesiones_refresh_hash_key ON auth.sesiones USING btree (refresh_hash)"
+}
+
+Table auth.textos_consentimiento {
+  tipo text [not null]
+  version text [not null]
+  texto text [not null]
+  vigente_desde timestamptz [not null, default: `now()`]
+  indexes {
+    (tipo, version) [pk]
+  }
+  checks {
+    `(tipo = ANY (ARRAY['tratamiento_datos'::text, 'whatsapp_optin'::text, 'biometricos'::text, 'asistente_ia'::text]))` [name: "textos_consentimiento_tipo_check"]
+  }
+  Note: "ACTUAL. textos_consentimiento_tipo_check: CHECK ((tipo = ANY (ARRAY['tratamiento_datos'::text, 'whatsapp_optin'::text, 'biometricos'::text, 'asistente_ia'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX textos_consentimiento_pkey ON auth.textos_consentimiento USING btree (tipo, version)"
+}
+
+Table auth.tokens_restablecimiento {
+  id uuid [pk, not null]
+  credencial_id uuid [not null]
+  token_hash bytea [not null]
+  expira_en timestamptz [not null]
+  usado_en timestamptz
+  creado_en timestamptz [not null, default: `now()`]
+  indexes {
+    (token_hash) [unique, name: "tokens_restablecimiento_token_hash_key"]
+  }
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE INDEX tokens_restablecimiento_pendientes ON auth.tokens_restablecimiento USING btree (token_hash) WHERE (usado_en IS NULL)\nCREATE UNIQUE INDEX tokens_restablecimiento_pkey ON auth.tokens_restablecimiento USING btree (id)\nCREATE UNIQUE INDEX tokens_restablecimiento_token_hash_key ON auth.tokens_restablecimiento USING btree (token_hash)"
+}
+
+Table auth.transiciones_credencial {
+  id bigint [pk, not null, increment]
+  credencial_id uuid [not null]
+  estado_anterior text
+  estado_nuevo text [not null]
+  motivo text
+  ocurrida_en timestamptz [not null, default: `now()`]
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE UNIQUE INDEX transiciones_credencial_pkey ON auth.transiciones_credencial USING btree (id)"
+}
+
+Table finanzas.cambio_clasificacion {
+  id bigint [pk, not null, increment]
+  componente_id uuid [not null]
+  version integer [not null]
+  anterior jsonb
+  nueva jsonb [not null]
+  ocurrida_en timestamptz [not null, default: `now()`]
+  indexes {
+    (componente_id, version) [unique, name: "cambio_clasificacion_componente_id_version_key"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. \nINDICES FISICOS:\nCREATE UNIQUE INDEX cambio_clasificacion_componente_id_version_key ON finanzas.cambio_clasificacion USING btree (componente_id, version)\nCREATE UNIQUE INDEX cambio_clasificacion_pkey ON finanzas.cambio_clasificacion USING btree (id)"
+}
+
+Table finanzas.categoria {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  propietario_id uuid
+  codigo varchar(60) [not null]
+  nombre varchar(80) [not null]
+  padre_id uuid
+  naturaleza text [not null]
+  icono varchar(60)
+  color varchar(7)
+  activa boolean [not null, default: `true`]
+  creada_en timestamptz [not null, default: `now()`]
+  indexes {
+    (propietario_id, codigo) [unique, name: "categoria_propietario_id_codigo_key"]
+  }
+  checks {
+    `((color)::text ~ '^#[0-9A-Fa-f]{6}$'::text)` [name: "categoria_color_check"]
+    `(naturaleza = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'traslado'::text, 'ajuste'::text]))` [name: "categoria_naturaleza_check"]
+    `(length(btrim((nombre)::text)) > 0)` [name: "categoria_nombre_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. categoria_color_check: CHECK (((color)::text ~ '^#[0-9A-Fa-f]{6}$'::text))\ncategoria_naturaleza_check: CHECK ((naturaleza = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'traslado'::text, 'ajuste'::text])))\ncategoria_nombre_check: CHECK ((length(btrim((nombre)::text)) > 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX categoria_pkey ON finanzas.categoria USING btree (id)\nCREATE UNIQUE INDEX categoria_propietario_id_codigo_key ON finanzas.categoria USING btree (propietario_id, codigo) NULLS NOT DISTINCT\nCREATE INDEX categoria_propietario_idx ON finanzas.categoria USING btree (propietario_id, padre_id)"
+}
+
+Table finanzas.clasificacion_movimiento {
+  componente_id uuid [pk, not null]
+  propietario_id uuid [not null]
+  categoria_id uuid
+  naturaleza text [not null, default: `'pendiente'::text`]
+  fuente text [not null]
+  confianza_ppm integer
+  modelo varchar(120)
+  version_clasificador varchar(80)
+  version integer [not null, default: `1`]
+  actor_id uuid
+  actualizada_en timestamptz [not null, default: `now()`]
+  checks {
+    `((naturaleza = 'pendiente'::text) = (categoria_id IS NULL))` [name: "clasificacion_movimiento_check"]
+    `((fuente <> 'usuario'::text) OR (actor_id IS NOT NULL))` [name: "clasificacion_movimiento_check1"]
+    `((fuente <> 'ia'::text) OR ((modelo IS NOT NULL) AND (version_clasificador IS NOT NULL) AND (confianza_ppm IS NOT NULL)))` [name: "clasificacion_movimiento_check2"]
+    `((confianza_ppm >= 0) AND (confianza_ppm <= 1000000))` [name: "clasificacion_movimiento_confianza_ppm_check"]
+    `(fuente = ANY (ARRAY['usuario'::text, 'regla'::text, 'ia'::text, 'sistema'::text]))` [name: "clasificacion_movimiento_fuente_check"]
+    `(naturaleza = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'traslado'::text, 'ajuste'::text, 'pendiente'::text]))` [name: "clasificacion_movimiento_naturaleza_check"]
+    `(version > 0)` [name: "clasificacion_movimiento_version_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. clasificacion_movimiento_check: CHECK (((naturaleza = 'pendiente'::text) = (categoria_id IS NULL)))\nclasificacion_movimiento_check1: CHECK (((fuente <> 'usuario'::text) OR (actor_id IS NOT NULL)))\nclasificacion_movimiento_check2: CHECK (((fuente <> 'ia'::text) OR ((modelo IS NOT NULL) AND (version_clasificador IS NOT NULL) AND (confianza_ppm IS NOT NULL))))\nclasificacion_movimiento_confianza_ppm_check: CHECK (((confianza_ppm >= 0) AND (confianza_ppm <= 1000000)))\nclasificacion_movimiento_fuente_check: CHECK ((fuente = ANY (ARRAY['usuario'::text, 'regla'::text, 'ia'::text, 'sistema'::text])))\nclasificacion_movimiento_naturaleza_check: CHECK ((naturaleza = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'traslado'::text, 'ajuste'::text, 'pendiente'::text])))\nclasificacion_movimiento_version_check: CHECK ((version > 0))\nINDICES FISICOS:\nCREATE INDEX clasificacion_categoria_idx ON finanzas.clasificacion_movimiento USING btree (propietario_id, categoria_id, componente_id)\nCREATE UNIQUE INDEX clasificacion_movimiento_pkey ON finanzas.clasificacion_movimiento USING btree (componente_id)"
+}
+
+Table finanzas.componente_movimiento {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  movimiento_id uuid [not null]
+  propietario_id uuid [not null]
+  posting_id bigint [not null]
+  motivo text [not null]
+  indexes {
+    (id, propietario_id) [unique, name: "componente_movimiento_id_propietario_id_key"]
+    (posting_id) [unique, name: "componente_movimiento_posting_id_key"]
+  }
+  checks {
+    `(motivo = ANY (ARRAY['deposito'::text, 'transferencia_recibida'::text, 'envio'::text, 'gravamen'::text, 'devolucion'::text, 'devolucion_gravamen'::text]))` [name: "componente_movimiento_motivo_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. componente_movimiento_motivo_check: CHECK ((motivo = ANY (ARRAY['deposito'::text, 'transferencia_recibida'::text, 'envio'::text, 'gravamen'::text, 'devolucion'::text, 'devolucion_gravamen'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX componente_movimiento_id_propietario_id_key ON finanzas.componente_movimiento USING btree (id, propietario_id)\nCREATE INDEX componente_movimiento_idx ON finanzas.componente_movimiento USING btree (movimiento_id)\nCREATE UNIQUE INDEX componente_movimiento_pkey ON finanzas.componente_movimiento USING btree (id)\nCREATE UNIQUE INDEX componente_movimiento_posting_id_key ON finanzas.componente_movimiento USING btree (posting_id)"
+}
+
+Table finanzas.movimiento {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  propietario_id uuid [not null]
+  usuario_financiero_id text [not null]
+  cuenta_id text [not null]
+  transferencia_id uuid
+  entry_sin_transferencia_id bigint
+  ocurrido_en timestamptz [not null]
+  version_proyeccion integer [not null, default: `1`]
+  proyectado_en timestamptz [not null, default: `now()`]
+  indexes {
+    (id, propietario_id) [unique, name: "movimiento_id_propietario_id_key"]
+  }
+  checks {
+    `(num_nonnulls(transferencia_id, entry_sin_transferencia_id) = 1)` [name: "movimiento_check"]
+    `(version_proyeccion > 0)` [name: "movimiento_version_proyeccion_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. movimiento_check: CHECK ((num_nonnulls(transferencia_id, entry_sin_transferencia_id) = 1))\nmovimiento_version_proyeccion_check: CHECK ((version_proyeccion > 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX movimiento_entry_uk ON finanzas.movimiento USING btree (propietario_id, entry_sin_transferencia_id) WHERE (entry_sin_transferencia_id IS NOT NULL)\nCREATE UNIQUE INDEX movimiento_id_propietario_id_key ON finanzas.movimiento USING btree (id, propietario_id)\nCREATE INDEX movimiento_periodo_idx ON finanzas.movimiento USING btree (propietario_id, ocurrido_en DESC, id DESC)\nCREATE UNIQUE INDEX movimiento_pkey ON finanzas.movimiento USING btree (id)\nCREATE UNIQUE INDEX movimiento_transferencia_uk ON finanzas.movimiento USING btree (propietario_id, transferencia_id) WHERE (transferencia_id IS NOT NULL)"
+}
+
+Table finanzas.periodo_presupuesto {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  presupuesto_id uuid [not null]
+  propietario_id uuid [not null]
+  desde date [not null]
+  hasta_exclusivo date [not null]
+  limite_centavos bigint [not null, note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  umbral_porcentaje smallint [not null, default: `80`]
+  indexes {
+    (presupuesto_id, desde) [unique, name: "periodo_presupuesto_presupuesto_id_desde_key"]
+  }
+  checks {
+    `(desde < hasta_exclusivo)` [name: "periodo_presupuesto_check"]
+    `(limite_centavos > 0)` [name: "periodo_presupuesto_limite_centavos_check"]
+    `((umbral_porcentaje >= 1) AND (umbral_porcentaje <= 100))` [name: "periodo_presupuesto_umbral_porcentaje_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. periodo_presupuesto_check: CHECK ((desde < hasta_exclusivo))\nperiodo_presupuesto_limite_centavos_check: CHECK ((limite_centavos > 0))\nperiodo_presupuesto_umbral_porcentaje_check: CHECK (((umbral_porcentaje >= 1) AND (umbral_porcentaje <= 100)))\nINDICES FISICOS:\nCREATE INDEX periodo_presupuesto_idx ON finanzas.periodo_presupuesto USING btree (propietario_id, desde, hasta_exclusivo)\nCREATE UNIQUE INDEX periodo_presupuesto_pkey ON finanzas.periodo_presupuesto USING btree (id)\nCREATE INDEX periodo_presupuesto_presupuesto_id_daterange_excl ON finanzas.periodo_presupuesto USING gist (presupuesto_id, daterange(desde, hasta_exclusivo, '[)'::text))\nCREATE UNIQUE INDEX periodo_presupuesto_presupuesto_id_desde_key ON finanzas.periodo_presupuesto USING btree (presupuesto_id, desde)"
+}
+
+Table finanzas.presupuesto {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  propietario_id uuid [not null]
+  categoria_id uuid
+  nombre varchar(80) [not null]
+  periodicidad text [not null]
+  zona_horaria text [not null, default: `'America/Bogota'::text`]
+  activo boolean [not null, default: `true`]
+  creado_en timestamptz [not null, default: `now()`]
+  indexes {
+    (id, propietario_id) [unique, name: "presupuesto_id_propietario_id_key"]
+  }
+  checks {
+    `(periodicidad = ANY (ARRAY['semanal'::text, 'mensual'::text, 'anual'::text, 'unico'::text]))` [name: "presupuesto_periodicidad_check"]
+    `(zona_horaria = 'America/Bogota'::text)` [name: "presupuesto_zona_horaria_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. presupuesto_periodicidad_check: CHECK ((periodicidad = ANY (ARRAY['semanal'::text, 'mensual'::text, 'anual'::text, 'unico'::text])))\npresupuesto_zona_horaria_check: CHECK ((zona_horaria = 'America/Bogota'::text))\nINDICES FISICOS:\nCREATE UNIQUE INDEX presupuesto_id_propietario_id_key ON finanzas.presupuesto USING btree (id, propietario_id)\nCREATE UNIQUE INDEX presupuesto_pkey ON finanzas.presupuesto USING btree (id)"
+}
+
+Table finanzas.regla_clasificacion {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  propietario_id uuid [not null]
+  contraparte_hmac bytea [not null]
+  version_clave integer [not null]
+  motivo text [not null]
+  categoria_id uuid [not null]
+  activa boolean [not null, default: `true`]
+  creada_en timestamptz [not null, default: `now()`]
+  indexes {
+    (propietario_id, contraparte_hmac, version_clave, motivo) [unique, name: "regla_clasificacion_propietario_id_contraparte_hmac_version_key"]
+  }
+  checks {
+    `(octet_length(contraparte_hmac) = 32)` [name: "regla_clasificacion_contraparte_hmac_check"]
+    `(motivo = ANY (ARRAY['deposito'::text, 'transferencia_recibida'::text, 'envio'::text, 'gravamen'::text, 'devolucion'::text, 'devolucion_gravamen'::text]))` [name: "regla_clasificacion_motivo_check"]
+    `(version_clave > 0)` [name: "regla_clasificacion_version_clave_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. regla_clasificacion_contraparte_hmac_check: CHECK ((octet_length(contraparte_hmac) = 32))\nregla_clasificacion_motivo_check: CHECK ((motivo = ANY (ARRAY['deposito'::text, 'transferencia_recibida'::text, 'envio'::text, 'gravamen'::text, 'devolucion'::text, 'devolucion_gravamen'::text])))\nregla_clasificacion_version_clave_check: CHECK ((version_clave > 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX regla_clasificacion_pkey ON finanzas.regla_clasificacion USING btree (id)\nCREATE UNIQUE INDEX regla_clasificacion_propietario_id_contraparte_hmac_version_key ON finanzas.regla_clasificacion USING btree (propietario_id, contraparte_hmac, version_clave, motivo)"
+}
+
+Table finanzas.titular {
+  usuario_financiero_id text [pk, not null]
+  parte_id uuid [not null]
+  creada_en timestamptz [not null, default: `now()`]
+  indexes {
+    (parte_id) [unique, name: "titular_parte_id_key"]
+    (usuario_financiero_id, parte_id) [unique, name: "titular_usuario_financiero_id_parte_id_key"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. \nINDICES FISICOS:\nCREATE UNIQUE INDEX titular_parte_id_key ON finanzas.titular USING btree (parte_id)\nCREATE UNIQUE INDEX titular_pkey ON finanzas.titular USING btree (usuario_financiero_id)\nCREATE UNIQUE INDEX titular_usuario_financiero_id_parte_id_key ON finanzas.titular USING btree (usuario_financiero_id, parte_id)"
+}
+
+Table nucleo.conciliacion_corrida {
+  id bigint [pk, not null, increment]
+  ventana_hasta timestamptz [not null]
+  corrida_en timestamptz [not null, default: `now()`]
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE UNIQUE INDEX conciliacion_corrida_pkey ON nucleo.conciliacion_corrida USING btree (id)\nCREATE INDEX conciliacion_corrida_por_ventana ON nucleo.conciliacion_corrida USING btree (ventana_hasta DESC, id DESC)"
+}
+
+Table nucleo.cuenta {
+  id text [pk, not null]
+  naturaleza text [not null]
+  clase text [not null]
+  titular_id text
+  moneda char(3) [not null, default: `'COP'::bpchar`]
+  creada_en timestamptz [not null, default: `now()`]
+  checks {
+    `(naturaleza = ANY (ARRAY['activo'::text, 'pasivo'::text]))` [name: "cuenta_naturaleza_check"]
+  }
+  Note: "ACTUAL. cuenta_naturaleza_check: CHECK ((naturaleza = ANY (ARRAY['activo'::text, 'pasivo'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX cuenta_pkey ON nucleo.cuenta USING btree (id)"
+}
+
+Table nucleo.deposito {
+  id uuid [pk, not null]
+  usuario_id text [not null]
+  monto bigint [not null, note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  moneda char(3) [not null, default: `'COP'::bpchar`]
+  referencia text [not null]
+  idempotency_key text [not null]
+  cus text
+  estado text [not null, default: `'pendiente'::text`]
+  creada_en timestamptz [not null, default: `now()`]
+  actualizada_en timestamptz [not null, default: `now()`]
+  indexes {
+    (usuario_id, idempotency_key) [unique, name: "deposito_idempotencia_unica"]
+    (referencia) [unique, name: "deposito_referencia_unica"]
+  }
+  checks {
+    `(estado = ANY (ARRAY['pendiente'::text, 'confirmada'::text, 'rechazada'::text, 'expirada'::text]))` [name: "deposito_estado_check"]
+    `(monto > 0)` [name: "deposito_monto_check"]
+  }
+  Note: "ACTUAL. deposito_estado_check: CHECK ((estado = ANY (ARRAY['pendiente'::text, 'confirmada'::text, 'rechazada'::text, 'expirada'::text])))\ndeposito_monto_check: CHECK ((monto > 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX deposito_idempotencia_unica ON nucleo.deposito USING btree (usuario_id, idempotency_key)\nCREATE UNIQUE INDEX deposito_pkey ON nucleo.deposito USING btree (id)\nCREATE UNIQUE INDEX deposito_referencia_unica ON nucleo.deposito USING btree (referencia)\nCREATE INDEX nucleo_deposito_pendiente_creada_idx ON nucleo.deposito USING btree (creada_en) WHERE (estado = 'pendiente'::text)"
+}
+
+Table nucleo.descuadre {
+  id bigint [pk, not null, increment]
+  tipo text [not null]
+  transferencia_id uuid
+  referencia_externa text
+  monto_interno bigint [note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  monto_externo bigint [note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  ventana_desde timestamptz [not null]
+  ventana_hasta timestamptz [not null]
+  detectado_en timestamptz [not null, default: `now()`]
+  resuelto_en timestamptz
+  resolucion text
+  checks {
+    `(num_nonnulls(transferencia_id, referencia_externa) = 1)` [name: "descuadre_identidad_check"]
+  }
+  Note: "ACTUAL. descuadre_identidad_check: CHECK ((num_nonnulls(transferencia_id, referencia_externa) = 1))\nINDICES FISICOS:\nCREATE UNIQUE INDEX descuadre_identidad_unico ON nucleo.descuadre USING btree (tipo, COALESCE((transferencia_id)::text, referencia_externa)) WHERE (resuelto_en IS NULL)\nCREATE UNIQUE INDEX descuadre_pkey ON nucleo.descuadre USING btree (id)"
+}
+
+Table nucleo.detalle_transferencia {
+  transferencia_id uuid [pk, not null]
+  actor_id uuid
+  canal text [not null]
+  tipo_destino text [not null]
+  tipo_llave text
+  destinatario_id uuid
+  nombre_enmascarado text
+  entidad_destino text
+  referencia_externa text
+  request_id varchar(128)
+  accion_ia_id uuid
+  confirmada_por_usuario_en timestamptz
+  creada_en timestamptz [not null, default: `now()`]
+  checks {
+    `(canal = ANY (ARRAY['app'::text, 'asistente'::text, 'api'::text, 'legado'::text]))` [name: "detalle_transferencia_canal_check"]
+    `((tipo_destino = 'bre_b'::text) = (tipo_llave IS NOT NULL))` [name: "detalle_transferencia_check"]
+    `((tipo_destino <> 'interna'::text) OR (destinatario_id IS NOT NULL))` [name: "detalle_transferencia_check1"]
+    `(tipo_destino = ANY (ARRAY['interna'::text, 'bre_b'::text, 'desconocido'::text]))` [name: "detalle_transferencia_tipo_destino_check"]
+    `(tipo_llave = ANY (ARRAY['documento'::text, 'celular'::text, 'correo'::text, 'alfanumerico'::text, 'comercio'::text]))` [name: "detalle_transferencia_tipo_llave_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. detalle_transferencia_canal_check: CHECK ((canal = ANY (ARRAY['app'::text, 'asistente'::text, 'api'::text, 'legado'::text])))\ndetalle_transferencia_check: CHECK (((tipo_destino = 'bre_b'::text) = (tipo_llave IS NOT NULL)))\ndetalle_transferencia_check1: CHECK (((tipo_destino <> 'interna'::text) OR (destinatario_id IS NOT NULL)))\ndetalle_transferencia_tipo_destino_check: CHECK ((tipo_destino = ANY (ARRAY['interna'::text, 'bre_b'::text, 'desconocido'::text])))\ndetalle_transferencia_tipo_llave_check: CHECK ((tipo_llave = ANY (ARRAY['documento'::text, 'celular'::text, 'correo'::text, 'alfanumerico'::text, 'comercio'::text])))\nINDICES FISICOS:\nCREATE INDEX detalle_transferencia_destino_idx ON nucleo.detalle_transferencia USING btree (destinatario_id, creada_en DESC)\nCREATE UNIQUE INDEX detalle_transferencia_pkey ON nucleo.detalle_transferencia USING btree (transferencia_id)"
+}
+
+Table nucleo.evento_custodio {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  proveedor text [not null]
+  evento_externo_id text [not null]
+  deposito_id uuid
+  transferencia_id uuid
+  huella bytea [not null]
+  resultado text [not null]
+  codigo_resultado varchar(80)
+  ocurrido_en timestamptz [not null]
+  recibido_en timestamptz [not null, default: `now()`]
+  procesado_en timestamptz
+  indexes {
+    (proveedor, evento_externo_id) [unique, name: "evento_custodio_proveedor_evento_externo_id_key"]
+  }
+  checks {
+    `(num_nonnulls(deposito_id, transferencia_id) = 1)` [name: "evento_custodio_check"]
+    `((resultado = 'recibido'::text) = (procesado_en IS NULL))` [name: "evento_custodio_check1"]
+    `(octet_length(huella) = 32)` [name: "evento_custodio_huella_check"]
+    `(resultado = ANY (ARRAY['recibido'::text, 'procesado'::text, 'rechazado'::text]))` [name: "evento_custodio_resultado_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. evento_custodio_check: CHECK ((num_nonnulls(deposito_id, transferencia_id) = 1))\nevento_custodio_check1: CHECK (((resultado = 'recibido'::text) = (procesado_en IS NULL)))\nevento_custodio_huella_check: CHECK ((octet_length(huella) = 32))\nevento_custodio_resultado_check: CHECK ((resultado = ANY (ARRAY['recibido'::text, 'procesado'::text, 'rechazado'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX evento_custodio_pkey ON nucleo.evento_custodio USING btree (id)\nCREATE UNIQUE INDEX evento_custodio_proveedor_evento_externo_id_key ON nucleo.evento_custodio USING btree (proveedor, evento_externo_id)"
+}
+
+Table nucleo.evento_transferencia {
+  id bigint [pk, not null, increment]
+  transferencia_id uuid [not null]
+  estado_anterior text
+  estado_nuevo text [not null]
+  codigo_resultado varchar(80)
+  request_id varchar(128)
+  ocurrido_en timestamptz [not null, default: `now()`]
+  checks {
+    `(estado_nuevo = ANY (ARRAY['creada'::text, 'reservada'::text, 'despachada'::text, 'confirmada'::text, 'fallida'::text, 'indeterminada'::text, 'compensada'::text]))` [name: "evento_transferencia_estado_nuevo_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. evento_transferencia_estado_nuevo_check: CHECK ((estado_nuevo = ANY (ARRAY['creada'::text, 'reservada'::text, 'despachada'::text, 'confirmada'::text, 'fallida'::text, 'indeterminada'::text, 'compensada'::text])))\nINDICES FISICOS:\nCREATE INDEX evento_transferencia_idx ON nucleo.evento_transferencia USING btree (transferencia_id, id)\nCREATE UNIQUE INDEX evento_transferencia_pkey ON nucleo.evento_transferencia USING btree (id)"
+}
+
+Table nucleo.extracto_custodio {
+  corte_en timestamptz [pk, not null]
+  saldo bigint [not null, note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  origen text [not null]
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE UNIQUE INDEX extracto_custodio_pkey ON nucleo.extracto_custodio USING btree (corte_en)"
+}
+
+Table nucleo.journal_entry {
+  id bigint [pk, not null, increment]
+  tipo text [not null]
+  transferencia_id uuid
+  ocurrido_en timestamptz [not null]
+  registrado_en timestamptz [not null, default: `now()`]
+  descripcion text
+  deposito_id uuid
+  checks {
+    `(num_nonnulls(transferencia_id, deposito_id) <= 1)` [name: "journal_entry_origen_unico"]
+  }
+  Note: "ACTUAL. journal_entry_origen_unico: CHECK ((num_nonnulls(transferencia_id, deposito_id) <= 1))\nINDICES FISICOS:\nCREATE UNIQUE INDEX journal_entry_deposito_unico ON nucleo.journal_entry USING btree (deposito_id) WHERE (deposito_id IS NOT NULL)\nCREATE INDEX journal_entry_ocurrido_en ON nucleo.journal_entry USING btree (ocurrido_en)\nCREATE UNIQUE INDEX journal_entry_pkey ON nucleo.journal_entry USING btree (id)\nCREATE INDEX journal_entry_transferencia_id ON nucleo.journal_entry USING btree (transferencia_id)\nCREATE INDEX journal_transferencia_tipo_idx ON nucleo.journal_entry USING btree (transferencia_id, tipo, id)"
+}
+
+Table nucleo.outbox {
+  id bigint [pk, not null, increment]
+  tipo text [not null]
+  payload jsonb [not null]
+  disponible_en timestamptz [not null, default: `now()`]
+  intentos integer [not null, default: `0`]
+  ultimo_error text
+  despachado_en timestamptz
+  Note: "ACTUAL. \nINDICES FISICOS:\nCREATE INDEX outbox_despacho_por_transferencia ON nucleo.outbox USING btree (((payload ->> 'transferencia_id'::text))) WHERE ((tipo = 'despacho_transferencia'::text) AND (despachado_en IS NULL))\nCREATE INDEX outbox_pendientes ON nucleo.outbox USING btree (disponible_en) WHERE (despachado_en IS NULL)\nCREATE UNIQUE INDEX outbox_pkey ON nucleo.outbox USING btree (id)"
+}
+
+Table nucleo.posting {
+  id bigint [pk, not null, increment]
+  entry_id bigint [not null]
+  cuenta_id text [not null]
+  monto bigint [not null, note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  moneda char(3) [not null]
+  ocurrido_en timestamptz [not null]
+  checks {
+    `(monto <> 0)` [name: "posting_monto_check"]
+  }
+  Note: "ACTUAL. posting_monto_check: CHECK ((monto <> 0))\nINDICES FISICOS:\nCREATE INDEX posting_cuenta_fecha_idx ON nucleo.posting USING btree (cuenta_id, ocurrido_en DESC, entry_id DESC) INCLUDE (moneda)\nCREATE UNIQUE INDEX posting_pkey ON nucleo.posting USING btree (id)\nCREATE INDEX posting_por_asiento ON nucleo.posting USING btree (entry_id)\nCREATE INDEX posting_por_cuenta ON nucleo.posting USING btree (cuenta_id, id)"
+}
+
+Table nucleo.regla_limite {
+  id text [pk, not null]
+  nivel_kyc text [not null]
+  ventana text [not null]
+  tope_uvt_centesimas bigint [not null]
+  conteo_maximo integer
+  vigente_desde date [not null]
+  vigente_hasta date
+  fuente text [not null]
+  tipo text [not null, default: `'rechaza'::text`]
+  tarifa_ppm bigint [not null, default: `0`]
+  checks {
+    `(((tipo = 'rechaza'::text) AND (tarifa_ppm = 0)) OR ((tipo = 'grava'::text) AND (tarifa_ppm > 0)))` [name: "regla_limite_tarifa_coherente"]
+    `(tipo = ANY (ARRAY['rechaza'::text, 'grava'::text]))` [name: "regla_limite_tipo_valido"]
+    `(tope_uvt_centesimas > 0)` [name: "regla_limite_tope_uvt_centesimas_check"]
+    `(ventana = ANY (ARRAY['operacion'::text, 'diaria'::text, 'mensual'::text]))` [name: "regla_limite_ventana_check"]
+    `((vigente_hasta IS NULL) OR (vigente_hasta > vigente_desde))` [name: "regla_limite_vigencia_coherente"]
+  }
+  Note: "ACTUAL. regla_limite_tarifa_coherente: CHECK ((((tipo = 'rechaza'::text) AND (tarifa_ppm = 0)) OR ((tipo = 'grava'::text) AND (tarifa_ppm > 0))))\nregla_limite_tipo_valido: CHECK ((tipo = ANY (ARRAY['rechaza'::text, 'grava'::text])))\nregla_limite_tope_uvt_centesimas_check: CHECK ((tope_uvt_centesimas > 0))\nregla_limite_ventana_check: CHECK ((ventana = ANY (ARRAY['operacion'::text, 'diaria'::text, 'mensual'::text])))\nregla_limite_vigencia_coherente: CHECK (((vigente_hasta IS NULL) OR (vigente_hasta > vigente_desde)))\nINDICES FISICOS:\nCREATE UNIQUE INDEX regla_limite_pkey ON nucleo.regla_limite USING btree (id)"
+}
+
+Table nucleo.transferencia {
+  id uuid [pk, not null]
+  usuario_id text [not null]
+  cuenta_origen text [not null]
+  llave_destino text [not null]
+  monto bigint [not null, note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  moneda char(3) [not null, default: `'COP'::bpchar`]
+  idempotency_key text [not null]
+  estado text [not null]
+  creada_en timestamptz [not null, default: `now()`]
+  actualizada_en timestamptz [not null, default: `now()`]
+  indexes {
+    (usuario_id, idempotency_key) [unique, name: "transferencia_idempotencia_unica"]
+  }
+  checks {
+    `(estado = ANY (ARRAY['creada'::text, 'reservada'::text, 'despachada'::text, 'confirmada'::text, 'fallida'::text, 'indeterminada'::text, 'compensada'::text]))` [name: "transferencia_estado_check"]
+    `(monto > 0)` [name: "transferencia_monto_check"]
+  }
+  Note: "ACTUAL. transferencia_estado_check: CHECK ((estado = ANY (ARRAY['creada'::text, 'reservada'::text, 'despachada'::text, 'confirmada'::text, 'fallida'::text, 'indeterminada'::text, 'compensada'::text])))\ntransferencia_monto_check: CHECK ((monto > 0))\nINDICES FISICOS:\nCREATE INDEX transferencia_activas_por_actualizada ON nucleo.transferencia USING btree (actualizada_en) WHERE (estado = ANY (ARRAY['despachada'::text, 'indeterminada'::text]))\nCREATE INDEX transferencia_debito_del_mes ON nucleo.transferencia USING btree (usuario_id, creada_en) INCLUDE (monto, estado)\nCREATE UNIQUE INDEX transferencia_idempotencia_unica ON nucleo.transferencia USING btree (usuario_id, idempotency_key)\nCREATE UNIQUE INDEX transferencia_pkey ON nucleo.transferencia USING btree (id)"
+}
+
+Table nucleo.valor_uvt {
+  anio integer [pk, not null]
+  valor_centavos bigint [not null, note: "Centavos COP enteros. Nunca pesos enteros ni punto flotante."]
+  fuente text [not null]
+  checks {
+    `(valor_centavos > 0)` [name: "valor_uvt_valor_centavos_check"]
+  }
+  Note: "ACTUAL. valor_uvt_valor_centavos_check: CHECK ((valor_centavos > 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX valor_uvt_pkey ON nucleo.valor_uvt USING btree (anio)"
+}
+
+Table producto.destinatario_favorito {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  propietario_id uuid [not null]
+  destinatario_id uuid
+  alias varchar(80) [not null]
+  tipo_llave text
+  llave_cifrada bytea
+  llave_hmac bytea
+  version_clave integer
+  creado_en timestamptz [not null, default: `now()`]
+  checks {
+    `(((destinatario_id IS NOT NULL) AND (tipo_llave IS NULL) AND (llave_cifrada IS NULL) AND (llave_hmac IS NULL) AND (version_clave IS NULL)) OR ((destinatario_id IS NULL) AND (tipo_llave IS NOT NULL) AND (llave_cifrada IS NOT NULL) AND (llave_hmac IS NOT NULL) AND (version_clave IS NOT NULL) AND (octet_length(llave_hmac) = 32) AND (version_clave > 0)))` [name: "destinatario_favorito_check"]
+    `(tipo_llave = ANY (ARRAY['documento'::text, 'celular'::text, 'correo'::text, 'alfanumerico'::text, 'comercio'::text]))` [name: "destinatario_favorito_tipo_llave_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. destinatario_favorito_check: CHECK ((((destinatario_id IS NOT NULL) AND (tipo_llave IS NULL) AND (llave_cifrada IS NULL) AND (llave_hmac IS NULL) AND (version_clave IS NULL)) OR ((destinatario_id IS NULL) AND (tipo_llave IS NOT NULL) AND (llave_cifrada IS NOT NULL) AND (llave_hmac IS NOT NULL) AND (version_clave IS NOT NULL) AND (octet_length(llave_hmac) = 32) AND (version_clave > 0))))\ndestinatario_favorito_tipo_llave_check: CHECK ((tipo_llave = ANY (ARRAY['documento'::text, 'celular'::text, 'correo'::text, 'alfanumerico'::text, 'comercio'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX destinatario_favorito_pkey ON producto.destinatario_favorito USING btree (id)\nCREATE UNIQUE INDEX favorito_interno_uk ON producto.destinatario_favorito USING btree (propietario_id, destinatario_id) WHERE (destinatario_id IS NOT NULL)\nCREATE UNIQUE INDEX favorito_llave_uk ON producto.destinatario_favorito USING btree (propietario_id, tipo_llave, llave_hmac, version_clave) WHERE (tipo_llave IS NOT NULL)"
+}
+
+Table producto.notificacion {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  propietario_id uuid [not null]
+  tipo text [not null]
+  clave_deduplicacion text [not null]
+  referencia_id text [not null]
+  creada_en timestamptz [not null, default: `now()`]
+  leida_en timestamptz
+  indexes {
+    (propietario_id, tipo, clave_deduplicacion) [unique, name: "notificacion_propietario_id_tipo_clave_deduplicacion_key"]
+  }
+  checks {
+    `(tipo = ANY (ARRAY['transferencia'::text, 'deposito'::text, 'presupuesto'::text, 'seguridad'::text]))` [name: "notificacion_tipo_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. notificacion_tipo_check: CHECK ((tipo = ANY (ARRAY['transferencia'::text, 'deposito'::text, 'presupuesto'::text, 'seguridad'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX notificacion_pkey ON producto.notificacion USING btree (id)\nCREATE UNIQUE INDEX notificacion_propietario_id_tipo_clave_deduplicacion_key ON producto.notificacion USING btree (propietario_id, tipo, clave_deduplicacion)\nCREATE INDEX notificacion_reciente_idx ON producto.notificacion USING btree (propietario_id, creada_en DESC, id DESC)"
+}
+
+Table producto.preferencia {
+  parte_id uuid [pk, not null]
+  idioma text [not null, default: `'es-CO'::text`]
+  zona_horaria text [not null, default: `'America/Bogota'::text`]
+  voz_preferida varchar(80)
+  leer_respuestas boolean [not null, default: `false`]
+  avisos_presupuesto boolean [not null, default: `true`]
+  actualizada_en timestamptz [not null, default: `now()`]
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. \nINDICES FISICOS:\nCREATE UNIQUE INDEX preferencia_pkey ON producto.preferencia USING btree (parte_id)"
+}
+
+Table producto.tarjeta {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  propietario_id uuid [not null]
+  cuenta_id text [not null]
+  proveedor text [not null]
+  referencia_proveedor text [not null]
+  ultimos_cuatro char(4) [not null]
+  marca varchar(40) [not null]
+  tipo text [not null]
+  estado text [not null]
+  vence_mes smallint [not null]
+  vence_anio smallint [not null]
+  creada_en timestamptz [not null, default: `now()`]
+  indexes {
+    (proveedor, referencia_proveedor) [unique, name: "tarjeta_proveedor_referencia_proveedor_key"]
+  }
+  checks {
+    `(estado = ANY (ARRAY['solicitada'::text, 'activa'::text, 'bloqueada'::text, 'cancelada'::text, 'vencida'::text]))` [name: "tarjeta_estado_check"]
+    `(tipo = ANY (ARRAY['fisica'::text, 'virtual'::text]))` [name: "tarjeta_tipo_check"]
+    `(ultimos_cuatro ~ '^[0-9]{4}$'::text)` [name: "tarjeta_ultimos_cuatro_check"]
+    `((vence_anio >= 2000) AND (vence_anio <= 9999))` [name: "tarjeta_vence_anio_check"]
+    `((vence_mes >= 1) AND (vence_mes <= 12))` [name: "tarjeta_vence_mes_check"]
+  }
+  Note: "PROPUESTA V2; NO IMPLEMENTADA. tarjeta_estado_check: CHECK ((estado = ANY (ARRAY['solicitada'::text, 'activa'::text, 'bloqueada'::text, 'cancelada'::text, 'vencida'::text])))\ntarjeta_tipo_check: CHECK ((tipo = ANY (ARRAY['fisica'::text, 'virtual'::text])))\ntarjeta_ultimos_cuatro_check: CHECK ((ultimos_cuatro ~ '^[0-9]{4}$'::text))\ntarjeta_vence_anio_check: CHECK (((vence_anio >= 2000) AND (vence_anio <= 9999)))\ntarjeta_vence_mes_check: CHECK (((vence_mes >= 1) AND (vence_mes <= 12)))\nINDICES FISICOS:\nCREATE UNIQUE INDEX tarjeta_pkey ON producto.tarjeta USING btree (id)\nCREATE UNIQUE INDEX tarjeta_proveedor_referencia_proveedor_key ON producto.tarjeta USING btree (proveedor, referencia_proveedor)"
+}
+
+Table public.users {
+  id uuid [pk, not null]
+  email text [not null]
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (email) [unique, name: "users_email_key"]
+  }
+  Note: "ACTUAL. Legado congelado; nuevas identidades en auth.partes. \nINDICES FISICOS:\nCREATE UNIQUE INDEX users_email_key ON public.users USING btree (email)\nCREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+}
+
+Ref: asistente.accion_pendiente.(desafio_id) > auth.desafios.(id) [delete: no action]
+Ref: asistente.accion_pendiente.(transferencia_id) > nucleo.transferencia.(id) [delete: no action]
+Ref: asistente.accion_pendiente.(conversacion_id, usuario_id) > asistente.conversacion.(id, usuario_id) [delete: cascade]
+Ref: asistente.conversacion.(usuario_id) > auth.partes.(id) [delete: no action]
+Ref: asistente.ejecucion_proveedor.(usuario_id) > auth.partes.(id) [delete: no action]
+Ref: asistente.mensaje.(conversacion_id, accion_id) > asistente.accion_pendiente.(conversacion_id, id) [delete: no action]
+Ref: asistente.mensaje.(conversacion_id) > asistente.conversacion.(id) [delete: cascade]
+Ref: asistente.mensaje.(conversacion_id, respuesta_a) > asistente.mensaje.(conversacion_id, id) [delete: no action]
+Ref: asistente.solicitud_texto.(conversacion_id, mensaje_id) > asistente.mensaje.(conversacion_id, id) [delete: cascade]
+Ref: asistente.solicitud_texto.(conversacion_id, usuario_id) > asistente.conversacion.(id, usuario_id) [delete: cascade]
+Ref: auth.codigos_respaldo.(credencial_id) > auth.credenciales.(id) [delete: no action]
+Ref: auth.consentimientos.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.credenciales.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.desafios.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.empresas.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.kyc_estados.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.kyc_verificaciones.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.personas.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.roles_de_parte.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.roles_de_parte.(representada_id) > auth.partes.(id) [delete: no action]
+Ref: auth.sesiones.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: auth.tokens_restablecimiento.(credencial_id) > auth.credenciales.(id) [delete: no action]
+Ref: auth.transiciones_credencial.(credencial_id) > auth.credenciales.(id) [delete: no action]
+Ref: finanzas.cambio_clasificacion.(componente_id) > finanzas.componente_movimiento.(id) [delete: no action]
+Ref: finanzas.categoria.(padre_id) > finanzas.categoria.(id) [delete: no action]
+Ref: finanzas.categoria.(propietario_id) > auth.partes.(id) [delete: no action]
+Ref: finanzas.clasificacion_movimiento.(actor_id) > auth.partes.(id) [delete: no action]
+Ref: finanzas.clasificacion_movimiento.(categoria_id) > finanzas.categoria.(id) [delete: no action]
+Ref: finanzas.clasificacion_movimiento.(componente_id, propietario_id) > finanzas.componente_movimiento.(id, propietario_id) [delete: no action]
+Ref: finanzas.componente_movimiento.(movimiento_id, propietario_id) > finanzas.movimiento.(id, propietario_id) [delete: no action]
+Ref: finanzas.componente_movimiento.(posting_id) > nucleo.posting.(id) [delete: no action]
+Ref: finanzas.movimiento.(cuenta_id) > nucleo.cuenta.(id) [delete: no action]
+Ref: finanzas.movimiento.(entry_sin_transferencia_id) > nucleo.journal_entry.(id) [delete: no action]
+Ref: finanzas.movimiento.(propietario_id) > auth.partes.(id) [delete: no action]
+Ref: finanzas.movimiento.(transferencia_id) > nucleo.transferencia.(id) [delete: no action]
+Ref: finanzas.movimiento.(usuario_financiero_id, propietario_id) > finanzas.titular.(usuario_financiero_id, parte_id) [delete: no action]
+Ref: finanzas.periodo_presupuesto.(presupuesto_id, propietario_id) > finanzas.presupuesto.(id, propietario_id) [delete: no action]
+Ref: finanzas.presupuesto.(categoria_id) > finanzas.categoria.(id) [delete: no action]
+Ref: finanzas.presupuesto.(propietario_id) > auth.partes.(id) [delete: no action]
+Ref: finanzas.regla_clasificacion.(categoria_id) > finanzas.categoria.(id) [delete: no action]
+Ref: finanzas.regla_clasificacion.(propietario_id) > auth.partes.(id) [delete: no action]
+Ref: finanzas.titular.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: nucleo.detalle_transferencia.(actor_id) > auth.partes.(id) [delete: no action]
+Ref: nucleo.detalle_transferencia.(destinatario_id) > auth.partes.(id) [delete: no action]
+Ref: nucleo.detalle_transferencia.(transferencia_id) > nucleo.transferencia.(id) [delete: no action]
+Ref: nucleo.evento_custodio.(deposito_id) > nucleo.deposito.(id) [delete: no action]
+Ref: nucleo.evento_custodio.(transferencia_id) > nucleo.transferencia.(id) [delete: no action]
+Ref: nucleo.evento_transferencia.(transferencia_id) > nucleo.transferencia.(id) [delete: no action]
+Ref: nucleo.journal_entry.(deposito_id) > nucleo.deposito.(id) [delete: no action]
+Ref: nucleo.posting.(cuenta_id) > nucleo.cuenta.(id) [delete: no action]
+Ref: nucleo.posting.(entry_id) > nucleo.journal_entry.(id) [delete: no action]
+Ref: nucleo.transferencia.(cuenta_origen) > nucleo.cuenta.(id) [delete: no action]
+Ref: producto.destinatario_favorito.(destinatario_id) > auth.partes.(id) [delete: no action]
+Ref: producto.destinatario_favorito.(propietario_id) > auth.partes.(id) [delete: no action]
+Ref: producto.notificacion.(propietario_id) > auth.partes.(id) [delete: no action]
+Ref: producto.preferencia.(parte_id) > auth.partes.(id) [delete: no action]
+Ref: producto.tarjeta.(cuenta_id) > nucleo.cuenta.(id) [delete: no action]
+Ref: producto.tarjeta.(propietario_id) > auth.partes.(id) [delete: no action]
+
+TableGroup "public" {
+  public.users
+}
+
+TableGroup "auth" {
+  auth.codigos_respaldo
+  auth.consentimientos
+  auth.credenciales
+  auth.desafios
+  auth.empresas
+  auth.eventos_autenticacion
+  auth.kyc_estados
+  auth.kyc_verificaciones
+  auth.outbox
+  auth.partes
+  auth.personas
+  auth.roles_de_parte
+  auth.sesiones
+  auth.textos_consentimiento
+  auth.tokens_restablecimiento
+  auth.transiciones_credencial
+}
+
+TableGroup "nucleo" {
+  nucleo.conciliacion_corrida
+  nucleo.cuenta
+  nucleo.deposito
+  nucleo.descuadre
+  nucleo.detalle_transferencia
+  nucleo.evento_custodio
+  nucleo.evento_transferencia
+  nucleo.extracto_custodio
+  nucleo.journal_entry
+  nucleo.outbox
+  nucleo.posting
+  nucleo.regla_limite
+  nucleo.transferencia
+  nucleo.valor_uvt
+}
+
+TableGroup "asistente" {
+  asistente.accion_pendiente
+  asistente.conversacion
+  asistente.ejecucion_proveedor
+  asistente.llamada_funcion
+  asistente.mensaje
+  asistente.solicitud_texto
+}
+
+TableGroup "finanzas" {
+  finanzas.cambio_clasificacion
+  finanzas.categoria
+  finanzas.clasificacion_movimiento
+  finanzas.componente_movimiento
+  finanzas.movimiento
+  finanzas.periodo_presupuesto
+  finanzas.presupuesto
+  finanzas.regla_clasificacion
+  finanzas.titular
+}
+
+TableGroup "producto" {
+  producto.destinatario_favorito
+  producto.notificacion
+  producto.preferencia
+  producto.tarjeta
+}

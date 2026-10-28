@@ -1,0 +1,1020 @@
+// ============================================================================
+// VERA - Modelo de datos
+// Billetera digital inteligente con agente de inteligencia artificial
+// PostgreSQL 16 + pgvector  |  Moneda: COP en enteros (BIGINT), nunca flotante
+// ----------------------------------------------------------------------------
+// Convenciones de auditoria
+//   created_on  : instante de creacion del registro
+//   created_by  : usuario que lo creo; NULL identifica un proceso del sistema
+//   updated_on  : instante de la ultima modificacion
+//   updated_by  : usuario que la realizo; NULL identifica un proceso del sistema
+//   is_active   : borrado logico. Nunca se eliminan filas fisicamente
+//
+// Las tablas del libro contable (contabilidad) llevan solo created_on y created_by:
+// el diario es de solo anexado y una correccion es un asiento nuevo en sentido
+// contrario, por lo que updated_on y is_active contradirian HU-BE-NF-05.
+// ============================================================================
+
+Project vera {
+  database_type: 'PostgreSQL'
+  Note: 'Modelo de datos del prototipo Vera. Esquemas: identidad, contabilidad, finanzas, ia, auditoria.'
+}
+
+// ============================================================================
+// TIPOS ENUMERADOS
+// ============================================================================
+
+Enum tipo_cuenta {
+  persona [note: 'Persona natural']
+  empresa [note: 'Persona juridica']
+}
+
+Enum estado_usuario {
+  pendiente_verificacion [note: 'Registrado, celular sin verificar. No opera la billetera']
+  activo
+  suspendido
+  bloqueado [note: 'Bloqueo temporal por intentos fallidos']
+  cerrado
+}
+
+Enum plataforma_dispositivo {
+  android
+  ios
+  otra
+}
+
+Enum proposito_desafio {
+  verificacion_celular
+  dispositivo_no_reconocido
+  cambio_contrasena
+  restablecimiento_contrasena
+  cambio_celular
+  recuperacion_cuenta
+  confirmacion_operacion [note: 'OTP disparado por /auth/otp/request para autorizar una operacion sensible']
+}
+
+Enum estado_desafio {
+  pendiente
+  verificado
+  expirado
+  agotado
+  cancelado
+}
+
+Enum canal_envio {
+  whatsapp
+  sms
+  correo_electronico
+}
+
+Enum estado_envio {
+  en_cola
+  enviado
+  entregado
+  fallido
+}
+
+Enum proposito_permiso {
+  restablecimiento_contrasena
+  recuperacion_cuenta
+  confirmacion_operacion [note: 'Comprobante que emite /auth/otp/verify para completar la operacion sensible']
+}
+
+Enum estado_permiso {
+  emitido
+  consumido
+  expirado
+  revocado
+}
+
+Enum tipo_cuenta_contable {
+  activo
+  pasivo
+  patrimonio
+  ingreso
+  gasto
+}
+
+Enum naturaleza {
+  debito
+  credito
+}
+
+Enum proposito_cuenta {
+  usuario_disponible [note: 'pasivo:usuario:{id}:disponible']
+  usuario_retenido [note: 'pasivo:usuario:{id}:retenido']
+  sistema_semilla [note: 'Contrapartida de la carga inicial de dinero simulado']
+  sistema_transitoria
+  sistema_comisiones
+}
+
+Enum naturaleza_contable {
+  debito
+  credito
+}
+
+Enum estado_transferencia {
+  pendiente
+  completada
+  rechazada
+  reversada
+}
+
+Enum origen_operacion {
+  aplicacion_movil
+  agente_ia
+  sistema
+}
+
+Enum estado_idempotencia {
+  en_proceso
+  completada
+  fallido
+}
+
+Enum origen_clasificacion {
+  regla_sistema
+  agente_ia
+  usuario
+}
+
+Enum periodicidad_presupuesto {
+  semanal
+  mensual
+  personalizada
+}
+
+Enum estado_conversacion {
+  activo
+  archivado
+}
+
+Enum rol_mensaje {
+  usuario
+  asistente
+  herramienta
+}
+
+Enum estado_invocacion {
+  espera_confirmacion
+  exitoso
+  fallido
+  denegado
+}
+
+Enum origen_memoria {
+  mensaje
+  resumen_movimiento
+  hallazgo
+}
+
+Enum estado_hallazgo {
+  nuevo
+  reconocido
+  descartado
+}
+
+Enum tipo_actor {
+  usuario
+  sistema
+  agente_ia
+}
+
+Enum ambito_limite {
+  registro
+  solicitud_codigo
+  verificacion_codigo
+  ingreso_sesion
+  consulta_destinatario
+  creacion_transferencia
+}
+
+// ============================================================================
+// ESQUEMA identidad - Autenticacion y gestion de usuarios (Epica 1)
+// ============================================================================
+
+Table identidad.usuario {
+  id uuid [pk, default: `gen_random_uuid()`]
+  celular_e164 varchar(16) [not null, unique, note: 'Identificador de la cuenta. Formato E.164, HU-BE-AUT-01']
+  fecha_verificacion_celular timestamptz [note: 'NULL mientras el celular no se verifica']
+  correo_electronico varchar(254) [not null, unique, note: 'Dato de contacto en las HU; identificador de ingreso en el documento de endpoints. Ver nota de la tabla']
+  fecha_verificacion_correo timestamptz
+  tipo_cuenta tipo_cuenta [not null, default: 'persona', note: 'Discrimina el subtipo: los datos propios viven en persona_natural o en empresa']
+  estado estado_usuario [not null, default: 'pendiente_verificacion']
+  intentos_fallidos_ingreso smallint [not null, default: 0]
+  bloqueado_hasta timestamptz
+  sesiones_invalidas_antes_de timestamptz [note: 'Marca de revocacion global. Todo token de renovacion emitido antes deja de ser valido, HU-BE-AUT-05']
+  fecha_aceptacion_politica_datos timestamptz [note: 'Ley 1581 de 2012']
+  fecha_consentimiento_whatsapp timestamptz [note: 'Consentimiento explicito para el canal de mensajeria']
+  idioma varchar(10) [not null, default: 'es-CO']
+  zona_horaria varchar(64) [not null, default: 'America/Bogota']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    celular_e164 [unique, name: 'ux_usuario_celular']
+    correo_electronico [unique, name: 'ux_usuario_correo']
+    estado [name: 'ix_usuario_estado']
+  }
+  Note: 'Datos comunes a los dos tipos de cuenta. Los datos propios de cada uno viven en identidad.persona_natural y en identidad.empresa, en relacion uno a uno. Un disparador diferido verifica al cerrar la transaccion que exista la fila del subtipo que corresponde a tipo_cuenta. ATENCION: HU-BE-AUT-01 dice que no se solicita documento de identidad por tratarse de un entorno simulado, mientras que el documento de endpoints exige tipoDocumento y numeroDocumento. El modelo soporta ambos, pero el equipo debe cerrar la contradiccion.'
+}
+
+Table identidad.credencial_usuario {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  algoritmo varchar(32) [not null, default: 'argon2id']
+  hash_contrasena text [not null, note: 'Codificacion PHC completa, incluye sal y parametros']
+  memoria_kib integer [not null]
+  iteraciones smallint [not null]
+  paralelismo smallint [not null]
+  es_vigente boolean [not null, default: true]
+  vigente_desde timestamptz [not null, default: `now()`]
+  fecha_reemplazo timestamptz
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, es_vigente) [name: 'ix_credencial_vigente']
+  }
+  Note: 'Historico de contrasenas. Solo una fila con es_vigente verdadero por cuenta. Permite impedir la reutilizacion de las ultimas contrasenas.'
+}
+
+Table identidad.dispositivo_usuario {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  identificador_dispositivo varchar(128) [not null, note: 'Identificador generado por el cliente y persistido en almacenamiento seguro']
+  nombre_visible varchar(80)
+  plataforma plataforma_dispositivo [not null]
+  version_sistema_operativo varchar(40)
+  version_aplicacion varchar(20)
+  modelo varchar(80)
+  es_reconocido boolean [not null, default: false, note: 'Verdadero tras superar un desafio de dispositivo no reconocido']
+  fecha_reconocimiento timestamptz
+  desbloqueo_rapido_activo boolean [not null, default: false, note: 'Preferencia de desbloqueo con huella o rostro, por cuenta y dispositivo, HU-BE-AUT-04']
+  fecha_activacion_desbloqueo timestamptz
+  sesiones_invalidas_antes_de timestamptz [note: 'Marca de revocacion acotada a este dispositivo, HU-BE-AUT-05']
+  ultima_actividad timestamptz
+  ultima_ip inet
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, identificador_dispositivo) [unique, name: 'ux_dispositivo_por_usuario']
+    usuario_id [name: 'ix_dispositivo_usuario']
+  }
+  Note: 'El sistema nunca almacena ni procesa huellas ni rostros. Solo guarda la preferencia de desbloqueo rapido.'
+}
+
+Table identidad.token_renovacion {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  dispositivo_usuario_id uuid [not null]
+  familia_id uuid [not null, note: 'Cadena de rotacion. Se conserva entre renovaciones sucesivas']
+  hash_token char(64) [not null, unique, note: 'SHA-256 del token. El valor en claro nunca se persiste']
+  fecha_emision timestamptz [not null, default: `now()`]
+  vence_por_inactividad timestamptz [not null, note: '15 dias de inactividad']
+  vence_absoluto timestamptz [not null, note: '45 dias desde el inicio de la cadena']
+  rotado_a_id uuid [note: 'Token que lo reemplazo en la rotacion']
+  fecha_uso timestamptz
+  fecha_revocacion timestamptz
+  motivo_revocacion varchar(60)
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    hash_token [unique, name: 'ux_token_hash']
+    (usuario_id, dispositivo_usuario_id) [name: 'ix_token_alcance']
+    familia_id [name: 'ix_token_familia']
+  }
+  Note: 'ADICION respecto de HU-BE-AUT-05, que resuelve la revocacion solo con marcas de instante. Sin esta tabla la rotacion no permite detectar el uso repetido de un token ya rotado, que es la senal de robo. Si el equipo decide conservar el diseno original, esta tabla se elimina y las marcas sesiones_invalidas_antes_de siguen siendo suficientes para cerrar sesion.'
+}
+
+Table identidad.desafio_verificacion {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  dispositivo_usuario_id uuid [note: 'Dispositivo que origino la solicitud']
+  proposito proposito_desafio [not null]
+  destino_e164 varchar(16) [not null]
+  motivo_operacion varchar(60) [note: 'Campo motivo de /auth/otp/request, solo cuando proposito es confirmacion_operacion. Se valida contra una lista cerrada en el backend']
+  hash_codigo char(64) [not null, note: 'El codigo de 6 digitos nunca se persiste en claro']
+  estado estado_desafio [not null, default: 'pendiente']
+  fecha_expiracion timestamptz [not null, note: 'Vigencia de 5 minutos, HU-BE-AUT-03']
+  intentos_usados smallint [not null, default: 0]
+  intentos_maximos smallint [not null, default: 3, note: 'Tres intentos por codigo, HU-BE-AUT-03 y documento de endpoints']
+  reenvios_usados smallint [not null, default: 0]
+  reenvios_maximos smallint [not null, default: 3]
+  fecha_ultimo_envio timestamptz [note: 'Base del enfriamiento de 60 segundos entre reenvios']
+  fecha_verificacion timestamptz
+  ip_solicitud inet
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, proposito, estado) [name: 'ix_desafio_busqueda']
+    fecha_expiracion [name: 'ix_desafio_expiracion']
+  }
+}
+
+Table identidad.envio_desafio {
+  id uuid [pk, default: `gen_random_uuid()`]
+  desafio_verificacion_id uuid [not null]
+  numero_intento smallint [not null]
+  canal canal_envio [not null, default: 'whatsapp']
+  proveedor varchar(40) [not null, default: 'whatsapp_cloud_api']
+  id_mensaje_proveedor varchar(120)
+  estado estado_envio [not null, default: 'en_cola']
+  codigo_error varchar(40)
+  detalle_error text
+  fecha_envio timestamptz
+  fecha_entrega timestamptz
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (desafio_verificacion_id, numero_intento) [unique, name: 'ux_envio_intento']
+  }
+  Note: 'Un desafio admite hasta tres reenvios, cada uno con su propio intento de entrega y su propio resultado.'
+}
+
+Table identidad.permiso_un_solo_uso {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  desafio_origen_id uuid [note: 'Desafio que habilito la emision del permiso']
+  proposito proposito_permiso [not null]
+  hash_token char(64) [not null, unique]
+  estado estado_permiso [not null, default: 'emitido']
+  fecha_expiracion timestamptz [not null, note: 'Vigencia maxima de 10 minutos, HU-BE-AUT-06 y HU-BE-AUT-07']
+  fecha_consumo timestamptz
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    hash_token [unique, name: 'ux_permiso_token']
+    (usuario_id, proposito, estado) [name: 'ix_permiso_busqueda']
+  }
+  Note: 'Permiso de un solo uso y vida corta que autoriza exclusivamente el cambio de contrasena. No es un token de sesion.'
+}
+
+Table identidad.lote_codigo_recuperacion {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  fecha_generacion timestamptz [not null, default: `now()`]
+  fecha_invalidacion timestamptz [note: 'Se invalida al generar un lote nuevo']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    usuario_id [name: 'ix_lote_recuperacion_usuario']
+  }
+  Note: 'Lote de ocho codigos de recuperacion. Se muestran una unica vez al usuario, HU-BE-AUT-07.'
+}
+
+Table identidad.codigo_recuperacion {
+  id uuid [pk, default: `gen_random_uuid()`]
+  lote_codigo_recuperacion_id uuid [not null]
+  numero_orden smallint [not null]
+  hash_codigo char(64) [not null, note: 'Almacenamiento derivado. El codigo en claro nunca se persiste']
+  fecha_consumo timestamptz
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (lote_codigo_recuperacion_id, numero_orden) [unique, name: 'ux_codigo_recuperacion_orden']
+  }
+}
+
+Table identidad.contador_limite_solicitudes {
+  id bigint [pk, increment]
+  ambito ambito_limite [not null]
+  sujeto varchar(160) [not null, note: 'Sujeto del limite: celular, direccion IP o identificador de cuenta']
+  inicio_ventana timestamptz [not null]
+  duracion_ventana_segundos integer [not null]
+  conteo integer [not null, default: 0]
+  violaciones_consecutivas smallint [not null, default: 0, note: 'Cada violacion multiplica la espera por factor_crecimiento, hasta bloqueo_maximo_segundos']
+  bloqueado_hasta timestamptz
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (ambito, sujeto, inicio_ventana) [unique, name: 'ux_limite_ventana']
+    bloqueado_hasta [name: 'ix_limite_bloqueado']
+  }
+  Note: 'Racionamiento y espera creciente exigidos en HU-BE-AUT-01, HU-BE-AUT-02, HU-BE-AUT-03 y HU-BE-NF-06. Vive en la base porque el presupuesto no contempla un almacen en memoria dedicado.'
+}
+
+
+Table identidad.tipo_documento {
+  id uuid [pk, default: `gen_random_uuid()`]
+  codigo varchar(6) [not null, unique, note: 'CC, CE, PA, PEP, PPT']
+  nombre varchar(80) [not null]
+  descripcion varchar(240)
+  aplica_persona boolean [not null, default: true]
+  aplica_empresa boolean [not null, default: false]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    codigo [unique, name: 'ux_tipo_documento_codigo']
+  }
+  Note: 'Catalogo. Se modela como tabla y no como enumerado porque Colombia agrega tipos de documento con frecuencia (PEP y PPT para poblacion migrante). Agregar uno es insertar una fila, no una migracion de esquema.'
+}
+
+Table identidad.persona_natural {
+  usuario_id uuid [pk, note: 'Llave primaria y foranea a la vez: relacion uno a uno con identidad.usuario']
+  nombre_completo varchar(160) [not null, note: 'Normalizado en NFC, conforme a LDML Person Names']
+  tipo_documento_id uuid [not null]
+  numero_documento varchar(20) [not null]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (tipo_documento_id, numero_documento) [unique, name: 'ux_persona_documento']
+  }
+  Note: 'Subtipo de usuario cuando tipo_cuenta es persona.'
+}
+
+Table identidad.empresa {
+  usuario_id uuid [pk, note: 'Llave primaria y foranea a la vez: relacion uno a uno con identidad.usuario']
+  razon_social varchar(200) [not null]
+  nit varchar(15) [not null, unique, note: 'Solo los digitos del NIT, sin el verificador y sin separadores']
+  digito_verificacion smallint [not null, note: 'Validado contra el algoritmo de modulo 11 de la DIAN']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    nit [unique, name: 'ux_empresa_nit']
+  }
+  Note: 'Subtipo de usuario cuando tipo_cuenta es empresa. El digito de verificacion se guarda aparte del NIT y una restriccion lo recalcula, de modo que la base rechaza un NIT mal digitado.'
+}
+
+Table identidad.representante_legal {
+  id uuid [pk, default: `gen_random_uuid()`]
+  empresa_id uuid [not null]
+  nombre_completo varchar(160) [not null]
+  tipo_documento_id uuid [not null]
+  numero_documento varchar(20) [not null]
+  es_vigente boolean [not null, default: true]
+  vigente_desde date [not null]
+  fecha_fin date
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (empresa_id, es_vigente) [name: 'ix_representante_vigente']
+  }
+  Note: 'Tabla propia y no columnas dentro de empresa, porque el representante legal cambia y la empresa sigue siendo la misma. Una restriccion permite un solo representante vigente por empresa y conserva los anteriores.'
+}
+
+Table identidad.politica_limite {
+  id uuid [pk, default: `gen_random_uuid()`]
+  ambito ambito_limite [not null]
+  sujeto_limite varchar(20) [not null, note: 'cuenta, origen_ip o celular']
+  maximo_solicitudes integer [not null]
+  ventana_segundos integer [not null]
+  bloqueo_inicial_segundos integer [not null, default: 30, note: 'Primera espera al superar el limite']
+  bloqueo_maximo_segundos integer [not null, default: 3600, note: 'Techo de la espera. HU-BE-AUT-03 pide de 30 segundos hasta 1 hora, nunca un bloqueo permanente']
+  factor_crecimiento numeric(3,1) [not null, default: 2.0, note: 'Multiplicador aplicado en cada violacion consecutiva']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (ambito, sujeto_limite, ventana_segundos) [unique, name: 'ux_politica_limite']
+  }
+  Note: 'Parametriza el racionamiento: 5 codigos por hora y por cuenta, 20 por hora y por origen, y 10 intentos fallidos en 24 horas. Una misma combinacion de ambito y sujeto admite varias ventanas, por eso la ventana hace parte de la llave. Vive en datos para poder ajustarlo sin desplegar codigo.'
+}
+
+// ============================================================================
+// ESQUEMA contabilidad - Libro contable por partida doble (Epica 2)
+// ============================================================================
+
+Table contabilidad.cuenta_contable {
+  id uuid [pk, default: `gen_random_uuid()`]
+  codigo varchar(120) [not null, unique, note: 'Ejemplo: pasivo:usuario:{uuid}:disponible']
+  tipo_cuenta tipo_cuenta_contable [not null]
+  naturaleza naturaleza [not null]
+  proposito proposito_cuenta [not null]
+  usuario_propietario_id uuid [note: 'NULL en las cuentas del sistema']
+  moneda char(3) [not null, default: 'COP']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    codigo [unique, name: 'ux_cuenta_contable_codigo']
+    (usuario_propietario_id, proposito) [unique, name: 'ux_cuenta_contable_propietario_proposito']
+    tipo_cuenta [name: 'ix_cuenta_contable_tipo']
+  }
+  Note: 'Cada usuario tiene exactamente dos subcuentas de pasivo: disponible y retenido. Las cuentas del sistema aportan la contrapartida que hace cuadrar cada asiento.'
+}
+
+Table contabilidad.asiento {
+  id uuid [pk, default: `gen_random_uuid()`]
+  numero_asiento bigint [not null, increment, unique, note: 'Secuencia monotona. Da orden estable cuando dos asientos comparten fecha']
+  tipo_transaccion_id uuid [not null]
+  descripcion varchar(240) [not null]
+  moneda char(3) [not null, default: 'COP']
+  fecha_hecho timestamptz [not null, note: 'Cuando ocurrio el hecho']
+  fecha_registro timestamptz [not null, default: `now()`, note: 'Cuando lo supo el sistema']
+  asiento_reversado_id uuid [note: 'Asiento que este corrige, en sentido contrario']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+
+  Indexes {
+    numero_asiento [unique, name: 'ux_asiento_numero']
+    fecha_hecho [name: 'ix_asiento_fecha_hecho']
+    asiento_reversado_id [name: 'ix_asiento_reverso']
+  }
+  Note: 'Diario de solo anexado. Un asiento no se edita ni se borra: la correccion es un asiento nuevo que apunta al original mediante asiento_reversado_id. Por eso la tabla no lleva updated_on ni is_active.'
+}
+
+Table contabilidad.apunte {
+  id uuid [pk, default: `gen_random_uuid()`]
+  numero_apunte bigint [not null, increment, unique, note: 'Cursor de paginacion del historial, HU-BE-NF-05 criterio 10']
+  asiento_id uuid [not null]
+  cuenta_contable_id uuid [not null]
+  orden_en_asiento smallint [not null]
+  naturaleza_apunte naturaleza_contable [not null]
+  monto_cop bigint [not null, note: 'Entero de pesos con signo desde la perspectiva del pasivo. La suma de los apuntes de un asiento es cero']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+
+  Indexes {
+    numero_apunte [unique, name: 'ux_apunte_numero']
+    (asiento_id, orden_en_asiento) [unique, name: 'ux_apunte_orden']
+    (cuenta_contable_id, numero_apunte) [name: 'ix_apunte_cuenta_cursor']
+  }
+  Note: 'Apunte contable. Es el registro que ve el usuario en su historial. Nunca se actualiza ni se borra.'
+}
+
+Table contabilidad.corte_saldo {
+  id uuid [pk, default: `gen_random_uuid()`]
+  cuenta_contable_id uuid [not null, unique]
+  saldo_cop bigint [not null, default: 0]
+  ultimo_numero_apunte bigint [not null, default: 0, note: 'Marca de agua: hasta que apunte esta calculado el saldo']
+  version_fila bigint [not null, default: 1, note: 'Bloqueo optimista para serializar operaciones concurrentes sobre la misma cuenta']
+  fecha_calculo timestamptz [not null, default: `now()`]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+
+  Indexes {
+    cuenta_contable_id [unique, name: 'ux_corte_saldo_cuenta']
+  }
+  Note: 'Corte de saldo. Es una cache derivada del diario, nunca la fuente de verdad. Se puede reconstruir por completo sumando los apuntes.'
+}
+
+// ============================================================================
+// ESQUEMA finanzas - Orquestacion de transacciones y analisis (Epica 3)
+// ============================================================================
+
+Table finanzas.tipo_transaccion {
+  id uuid [pk, default: `gen_random_uuid()`]
+  codigo varchar(40) [not null, unique, note: 'transferencia_interna, carga_saldo_simulado, retencion, liberacion, reverso']
+  nombre varchar(80) [not null]
+  descripcion varchar(240)
+  afecta_disponible boolean [not null, default: true]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    codigo [unique, name: 'ux_tipo_transaccion_codigo']
+  }
+}
+
+Table finanzas.clave_idempotencia {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  operacion varchar(60) [not null, note: 'Por ejemplo transferencia.crear']
+  valor_clave varchar(128) [not null, note: 'Clave de intencion enviada por el cliente']
+  huella_solicitud char(64) [not null, note: 'Hash del cuerpo. Detecta la misma clave con una peticion distinta']
+  estado estado_idempotencia [not null, default: 'en_proceso']
+  codigo_respuesta smallint
+  cuerpo_respuesta jsonb
+  fecha_expiracion timestamptz [not null]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, operacion, valor_clave) [unique, name: 'ux_clave_idempotencia']
+    fecha_expiracion [name: 'ix_idempotencia_expiracion']
+  }
+  Note: 'Garantiza que un doble toque o un reintento por perdida de conexion devuelvan el resultado de la primera operacion, HU-BE-NF-06 criterio 6.'
+}
+
+Table finanzas.transferencia {
+  id uuid [pk, default: `gen_random_uuid()`]
+  referencia_publica varchar(24) [not null, unique, note: 'Referencia legible que se muestra al usuario']
+  usuario_origen_id uuid [not null]
+  usuario_destino_id uuid [not null]
+  celular_origen_e164 varchar(16) [not null, note: 'Copia historica. El celular de la cuenta puede cambiar despues']
+  celular_destino_e164 varchar(16) [not null]
+  monto_cop bigint [not null, note: 'Entero positivo de pesos colombianos']
+  moneda char(3) [not null, default: 'COP']
+  mensaje varchar(140)
+  estado estado_transferencia [not null, default: 'pendiente']
+  codigo_motivo_rechazo varchar(40) [note: 'saldo_insuficiente, destinatario_no_existe, envio_a_si_mismo, monto_invalido']
+  asiento_id uuid [note: 'Asiento que materializo el movimiento. NULL si la transferencia fue rechazada']
+  clave_idempotencia_id uuid [not null]
+  origen origen_operacion [not null, default: 'aplicacion_movil', note: 'Distingue una transferencia iniciada por el agente de IA de una iniciada en la interfaz']
+  invocacion_herramienta_id uuid [note: 'Invocacion del agente que la origino, cuando aplica']
+  fecha_confirmacion timestamptz [note: 'Confirmacion explicita del usuario antes de ejecutar']
+  fecha_hecho timestamptz [not null, default: `now()`]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    referencia_publica [unique, name: 'ux_transferencia_referencia']
+    (usuario_origen_id, created_on) [name: 'ix_transferencia_origen']
+    (usuario_destino_id, created_on) [name: 'ix_transferencia_destino']
+    estado [name: 'ix_transferencia_estado']
+  }
+  Note: 'Intencion de transferencia intraentidad. El dinero lo mueve el asiento del libro, no esta tabla: aqui vive el estado de la operacion y su trazabilidad.'
+}
+
+Table finanzas.categoria_transaccion {
+  id uuid [pk, default: `gen_random_uuid()`]
+  codigo varchar(40) [not null, unique]
+  categoria_padre_id uuid [note: 'Jerarquia de dos niveles: categoria y subcategoria']
+  nombre varchar(80) [not null]
+  descripcion varchar(240)
+  icono varchar(40)
+  color char(7)
+  es_del_sistema boolean [not null, default: true, note: 'Falso en las categorias que crea el usuario']
+  usuario_propietario_id uuid [note: 'NULL en las categorias del catalogo base']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    codigo [unique, name: 'ux_categoria_codigo']
+    categoria_padre_id [name: 'ix_categoria_padre']
+  }
+}
+
+Table finanzas.clasificacion_movimiento {
+  id uuid [pk, default: `gen_random_uuid()`]
+  asiento_id uuid [not null, unique]
+  categoria_transaccion_id uuid [not null]
+  origen origen_clasificacion [not null]
+  confianza numeric(5,4) [note: 'Confianza del clasificador cuando la asigna una regla o el agente']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    asiento_id [unique, name: 'ux_clasificacion_asiento']
+    categoria_transaccion_id [name: 'ix_clasificacion_categoria']
+  }
+  Note: 'La clasificacion vive fuera del diario porque el usuario puede recategorizar un movimiento, y el asiento contable es inmutable.'
+}
+
+Table finanzas.presupuesto {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  categoria_transaccion_id uuid [note: 'NULL en un presupuesto global del periodo']
+  nombre varchar(80) [not null]
+  periodicidad periodicidad_presupuesto [not null, default: 'mensual']
+  fecha_inicio date [not null]
+  fecha_fin date [not null]
+  monto_limite_cop bigint [not null, note: 'Entero positivo de pesos']
+  umbral_alerta_porcentaje smallint [not null, default: 80]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, fecha_inicio, fecha_fin) [name: 'ix_presupuesto_periodo']
+  }
+  Note: 'Sostiene la pregunta que origina el proyecto: si una compra cabe o no en lo que queda del mes. Anticipa la epica de presupuesto, aun no redactada.'
+}
+
+// ============================================================================
+// ESQUEMA ia - Agente conversacional
+// ============================================================================
+
+Table ia.conversacion {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  titulo varchar(120)
+  estado estado_conversacion [not null, default: 'activo']
+  cantidad_mensajes integer [not null, default: 0]
+  fecha_inicio_conversacion timestamptz [not null, default: `now()`]
+  fecha_ultimo_mensaje timestamptz
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, fecha_ultimo_mensaje) [name: 'ix_conversacion_reciente']
+  }
+}
+
+Table ia.mensaje {
+  id uuid [pk, default: `gen_random_uuid()`]
+  conversacion_id uuid [not null]
+  numero_orden integer [not null]
+  rol rol_mensaje [not null]
+  contenido text [not null]
+  nombre_modelo varchar(60)
+  tokens_entrada integer
+  tokens_salida integer
+  latencia_ms integer
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+
+  Indexes {
+    (conversacion_id, numero_orden) [unique, name: 'ux_mensaje_orden']
+  }
+  Note: 'Historial de la conversacion. Es de solo anexado: un turno ya emitido no se edita.'
+}
+
+Table ia.herramienta {
+  id uuid [pk, default: `gen_random_uuid()`]
+  codigo varchar(60) [not null, unique, note: 'consultar_saldo, listar_movimientos, resumir_gastos, resolver_destinatario, enviar_dinero']
+  nombre varchar(80) [not null]
+  descripcion varchar(400) [not null]
+  esquema_entrada jsonb [not null, note: 'Esquema JSON de los argumentos que el modelo puede enviar']
+  modifica_datos boolean [not null, default: false]
+  exige_confirmacion_usuario boolean [not null, default: false]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    codigo [unique, name: 'ux_herramienta_codigo']
+  }
+  Note: 'Conjunto cerrado y predefinido de funciones que el agente puede invocar. El modelo nunca genera SQL: solo puede pedir una de estas herramientas, y el backend inyecta la identidad del usuario autenticado antes de ejecutarla. Desactivar una herramienta con is_active la retira del agente sin desplegar codigo.'
+}
+
+Table ia.invocacion_herramienta {
+  id uuid [pk, default: `gen_random_uuid()`]
+  mensaje_id uuid [not null]
+  herramienta_id uuid [not null]
+  argumentos jsonb [not null, note: 'Argumentos propuestos por el modelo, ya validados contra esquema_entrada']
+  estado estado_invocacion [not null]
+  resumen_resultado text
+  codigo_error varchar(40)
+  duracion_ms integer
+  fecha_confirmacion_usuario timestamptz [note: 'Solo en herramientas que modifican dinero']
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    mensaje_id [name: 'ix_invocacion_mensaje']
+    (herramienta_id, estado) [name: 'ix_invocacion_herramienta_estado']
+  }
+}
+
+Table ia.memoria_vectorial {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  origen origen_memoria [not null]
+  origen_id uuid [not null, note: 'Identificador del objeto de origen segun el valor de origen']
+  contenido text [not null]
+  vector_embebido vector(1536) [not null, note: 'Extension pgvector. Indice HNSW con distancia coseno']
+  nombre_modelo varchar(60) [not null]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, origen) [name: 'ix_memoria_alcance']
+  }
+  Note: 'Memoria conversacional del copiloto. La busqueda por similitud siempre se acota al usuario autenticado.'
+}
+
+Table ia.hallazgo {
+  id uuid [pk, default: `gen_random_uuid()`]
+  usuario_id uuid [not null]
+  categoria_transaccion_id uuid
+  codigo_hallazgo varchar(40) [not null, note: 'pico_de_gasto, cobro_recurrente, riesgo_presupuesto, oportunidad_ahorro']
+  titulo varchar(120) [not null]
+  cuerpo text [not null]
+  fecha_inicio date
+  fecha_fin date
+  relevancia numeric(5,4)
+  estado estado_hallazgo [not null, default: 'nuevo']
+  fecha_reconocimiento timestamptz
+  modelo_generador varchar(60)
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+  updated_on timestamptz
+  updated_by uuid
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (usuario_id, estado) [name: 'ix_hallazgo_usuario_estado']
+  }
+  Note: 'Patrones y observaciones que el agente deriva del historial. Es el apoyo a la toma de decisiones del objetivo general.'
+}
+
+// ============================================================================
+// ESQUEMA auditoria - Trazabilidad transversal
+// ============================================================================
+
+Table auditoria.evento_auditoria {
+  id bigint [pk, increment]
+  codigo_evento varchar(60) [not null, note: 'usuario.registrado, sesion.abierta, transferencia.completada, ia.herramienta_denegada']
+  tipo_actor tipo_actor [not null]
+  usuario_actor_id uuid
+  dispositivo_usuario_id uuid
+  esquema_entidad varchar(20)
+  tabla_entidad varchar(60)
+  entidad_id uuid
+  direccion_ip inet
+  agente_usuario varchar(240)
+  solicitud_id uuid [note: 'Correlaciona todos los eventos de una misma peticion HTTP']
+  contenido_evento jsonb [note: 'Contexto ya redactado. El celular se enmascara y jamas se registran codigos ni contrasenas']
+  fecha_evento timestamptz [not null, default: `now()`]
+  created_on timestamptz [not null, default: `now()`]
+  created_by uuid
+
+  Indexes {
+    (usuario_actor_id, fecha_evento) [name: 'ix_auditoria_actor']
+    (tabla_entidad, entidad_id) [name: 'ix_auditoria_entidad']
+    codigo_evento [name: 'ix_auditoria_codigo_evento']
+    solicitud_id [name: 'ix_auditoria_solicitud']
+  }
+  Note: 'Bitacora de solo anexado. Cubre el requisito de trazabilidad y auditoria del alcance del anteproyecto.'
+}
+
+// ============================================================================
+// RELACIONES
+// ============================================================================
+
+// identidad
+Ref: identidad.persona_natural.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.persona_natural.tipo_documento_id > identidad.tipo_documento.id
+Ref: identidad.empresa.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.representante_legal.empresa_id > identidad.empresa.usuario_id [delete: cascade]
+Ref: identidad.representante_legal.tipo_documento_id > identidad.tipo_documento.id
+Ref: identidad.credencial_usuario.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.dispositivo_usuario.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.token_renovacion.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.token_renovacion.dispositivo_usuario_id > identidad.dispositivo_usuario.id [delete: cascade]
+Ref: identidad.token_renovacion.rotado_a_id > identidad.token_renovacion.id
+Ref: identidad.desafio_verificacion.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.desafio_verificacion.dispositivo_usuario_id > identidad.dispositivo_usuario.id
+Ref: identidad.envio_desafio.desafio_verificacion_id > identidad.desafio_verificacion.id [delete: cascade]
+Ref: identidad.permiso_un_solo_uso.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.permiso_un_solo_uso.desafio_origen_id > identidad.desafio_verificacion.id
+Ref: identidad.lote_codigo_recuperacion.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: identidad.codigo_recuperacion.lote_codigo_recuperacion_id > identidad.lote_codigo_recuperacion.id [delete: cascade]
+
+// contabilidad
+Ref: contabilidad.cuenta_contable.usuario_propietario_id > identidad.usuario.id
+Ref: contabilidad.asiento.tipo_transaccion_id > finanzas.tipo_transaccion.id
+Ref: contabilidad.asiento.asiento_reversado_id > contabilidad.asiento.id
+Ref: contabilidad.apunte.asiento_id > contabilidad.asiento.id
+Ref: contabilidad.apunte.cuenta_contable_id > contabilidad.cuenta_contable.id
+Ref: contabilidad.corte_saldo.cuenta_contable_id > contabilidad.cuenta_contable.id
+
+// finanzas
+Ref: finanzas.clave_idempotencia.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: finanzas.transferencia.usuario_origen_id > identidad.usuario.id
+Ref: finanzas.transferencia.usuario_destino_id > identidad.usuario.id
+Ref: finanzas.transferencia.asiento_id > contabilidad.asiento.id
+Ref: finanzas.transferencia.clave_idempotencia_id > finanzas.clave_idempotencia.id
+Ref: finanzas.transferencia.invocacion_herramienta_id > ia.invocacion_herramienta.id
+Ref: finanzas.categoria_transaccion.categoria_padre_id > finanzas.categoria_transaccion.id
+Ref: finanzas.categoria_transaccion.usuario_propietario_id > identidad.usuario.id
+Ref: finanzas.clasificacion_movimiento.asiento_id > contabilidad.asiento.id
+Ref: finanzas.clasificacion_movimiento.categoria_transaccion_id > finanzas.categoria_transaccion.id
+Ref: finanzas.presupuesto.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: finanzas.presupuesto.categoria_transaccion_id > finanzas.categoria_transaccion.id
+
+// ia
+Ref: ia.conversacion.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: ia.mensaje.conversacion_id > ia.conversacion.id [delete: cascade]
+Ref: ia.invocacion_herramienta.mensaje_id > ia.mensaje.id [delete: cascade]
+Ref: ia.invocacion_herramienta.herramienta_id > ia.herramienta.id
+Ref: ia.memoria_vectorial.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: ia.hallazgo.usuario_id > identidad.usuario.id [delete: cascade]
+Ref: ia.hallazgo.categoria_transaccion_id > finanzas.categoria_transaccion.id
+
+// auditoria
+Ref: auditoria.evento_auditoria.usuario_actor_id > identidad.usuario.id
+Ref: auditoria.evento_auditoria.dispositivo_usuario_id > identidad.dispositivo_usuario.id
+
+// ============================================================================
+// AGRUPACION VISUAL
+// ============================================================================
+
+TableGroup "1. Identidad y acceso" {
+  identidad.usuario
+  identidad.tipo_documento
+  identidad.persona_natural
+  identidad.empresa
+  identidad.representante_legal
+  identidad.politica_limite
+  identidad.credencial_usuario
+  identidad.dispositivo_usuario
+  identidad.token_renovacion
+  identidad.desafio_verificacion
+  identidad.envio_desafio
+  identidad.permiso_un_solo_uso
+  identidad.lote_codigo_recuperacion
+  identidad.codigo_recuperacion
+  identidad.contador_limite_solicitudes
+}
+
+TableGroup "2. Libro contable" {
+  contabilidad.cuenta_contable
+  contabilidad.asiento
+  contabilidad.apunte
+  contabilidad.corte_saldo
+}
+
+TableGroup "3. Nucleo financiero" {
+  finanzas.tipo_transaccion
+  finanzas.clave_idempotencia
+  finanzas.transferencia
+  finanzas.categoria_transaccion
+  finanzas.clasificacion_movimiento
+  finanzas.presupuesto
+}
+
+TableGroup "4. Agente de IA" {
+  ia.conversacion
+  ia.mensaje
+  ia.herramienta
+  ia.invocacion_herramienta
+  ia.memoria_vectorial
+  ia.hallazgo
+}
+
+TableGroup "5. Auditoria" {
+  auditoria.evento_auditoria
+}
