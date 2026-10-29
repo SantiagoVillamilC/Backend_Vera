@@ -381,6 +381,138 @@ Table auth.transiciones_credencial {
   Note: "ACTUAL. \nINDICES FISICOS:\nCREATE UNIQUE INDEX transiciones_credencial_pkey ON auth.transiciones_credencial USING btree (id)"
 }
 
+Table inteligencia.aviso {
+  id uuid [pk, not null]
+  usuario_id text [not null]
+  tipo text [not null]
+  clave text [not null]
+  periodo date [not null]
+  severidad_centavos bigint [not null]
+  prioridad smallint [not null]
+  texto text [not null]
+  texto_verificado boolean [not null, default: `false`]
+  transaccion_id uuid
+  creado_en timestamptz [not null, default: `now()`]
+  descartado_en timestamptz
+  indexes {
+    (usuario_id, tipo, clave, periodo) [unique, name: "aviso_dedupe_unico"]
+  }
+  checks {
+    `(btrim(clave) <> ''::text)` [name: "aviso_clave_check"]
+    `((descartado_en IS NULL) OR (descartado_en >= creado_en))` [name: "aviso_descarte_no_anterior_al_alta"]
+    `(prioridad > 0)` [name: "aviso_prioridad_check"]
+    `(severidad_centavos >= 0)` [name: "aviso_severidad_centavos_check"]
+    `(btrim(texto) <> ''::text)` [name: "aviso_texto_check"]
+    `(btrim(tipo) <> ''::text)` [name: "aviso_tipo_check"]
+    `(btrim(usuario_id) <> ''::text)` [name: "aviso_usuario_id_check"]
+  }
+  Note: "ACTUAL. aviso_clave_check: CHECK ((btrim(clave) <> ''::text))\naviso_descarte_no_anterior_al_alta: CHECK (((descartado_en IS NULL) OR (descartado_en >= creado_en)))\naviso_prioridad_check: CHECK ((prioridad > 0))\naviso_severidad_centavos_check: CHECK ((severidad_centavos >= 0))\naviso_texto_check: CHECK ((btrim(texto) <> ''::text))\naviso_tipo_check: CHECK ((btrim(tipo) <> ''::text))\naviso_usuario_id_check: CHECK ((btrim(usuario_id) <> ''::text))\nINDICES FISICOS:\nCREATE UNIQUE INDEX aviso_dedupe_unico ON inteligencia.aviso USING btree (usuario_id, tipo, clave, periodo)\nCREATE UNIQUE INDEX aviso_pkey ON inteligencia.aviso USING btree (id)\nCREATE INDEX aviso_por_usuario ON inteligencia.aviso USING btree (usuario_id, periodo DESC, prioridad, severidad_centavos DESC)\nCREATE INDEX aviso_vigente_por_usuario ON inteligencia.aviso USING btree (usuario_id, creado_en DESC) WHERE (descartado_en IS NULL)"
+}
+
+Table inteligencia.aviso_entrega {
+  aviso_id uuid [not null]
+  canal text [not null]
+  estado text [not null]
+  enviado_en timestamptz
+  indexes {
+    (aviso_id, canal) [pk]
+  }
+  checks {
+    `(btrim(canal) <> ''::text)` [name: "aviso_entrega_canal_check"]
+    `(estado = ANY (ARRAY['pendiente'::text, 'enviado'::text, 'fallido'::text, 'descartado'::text]))` [name: "aviso_entrega_estado_check"]
+  }
+  Note: "ACTUAL. aviso_entrega_canal_check: CHECK ((btrim(canal) <> ''::text))\naviso_entrega_estado_check: CHECK ((estado = ANY (ARRAY['pendiente'::text, 'enviado'::text, 'fallido'::text, 'descartado'::text])))\nINDICES FISICOS:\nCREATE UNIQUE INDEX aviso_entrega_pkey ON inteligencia.aviso_entrega USING btree (aviso_id, canal)"
+}
+
+Table inteligencia.categoria {
+  codigo text [pk, not null]
+  nombre text [not null]
+  grupo text [not null]
+  orden smallint [not null]
+  indexes {
+    (orden) [unique, name: "categoria_orden_unico"]
+  }
+  checks {
+    `(btrim(codigo) <> ''::text)` [name: "categoria_codigo_check"]
+    `(grupo = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'ninguno'::text]))` [name: "categoria_grupo_check"]
+    `(btrim(nombre) <> ''::text)` [name: "categoria_nombre_check"]
+    `(orden > 0)` [name: "categoria_orden_check"]
+  }
+  Note: "ACTUAL. categoria_codigo_check: CHECK ((btrim(codigo) <> ''::text))\ncategoria_grupo_check: CHECK ((grupo = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'ninguno'::text])))\ncategoria_nombre_check: CHECK ((btrim(nombre) <> ''::text))\ncategoria_orden_check: CHECK ((orden > 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX categoria_orden_unico ON inteligencia.categoria USING btree (orden)\nCREATE UNIQUE INDEX categoria_pkey ON inteligencia.categoria USING btree (codigo)"
+}
+
+Table inteligencia.cursor_enriquecimiento {
+  id smallint [pk, not null, default: `1`]
+  ultimo_entry_id bigint [not null, default: `0`]
+  actualizado_en timestamptz [not null, default: `now()`]
+  checks {
+    `(id = 1)` [name: "cursor_enriquecimiento_id_check"]
+    `(ultimo_entry_id >= 0)` [name: "cursor_enriquecimiento_ultimo_entry_id_check"]
+  }
+  Note: "ACTUAL. cursor_enriquecimiento_id_check: CHECK ((id = 1))\ncursor_enriquecimiento_ultimo_entry_id_check: CHECK ((ultimo_entry_id >= 0))\nINDICES FISICOS:\nCREATE UNIQUE INDEX cursor_enriquecimiento_pkey ON inteligencia.cursor_enriquecimiento USING btree (id)"
+}
+
+Table inteligencia.memoria_correccion {
+  usuario_id text [not null]
+  tipo_destino text [not null]
+  nivel text [not null]
+  valor text [not null]
+  categoria text
+  nombre text
+  actualizado_en timestamptz [not null, default: `now()`]
+  indexes {
+    (usuario_id, tipo_destino, nivel, valor) [pk]
+  }
+  checks {
+    `((categoria IS NOT NULL) OR ((nombre IS NOT NULL) AND (btrim(nombre) <> ''::text)))` [name: "memoria_correccion_check"]
+    `(nivel = ANY (ARRAY['llave'::text, 'mid'::text, 'nombre'::text]))` [name: "memoria_correccion_nivel_check"]
+    `(tipo_destino = ANY (ARRAY['comercio'::text, 'persona'::text]))` [name: "memoria_correccion_tipo_destino_check"]
+    `(btrim(usuario_id) <> ''::text)` [name: "memoria_correccion_usuario_id_check"]
+    `(btrim(valor) <> ''::text)` [name: "memoria_correccion_valor_check"]
+  }
+  Note: "ACTUAL. memoria_correccion_check: CHECK (((categoria IS NOT NULL) OR ((nombre IS NOT NULL) AND (btrim(nombre) <> ''::text))))\nmemoria_correccion_nivel_check: CHECK ((nivel = ANY (ARRAY['llave'::text, 'mid'::text, 'nombre'::text])))\nmemoria_correccion_tipo_destino_check: CHECK ((tipo_destino = ANY (ARRAY['comercio'::text, 'persona'::text])))\nmemoria_correccion_usuario_id_check: CHECK ((btrim(usuario_id) <> ''::text))\nmemoria_correccion_valor_check: CHECK ((btrim(valor) <> ''::text))\nINDICES FISICOS:\nCREATE UNIQUE INDEX memoria_correccion_pkey ON inteligencia.memoria_correccion USING btree (usuario_id, tipo_destino, nivel, valor)"
+}
+
+Table inteligencia.movimiento_enriquecido {
+  usuario_id text [not null]
+  transaccion_id uuid [not null]
+  entry_ancla bigint [not null]
+  ocurrido_en timestamptz [not null]
+  moneda char(3) [not null, default: `'COP'::bpchar`]
+  direccion text [not null]
+  monto_centavos bigint [not null]
+  contraparte text [not null]
+  contraparte_resuelta boolean [not null]
+  descripcion text
+  categoria text [not null]
+  origen_categoria text [not null]
+  comercio_mid text
+  comercio_nombre text
+  mcc text
+  version_modelo text [not null]
+  calculado_en timestamptz [not null, default: `now()`]
+  tipo_destino text
+  contraparte_llave text
+  contraparte_nombre_normalizado text
+  indexes {
+    (usuario_id, transaccion_id) [pk]
+  }
+  checks {
+    `(btrim(contraparte) <> ''::text)` [name: "movimiento_enriquecido_contraparte_check"]
+    `((tipo_destino IS NOT NULL) OR ((contraparte_llave IS NULL) AND (comercio_mid IS NULL) AND (contraparte_nombre_normalizado IS NULL)))` [name: "movimiento_enriquecido_destino_completo"]
+    `(direccion = ANY (ARRAY['entrada'::text, 'salida'::text]))` [name: "movimiento_enriquecido_direccion_check"]
+    `((contraparte_llave IS NULL) OR (btrim(contraparte_llave) <> ''::text))` [name: "movimiento_enriquecido_llave_no_vacia"]
+    `(monto_centavos <> 0)` [name: "movimiento_enriquecido_monto_centavos_check"]
+    `((contraparte_nombre_normalizado IS NULL) OR ((btrim(contraparte_nombre_normalizado) <> ''::text) AND (contraparte_nombre_normalizado = btrim(contraparte_nombre_normalizado))))` [name: "movimiento_enriquecido_nombre_normalizado_valido"]
+    `((contraparte_nombre_normalizado IS NULL) OR (tipo_destino = 'comercio'::text))` [name: "movimiento_enriquecido_nombre_solo_de_comercio"]
+    `(origen_categoria = ANY (ARRAY['memoria'::text, 'contraparte_interna'::text, 'mcc'::text, 'catalogo'::text, 'lexico'::text, 'tfidf'::text, 'llm'::text, 'sin_categoria'::text, 'manual'::text]))` [name: "movimiento_enriquecido_origen_categoria_check"]
+    `((tipo_destino IS NULL) OR (tipo_destino = ANY (ARRAY['comercio'::text, 'persona'::text])))` [name: "movimiento_enriquecido_tipo_destino_valido"]
+    `(btrim(usuario_id) <> ''::text)` [name: "movimiento_enriquecido_usuario_id_check"]
+    `(btrim(version_modelo) <> ''::text)` [name: "movimiento_enriquecido_version_modelo_check"]
+  }
+  Note: "ACTUAL. movimiento_enriquecido_contraparte_check: CHECK ((btrim(contraparte) <> ''::text))\nmovimiento_enriquecido_destino_completo: CHECK (((tipo_destino IS NOT NULL) OR ((contraparte_llave IS NULL) AND (comercio_mid IS NULL) AND (contraparte_nombre_normalizado IS NULL))))\nmovimiento_enriquecido_direccion_check: CHECK ((direccion = ANY (ARRAY['entrada'::text, 'salida'::text])))\nmovimiento_enriquecido_llave_no_vacia: CHECK (((contraparte_llave IS NULL) OR (btrim(contraparte_llave) <> ''::text)))\nmovimiento_enriquecido_monto_centavos_check: CHECK ((monto_centavos <> 0))\nmovimiento_enriquecido_nombre_normalizado_valido: CHECK (((contraparte_nombre_normalizado IS NULL) OR ((btrim(contraparte_nombre_normalizado) <> ''::text) AND (contraparte_nombre_normalizado = btrim(contraparte_nombre_normalizado)))))\nmovimiento_enriquecido_nombre_solo_de_comercio: CHECK (((contraparte_nombre_normalizado IS NULL) OR (tipo_destino = 'comercio'::text)))\nmovimiento_enriquecido_origen_categoria_check: CHECK ((origen_categoria = ANY (ARRAY['memoria'::text, 'contraparte_interna'::text, 'mcc'::text, 'catalogo'::text, 'lexico'::text, 'tfidf'::text, 'llm'::text, 'sin_categoria'::text, 'manual'::text])))\nmovimiento_enriquecido_tipo_destino_valido: CHECK (((tipo_destino IS NULL) OR (tipo_destino = ANY (ARRAY['comercio'::text, 'persona'::text]))))\nmovimiento_enriquecido_usuario_id_check: CHECK ((btrim(usuario_id) <> ''::text))\nmovimiento_enriquecido_version_modelo_check: CHECK ((btrim(version_modelo) <> ''::text))\nINDICES FISICOS:\nCREATE UNIQUE INDEX movimiento_enriquecido_pkey ON inteligencia.movimiento_enriquecido USING btree (usuario_id, transaccion_id)\nCREATE INDEX movimiento_enriquecido_por_asiento ON inteligencia.movimiento_enriquecido USING btree (entry_ancla)\nCREATE INDEX movimiento_enriquecido_por_categoria ON inteligencia.movimiento_enriquecido USING btree (usuario_id, categoria, ocurrido_en)\nCREATE INDEX movimiento_enriquecido_por_destino_llave ON inteligencia.movimiento_enriquecido USING btree (usuario_id, tipo_destino, contraparte_llave) WHERE (contraparte_llave IS NOT NULL)\nCREATE INDEX movimiento_enriquecido_por_destino_mid ON inteligencia.movimiento_enriquecido USING btree (usuario_id, tipo_destino, comercio_mid) WHERE (comercio_mid IS NOT NULL)\nCREATE INDEX movimiento_enriquecido_por_destino_nombre ON inteligencia.movimiento_enriquecido USING btree (usuario_id, tipo_destino, contraparte_nombre_normalizado) WHERE (contraparte_nombre_normalizado IS NOT NULL)\nCREATE INDEX movimiento_enriquecido_por_usuario ON inteligencia.movimiento_enriquecido USING btree (usuario_id, ocurrido_en DESC, transaccion_id DESC)"
+}
+
 Table nucleo.conciliacion_corrida {
   id bigint [pk, not null, increment]
   ventana_hasta timestamptz [not null]
@@ -570,6 +702,9 @@ Ref: auth.roles_de_parte.(representada_id) > auth.partes.(id) [delete: no action
 Ref: auth.sesiones.(parte_id) > auth.partes.(id) [delete: no action]
 Ref: auth.tokens_restablecimiento.(credencial_id) > auth.credenciales.(id) [delete: no action]
 Ref: auth.transiciones_credencial.(credencial_id) > auth.credenciales.(id) [delete: no action]
+Ref: inteligencia.aviso_entrega.(aviso_id) > inteligencia.aviso.(id) [delete: cascade]
+Ref: inteligencia.memoria_correccion.(categoria) > inteligencia.categoria.(codigo) [delete: no action]
+Ref: inteligencia.movimiento_enriquecido.(categoria) > inteligencia.categoria.(codigo) [delete: no action]
 Ref: nucleo.journal_entry.(deposito_id) > nucleo.deposito.(id) [delete: no action]
 Ref: nucleo.posting.(cuenta_id) > nucleo.cuenta.(id) [delete: no action]
 Ref: nucleo.posting.(entry_id) > nucleo.journal_entry.(id) [delete: no action]
@@ -610,6 +745,15 @@ TableGroup "nucleo" {
   nucleo.regla_limite
   nucleo.transferencia
   nucleo.valor_uvt
+}
+
+TableGroup "inteligencia" {
+  inteligencia.aviso
+  inteligencia.aviso_entrega
+  inteligencia.categoria
+  inteligencia.cursor_enriquecimiento
+  inteligencia.memoria_correccion
+  inteligencia.movimiento_enriquecido
 }
 
 TableGroup "asistente" {

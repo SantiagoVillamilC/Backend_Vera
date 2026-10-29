@@ -3,7 +3,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 6dgLqYdVSRFbS557fgadfWgXKz4XDVyjdedUTVmzM8suSUElBzkSWgIkvXtVdcd
+\restrict ajQsNSe4VIuEMWafzwYr0ajVXshfE33aqpgnue7mJ3NXvDJW0k2Mwzl2ClyiO91
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg13+2)
 -- Dumped by pg_dump version 17.11 (Debian 17.11-1.pgdg13+2)
@@ -32,6 +32,13 @@ CREATE SCHEMA asistente;
 --
 
 CREATE SCHEMA auth;
+
+
+--
+-- Name: inteligencia; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA inteligencia;
 
 
 --
@@ -746,6 +753,135 @@ ALTER TABLE auth.transiciones_credencial ALTER COLUMN id ADD GENERATED ALWAYS AS
 
 
 --
+-- Name: aviso; Type: TABLE; Schema: inteligencia; Owner: -
+--
+
+CREATE TABLE inteligencia.aviso (
+    id uuid NOT NULL,
+    usuario_id text NOT NULL,
+    tipo text NOT NULL,
+    clave text NOT NULL,
+    periodo date NOT NULL,
+    severidad_centavos bigint NOT NULL,
+    prioridad smallint NOT NULL,
+    texto text NOT NULL,
+    texto_verificado boolean DEFAULT false NOT NULL,
+    transaccion_id uuid,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    descartado_en timestamp with time zone,
+    CONSTRAINT aviso_clave_check CHECK ((btrim(clave) <> ''::text)),
+    CONSTRAINT aviso_descarte_no_anterior_al_alta CHECK (((descartado_en IS NULL) OR (descartado_en >= creado_en))),
+    CONSTRAINT aviso_prioridad_check CHECK ((prioridad > 0)),
+    CONSTRAINT aviso_severidad_centavos_check CHECK ((severidad_centavos >= 0)),
+    CONSTRAINT aviso_texto_check CHECK ((btrim(texto) <> ''::text)),
+    CONSTRAINT aviso_tipo_check CHECK ((btrim(tipo) <> ''::text)),
+    CONSTRAINT aviso_usuario_id_check CHECK ((btrim(usuario_id) <> ''::text))
+);
+
+
+--
+-- Name: aviso_entrega; Type: TABLE; Schema: inteligencia; Owner: -
+--
+
+CREATE TABLE inteligencia.aviso_entrega (
+    aviso_id uuid NOT NULL,
+    canal text NOT NULL,
+    estado text NOT NULL,
+    enviado_en timestamp with time zone,
+    CONSTRAINT aviso_entrega_canal_check CHECK ((btrim(canal) <> ''::text)),
+    CONSTRAINT aviso_entrega_estado_check CHECK ((estado = ANY (ARRAY['pendiente'::text, 'enviado'::text, 'fallido'::text, 'descartado'::text])))
+);
+
+
+--
+-- Name: categoria; Type: TABLE; Schema: inteligencia; Owner: -
+--
+
+CREATE TABLE inteligencia.categoria (
+    codigo text NOT NULL,
+    nombre text NOT NULL,
+    grupo text NOT NULL,
+    orden smallint NOT NULL,
+    CONSTRAINT categoria_codigo_check CHECK ((btrim(codigo) <> ''::text)),
+    CONSTRAINT categoria_grupo_check CHECK ((grupo = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'ninguno'::text]))),
+    CONSTRAINT categoria_nombre_check CHECK ((btrim(nombre) <> ''::text)),
+    CONSTRAINT categoria_orden_check CHECK ((orden > 0))
+);
+
+
+--
+-- Name: cursor_enriquecimiento; Type: TABLE; Schema: inteligencia; Owner: -
+--
+
+CREATE TABLE inteligencia.cursor_enriquecimiento (
+    id smallint DEFAULT 1 NOT NULL,
+    ultimo_entry_id bigint DEFAULT 0 NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT cursor_enriquecimiento_id_check CHECK ((id = 1)),
+    CONSTRAINT cursor_enriquecimiento_ultimo_entry_id_check CHECK ((ultimo_entry_id >= 0))
+);
+
+
+--
+-- Name: memoria_correccion; Type: TABLE; Schema: inteligencia; Owner: -
+--
+
+CREATE TABLE inteligencia.memoria_correccion (
+    usuario_id text NOT NULL,
+    tipo_destino text NOT NULL,
+    nivel text NOT NULL,
+    valor text NOT NULL,
+    categoria text,
+    nombre text,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT memoria_correccion_check CHECK (((categoria IS NOT NULL) OR ((nombre IS NOT NULL) AND (btrim(nombre) <> ''::text)))),
+    CONSTRAINT memoria_correccion_nivel_check CHECK ((nivel = ANY (ARRAY['llave'::text, 'mid'::text, 'nombre'::text]))),
+    CONSTRAINT memoria_correccion_tipo_destino_check CHECK ((tipo_destino = ANY (ARRAY['comercio'::text, 'persona'::text]))),
+    CONSTRAINT memoria_correccion_usuario_id_check CHECK ((btrim(usuario_id) <> ''::text)),
+    CONSTRAINT memoria_correccion_valor_check CHECK ((btrim(valor) <> ''::text))
+);
+
+
+--
+-- Name: movimiento_enriquecido; Type: TABLE; Schema: inteligencia; Owner: -
+--
+
+CREATE TABLE inteligencia.movimiento_enriquecido (
+    usuario_id text NOT NULL,
+    transaccion_id uuid NOT NULL,
+    entry_ancla bigint NOT NULL,
+    ocurrido_en timestamp with time zone NOT NULL,
+    moneda character(3) DEFAULT 'COP'::bpchar NOT NULL,
+    direccion text NOT NULL,
+    monto_centavos bigint NOT NULL,
+    contraparte text NOT NULL,
+    contraparte_resuelta boolean NOT NULL,
+    descripcion text,
+    categoria text NOT NULL,
+    origen_categoria text NOT NULL,
+    comercio_mid text,
+    comercio_nombre text,
+    mcc text,
+    version_modelo text NOT NULL,
+    calculado_en timestamp with time zone DEFAULT now() NOT NULL,
+    tipo_destino text,
+    contraparte_llave text,
+    contraparte_nombre_normalizado text,
+    CONSTRAINT movimiento_enriquecido_contraparte_check CHECK ((btrim(contraparte) <> ''::text)),
+    CONSTRAINT movimiento_enriquecido_destino_completo CHECK (((tipo_destino IS NOT NULL) OR ((contraparte_llave IS NULL) AND (comercio_mid IS NULL) AND (contraparte_nombre_normalizado IS NULL)))),
+    CONSTRAINT movimiento_enriquecido_direccion_check CHECK ((direccion = ANY (ARRAY['entrada'::text, 'salida'::text]))),
+    CONSTRAINT movimiento_enriquecido_llave_no_vacia CHECK (((contraparte_llave IS NULL) OR (btrim(contraparte_llave) <> ''::text))),
+    CONSTRAINT movimiento_enriquecido_monto_centavos_check CHECK ((monto_centavos <> 0)),
+    CONSTRAINT movimiento_enriquecido_nombre_normalizado_valido CHECK (((contraparte_nombre_normalizado IS NULL) OR ((btrim(contraparte_nombre_normalizado) <> ''::text) AND (contraparte_nombre_normalizado = btrim(contraparte_nombre_normalizado))))),
+    CONSTRAINT movimiento_enriquecido_nombre_solo_de_comercio CHECK (((contraparte_nombre_normalizado IS NULL) OR (tipo_destino = 'comercio'::text))),
+    CONSTRAINT movimiento_enriquecido_origen_categoria_check CHECK ((origen_categoria = ANY (ARRAY['memoria'::text, 'contraparte_interna'::text, 'mcc'::text, 'catalogo'::text, 'lexico'::text, 'tfidf'::text, 'llm'::text, 'sin_categoria'::text, 'manual'::text]))),
+    CONSTRAINT movimiento_enriquecido_tipo_destino_valido CHECK (((tipo_destino IS NULL) OR (tipo_destino = ANY (ARRAY['comercio'::text, 'persona'::text])))),
+    CONSTRAINT movimiento_enriquecido_usuario_id_check CHECK ((btrim(usuario_id) <> ''::text)),
+    CONSTRAINT movimiento_enriquecido_version_modelo_check CHECK ((btrim(version_modelo) <> ''::text))
+);
+
+
+--
 -- Name: conciliacion_corrida; Type: TABLE; Schema: nucleo; Owner: -
 --
 
@@ -990,6 +1126,84 @@ CREATE TABLE nucleo.valor_uvt (
     valor_centavos bigint NOT NULL,
     fuente text NOT NULL,
     CONSTRAINT valor_uvt_valor_centavos_check CHECK ((valor_centavos > 0))
+);
+
+
+--
+-- Name: goose_db_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.goose_db_version (
+    id integer NOT NULL,
+    version_id bigint NOT NULL,
+    is_applied boolean NOT NULL,
+    tstamp timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: goose_db_version_asistente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.goose_db_version_asistente (
+    id integer NOT NULL,
+    version_id bigint NOT NULL,
+    is_applied boolean NOT NULL,
+    tstamp timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: goose_db_version_asistente_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.goose_db_version_asistente ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.goose_db_version_asistente_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: goose_db_version_auth; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.goose_db_version_auth (
+    id integer NOT NULL,
+    version_id bigint NOT NULL,
+    is_applied boolean NOT NULL,
+    tstamp timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: goose_db_version_auth_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.goose_db_version_auth ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.goose_db_version_auth_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: goose_db_version_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.goose_db_version ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.goose_db_version_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
 
@@ -1253,6 +1467,70 @@ ALTER TABLE ONLY auth.transiciones_credencial
 
 
 --
+-- Name: aviso aviso_dedupe_unico; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.aviso
+    ADD CONSTRAINT aviso_dedupe_unico UNIQUE (usuario_id, tipo, clave, periodo);
+
+
+--
+-- Name: aviso_entrega aviso_entrega_pkey; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.aviso_entrega
+    ADD CONSTRAINT aviso_entrega_pkey PRIMARY KEY (aviso_id, canal);
+
+
+--
+-- Name: aviso aviso_pkey; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.aviso
+    ADD CONSTRAINT aviso_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: categoria categoria_orden_unico; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.categoria
+    ADD CONSTRAINT categoria_orden_unico UNIQUE (orden);
+
+
+--
+-- Name: categoria categoria_pkey; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.categoria
+    ADD CONSTRAINT categoria_pkey PRIMARY KEY (codigo);
+
+
+--
+-- Name: cursor_enriquecimiento cursor_enriquecimiento_pkey; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.cursor_enriquecimiento
+    ADD CONSTRAINT cursor_enriquecimiento_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: memoria_correccion memoria_correccion_pkey; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.memoria_correccion
+    ADD CONSTRAINT memoria_correccion_pkey PRIMARY KEY (usuario_id, tipo_destino, nivel, valor);
+
+
+--
+-- Name: movimiento_enriquecido movimiento_enriquecido_pkey; Type: CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.movimiento_enriquecido
+    ADD CONSTRAINT movimiento_enriquecido_pkey PRIMARY KEY (usuario_id, transaccion_id);
+
+
+--
 -- Name: conciliacion_corrida conciliacion_corrida_pkey; Type: CONSTRAINT; Schema: nucleo; Owner: -
 --
 
@@ -1362,6 +1640,30 @@ ALTER TABLE ONLY nucleo.transferencia
 
 ALTER TABLE ONLY nucleo.valor_uvt
     ADD CONSTRAINT valor_uvt_pkey PRIMARY KEY (anio);
+
+
+--
+-- Name: goose_db_version_asistente goose_db_version_asistente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.goose_db_version_asistente
+    ADD CONSTRAINT goose_db_version_asistente_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: goose_db_version_auth goose_db_version_auth_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.goose_db_version_auth
+    ADD CONSTRAINT goose_db_version_auth_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: goose_db_version goose_db_version_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.goose_db_version
+    ADD CONSTRAINT goose_db_version_pkey PRIMARY KEY (id);
 
 
 --
@@ -1539,6 +1841,62 @@ CREATE INDEX sesiones_parte_vigente ON auth.sesiones USING btree (parte_id, revo
 --
 
 CREATE INDEX tokens_restablecimiento_pendientes ON auth.tokens_restablecimiento USING btree (token_hash) WHERE (usado_en IS NULL);
+
+
+--
+-- Name: aviso_por_usuario; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX aviso_por_usuario ON inteligencia.aviso USING btree (usuario_id, periodo DESC, prioridad, severidad_centavos DESC);
+
+
+--
+-- Name: aviso_vigente_por_usuario; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX aviso_vigente_por_usuario ON inteligencia.aviso USING btree (usuario_id, creado_en DESC) WHERE (descartado_en IS NULL);
+
+
+--
+-- Name: movimiento_enriquecido_por_asiento; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX movimiento_enriquecido_por_asiento ON inteligencia.movimiento_enriquecido USING btree (entry_ancla);
+
+
+--
+-- Name: movimiento_enriquecido_por_categoria; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX movimiento_enriquecido_por_categoria ON inteligencia.movimiento_enriquecido USING btree (usuario_id, categoria, ocurrido_en);
+
+
+--
+-- Name: movimiento_enriquecido_por_destino_llave; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX movimiento_enriquecido_por_destino_llave ON inteligencia.movimiento_enriquecido USING btree (usuario_id, tipo_destino, contraparte_llave) WHERE (contraparte_llave IS NOT NULL);
+
+
+--
+-- Name: movimiento_enriquecido_por_destino_mid; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX movimiento_enriquecido_por_destino_mid ON inteligencia.movimiento_enriquecido USING btree (usuario_id, tipo_destino, comercio_mid) WHERE (comercio_mid IS NOT NULL);
+
+
+--
+-- Name: movimiento_enriquecido_por_destino_nombre; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX movimiento_enriquecido_por_destino_nombre ON inteligencia.movimiento_enriquecido USING btree (usuario_id, tipo_destino, contraparte_nombre_normalizado) WHERE (contraparte_nombre_normalizado IS NOT NULL);
+
+
+--
+-- Name: movimiento_enriquecido_por_usuario; Type: INDEX; Schema: inteligencia; Owner: -
+--
+
+CREATE INDEX movimiento_enriquecido_por_usuario ON inteligencia.movimiento_enriquecido USING btree (usuario_id, ocurrido_en DESC, transaccion_id DESC);
 
 
 --
@@ -1886,6 +2244,30 @@ ALTER TABLE ONLY auth.transiciones_credencial
 
 
 --
+-- Name: aviso_entrega aviso_entrega_aviso_id_fkey; Type: FK CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.aviso_entrega
+    ADD CONSTRAINT aviso_entrega_aviso_id_fkey FOREIGN KEY (aviso_id) REFERENCES inteligencia.aviso(id) ON DELETE CASCADE;
+
+
+--
+-- Name: memoria_correccion memoria_correccion_categoria_fkey; Type: FK CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.memoria_correccion
+    ADD CONSTRAINT memoria_correccion_categoria_fkey FOREIGN KEY (categoria) REFERENCES inteligencia.categoria(codigo);
+
+
+--
+-- Name: movimiento_enriquecido movimiento_enriquecido_categoria_fkey; Type: FK CONSTRAINT; Schema: inteligencia; Owner: -
+--
+
+ALTER TABLE ONLY inteligencia.movimiento_enriquecido
+    ADD CONSTRAINT movimiento_enriquecido_categoria_fkey FOREIGN KEY (categoria) REFERENCES inteligencia.categoria(codigo);
+
+
+--
 -- Name: journal_entry journal_entry_deposito_id_fkey; Type: FK CONSTRAINT; Schema: nucleo; Owner: -
 --
 
@@ -1929,6 +2311,14 @@ GRANT USAGE ON SCHEMA asistente TO rol_asistente;
 --
 
 GRANT USAGE ON SCHEMA auth TO rol_auth;
+GRANT USAGE ON SCHEMA auth TO rol_inteligencia;
+
+
+--
+-- Name: SCHEMA inteligencia; Type: ACL; Schema: -; Owner: -
+--
+
+GRANT USAGE ON SCHEMA inteligencia TO rol_inteligencia;
 
 
 --
@@ -1936,6 +2326,7 @@ GRANT USAGE ON SCHEMA auth TO rol_auth;
 --
 
 GRANT USAGE ON SCHEMA nucleo TO rol_nucleo;
+GRANT USAGE ON SCHEMA nucleo TO rol_inteligencia;
 
 
 --
@@ -2331,6 +2722,20 @@ GRANT SELECT,INSERT,UPDATE ON TABLE auth.empresas TO rol_auth;
 
 
 --
+-- Name: COLUMN empresas.parte_id; Type: ACL; Schema: auth; Owner: -
+--
+
+GRANT SELECT(parte_id) ON TABLE auth.empresas TO rol_inteligencia;
+
+
+--
+-- Name: COLUMN empresas.razon_social; Type: ACL; Schema: auth; Owner: -
+--
+
+GRANT SELECT(razon_social) ON TABLE auth.empresas TO rol_inteligencia;
+
+
+--
 -- Name: TABLE eventos_autenticacion; Type: ACL; Schema: auth; Owner: -
 --
 
@@ -2408,6 +2813,27 @@ GRANT SELECT,INSERT,UPDATE ON TABLE auth.personas TO rol_auth;
 
 
 --
+-- Name: COLUMN personas.parte_id; Type: ACL; Schema: auth; Owner: -
+--
+
+GRANT SELECT(parte_id) ON TABLE auth.personas TO rol_inteligencia;
+
+
+--
+-- Name: COLUMN personas.nombre; Type: ACL; Schema: auth; Owner: -
+--
+
+GRANT SELECT(nombre) ON TABLE auth.personas TO rol_inteligencia;
+
+
+--
+-- Name: COLUMN personas.perfil_nombre; Type: ACL; Schema: auth; Owner: -
+--
+
+GRANT SELECT(perfil_nombre) ON TABLE auth.personas TO rol_inteligencia;
+
+
+--
 -- Name: TABLE roles_de_parte; Type: ACL; Schema: auth; Owner: -
 --
 
@@ -2478,6 +2904,48 @@ GRANT SELECT,INSERT ON TABLE auth.transiciones_credencial TO rol_auth;
 
 
 --
+-- Name: TABLE aviso; Type: ACL; Schema: inteligencia; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE inteligencia.aviso TO rol_inteligencia;
+
+
+--
+-- Name: TABLE aviso_entrega; Type: ACL; Schema: inteligencia; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE inteligencia.aviso_entrega TO rol_inteligencia;
+
+
+--
+-- Name: TABLE categoria; Type: ACL; Schema: inteligencia; Owner: -
+--
+
+GRANT SELECT ON TABLE inteligencia.categoria TO rol_inteligencia;
+
+
+--
+-- Name: TABLE cursor_enriquecimiento; Type: ACL; Schema: inteligencia; Owner: -
+--
+
+GRANT SELECT,UPDATE ON TABLE inteligencia.cursor_enriquecimiento TO rol_inteligencia;
+
+
+--
+-- Name: TABLE memoria_correccion; Type: ACL; Schema: inteligencia; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE inteligencia.memoria_correccion TO rol_inteligencia;
+
+
+--
+-- Name: TABLE movimiento_enriquecido; Type: ACL; Schema: inteligencia; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE inteligencia.movimiento_enriquecido TO rol_inteligencia;
+
+
+--
 -- Name: TABLE conciliacion_corrida; Type: ACL; Schema: nucleo; Owner: -
 --
 
@@ -2489,6 +2957,7 @@ GRANT SELECT,INSERT ON TABLE nucleo.conciliacion_corrida TO rol_nucleo;
 --
 
 GRANT SELECT,INSERT ON TABLE nucleo.cuenta TO rol_nucleo;
+GRANT SELECT ON TABLE nucleo.cuenta TO rol_inteligencia;
 
 
 --
@@ -2559,6 +3028,7 @@ GRANT SELECT,INSERT ON TABLE nucleo.extracto_custodio TO rol_nucleo;
 --
 
 GRANT SELECT,INSERT ON TABLE nucleo.journal_entry TO rol_nucleo;
+GRANT SELECT ON TABLE nucleo.journal_entry TO rol_inteligencia;
 
 
 --
@@ -2601,6 +3071,7 @@ GRANT UPDATE(despachado_en) ON TABLE nucleo.outbox TO rol_nucleo;
 --
 
 GRANT SELECT,INSERT ON TABLE nucleo.posting TO rol_nucleo;
+GRANT SELECT ON TABLE nucleo.posting TO rol_inteligencia;
 
 
 --
@@ -2649,5 +3120,5 @@ GRANT SELECT ON TABLE public.users TO rol_api;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 6dgLqYdVSRFbS557fgadfWgXKz4XDVyjdedUTVmzM8suSUElBzkSWgIkvXtVdcd
+\unrestrict ajQsNSe4VIuEMWafzwYr0ajVXshfE33aqpgnue7mJ3NXvDJW0k2Mwzl2ClyiO91
 
