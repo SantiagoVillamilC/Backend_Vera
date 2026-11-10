@@ -15,6 +15,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/vozlocal"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
@@ -60,6 +61,15 @@ func run() error {
 		return fmt.Errorf("proveedor IA: %w", err)
 	}
 
+	var sintetizador copilot.SintetizadorVoz
+	tokenVoz := os.Getenv("VERA_VOZ_TOKEN")
+	if tokenVoz != "" {
+		voz, err := vozlocal.Nueva(envOr("VERA_VOZ_URL", "http://127.0.0.1:8766"), tokenVoz)
+		if err != nil {
+			return fmt.Errorf("configuración de voz local inválida: %w", err)
+		}
+		sintetizador = vozlocal.NuevaCache(voz)
+	}
 	pool, err := database.NewPool(ctx, cfg.AppDatabaseURL)
 	if err != nil {
 		return fmt.Errorf("pool: %w", err)
@@ -311,7 +321,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA, Historial: historialIA}, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Sintetizador: sintetizador, TokenVoz: tokenVoz, Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA, Historial: historialIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

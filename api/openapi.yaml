@@ -1290,6 +1290,60 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/vera/sintetizar:
+    post:
+      operationId: sintetizarVera
+      tags: [vera]
+      summary: Sintetiza texto con Kokoro local.
+      description: Requiere sesión, consentimiento y token de voz. Cuota de voz por usuario. Caché SHA-256 de cinco minutos. Máximo 8192 bytes y 87 segundos de audio. Si el servicio falla devuelve 200 JSON con voz_local=true; la app conserva el mensaje y usa su voz local.
+      parameters:
+        - in: header
+          name: X-Vera-Token
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SintetizarVeraRequest'
+      responses:
+        '200':
+          description: WAV PCM16 mono 24 kHz o degradación explícita sin audio.
+          headers:
+            X-Vera-Audio:
+              schema:
+                type: string
+              description: no-disponible cuando debe usarse la voz local de la app.
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+                required: [success, data, error, meta]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/SintesisDegradada'
+                  error:
+                    nullable: true
+                  meta:
+                    nullable: true
+        '401':
+          description: Sesión o token inválido.
+        '403':
+          description: Falta consentimiento.
+        '422':
+          description: Texto inválido.
+        '429':
+          description: Cuota del usuario agotada.
+        '503':
+          description: No se pudo verificar consentimiento o cuota.
   /v1/vera/mensajes:
     post:
       operationId: enviarMensajeVera
@@ -2013,6 +2067,25 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    SintetizarVeraRequest:
+      type: object
+      additionalProperties: false
+      required: [texto]
+      properties:
+        texto:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          x-oapi-codegen-extra-tags:
+            validate: required,max=8192
+    SintesisDegradada:
+      type: object
+      required: [audio_disponible, voz_local]
+      properties:
+        audio_disponible:
+          type: boolean
+        voz_local:
+          type: boolean
     APIError:
       type: object
       required: [code, message]

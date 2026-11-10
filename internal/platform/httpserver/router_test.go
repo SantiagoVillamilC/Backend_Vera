@@ -444,7 +444,7 @@ func TestRutasPublicasCoincidenConElContrato(t *testing.T) {
 	if publicas != 8 {
 		t.Fatalf("operaciones publicas = %d, quiero 8", publicas)
 	}
-	if privadas != 36 {
-		t.Fatalf("operaciones no publicas = %d, quiero 36", privadas)
+	if privadas != 37 {
+		t.Fatalf("operaciones no publicas = %d, quiero 37", privadas)
 	}
 }

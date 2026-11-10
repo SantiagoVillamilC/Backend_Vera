@@ -2551,6 +2551,17 @@ type SesionesResponse struct {
 // SesionesResponseSuccess defines model for SesionesResponse.Success.
 type SesionesResponseSuccess bool
 
+// SintesisDegradada defines model for SintesisDegradada.
+type SintesisDegradada struct {
+	AudioDisponible bool `json:"audio_disponible"`
+	VozLocal        bool `json:"voz_local"`
+}
+
+// SintetizarVeraRequest defines model for SintetizarVeraRequest.
+type SintetizarVeraRequest struct {
+	Texto string `json:"texto" validate:"required,max=8192"`
+}
+
 // Tokens defines model for Tokens.
 type Tokens struct {
 	// AccessToken JWT de acceso. Vive 5 minutos. Al vencer se renueva con el refresh en POST /v1/auth/refresh.
@@ -2717,6 +2728,11 @@ type EnviarMensajeVozVeraParams struct {
 	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
 }
 
+// SintetizarVeraParams defines parameters for SintetizarVera.
+type SintetizarVeraParams struct {
+	XVeraToken string `json:"X-Vera-Token"`
+}
+
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
 type CreateCompanyJSONRequestBody = CrearEmpresaRequest
 
@@ -2764,6 +2780,9 @@ type EnviarMensajeVeraJSONRequestBody = EnviarMensajeVeraRequest
 
 // EnviarMensajeVozVeraJSONRequestBody defines body for EnviarMensajeVozVera for application/json ContentType.
 type EnviarMensajeVozVeraJSONRequestBody = EnviarAudioVeraRequest
+
+// SintetizarVeraJSONRequestBody defines body for SintetizarVera for application/json ContentType.
+type SintetizarVeraJSONRequestBody = SintetizarVeraRequest
 
 // AsConsultaConsentsResponseData0 returns the union data inside the ConsultaConsentsResponse_Data as a ConsultaConsentsResponseData0
 func (t ConsultaConsentsResponse_Data) AsConsultaConsentsResponseData0() (ConsultaConsentsResponseData0, error) {
@@ -3035,6 +3054,9 @@ type ServerInterface interface {
 	// EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
 	// (POST /v1/vera/mensajes/voz)
 	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams)
+	// SintetizarVera Sintetiza texto con Kokoro local.
+	// (POST /v1/vera/sintetizar)
+	SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -3248,6 +3270,12 @@ func (_ Unimplemented) EnviarMensajeVera(w http.ResponseWriter, r *http.Request,
 // EnviarMensajeVozVera Envia un audio al asistente y devuelve la transcripcion y la respuesta.
 // (POST /v1/vera/mensajes/voz)
 func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SintetizarVera Sintetiza texto con Kokoro local.
+// (POST /v1/vera/sintetizar)
+func (_ Unimplemented) SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4113,6 +4141,51 @@ func (siw *ServerInterfaceWrapper) EnviarMensajeVozVera(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// SintetizarVera operation middleware
+func (siw *ServerInterfaceWrapper) SintetizarVera(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SintetizarVeraParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Vera-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Vera-Token")]; found {
+		var XVeraToken string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Vera-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Vera-Token", valueList[0], &XVeraToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Vera-Token", Err: err})
+			return
+		}
+
+		params.XVeraToken = XVeraToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Vera-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Vera-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SintetizarVera(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -4303,6 +4376,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/transferencias/interbancarias", wrapper.TransferirInterbancaria)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/vera/sintetizar", wrapper.SintetizarVera)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/vera/mensajes", wrapper.EnviarMensajeVera)

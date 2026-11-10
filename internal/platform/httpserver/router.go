@@ -31,6 +31,7 @@ var RutasDeDinero = []string{
 	http.MethodPost + " /v1/transferencias/interbancarias",
 	http.MethodGet + " /v1/destinatarios",
 	http.MethodPost + " /v1/vera/mensajes",
+	http.MethodPost + " /v1/vera/sintetizar",
 	http.MethodPost + " /v1/vera/mensajes/voz",
 	http.MethodPost + " /v1/vera/acciones/{id}/codigo",
 	http.MethodPost + " /v1/vera/acciones/{id}/confirmar",
@@ -53,6 +54,8 @@ type LimitadorUsoVera interface {
 
 // DependenciasVera reúne los puertos del asistente y sus conversaciones por texto y voz.
 type DependenciasVera struct {
+	Sintetizador   copilot.SintetizadorVoz
+	TokenVoz       string
 	Proveedor      copilot.ProveedorIA
 	Catalogo       *copilot.Catalogo
 	Consentimiento *copilot.ControlConsentimiento
@@ -104,8 +107,8 @@ func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, auten
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "Idempotency-Key"},
-		ExposedHeaders: []string{"Retry-After", "X-Conversacion-Id", "X-Mensaje-Usuario-Id"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "Idempotency-Key", "X-Vera-Token"},
+		ExposedHeaders: []string{"Retry-After", "X-Vera-Audio", "X-Conversacion-Id", "X-Mensaje-Usuario-Id"},
 		MaxAge:         300,
 	}))
 	r.Use(RateLimitExempting([]string{"/healthz", "/readyz", "/metrics"}, rateLimitRequests, rateLimitWindow))
