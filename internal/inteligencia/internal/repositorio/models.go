@@ -30,6 +30,15 @@ type AvisoEntrega struct {
 	EnviadoEn pgtype.Timestamptz `json:"enviado_en"`
 }
 
+type CatalogoMarca struct {
+	NombreNormalizado string             `json:"nombre_normalizado"`
+	Categoria         string             `json:"categoria"`
+	Llave             pgtype.Text        `json:"llave"`
+	Origen            string             `json:"origen"`
+	Version           string             `json:"version"`
+	CreadaEn          pgtype.Timestamptz `json:"creada_en"`
+}
+
 type Categoria struct {
 	Codigo string `json:"codigo"`
 	Nombre string `json:"nombre"`
@@ -92,6 +101,7 @@ type NucleoJournalEntry struct {
 	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
 	RegistradoEn    pgtype.Timestamptz `json:"registrado_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
+	Mcc             pgtype.Text        `json:"mcc"`
 }
 
 type NucleoPosting struct {

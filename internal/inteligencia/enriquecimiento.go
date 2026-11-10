@@ -143,7 +143,7 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 						memorias[efecto.UsuarioID] = memoria
 					}
 					contraparte := ResolverContraparte(grupo.apuntes, efecto.UsuarioID, nombres)
-					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, s.clasificador, s.lexico.ParesDeLexico(), &resultado); err != nil {
+					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, s.catalogo(), s.clasificador, s.lexico.ParesDeLexico(), &resultado); err != nil {
 						return Resultado{}, err
 					}
 				}
@@ -326,6 +326,7 @@ func apunteDeAsiento(fila repositorio.LineasDeAsientosRow) Apunte {
 		OcurridoEn:  fila.OcurridoEn.Time,
 		Tipo:        fila.Tipo,
 		Descripcion: fila.Descripcion.String,
+		MCC:         fila.Mcc.String,
 		CuentaID:    fila.CuentaID,
 		Monto:       fila.Monto,
 		Moneda:      fila.Moneda,
@@ -345,6 +346,7 @@ func apunteDeTransferencia(fila repositorio.LineasDeTransferenciasRow) Apunte {
 		OcurridoEn:         fila.OcurridoEn.Time,
 		Tipo:               fila.Tipo,
 		Descripcion:        fila.Descripcion.String,
+		MCC:                fila.Mcc.String,
 		CuentaID:           fila.CuentaID,
 		Monto:              fila.Monto,
 		Moneda:             fila.Moneda,
@@ -455,8 +457,8 @@ func direccionDeNeto(neto int64) string {
 }
 
 func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, efecto Efecto,
-	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, clasificador *Modelo,
-	lexico []ParLexico, resultado *Resultado) error {
+	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, catalogo CatalogoCurado,
+	clasificador *Modelo, lexico []ParLexico, resultado *Resultado) error {
 	monto, valido := Absoluto(efecto.Neto)
 	if !valido {
 		return errors.New("inteligencia: el monto del movimiento no cabe en int64")
@@ -476,19 +478,27 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		MID:    contraparte.MID,
 		Nombre: contraparte.Nombre,
 	}
+	mcc := ""
+	if codigo, valido := NormalizarMCC(contraparte.MCC); valido {
+		mcc = codigo
+	}
 	entrada := Entrada{
 		Canal:            canal,
 		Llave:            contraparte.Llave,
 		Nombre:           contraparte.Nombre,
 		MID:              contraparte.MID,
+		MCC:              mcc,
 		TipoDestino:      contraparte.Tipo,
 		CategoriaInterna: string(contraparte.CategoriaInterna),
 	}
+	escalones := escalonesDelLote(catalogo, clasificador, lexico)
 	decision := Decidir(entrada, Recursos{
-		Memoria:      Proyectar(memoria, efecto.UsuarioID, destino),
-		Lexico:       lexico,
-		Clasificador: clasificador,
-	}, escalonesDelLote(clasificador, lexico))
+		Memoria:         Proyectar(memoria, efecto.UsuarioID, destino),
+		CatalogoNombres: catalogo.Nombres,
+		CatalogoLlaves:  catalogo.Llaves,
+		Lexico:          lexico,
+		Clasificador:    clasificador,
+	}, escalones)
 	categoria := decision.Categoria
 	if categoria == "" {
 		categoria = SinCategoria
@@ -529,7 +539,7 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		OrigenCategoria:              origen,
 		ComercioMid:                  pgtype.Text{String: destinoPersistido.MID, Valid: destinoPersistido.MID != ""},
 		ComercioNombre:               pgtype.Text{String: comercioNombre, Valid: comercioNombre != ""},
-		Mcc:                          pgtype.Text{},
+		Mcc:                          pgtype.Text{String: mcc, Valid: mcc != ""},
 		VersionModelo:                versionModelo,
 		TipoDestino:                  pgtype.Text{String: string(destinoPersistido.Tipo), Valid: destinoPersistido.Tipo != ""},
 		ContraparteLlave:             pgtype.Text{String: destinoPersistido.Llave, Valid: destinoPersistido.Llave != ""},
@@ -570,10 +580,15 @@ func intentarBloqueo(ctx context.Context, tx transaccionDeInteligencia) (bool, e
 	return bloqueado, nil
 }
 
-// escalonesDelLote es el punto único donde el lote decide qué escalones entran. El léxico va antes que
-// el clasificador, como manda el contrato, y ninguno de los dos cambia el primer corte por sí solo.
-func escalonesDelLote(clasificador *Modelo, lexico []ParLexico) Escalones {
+// escalonesDelLote es el punto único donde el lote decide qué escalones entran. El catálogo solo
+// entra cuando trae filas, porque sin datos el escalón 4 no puede decidir. El léxico va antes que el
+// clasificador, como manda el contrato, y ninguno de los dos cambia el primer corte por sí solo.
+func escalonesDelLote(catalogo CatalogoCurado, clasificador *Modelo, lexico []ParLexico) Escalones {
 	escalones := PrimerCorte()
+	escalones[EscalonMCC] = struct{}{}
+	if catalogo.HayEntradas() {
+		escalones[EscalonCatalogo] = struct{}{}
+	}
 	if len(lexico) > 0 {
 		escalones[EscalonLexico] = struct{}{}
 	}

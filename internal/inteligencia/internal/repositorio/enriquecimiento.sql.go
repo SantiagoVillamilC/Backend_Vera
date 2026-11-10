@@ -76,6 +76,41 @@ func (q *Queries) BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMov
 	return nil
 }
 
+const conteoPorOrigenYMes = `-- name: ConteoPorOrigenYMes :many
+SELECT date_trunc('month', ocurrido_en AT TIME ZONE 'UTC')::date AS mes,
+       origen_categoria,
+       count(*) AS total
+  FROM inteligencia.movimiento_enriquecido
+ GROUP BY 1, 2
+ ORDER BY 1, 2
+`
+
+type ConteoPorOrigenYMesRow struct {
+	Mes             pgtype.Date `json:"mes"`
+	OrigenCategoria string      `json:"origen_categoria"`
+	Total           int64       `json:"total"`
+}
+
+func (q *Queries) ConteoPorOrigenYMes(ctx context.Context) ([]ConteoPorOrigenYMesRow, error) {
+	rows, err := q.db.Query(ctx, conteoPorOrigenYMes)
+	if err != nil {
+		return nil, fmt.Errorf("query ConteoPorOrigenYMes: %w", err)
+	}
+	defer rows.Close()
+	items := []ConteoPorOrigenYMesRow{}
+	for rows.Next() {
+		var i ConteoPorOrigenYMesRow
+		if err := rows.Scan(&i.Mes, &i.OrigenCategoria, &i.Total); err != nil {
+			return nil, fmt.Errorf("query ConteoPorOrigenYMes: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query ConteoPorOrigenYMes: %w", err)
+	}
+	return items, nil
+}
+
 const exportarCopia = `-- name: ExportarCopia :many
 SELECT usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
        contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
@@ -239,6 +274,7 @@ SELECT je.id AS entry_id,
        je.transferencia_id,
        je.ocurrido_en,
        je.descripcion,
+       je.mcc,
        p.cuenta_id,
        p.monto,
        p.moneda
@@ -254,6 +290,7 @@ type LineasDeAsientosRow struct {
 	TransferenciaID pgtype.UUID        `json:"transferencia_id"`
 	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
+	Mcc             pgtype.Text        `json:"mcc"`
 	CuentaID        string             `json:"cuenta_id"`
 	Monto           int64              `json:"monto"`
 	Moneda          string             `json:"moneda"`
@@ -274,6 +311,7 @@ func (q *Queries) LineasDeAsientos(ctx context.Context, asientos []int64) ([]Lin
 			&i.TransferenciaID,
 			&i.OcurridoEn,
 			&i.Descripcion,
+			&i.Mcc,
 			&i.CuentaID,
 			&i.Monto,
 			&i.Moneda,
@@ -294,6 +332,7 @@ SELECT je.id AS entry_id,
        je.transferencia_id,
        je.ocurrido_en,
        je.descripcion,
+       je.mcc,
        p.cuenta_id,
        p.monto,
        p.moneda
@@ -309,6 +348,7 @@ type LineasDeTransferenciasRow struct {
 	TransferenciaID pgtype.UUID        `json:"transferencia_id"`
 	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
+	Mcc             pgtype.Text        `json:"mcc"`
 	CuentaID        string             `json:"cuenta_id"`
 	Monto           int64              `json:"monto"`
 	Moneda          string             `json:"moneda"`
@@ -329,6 +369,7 @@ func (q *Queries) LineasDeTransferencias(ctx context.Context, transferencias []p
 			&i.TransferenciaID,
 			&i.OcurridoEn,
 			&i.Descripcion,
+			&i.Mcc,
 			&i.CuentaID,
 			&i.Monto,
 			&i.Moneda,

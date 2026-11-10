@@ -11,6 +11,7 @@ SELECT je.id AS entry_id,
        je.transferencia_id,
        je.ocurrido_en,
        je.descripcion,
+       je.mcc,
        p.cuenta_id,
        p.monto,
        p.moneda
@@ -25,6 +26,7 @@ SELECT je.id AS entry_id,
        je.transferencia_id,
        je.ocurrido_en,
        je.descripcion,
+       je.mcc,
        p.cuenta_id,
        p.monto,
        p.moneda
@@ -89,6 +91,14 @@ SELECT usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, 
        tipo_destino, contraparte_llave, contraparte_nombre_normalizado
   FROM inteligencia.movimiento_enriquecido
  ORDER BY usuario_id, ocurrido_en, transaccion_id;
+
+-- name: ConteoPorOrigenYMes :many
+SELECT date_trunc('month', ocurrido_en AT TIME ZONE 'UTC')::date AS mes,
+       origen_categoria,
+       count(*) AS total
+  FROM inteligencia.movimiento_enriquecido
+ GROUP BY 1, 2
+ ORDER BY 1, 2;
 
 -- name: BorrarMovimientoEnriquecido :exec
 DELETE FROM inteligencia.movimiento_enriquecido

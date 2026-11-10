@@ -17,12 +17,19 @@ type Querier interface {
 	AvisoPorIdentidad(ctx context.Context, arg AvisoPorIdentidadParams) (AvisoPorIdentidadRow, error)
 	AvisosDelUsuarioEnVentana(ctx context.Context, arg AvisosDelUsuarioEnVentanaParams) ([]AvisosDelUsuarioEnVentanaRow, error)
 	AvisosDescartadosPorPagina(ctx context.Context, arg AvisosDescartadosPorPaginaParams) ([]AvisosDescartadosPorPaginaRow, error)
+	// Único criterio de conteo: el periodo, que es el mes al que pertenece el hecho que disparó el aviso,
+	// no la fecha en que se entregó la tarjeta. Un aviso puede entregarse en un mes y pertenecer a otro.
+	// Las dos consultas de abajo usan ese periodo y excluyen los descartados, así que descartar libera
+	// cupo, y el resumen, la bandeja y el emisor informan la misma cifra para el mismo mes.
 	AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDelMesParams) ([]AvisosVigentesDelMesRow, error)
 	AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error)
+	BorrarCatalogoMarcaFueraDe(ctx context.Context, arg BorrarCatalogoMarcaFueraDeParams) (int64, error)
 	BorrarCopia(ctx context.Context) error
 	BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMovimientoEnriquecidoParams) error
+	BuscarCatalogoPorLlave(ctx context.Context, llave string) (CatalogoMarca, error)
+	BuscarCatalogoPorNombre(ctx context.Context, nombreNormalizado string) (CatalogoMarca, error)
 	ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error)
-	ContarAvisosEmitidosEnElMes(ctx context.Context, arg ContarAvisosEmitidosEnElMesParams) (int64, error)
+	ConteoPorOrigenYMes(ctx context.Context) ([]ConteoPorOrigenYMesRow, error)
 	DescartarAviso(ctx context.Context, arg DescartarAvisoParams) (DescartarAvisoRow, error)
 	EmitirAviso(ctx context.Context, arg EmitirAvisoParams) (pgtype.UUID, error)
 	ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
@@ -41,7 +48,9 @@ type Querier interface {
 	LeerCursor(ctx context.Context) (LeerCursorRow, error)
 	LineasDeAsientos(ctx context.Context, asientos []int64) ([]LineasDeAsientosRow, error)
 	LineasDeTransferencias(ctx context.Context, transferencias []pgtype.UUID) ([]LineasDeTransferenciasRow, error)
+	ListarCatalogoMarca(ctx context.Context) ([]ListarCatalogoMarcaRow, error)
 	ListarCategorias(ctx context.Context) ([]Categoria, error)
+	ListarCodigosDeCategoria(ctx context.Context) ([]string, error)
 	ListarMemoriaDeUsuario(ctx context.Context, usuarioID string) ([]ListarMemoriaDeUsuarioRow, error)
 	PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimientosParams) ([]PaginaDeMovimientosRow, error)
 	PagosDelUsuarioParaSeries(ctx context.Context, arg PagosDelUsuarioParaSeriesParams) ([]PagosDelUsuarioParaSeriesRow, error)
@@ -51,6 +60,7 @@ type Querier interface {
 	RenombrarContrapartePorDestino(ctx context.Context, arg RenombrarContrapartePorDestinoParams) ([]pgtype.UUID, error)
 	SaldoDelUsuarioHasta(ctx context.Context, arg SaldoDelUsuarioHastaParams) (int64, error)
 	TotalesPorCategoriaYMes(ctx context.Context, arg TotalesPorCategoriaYMesParams) ([]TotalesPorCategoriaYMesRow, error)
+	UpsertCatalogoMarca(ctx context.Context, arg UpsertCatalogoMarcaParams) (bool, error)
 	UsuariosConHistorial(ctx context.Context, arg UsuariosConHistorialParams) ([]string, error)
 }
 
