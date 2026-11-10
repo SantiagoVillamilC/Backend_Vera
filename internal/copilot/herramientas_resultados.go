@@ -7,6 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 )
@@ -62,6 +63,25 @@ type ResumenHerramienta struct {
 }
 
 func (ResumenHerramienta) datosHerramienta() {}
+
+// CategoriaConsumoHerramienta es el gasto del mes de una categoría con su referencia histórica.
+type CategoriaConsumoHerramienta struct {
+	Codigo, Nombre string
+	Total          nucleo.Centavos
+	Mediana        *nucleo.Centavos
+}
+
+// ConsumoHerramienta describe el alcance y el tope de meses completos de la comparación.
+type ConsumoHerramienta struct {
+	Mes, Alcance, Moneda            string
+	Evaluable                       bool
+	MesesCompletos, MesesRequeridos int
+	Total                           nucleo.Centavos
+	Categorias                      []CategoriaConsumoHerramienta
+	HayMas                          bool
+}
+
+func (ConsumoHerramienta) datosHerramienta() {}
 
 // DestinatarioHerramienta recibe datos del resolvedor y los enmascara al salir.
 type DestinatarioHerramienta struct{ Nombre, Celular, Referencia string }
@@ -159,6 +179,25 @@ func serializarDatos(nombre string, args ArgumentosHerramienta, datos DatosHerra
 			grupos = append(grupos, map[string]any{"grupo": etiqueta, "entradas": montoParaModelo(g.Entradas), "salidas": montoParaModelo(g.Salidas), "neto": montoParaModelo(g.Neto), "cantidad": g.Cantidad, "total": montoParaModelo(total)})
 		}
 		vista = map[string]any{"entradas": montoParaModelo(d.Entradas), "salidas": montoParaModelo(d.Salidas), "neto": montoParaModelo(d.Neto), "cantidad": d.Cantidad, "grupos": grupos, "hay_mas": d.HayMas || len(d.Grupos) > 10}
+	case ConsumoHerramienta:
+		if nombre != "resumir_consumo_por_categoria" || d.MesesCompletos < 0 || d.MesesRequeridos < 1 || !mesValido(d.Mes) || d.Alcance != inteligencia.AlcanceBilletera || d.Moneda != inteligencia.MonedaDeLaBilletera {
+			return nil, ErrHerramientaValidacion
+		}
+		categorias := make([]map[string]any, 0, min(len(d.Categorias), 10))
+		for _, c := range d.Categorias[:min(len(d.Categorias), 10)] {
+			if !inteligencia.EsCategoria(inteligencia.Categoria(c.Codigo)) || c.Nombre == "" || c.Total <= 0 {
+				return nil, ErrHerramientaValidacion
+			}
+			var mediana any
+			if c.Mediana != nil {
+				if *c.Mediana <= 0 {
+					return nil, ErrHerramientaValidacion
+				}
+				mediana = montoParaModelo(*c.Mediana)
+			}
+			categorias = append(categorias, map[string]any{"categoria": c.Codigo, "nombre": c.Nombre, "total": montoParaModelo(c.Total), "mediana": mediana})
+		}
+		vista = map[string]any{"mes": d.Mes, "alcance": d.Alcance, "moneda": d.Moneda, "evaluable": d.Evaluable, "meses_completos": d.MesesCompletos, "meses_requeridos": d.MesesRequeridos, "total": montoParaModelo(d.Total), "categorias": categorias, "hay_mas": d.HayMas || len(d.Categorias) > 10}
 	case DestinatariosHerramienta:
 		if nombre != "buscar_destinatario" {
 			return nil, ErrHerramientaValidacion
@@ -203,6 +242,15 @@ func motivoValido(m string) bool {
 		return true
 	}
 	return false
+}
+
+// mesValido exige el mismo YYYY-MM del esquema, con mes dentro del calendario.
+func mesValido(mes string) bool {
+	if len(mes) != 7 || mes[4] != '-' {
+		return false
+	}
+	_, err := time.Parse("2006-01", mes)
+	return err == nil
 }
 
 func estadoTransferenciaValido(e string) bool {
