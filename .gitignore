@@ -18,3 +18,4 @@ out/
 __pycache__/
 DEMO-ESCENARIO-STATE.json
 DEMO-ESCENARIO-STATE.json.tmp
+/verificar-modelos
