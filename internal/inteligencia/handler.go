@@ -22,7 +22,7 @@ type ServicioDeLectura interface {
 	AvisosDelUsuarioPaginados(context.Context, string, EstadoDeAvisos, *CursorDeAviso, int) (PaginaDeAvisos, error)
 	Movimientos(ctx context.Context, usuarioID string, ancla *CursorDeMovimiento, limite int) (PaginaDeMovimientos, error)
 	CorregirMovimiento(ctx context.Context, usuarioID string, transaccionID uuid.UUID, solicitud SolicitudDeCorreccion) (CorreccionAplicada, error)
-	Resumen(ctx context.Context, usuarioID, mes string) (ResumenDelMes, error)
+	Resumen(ctx context.Context, usuarioID, mes string, ahora time.Time) (ResumenDelMes, error)
 	AvisosDelUsuario(ctx context.Context, usuarioID, mes string, ahora time.Time) ([]AvisoEmitido, error)
 	DescartarAviso(ctx context.Context, usuarioID string, avisoID uuid.UUID, ahora time.Time) (DescarteDeAviso, error)
 }
@@ -117,7 +117,7 @@ func (h *Handler) ResumenInteligencia(w http.ResponseWriter, r *http.Request, pa
 	if params.Mes != nil {
 		mes = *params.Mes
 	}
-	resumen, err := h.servicio.Resumen(r.Context(), usuarioID, mes)
+	resumen, err := h.servicio.Resumen(r.Context(), usuarioID, mes, h.reloj())
 	if errors.Is(err, ErrMesInvalido) {
 		api.WriteError(w, http.StatusBadRequest, "ValidationError", "mes must use the YYYY-MM format", nil)
 		return

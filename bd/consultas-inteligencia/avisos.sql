@@ -65,21 +65,26 @@ SELECT tipo, clave, periodo
    AND periodo >= sqlc.arg('desde')::date
    AND periodo < sqlc.arg('hasta')::date;
 
+-- Único criterio de conteo: el periodo, que es el mes al que pertenece el hecho que disparó el aviso,
+-- no la fecha en que se entregó la tarjeta. Un aviso puede entregarse en un mes y pertenecer a otro.
+-- Las dos consultas de abajo usan ese periodo y excluyen los descartados, así que descartar libera
+-- cupo, y el resumen, la bandeja y el emisor informan la misma cifra para el mismo mes.
 -- name: AvisosVigentesDelMes :many
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
    AND descartado_en IS NULL
-   AND creado_en >= sqlc.arg('desde')::timestamptz
-   AND creado_en < sqlc.arg('hasta')::timestamptz
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date
  ORDER BY prioridad, severidad_centavos DESC, clave, id;
 
--- name: ContarAvisosEmitidosEnElMes :one
-SELECT count(*)::bigint AS emitidos
+-- name: ContarAvisosDelMes :one
+SELECT count(*)::bigint AS avisos_emitidos
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
-   AND creado_en >= sqlc.arg('desde')::timestamptz
-   AND creado_en < sqlc.arg('hasta')::timestamptz;
+   AND descartado_en IS NULL
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date;
 
 -- name: EmitirAviso :one
 INSERT INTO inteligencia.aviso (

@@ -91,9 +91,7 @@ func (s *Servicio) EmitirAvisos(ctx context.Context, ahora time.Time) (int, erro
 				return emitidos, err
 			}
 			emitidos += insertados
-			resumen.Emitidos += insertados
-			resumen.YaEmitidos += recuento.YaEmitidas
-			resumen.SuprimidosPorCupo += recuento.Recortadas
+			resumen.AcumularRecuento(insertados, recuento)
 		}
 		despuesDe = usuarios[len(usuarios)-1]
 	}
@@ -116,23 +114,27 @@ func (s *Servicio) emitirAvisosDeUsuario(ctx context.Context, usuarioID string,
 			if err != nil {
 				return struct{}{}, err
 			}
-			yaEmitidas, emitidosDelMes, err := estadoDeAvisos(ctx, q, usuarioID, ahora)
-			if err != nil {
-				return struct{}{}, err
-			}
-			tarjetas, recuentoDelUsuario, err := avisos.TarjetasDelDiaConRecuento(
-				hechos, yaEmitidas, emitidosDelMes, s.avisosCfg.TopeAvisosMes)
-			if err != nil {
-				return struct{}{}, err
-			}
-			for _, tarjeta := range tarjetas {
-				nuevo, err := guardarAviso(ctx, q, usuarioID, tarjeta, ahora)
+			recuentoDelUsuario := avisos.Recuento{}
+			for _, grupo := range avisos.AgruparPorPeriodo(hechos, ahora) {
+				yaEmitidas, emitidosDelPeriodo, err := estadoDelPeriodo(ctx, q, usuarioID, grupo.Inicio)
 				if err != nil {
 					return struct{}{}, err
 				}
-				if nuevo {
-					insertados++
+				tarjetas, recuentoDelPeriodo, err := avisos.TarjetasDelDiaConRecuento(
+					grupo.Hechos, yaEmitidas, emitidosDelPeriodo, s.avisosCfg.CupoMensualDeAvisos())
+				if err != nil {
+					return struct{}{}, err
 				}
+				for _, tarjeta := range tarjetas {
+					nuevo, err := guardarAviso(ctx, q, usuarioID, tarjeta, ahora)
+					if err != nil {
+						return struct{}{}, err
+					}
+					if nuevo {
+						insertados++
+					}
+				}
+				recuentoDelUsuario.Sumar(recuentoDelPeriodo)
 			}
 			recuento = recuentoDelUsuario
 			return struct{}{}, nil
@@ -229,14 +231,17 @@ func (s *Servicio) contextoDeAvisos(ctx context.Context, q *repositorio.Queries,
 	return avisos.NuevoContexto(instante, ahora, s.avisosCfg)
 }
 
-func estadoDeAvisos(ctx context.Context, q *repositorio.Queries, usuarioID string,
-	ahora time.Time) (map[avisos.ClaveDeAviso]struct{}, int, error) {
-	desde := inicioDelMesDe(ahora, 0)
-	hasta := inicioDelMesDe(ahora, 1)
+// estadoDelPeriodo lee la deduplicación y la ocupación del cupo de un mes. El período de un aviso es
+// el mes del hecho que lo dispara, no el mes en que se entrega, así que la ventana es exactamente ese
+// mes: un aviso de otro período no entra como candidato ni choca contra la clave única.
+func estadoDelPeriodo(ctx context.Context, q *repositorio.Queries, usuarioID string,
+	inicio time.Time) (map[avisos.ClaveDeAviso]struct{}, int, error) {
+	desde := fechaCivil(inicio)
+	hasta := fechaCivil(inicio.AddDate(0, 1, 0))
 	filas, err := q.AvisosDelUsuarioEnVentana(ctx, repositorio.AvisosDelUsuarioEnVentanaParams{
 		UsuarioID: usuarioID,
-		Desde:     pgtype.Date{Time: desde.AddDate(0, -3, 0), Valid: true},
-		Hasta:     pgtype.Date{Time: hasta.AddDate(0, 3, 0), Valid: true},
+		Desde:     pgtype.Date{Time: desde, Valid: true},
+		Hasta:     pgtype.Date{Time: hasta, Valid: true},
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inteligencia: leer los avisos de %q: %w", usuarioID, err)
@@ -249,10 +254,10 @@ func estadoDeAvisos(ctx context.Context, q *repositorio.Queries, usuarioID strin
 			Periodo: fila.Periodo.Time.Format("2006-01-02"),
 		}] = struct{}{}
 	}
-	emitidos, err := q.ContarAvisosEmitidosEnElMes(ctx, repositorio.ContarAvisosEmitidosEnElMesParams{
+	emitidos, err := q.ContarAvisosDelMes(ctx, repositorio.ContarAvisosDelMesParams{
 		UsuarioID: usuarioID,
-		Desde:     pgtype.Timestamptz{Time: desde, Valid: true},
-		Hasta:     pgtype.Timestamptz{Time: hasta, Valid: true},
+		Desde:     pgtype.Date{Time: desde, Valid: true},
+		Hasta:     pgtype.Date{Time: hasta, Valid: true},
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inteligencia: contar los avisos de %q: %w", usuarioID, err)
@@ -297,6 +302,8 @@ func guardarAviso(ctx context.Context, q *repositorio.Queries, usuarioID string,
 }
 
 // AvisosDelUsuario devuelve las tarjetas vigentes del mes pedido, en orden de prioridad y severidad.
+// El mes filtra por el periodo del aviso, el mismo criterio con el que se cuenta el cupo, así que la
+// bandeja y el resumen coinciden. Los descartados no se listan ni ocupan cupo.
 func (s *Servicio) AvisosDelUsuario(ctx context.Context, usuarioID, mes string, ahora time.Time) ([]AvisoEmitido, error) {
 	desde, err := inicioDelMesPedido(mes, ahora)
 	if err != nil {
@@ -307,8 +314,8 @@ func (s *Servicio) AvisosDelUsuario(ctx context.Context, usuarioID, mes string, 
 		func(ctx context.Context, _ transaccionDeInteligencia, q *repositorio.Queries) ([]repositorio.AvisosVigentesDelMesRow, error) {
 			return q.AvisosVigentesDelMes(ctx, repositorio.AvisosVigentesDelMesParams{
 				UsuarioID: usuarioID,
-				Desde:     pgtype.Timestamptz{Time: desde, Valid: true},
-				Hasta:     pgtype.Timestamptz{Time: hasta, Valid: true},
+				Desde:     pgtype.Date{Time: fechaCivil(desde), Valid: true},
+				Hasta:     pgtype.Date{Time: fechaCivil(hasta), Valid: true},
 			})
 		})
 	if err != nil {

@@ -12,30 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const contarAvisosDelMes = `-- name: ContarAvisosDelMes :one
-SELECT count(*)::bigint AS avisos_emitidos
-  FROM inteligencia.aviso
- WHERE usuario_id = $1::text
-   AND periodo >= $2::date
-   AND periodo < $3::date
-`
-
-type ContarAvisosDelMesParams struct {
-	UsuarioID string      `json:"usuario_id"`
-	Desde     pgtype.Date `json:"desde"`
-	Hasta     pgtype.Date `json:"hasta"`
-}
-
-func (q *Queries) ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, contarAvisosDelMes, arg.UsuarioID, arg.Desde, arg.Hasta)
-	var avisos_emitidos int64
-	err := row.Scan(&avisos_emitidos)
-	if err != nil {
-		err = fmt.Errorf("query ContarAvisosDelMes: %w", err)
-	}
-	return avisos_emitidos, err
-}
-
 const paginaDeMovimientos = `-- name: PaginaDeMovimientos :many
 SELECT m.transaccion_id,
        m.ocurrido_en,

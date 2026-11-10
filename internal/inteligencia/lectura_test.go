@@ -1,13 +1,17 @@
 package inteligencia
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/internal/repositorio"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func marzoDe2026(dia int) time.Time {
@@ -147,7 +151,77 @@ func TestMedianaRedondeaMedioAPar(t *testing.T) {
 func TestResumenRechazaElMesAntesDeTocarLaBase(t *testing.T) {
 	t.Parallel()
 
-	if _, err := NuevoServicio(nil).Resumen(t.Context(), "usuario", "2026-13"); !errors.Is(err, ErrMesInvalido) {
+	if _, err := NuevoServicio(nil).Resumen(t.Context(), "usuario", "2026-13",
+		time.Date(2026, time.September, 15, 12, 0, 0, 0, zonaBogota)); !errors.Is(err, ErrMesInvalido) {
 		t.Fatalf("error = %v, want %v", err, ErrMesInvalido)
+	}
+}
+
+// consultasDeResumenFalsas devuelve un usuario sin historial, una cantidad fija de avisos y anota la
+// ventana con la que se le consultó el conteo.
+type consultasDeResumenFalsas struct {
+	emitidos  int64
+	consultas int
+	desde     pgtype.Date
+	hasta     pgtype.Date
+}
+
+func (c *consultasDeResumenFalsas) PrimerMovimientoDelUsuario(ctx context.Context,
+	usuarioID string) (pgtype.Timestamptz, error) {
+	return pgtype.Timestamptz{}, nil
+}
+
+func (c *consultasDeResumenFalsas) TotalesPorCategoriaYMes(ctx context.Context,
+	arg repositorio.TotalesPorCategoriaYMesParams) ([]repositorio.TotalesPorCategoriaYMesRow, error) {
+	return nil, nil
+}
+
+func (c *consultasDeResumenFalsas) ContarAvisosDelMes(ctx context.Context,
+	arg repositorio.ContarAvisosDelMesParams) (int64, error) {
+	c.consultas++
+	c.desde = arg.Desde
+	c.hasta = arg.Hasta
+	return c.emitidos, nil
+}
+
+func TestElCupoDelResumenSaleDeLaConfiguracionDelEmisor(t *testing.T) {
+	t.Parallel()
+
+	casos := map[string]int{
+		"por defecto": avisos.CupoMensualPorDefecto,
+		"ampliado":    7,
+		"recortado":   1,
+	}
+	for nombre, tope := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+
+			configuracion := avisos.ConfiguracionPorDefecto()
+			configuracion.TopeAvisosMes = tope
+			servicio := NuevoServicio(nil, ConConfiguracionDeAvisos(configuracion))
+
+			inicio := marzoDe2026(1)
+			siguiente := inicio.AddDate(0, 1, 0)
+			falsas := &consultasDeResumenFalsas{emitidos: 2}
+			resumen, err := servicio.resumenCon(t.Context(), falsas, "usuario", inicio, siguiente)
+			if err != nil {
+				t.Fatalf("resumenCon: %v", err)
+			}
+			if resumen.CupoAvisos != tope {
+				t.Fatalf("cupo = %d, want %d: el resumen no lee el tope de la configuración",
+					resumen.CupoAvisos, tope)
+			}
+			if resumen.AvisosEmitidos != int(falsas.emitidos) {
+				t.Fatalf("emitidos = %d, want %d: el resumen no informa el conteo de la consulta",
+					resumen.AvisosEmitidos, falsas.emitidos)
+			}
+			if falsas.consultas != 1 {
+				t.Fatalf("consultas de avisos = %d, want 1", falsas.consultas)
+			}
+			if !falsas.desde.Time.Equal(fechaCivil(inicio)) || !falsas.hasta.Time.Equal(fechaCivil(siguiente)) {
+				t.Fatalf("ventana contada = %v a %v, want %v a %v",
+					falsas.desde.Time, falsas.hasta.Time, fechaCivil(inicio), fechaCivil(siguiente))
+			}
+		})
 	}
 }

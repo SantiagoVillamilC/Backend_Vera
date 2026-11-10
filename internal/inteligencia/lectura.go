@@ -24,9 +24,6 @@ const (
 // MesesRequeridosParaEvaluar es el mínimo de meses completos que exige la mediana.
 const MesesRequeridosParaEvaluar = 3
 
-// CupoMensualDeAvisos es el tope de avisos por usuario y mes del punto 250.
-const CupoMensualDeAvisos = 3
-
 // AlcanceBilletera declara que el resumen solo ve los movimientos de la billetera.
 const AlcanceBilletera = "billetera"
 
@@ -182,9 +179,11 @@ type ResumenDelMes struct {
 	Categorias      []ResumenDeCategoria
 }
 
-// Resumen agrupa el gasto del mes por categoría y calcula la mediana de los meses completos.
-func (s *Servicio) Resumen(ctx context.Context, usuarioID, mes string) (ResumenDelMes, error) {
-	inicio, err := inicioDelMes(mes, time.Now())
+// Resumen agrupa el gasto del mes por categoría y calcula la mediana de los meses completos. El mes
+// vacío se resuelve con el mismo reloj que la bandeja, para que las dos vistas no puedan caer en
+// meses distintos.
+func (s *Servicio) Resumen(ctx context.Context, usuarioID, mes string, ahora time.Time) (ResumenDelMes, error) {
+	inicio, err := inicioDelMes(mes, ahora)
 	if err != nil {
 		return ResumenDelMes{}, err
 	}
@@ -192,7 +191,7 @@ func (s *Servicio) Resumen(ctx context.Context, usuarioID, mes string) (ResumenD
 
 	resumen, err := enTransaccion(ctx, s.pool,
 		func(ctx context.Context, _ transaccionDeInteligencia, q *repositorio.Queries) (ResumenDelMes, error) {
-			return resumenEnTransaccion(ctx, q, usuarioID, inicio, siguiente)
+			return s.resumenCon(ctx, q, usuarioID, inicio, siguiente)
 		})
 	if err != nil {
 		return ResumenDelMes{}, err
@@ -200,7 +199,16 @@ func (s *Servicio) Resumen(ctx context.Context, usuarioID, mes string) (ResumenD
 	return resumen, nil
 }
 
-func resumenEnTransaccion(ctx context.Context, q *repositorio.Queries, usuarioID string,
+// consultasDeResumen son las lecturas que arma el resumen. El cupo no sale de la base: sale de la
+// configuración del emisor, para que el resumen y el emisor informen la misma cifra.
+type consultasDeResumen interface {
+	PrimerMovimientoDelUsuario(ctx context.Context, usuarioID string) (pgtype.Timestamptz, error)
+	TotalesPorCategoriaYMes(ctx context.Context,
+		arg repositorio.TotalesPorCategoriaYMesParams) ([]repositorio.TotalesPorCategoriaYMesRow, error)
+	ContarAvisosDelMes(ctx context.Context, arg repositorio.ContarAvisosDelMesParams) (int64, error)
+}
+
+func (s *Servicio) resumenCon(ctx context.Context, q consultasDeResumen, usuarioID string,
 	inicio, siguiente time.Time) (ResumenDelMes, error) {
 	primero, err := q.PrimerMovimientoDelUsuario(ctx, usuarioID)
 	if err != nil {
@@ -244,7 +252,7 @@ func resumenEnTransaccion(ctx context.Context, q *repositorio.Queries, usuarioID
 		Evaluable:       len(meses) >= MesesRequeridosParaEvaluar,
 		MesesCompletos:  len(meses),
 		MesesRequeridos: MesesRequeridosParaEvaluar,
-		CupoAvisos:      CupoMensualDeAvisos,
+		CupoAvisos:      s.avisosCfg.CupoMensualDeAvisos(),
 		AvisosEmitidos:  int(avisos),
 	}
 	resumen.Categorias = categoriasDelMes(filas, meses, claveDeMes(inicio))

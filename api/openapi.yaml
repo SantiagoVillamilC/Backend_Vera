@@ -943,6 +943,13 @@ paths:
     get:
       operationId: listarAvisosInteligencia
       summary: Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+      description: >
+        La bandeja y el cupo del mes usan el mismo criterio: el periodo del aviso, que es el mes al
+        que pertenece el hecho que lo disparo, no la fecha en la que se entrego la tarjeta. Un aviso
+        puede entregarse un mes y pertenecer a otro, y en ese caso cuenta y aparece en el mes al que
+        pertenece. Por eso esta bandeja y el numero de avisos del resumen coinciden para el mismo mes.
+        Un aviso descartado sale de la bandeja y deja de ocupar cupo, porque descartar libera cupo: la
+        bandeja y el conteo excluyen los descartados.
       tags: [inteligencia]
       description: Paginación de 20 avisos por defecto, límite 1 a 50. La continuación se devuelve en X-Vera-Siguiente-Cursor. Las llamadas antiguas con solo mes conservan su ventana mensual sin paginación. Combinar mes con limite, cursor o estado devuelve 400.
       parameters:
@@ -953,9 +960,10 @@ paths:
           in: query
           required: false
           description: >
-            Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del
-            aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido
-            llegue al handler y salga como ValidationError.
+            Mes calendario del periodo del aviso, con formato YYYY-MM. Filtra por el mes al que
+            pertenece el hecho que disparo el aviso, el mismo criterio con el que se cuenta el cupo y
+            se informa en el resumen. Por defecto el mes en curso. Se tipa x-go-type string para que
+            un valor invalido llegue al handler y salga como ValidationError.
           schema:
             type: string
             pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
@@ -997,6 +1005,10 @@ paths:
     post:
       operationId: descartarAvisoInteligencia
       summary: Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+      description: >
+        Descartar no borra el aviso: sale de la bandeja y deja de ocupar cupo en su periodo, pero
+        sigue siendo el mismo aviso para la deduplicacion, asi que el emisor no lo vuelve a emitir.
+        El descarte es idempotente y solo afecta a los avisos del usuario autenticado.
       tags: [inteligencia]
       parameters:
         - name: id
@@ -3303,8 +3315,12 @@ components:
           pattern: "^-?[0-9]+$"
         cupo_avisos:
           type: integer
+          description: Tope mensual de avisos que aplica el emisor, tomado de su configuracion.
         avisos_emitidos:
           type: integer
+          description: >
+            Avisos vigentes del mes, contados por el periodo del aviso. Los descartados no cuentan,
+            porque descartar libera cupo.
         categorias:
           type: array
           items:

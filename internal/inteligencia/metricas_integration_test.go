@@ -102,6 +102,12 @@ func TestAvisosPublicanElRecorteDelCupo(t *testing.T) {
 	configuracion.TopeAvisosMes = 1
 	servicio := NuevoServicio(pool, ConMetricas(grabadas), ConConfiguracionDeAvisos(configuracion))
 
+	// Calienta la base con el tope del producto: la corrida medida solo puede recortar lo de esta
+	// prueba, y el tope de 1 no queda escrito en usuarios ajenos.
+	if _, err := NuevoServicio(pool).EmitirAvisos(t.Context(), ahoraDeAvisos); err != nil {
+		t.Fatalf("corrida de calentamiento: %v", err)
+	}
+
 	usuario := usuarioDeAvisos(t, pool)
 	gastoMensual(t, pool, usuario, 5, 90_000_000, "alimentos_mercado", "MERCADO", "L-MERCADO")
 	sembrarCopia(t, pool, filaDeCopia{
@@ -131,6 +137,17 @@ func TestAvisosPublicanElRecorteDelCupo(t *testing.T) {
 		t.Fatalf("duraciones por usuario = %d, usuarios = %d",
 			len(resumen.DuracionesPorUsuario), resumen.Usuarios)
 	}
+
+	// El recuento por usuario aísla el recorte que el resumen agregado solo informa como un total.
+	insertados, recuento, err := servicio.emitirAvisosDeUsuario(t.Context(), usuario, ahoraDeAvisos)
+	if err != nil {
+		t.Fatalf("emitir los avisos de %q: %v", usuario, err)
+	}
+	if insertados != 0 || recuento.Recortadas != 1 {
+		t.Fatalf("insertados = %d, recortadas = %d, quiero 0 y 1: el cupo de 1 deja fuera la segunda",
+			insertados, recuento.Recortadas)
+	}
+	cerrarElCupoDeAvisos(t, pool, usuario, ahoraDeAvisos)
 }
 
 // TestAvisosIdempotentesNoCuentanComoEmitidos separa el dedupe del cupo en una segunda corrida.
@@ -138,6 +155,11 @@ func TestAvisosIdempotentesNoCuentanComoEmitidos(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	grabadas := &metricasGrabadas{}
 	servicio := NuevoServicio(pool, ConMetricas(grabadas))
+
+	// Calienta la base para que la segunda corrida medida solo encuentre lo que dejó la primera.
+	if _, err := NuevoServicio(pool).EmitirAvisos(t.Context(), ahoraDeAvisos); err != nil {
+		t.Fatalf("corrida de calentamiento: %v", err)
+	}
 
 	usuario := usuarioDeAvisos(t, pool)
 	gastoMensual(t, pool, usuario, 5, 90_000_000, "alimentos_mercado", "MERCADO", "L-MERCADO")
@@ -193,7 +215,7 @@ ON CONFLICT (id) DO NOTHING`, "pasivo:liquidacion_pendiente:comercio-0"); err !=
 	if err := tx.Commit(t.Context()); err != nil {
 		t.Fatalf("confirmar la cuenta del comercio: %v", err)
 	}
-	sembrarAsiento(t, pool, "liquidacion_confirmada", nil, "DROGUERIA NORTE 12",
+	sembrarAsiento(t, pool, "liquidacion_confirmada", nil, "DROGUERIA NORTE 12", "",
 		time.Date(2026, 8, 12, 15, 0, 0, 0, time.UTC), []lineaDePrueba{
 			{"pasivo:usuario:" + usuario + ":disponible", 120_000_00},
 			{"pasivo:liquidacion_pendiente:comercio-0", -120_000_00},

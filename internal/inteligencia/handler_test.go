@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
@@ -39,6 +40,8 @@ type servicioDeLecturaFalso struct {
 	avisos        []AvisoEmitido
 	avisosErr     error
 	avisosMes     string
+	avisosAhora   time.Time
+	resumenAhora  time.Time
 	avisoDescarte DescarteDeAviso
 	avisoErr      error
 	avisoBorrado  uuid.UUID
@@ -62,17 +65,20 @@ func (f *servicioDeLecturaFalso) CorregirMovimiento(_ context.Context, usuarioID
 	return f.correccion, f.correccionErr
 }
 
-func (f *servicioDeLecturaFalso) Resumen(_ context.Context, usuarioID, mes string) (ResumenDelMes, error) {
+func (f *servicioDeLecturaFalso) Resumen(_ context.Context, usuarioID, mes string,
+	ahora time.Time) (ResumenDelMes, error) {
 	f.llamado = true
 	f.usuario = usuarioID
 	f.mes = mes
+	f.resumenAhora = ahora
 	return f.resumen, f.err
 }
 
 func (f *servicioDeLecturaFalso) AvisosDelUsuario(_ context.Context, usuarioID, mes string,
-	_ time.Time) ([]AvisoEmitido, error) {
+	ahora time.Time) ([]AvisoEmitido, error) {
 	f.usuario = usuarioID
 	f.avisosMes = mes
+	f.avisosAhora = ahora
 	return f.avisos, f.avisosErr
 }
 
@@ -282,7 +288,7 @@ func TestResumenDevuelveMontosComoTextoYMedianaNula(t *testing.T) {
 			MesesCompletos:  3,
 			MesesRequeridos: MesesRequeridosParaEvaluar,
 			TotalCentavos:   570000,
-			CupoAvisos:      CupoMensualDeAvisos,
+			CupoAvisos:      avisos.CupoMensualPorDefecto,
 			AvisosEmitidos:  1,
 			Categorias: []ResumenDeCategoria{
 				{Codigo: "compras", Nombre: "Compras", TotalCentavos: 500000, MedianaCentavos: &mediana, MesesConGasto: 3},
@@ -331,6 +337,35 @@ func TestResumenPasaElMesYRechazaElInvalido(t *testing.T) {
 		t.Fatalf("código = %d, want 400", rec.Code)
 	}
 	assertErrorDelSobre(t, rec, "ValidationError")
+}
+
+func TestElResumenYLaBandejaResuelvenElMesConElMismoReloj(t *testing.T) {
+	t.Parallel()
+
+	ahora := time.Date(2026, time.July, 1, 0, 0, 5, 0, zonaBogota)
+	falso := &servicioDeLecturaFalso{}
+	handler := NuevoHandlerConReloj(falso, func() time.Time { return ahora })
+
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/resumen")
+	handler.ResumenInteligencia(rec, req, api.ResumenInteligenciaParams{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("resumen: código = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = peticionConIdentidad(t, "/v1/inteligencia/avisos")
+	handler.ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bandeja: código = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if !falso.resumenAhora.Equal(ahora) {
+		t.Errorf("el resumen recibió %v, want %v", falso.resumenAhora, ahora)
+	}
+	if !falso.avisosAhora.Equal(ahora) {
+		t.Errorf("la bandeja recibió %v, want %v", falso.avisosAhora, ahora)
+	}
 }
 
 func TestServicioQueFallaResponde500Generico(t *testing.T) {
