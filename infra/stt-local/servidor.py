@@ -1,6 +1,6 @@
 """Transcripción local para el asistente. Sólo loopback, token y audio en memoria.
 
-Borrador de traspaso: replica el patrón del servicio de voz del laboratorio
+Servicio local: replica el patrón del servicio de voz del laboratorio
 (infra/voz-local/servidor.py) para que el backend solo tenga que cambiar a quién
 le manda el audio. No guarda audio ni texto, y no habla con servicios externos.
 
@@ -17,6 +17,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MAX_BYTES = 8 * 1024 * 1024
+MAX_SEGUNDOS = 60
 TIPOS = {"audio/wav", "audio/x-wav", "audio/m4a", "audio/mp4", "audio/mpeg"}
 
 
@@ -33,6 +34,8 @@ def cargar_modelo(nombre, gpu):
 
 
 def crear_servidor(modelo, token, nombre_modelo, direccion):
+    if direccion[0] != "127.0.0.1" or len(token) < 32:
+        raise ValueError("Se requiere loopback y un token de al menos 32 caracteres")
     cerrojo = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
@@ -74,6 +77,10 @@ def crear_servidor(modelo, token, nombre_modelo, direccion):
             if tipo not in TIPOS:
                 self.responder(415)
                 return
+            longitud = 0
+            if self.headers.get("Transfer-Encoding"):
+                self.responder(422)
+                return
             try:
                 longitud = int(self.headers.get("Content-Length", "0"))
                 if not 0 < longitud <= MAX_BYTES:
@@ -88,8 +95,14 @@ def crear_servidor(modelo, token, nombre_modelo, direccion):
                 self.responder(409)
                 return
             try:
+                # Decodificar antes del VAD: también limita clips largos en silencio.
+                from faster_whisper.audio import decode_audio
+                muestras = decode_audio(io.BytesIO(audio), sampling_rate=16000)
+                if len(muestras) > MAX_SEGUNDOS * 16000:
+                    self.responder(413)
+                    return
                 segmentos, _ = modelo.transcribe(
-                    io.BytesIO(audio), language="es", beam_size=1, vad_filter=True
+                    muestras, language="es", beam_size=1, vad_filter=True
                 )
                 texto = " ".join(s.text.strip() for s in segmentos).strip()
             except Exception:
@@ -110,12 +123,13 @@ def main():
     nombre_modelo = os.environ.get("WHISPER_MODELO", "small")
     gpu = os.environ.get("WHISPER_GPU", "auto")
     host, _, puerto = os.environ.get("WHISPER_DIRECCION", "127.0.0.1:8767").rpartition(":")
+    if host != "127.0.0.1" or gpu not in ("auto", "si", "no") or nombre_modelo != "small":
+        raise SystemExit("Se requiere 127.0.0.1, modelo small y GPU auto|si|no")
     modelo = cargar_modelo(nombre_modelo, gpu)
-    # Calentamiento: fuerza la carga del modelo y del VAD antes de aceptar tráfico.
-    try:
-        modelo.transcribe(io.BytesIO(b""), language="es", beam_size=1, vad_filter=True)
-    except Exception:
-        pass
+    # transcribe devuelve un generador: consumirlo es necesario para calentar.
+    import numpy as np
+    segmentos, _ = modelo.transcribe(np.zeros(16000, dtype=np.float32), language="es", beam_size=1, vad_filter=True)
+    list(segmentos)
     servidor = crear_servidor(modelo, token, nombre_modelo, (host or "127.0.0.1", int(puerto)))
     servidor.serve_forever()
 

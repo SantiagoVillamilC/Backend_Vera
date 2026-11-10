@@ -1,4 +1,4 @@
-# Operación de la voz de Vera (Kokoro)
+# Operación de la entrega STT/TTS
 
 ## Kokoro integrado
 
@@ -24,12 +24,50 @@ Límites: 8192 bytes de texto, plazo total de 25 segundos, WAV de aproximadament
 se respeta la cancelación y nunca se cachean fallos. La caché es por instancia y se
 pierde al reiniciar. Los WAV salen con `Cache-Control: no-store`.
 
+## Whisper local
+
+```bash
+docker build -t vera-stt infra/stt-local
+docker volume create vera-whisper-modelos
+docker run --rm --network host -v vera-whisper-modelos:/modelos \
+  -e WHISPER_TOKEN="$WHISPER_TOKEN" -e WHISPER_GPU=no vera-stt
+```
+
+`--network host` requiere soporte de red host (Linux o Docker Desktop configurado).
+Otra opción es compartir el espacio de red del contenedor de la API con
+`--network container:NOMBRE_API`. No publicar el servicio para sortear loopback.
+El directorio `/modelos` debe ser escribible por UID 10001.
+
+El primer arranque descarga `small`; posteriores ejecuciones pueden usar
+`HF_HUB_OFFLINE=1` y la caché de modelos, sin Internet. CPU usa `int8`; GPU usa
+`float16` con `WHISPER_GPU=si` y un runtime CUDA compatible, no incluido en esta
+imagen CPU. El modelo, el idioma español, `beam_size=1` y VAD se conservan.
+
+El servicio solo admite `127.0.0.1`. `GET /healthz` y `POST /transcribir` exigen
+`X-Vera-Token`. Máximo 8 MiB y 60 segundos de audio decodificado; formatos WAV, M4A/MP4
+y MPEG. Una sola transcripción simultánea; otra obtiene 409. Errores públicos:
+401 token, 415 tipo, 413 tamaño/duración, 422 audio inválido. El silencio devuelve
+`transcripcion` vacía. No se escribe audio ni texto a disco.
+
+El cliente Go `internal/copilot/sttlocal.Nuevo(url, token, plazo)` admite un plazo
+positivo de hasta dos minutos, respeta contexto, no sigue redirecciones y devuelve
+las categorías públicas de `copilot`. `Transcribir` no crea conversaciones. La capa
+que lo integre debe tratar texto vacío como «audio no entendido» y conservar el chat
+por texto si STT no está disponible. El proveedor compuesto con el razonador sigue
+pendiente, tal como delimita la entrega original.
+
+Se fija `av==16.1.0`: PyAV 19 elimina el argumento usado por faster-whisper 1.2.1,
+una [incompatibilidad confirmada por el proyecto](https://github.com/SYSTRAN/faster-whisper/issues/1589).
+
 ## Verificación
 
 ```bash
 go test -race ./...
 go vet ./...
+python -m unittest discover -s infra/stt-local -p test_servidor.py
 ```
 
-Las pruebas Go usan servicios HTTP de prueba. La prueba con el modelo real requiere la imagen
-`infra/voz-local` y su token.
+Las pruebas Go usan servicios HTTP de prueba; las Python separan el contrato del
+modelo. Las pruebas de audio real requieren los pesos. Para el conjunto oficial de
+24 clips usar `infra/stt-local/probar.py` y las referencias del repositorio de modelos;
+ese conjunto no está incluido en este backend.
