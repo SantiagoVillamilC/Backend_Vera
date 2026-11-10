@@ -15,3 +15,6 @@ simulador-riel.db*
 
 # Salidas de la prueba de carga: access firmados y resúmenes de k6, nunca se versionan.
 out/
+__pycache__/
+DEMO-ESCENARIO-STATE.json
+DEMO-ESCENARIO-STATE.json.tmp
