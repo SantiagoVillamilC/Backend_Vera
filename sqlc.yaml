@@ -45,6 +45,7 @@ sql:
       - bd/migraciones/0018_create_outbox.sql
       - bd/migraciones/0019_create_descuadre_y_cursor.sql
       - bd/migraciones/0027_indice_movimientos_por_cuenta_fecha.sql
+      - bd/migraciones/0028_add_mcc_a_journal_entry.sql
     queries: bd/consultas-nucleo
     gen:
       go:
@@ -79,6 +80,9 @@ sql:
       - bd/migraciones/0024_create_aviso_y_cursor.sql
       - bd/migraciones/0025_add_destino_a_la_copia.sql
       - bd/migraciones/0026_add_descarte_a_aviso.sql
+      - bd/migraciones/0028_add_mcc_a_journal_entry.sql
+      - bd/migraciones/0029_create_catalogo_marca.sql
+      - bd/migraciones/0030_categoria_visible_del_catalogo.sql
     queries: bd/consultas-inteligencia
     gen:
       go:
@@ -97,6 +101,7 @@ sql:
           inteligencia_aviso: Aviso
           inteligencia_aviso_entrega: AvisoEntrega
           inteligencia_cursor_enriquecimiento: CursorEnriquecimiento
+          inteligencia_catalogo_marca: CatalogoMarca
   # Repositorio de auth (fase0-2): su propio esquema y su propio rol, sin el ledger del núcleo.
   - engine: postgresql
     schema:

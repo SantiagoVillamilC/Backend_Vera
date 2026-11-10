@@ -155,7 +155,8 @@ func Decidir(entrada Entrada, recursos Recursos, escalones Escalones) Decision {
 		if categoria, encontrada := buscarCategoria(recursos.CatalogoLlaves, entrada.Llave); encontrada {
 			return Decision{Categoria: categoria, Escalon: EscalonCatalogo, Origen: OrigenCatalogo}
 		}
-		if categoria, encontrada := buscarCategoria(recursos.CatalogoNombres, nombre); encontrada {
+		if categoria, encontrada := buscarCategoria(recursos.CatalogoNombres,
+			ClaveDeCatalogo(entrada.Nombre)); encontrada {
 			return Decision{Categoria: categoria, Escalon: EscalonCatalogo, Origen: OrigenCatalogo}
 		}
 	}

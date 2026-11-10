@@ -52,7 +52,7 @@ func (s *Servicio) ProcesarEscenario(ctx context.Context, usuario string, asient
 					return struct{}{}, errors.New("asiento ajeno al usuario de demo")
 				}
 				contraparte := ResolverContraparte(g.apuntes, usuario, nombres)
-				if e := escribirMovimiento(ctx, q, g, efecto, transaccionDeGrupo(g), contraparte, memoria, s.clasificador, s.lexico.ParesDeLexico(), &resultado); e != nil {
+				if e := escribirMovimiento(ctx, q, g, efecto, transaccionDeGrupo(g), contraparte, memoria, s.catalogo(), s.clasificador, s.lexico.ParesDeLexico(), &resultado); e != nil {
 					return struct{}{}, e
 				}
 			}

@@ -129,7 +129,16 @@ func run() error {
 		metricasInteligencia.ClasificadorActivo(modeloClasificador != nil)
 		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConMetricas(metricasInteligencia))
 	}
+	// El catálogo curado enciende el escalón 4. Si la tabla no se puede leer, la API arranca sin él:
+	// perder la categoría de un movimiento es mejor que no atender.
+	catalogoNombres := make(map[string]inteligencia.Categoria)
+	catalogoLlaves := make(map[string]inteligencia.Categoria)
+	opcionesInteligencia = append(opcionesInteligencia,
+		inteligencia.ConCatalogo(catalogoNombres, catalogoLlaves))
 	servicioInteligencia := inteligencia.NuevoServicio(pool, opcionesInteligencia...)
+	if err := servicioInteligencia.CargarCatalogo(ctx); err != nil {
+		slog.Error("catálogo curado no disponible, la cascada sigue sin el escalón 4", "error", err)
+	}
 	handlerInteligencia := inteligencia.NuevoHandler(servicioInteligencia,
 		inteligencia.ConMetricasDeLaCorreccion(metricasDeCorreccion(metricasInteligencia)))
 

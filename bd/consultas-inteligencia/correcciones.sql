@@ -53,7 +53,7 @@ WITH objetivo AS (
              WHERE mc.usuario_id = m.usuario_id
                AND mc.tipo_destino = m.tipo_destino
                AND mc.categoria IS NOT NULL
-               AND cc.grupo <> 'ninguno'
+               AND inteligencia.categoria_es_visible(cc.codigo)
                AND ((mc.nivel = 'llave' AND mc.valor = m.contraparte_llave)
                  OR (mc.nivel = 'mid' AND mc.valor = m.comercio_mid)
                  OR (mc.nivel = 'nombre' AND mc.valor = m.contraparte_nombre_normalizado))

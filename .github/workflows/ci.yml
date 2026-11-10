@@ -146,6 +146,11 @@ jobs:
             -c "ALTER ROLE owner WITH PASSWORD '$OWNER_PW'" \
             -c "ALTER ROLE rol_api WITH PASSWORD '$API_PW'"
 
+      # El catálogo curado del escalón 4 vive en bd/datos/catalogo-v3 y ninguna migración lo inserta,
+      # así que la base recién migrada lo carga aquí, igual que en el despliegue.
+      - name: Load curated catalog
+        run: go run ./cmd/cargar-catalogo -aplicar
+
       - name: Start custodian simulator
         run: |
           (cd servicios/simuladores && go build -o "$RUNNER_TEMP/simulador-custodia" ./cmd/simulador-custodia)

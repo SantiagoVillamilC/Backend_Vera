@@ -59,6 +59,31 @@ func TestCategoriasCoincidenConElCatalogoFijo(t *testing.T) {
 	}
 }
 
+// TestLasCategoriasVisiblesCoincidenConLaBase compara la lista declarada en Go con la función que
+// gobierna la tabla, para que las dos no se separen.
+func TestLasCategoriasVisiblesCoincidenConLaBase(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	codigos, err := enTransaccion(t.Context(), poolDeInteligencia{pool: pool},
+		func(ctx context.Context, _ transaccionDeInteligencia, q *repositorio.Queries) ([]string, error) {
+			return q.ListarCodigosDeCategoria(ctx)
+		})
+	if err != nil {
+		t.Fatalf("ListarCodigosDeCategoria: %v", err)
+	}
+	if len(codigos) != len(categoriasVisibles) {
+		t.Fatalf("la base declara %d categorías visibles, want %d: %v", len(codigos),
+			len(categoriasVisibles), codigos)
+	}
+	for _, codigo := range codigos {
+		if !EsCategoriaVisible(Categoria(codigo)) {
+			t.Errorf("la base declara visible %q y Go no", codigo)
+		}
+	}
+	if EsCategoriaVisible(SinCategoria) {
+		t.Errorf("Go declara visible %q y la base no", SinCategoria)
+	}
+}
+
 func TestRolDeInteligenciaLeeElLedger(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	ctx := t.Context()

@@ -1,10 +1,10 @@
 # Atajos del backend. Los binarios viven en out/bin, que está en .gitignore.
 BIN := out/bin
-COMANDOS := api migrate enriquecer avisos semilla-inteligencia evaluar-clasificador rollback-m8
+COMANDOS := api migrate enriquecer avisos semilla-inteligencia evaluar-clasificador rollback-m8 cargar-catalogo
 
 .PHONY: build verificar imagen demo limpiar
 
-# Compila los siete comandos con CGO apagado, igual que la imagen de Docker.
+# Compila todos los comandos con CGO apagado, igual que la imagen de Docker.
 build:
 	@mkdir -p $(BIN)
 	@for comando in $(COMANDOS); do \
