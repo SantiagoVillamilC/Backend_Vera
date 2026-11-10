@@ -231,7 +231,7 @@ func escribirAsientoDeDespacho(ctx context.Context, q *repositorio.Queries, tran
 	if err != nil {
 		return err
 	}
-	return insertarAsientoConLineas(ctx, q, TipoAsientoDespachoRiel, transferencia, time.Now().UTC(), pgtype.Text{}, lineas)
+	return insertarAsientoConLineas(ctx, q, TipoAsientoDespachoRiel, transferencia, time.Now().UTC(), pgtype.Text{}, pgtype.Text{}, lineas)
 }
 
 // lineasDeDespacho arma las dos líneas del asiento 3, que sacan el dinero retenido hacia el riel.
@@ -346,7 +346,7 @@ type transicionCierre struct {
 func (s *Servicio) cerrarConfirmada(ctx context.Context, reclamada despachoReclamado, respuesta RespuestaRiel) error {
 	transiciones := []transicionCierre{{esperado: EstadoTransferenciaDespachada, nuevo: EstadoTransferenciaConfirmada}}
 	asentar := func(ctx context.Context, q *repositorio.Queries) error {
-		return escribirAsientoDeConfirmacion(ctx, q, reclamada.transferencia, respuesta.OcurridoEn)
+		return escribirAsientoDeConfirmacion(ctx, q, reclamada.transferencia, respuesta)
 	}
 	return s.cerrarDespacho(ctx, reclamada, transiciones, asentar)
 }
@@ -407,12 +407,14 @@ func aplicarCierre(ctx context.Context, q *repositorio.Queries, id pgtype.UUID, 
 }
 
 // escribirAsientoDeConfirmacion escribe el asiento 4a del Apéndice B: el dinero en vuelo sale del custodio.
-func escribirAsientoDeConfirmacion(ctx context.Context, q *repositorio.Queries, transferencia repositorio.Transferencia, ocurridoEn time.Time) error {
+func escribirAsientoDeConfirmacion(ctx context.Context, q *repositorio.Queries, transferencia repositorio.Transferencia, respuesta RespuestaRiel) error {
 	lineas, err := lineasDeConfirmacion(transferencia)
 	if err != nil {
 		return err
 	}
-	return insertarAsientoConLineas(ctx, q, TipoAsientoLiquidacionConfirmada, transferencia, ocurridoEn, pgtype.Text{}, lineas)
+	return insertarAsientoConLineas(ctx, q, TipoAsientoLiquidacionConfirmada, transferencia, respuesta.OcurridoEn,
+		pgtype.Text{String: respuesta.ComercioNombre, Valid: respuesta.ComercioNombre != ""},
+		pgtype.Text{String: respuesta.ComercioMCC, Valid: respuesta.ComercioMCC != ""}, lineas)
 }
 
 // lineasDeConfirmacion arma las dos líneas del asiento 4a contra la cuenta del custodio.
@@ -442,7 +444,7 @@ func escribirAsientoDeCompensacion(ctx context.Context, q *repositorio.Queries, 
 	if err != nil {
 		return err
 	}
-	return insertarAsientoConLineas(ctx, q, TipoAsientoCompensacion, transferencia, ocurridoEn, motivoDeRechazo(motivo), lineas)
+	return insertarAsientoConLineas(ctx, q, TipoAsientoCompensacion, transferencia, ocurridoEn, motivoDeRechazo(motivo), pgtype.Text{}, lineas)
 }
 
 // lineasDeCompensacion arma las dos líneas del asiento 4b y, con gravamen, las dos de su devolución (HU-NF-10, criterio 15.2).
@@ -481,12 +483,13 @@ func motivoDeRechazo(motivo string) pgtype.Text {
 }
 
 // insertarAsientoConLineas escribe la cabecera y las líneas de un asiento del desenlace en la transacción en curso.
-func insertarAsientoConLineas(ctx context.Context, q *repositorio.Queries, tipo string, transferencia repositorio.Transferencia, ocurridoEn time.Time, descripcion pgtype.Text, lineas []repositorio.InsertarLineaParams) error {
+func insertarAsientoConLineas(ctx context.Context, q *repositorio.Queries, tipo string, transferencia repositorio.Transferencia, ocurridoEn time.Time, descripcion, mcc pgtype.Text, lineas []repositorio.InsertarLineaParams) error {
 	asiento, err := q.InsertarAsiento(ctx, repositorio.InsertarAsientoParams{
 		Tipo:            tipo,
 		TransferenciaID: transferencia.ID,
 		OcurridoEn:      pgtype.Timestamptz{Time: ocurridoEn.UTC(), Valid: true},
 		Descripcion:     descripcion,
+		Mcc:             mcc,
 	})
 	if err != nil {
 		return fmt.Errorf("nucleo: asentar %q de %s: %w", tipo, uuid.UUID(transferencia.ID.Bytes), err)

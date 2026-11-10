@@ -214,7 +214,7 @@ func (d *detectorDiferencias) adoptarElExtracto(transferencia repositorio.Transf
 	if desenlace.compensar {
 		err = escribirAsientoDeCompensacion(d.ctx, d.q, transferencia, "", operacion.OcurridoEn)
 	} else {
-		err = escribirAsientoDeConfirmacion(d.ctx, d.q, transferencia, operacion.OcurridoEn)
+		err = escribirAsientoDeConfirmacion(d.ctx, d.q, transferencia, RespuestaRiel{OcurridoEn: operacion.OcurridoEn})
 	}
 	if err != nil {
 		return err

@@ -70,7 +70,7 @@ func sembrarPersona(t *testing.T, pool *pgxpool.Pool, usuario, nombre string) {
 }
 
 func sembrarAsiento(t *testing.T, pool *pgxpool.Pool, tipo string, transferencia *uuid.UUID,
-	descripcion string, ocurrido time.Time, lineas []lineaDePrueba) int64 {
+	descripcion, mcc string, ocurrido time.Time, lineas []lineaDePrueba) int64 {
 	t.Helper()
 	ctx := t.Context()
 	tx, err := pool.Begin(ctx)
@@ -87,9 +87,10 @@ func sembrarAsiento(t *testing.T, pool *pgxpool.Pool, tipo string, transferencia
 	}
 	var id int64
 	if err := tx.QueryRow(ctx,
-		"INSERT INTO nucleo.journal_entry (tipo, transferencia_id, ocurrido_en, descripcion) VALUES ($1, $2, $3, $4) RETURNING id",
+		"INSERT INTO nucleo.journal_entry (tipo, transferencia_id, ocurrido_en, descripcion, mcc) VALUES ($1, $2, $3, $4, $5) RETURNING id",
 		tipo, transferenciaParam, ocurrido,
-		pgtype.Text{String: descripcion, Valid: descripcion != ""}).Scan(&id); err != nil {
+		pgtype.Text{String: descripcion, Valid: descripcion != ""},
+		pgtype.Text{String: mcc, Valid: mcc != ""}).Scan(&id); err != nil {
 		t.Fatalf("crear asiento %q: %v", tipo, err)
 	}
 	for _, linea := range lineas {
@@ -180,30 +181,30 @@ func TestEnriquecimientoDeUnaTransferenciaUnFondeoYUnGMF(t *testing.T) {
 	sembrarCuentaDeUsuario(t, pool, u2)
 	sembrarPersona(t, pool, u2, "Persona Dos")
 
-	idFondeo := sembrarAsiento(t, pool, "deposito", nil, "fondeo", base,
+	idFondeo := sembrarAsiento(t, pool, "deposito", nil, "fondeo", "", base,
 		[]lineaDePrueba{
 			{"activo:custodia:banco", 1000000},
 			{"pasivo:usuario:" + u1 + ":disponible", -1000000},
 		})
 
 	transferencia := uuid.New()
-	sembrarAsiento(t, pool, "retencion", &transferencia, "", base.Add(time.Minute),
+	sembrarAsiento(t, pool, "retencion", &transferencia, "", "", base.Add(time.Minute),
 		[]lineaDePrueba{
 			{"pasivo:usuario:" + u1 + ":disponible", 500000},
 			{"pasivo:usuario:" + u1 + ":retenido", -500000},
 		})
-	sembrarAsiento(t, pool, "despacho_riel", &transferencia, "", base.Add(2*time.Minute),
+	sembrarAsiento(t, pool, "despacho_riel", &transferencia, "", "", base.Add(2*time.Minute),
 		[]lineaDePrueba{
 			{"pasivo:usuario:" + u1 + ":retenido", 500000},
 			{"pasivo:liquidacion_pendiente:riel", -500000},
 		})
-	sembrarAsiento(t, pool, "liquidacion_confirmada", &transferencia, "", base.Add(3*time.Minute),
+	sembrarAsiento(t, pool, "liquidacion_confirmada", &transferencia, "", "", base.Add(3*time.Minute),
 		[]lineaDePrueba{
 			{"pasivo:liquidacion_pendiente:riel", 500000},
 			{"pasivo:usuario:" + u2 + ":disponible", -500000},
 		})
 
-	idGMF := sembrarAsiento(t, pool, "retencion", nil, "GMF", base.Add(4*time.Minute),
+	idGMF := sembrarAsiento(t, pool, "retencion", nil, "GMF", "", base.Add(4*time.Minute),
 		[]lineaDePrueba{
 			{"pasivo:usuario:" + u1 + ":disponible", 2000},
 			{"pasivo:gmf_por_pagar", -2000},

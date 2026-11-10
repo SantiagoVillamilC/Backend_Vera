@@ -178,7 +178,7 @@ func sembrarAsientoDeConfirmacionDeResolucion(t *testing.T, ctx context.Context,
 	cierre := leerTransferenciaDeResolucion(t, ctx, pool, id)
 	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
-			return struct{}{}, escribirAsientoDeConfirmacion(ctx, q, cierre, ocurridoEn)
+			return struct{}{}, escribirAsientoDeConfirmacion(ctx, q, cierre, RespuestaRiel{OcurridoEn: ocurridoEn})
 		}); err != nil {
 		t.Fatalf("sembrar el 4a: %v", err)
 	}

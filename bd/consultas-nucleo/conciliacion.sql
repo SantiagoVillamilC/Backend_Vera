@@ -57,14 +57,14 @@ SELECT ventana_hasta
  LIMIT 1;
 
 -- name: LeerAsientosDeVentana :many
-SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
+SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id, mcc
   FROM nucleo.journal_entry
  WHERE ocurrido_en >= @desde
    AND ocurrido_en < @hasta
  ORDER BY ocurrido_en, id;
 
 -- name: LeerAsientosDeTransferencia :many
-SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
+SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id, mcc
   FROM nucleo.journal_entry
  WHERE transferencia_id = @transferencia_id
  ORDER BY ocurrido_en, id;

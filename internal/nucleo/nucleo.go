@@ -118,6 +118,8 @@ type RespuestaRiel struct {
 	Resultado       ResultadoRiel `json:"resultado"`
 	Motivo          string        `json:"motivo,omitempty"`
 	OcurridoEn      time.Time     `json:"ocurrido_en"`
+	ComercioNombre  string        `json:"comercio_nombre,omitempty"`
+	ComercioMCC     string        `json:"mcc,omitempty"`
 }
 
 // ErrRielSinRegistro reporta que el riel no reconoce la transferencia consultada.

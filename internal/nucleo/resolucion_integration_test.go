@@ -74,7 +74,7 @@ func sembrarDespacho(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id p
 	}
 	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
-			return struct{}{}, insertarAsientoConLineas(ctx, q, TipoAsientoDespachoRiel, transferencia, ocurridoEn, pgtype.Text{}, lineas)
+			return struct{}{}, insertarAsientoConLineas(ctx, q, TipoAsientoDespachoRiel, transferencia, ocurridoEn, pgtype.Text{}, pgtype.Text{}, lineas)
 		}); err != nil {
 		t.Fatalf("sembrar despacho: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestHU_NF_08_Criterio22EstadoFinalContradichoNoRevierteElCierre(t *testing.
 	cierre := leerTransferenciaDeResolucion(t, ctx, pool, id)
 	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
-			return struct{}{}, escribirAsientoDeConfirmacion(ctx, q, cierre, base.Add(time.Minute))
+			return struct{}{}, escribirAsientoDeConfirmacion(ctx, q, cierre, RespuestaRiel{OcurridoEn: base.Add(time.Minute)})
 		}); err != nil {
 		t.Fatalf("sembrar el 4a: %v", err)
 	}
