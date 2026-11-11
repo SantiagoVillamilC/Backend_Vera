@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/gemini"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/ollama"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/provsim"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
@@ -21,6 +23,7 @@ type ConfigVera struct {
 	Proveedor     string
 	APIKey        string
 	Modelo        string
+	OllamaURL     string
 	Timeout       time.Duration
 	Temperatura   float32
 	Limites       copilot.LimitesUso
@@ -29,10 +32,18 @@ type ConfigVera struct {
 }
 
 func cargarConfigVera() (ConfigVera, []error) {
-	c := ConfigVera{Proveedor: envOr("VERA_PROVEEDOR", "simulado"), APIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")), Modelo: strings.TrimSpace(os.Getenv("VERA_MODELO"))}
+	c := ConfigVera{Proveedor: envOr("VERA_PROVEEDOR", "simulado"), APIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")), OllamaURL: strings.TrimSpace(envOr("VERA_OLLAMA_URL", "http://127.0.0.1:11434"))}
+	modeloPorDefecto := ""
+	if c.Proveedor == "local" {
+		modeloPorDefecto = "gemma4-e4b-local"
+	}
+	c.Modelo = strings.TrimSpace(envOr("VERA_MODELO", modeloPorDefecto))
 	var errs []error
-	if c.Proveedor != "simulado" && c.Proveedor != "gemini" {
-		errs = append(errs, errors.New("VERA_PROVEEDOR debe ser gemini o simulado"))
+	if c.Proveedor != "simulado" && c.Proveedor != "gemini" && c.Proveedor != "local" {
+		errs = append(errs, errors.New("VERA_PROVEEDOR debe ser simulado, gemini o local"))
+	}
+	if err := urlOrigenOpcional("VERA_OLLAMA_URL", c.OllamaURL); err != nil {
+		errs = append(errs, err)
 	}
 	if c.Proveedor == "gemini" {
 		if c.APIKey == "" {
@@ -42,9 +53,17 @@ func cargarConfigVera() (ConfigVera, []error) {
 			errs = append(errs, errors.New("VERA_MODELO es obligatorio para VERA_PROVEEDOR=gemini"))
 		}
 	}
-	d, err := time.ParseDuration(envOr("VERA_TIMEOUT_LLAMADA", "10s"))
-	if err != nil || d <= 0 || d > 30*time.Second {
-		errs = append(errs, errors.New("VERA_TIMEOUT_LLAMADA debe ser mayor que 0 y hasta 30s"))
+	if c.Proveedor == "local" && c.Modelo == "" {
+		errs = append(errs, errors.New("VERA_MODELO es obligatorio para VERA_PROVEEDOR=local"))
+	}
+	plazoPorDefecto, plazoMaximo := "10s", 30*time.Second
+	if c.Proveedor == "local" {
+		// La inferencia en una GPU de 4 GB es más lenta que una API remota.
+		plazoPorDefecto, plazoMaximo = "120s", 5*time.Minute
+	}
+	d, err := time.ParseDuration(envOr("VERA_TIMEOUT_LLAMADA", plazoPorDefecto))
+	if err != nil || d <= 0 || d > plazoMaximo {
+		errs = append(errs, fmt.Errorf("VERA_TIMEOUT_LLAMADA debe ser mayor que 0 y hasta %s", plazoMaximo))
 	} else {
 		c.Timeout = d
 	}
@@ -101,7 +120,7 @@ func cargarLimitesVera() (copilot.LimitesUso, error) {
 
 // LogValue omite la clave y sólo indica su presencia.
 func (c ConfigVera) LogValue() slog.Value {
-	return slog.GroupValue(slog.String("proveedor", c.Proveedor), slog.String("modelo", c.Modelo), slog.Bool("gemini_api_key_set", c.APIKey != ""), slog.Duration("timeout", c.Timeout), slog.Float64("temperatura", float64(c.Temperatura)))
+	return slog.GroupValue(slog.String("proveedor", c.Proveedor), slog.String("modelo", c.Modelo), slog.String("ollama_url", c.OllamaURL), slog.Bool("gemini_api_key_set", c.APIKey != ""), slog.Duration("timeout", c.Timeout), slog.Float64("temperatura", float64(c.Temperatura)))
 }
 
 func nuevoProveedorIA(ctx context.Context, c ConfigVera) (copilot.ProveedorIA, error) {
@@ -110,6 +129,9 @@ func nuevoProveedorIA(ctx context.Context, c ConfigVera) (copilot.ProveedorIA, e
 		return provsim.Nuevo(), nil
 	case "gemini":
 		return gemini.Nuevo(ctx, gemini.Config{APIKey: c.APIKey, Modelo: c.Modelo, Timeout: c.Timeout, Temperatura: c.Temperatura}, slog.Default())
+	case "local":
+		// Sin sondeo al arrancar: Ollama puede no estar arriba todavía.
+		return ollama.Nuevo(ollama.Config{URL: c.OllamaURL, Modelo: c.Modelo, Timeout: c.Timeout, Temperatura: c.Temperatura}, slog.Default())
 	default:
 		return nil, copilot.ErrSolicitudIA
 	}
