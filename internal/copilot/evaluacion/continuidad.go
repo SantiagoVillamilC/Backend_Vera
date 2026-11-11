@@ -72,7 +72,13 @@ func respuestaDeLecturas(historial []copilot.TurnoIA) string {
 					Fecha, Motivo string
 					Monto         importeRespaldo
 				}
-				HayMas bool `json:"hay_mas"`
+				HayMas     bool `json:"hay_mas"`
+				Mes        string
+				Total      importeRespaldo
+				Categorias []struct {
+					Nombre string
+					Total  importeRespaldo
+				}
 			}
 		}
 		if json.Unmarshal(p.Resultado.Datos, &s) != nil || s.Datos == nil {
@@ -108,6 +114,18 @@ func respuestaDeLecturas(historial []copilot.TurnoIA) string {
 			if d.HayMas {
 				textos = append(textos, "Hay más movimientos fuera de esta página.")
 			}
+		case "resumir_consumo_por_categoria":
+			if d.Mes == "" || d.Total.texto() == "" {
+				return ""
+			}
+			partes := make([]string, 0, len(d.Categorias))
+			for _, c := range d.Categorias {
+				if c.Nombre == "" || c.Total.texto() == "" {
+					return ""
+				}
+				partes = append(partes, c.Nombre+" "+c.Total.texto())
+			}
+			textos = append(textos, "Gasto de "+d.Mes+" por categoría: "+strings.Join(partes, ", ")+". Total calculado por el backend: "+d.Total.texto()+".")
 		default:
 			return ""
 		}

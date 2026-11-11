@@ -145,6 +145,12 @@ tokens conocidos y el resultado. No registra instrucciones, mensajes, resultados
 funciones ni audio. Ante timeout pueden existir cargos de cómputo local que nadie reporta,
 así que no se inventa consumo.
 
+## Evaluación contra el conjunto congelado
+
+`cmd/evaluar-vera` acepta `-proveedor local`. En ese modo construye `ollama.Nuevo` con el modelo de
+`VERA_MODELO`, no exige `-nivel-gratuito-confirmado` y usa intervalo cero salvo que se fije. El
+detalle de la medición, los criterios y la reproducción están en `aceptacion-agente-local.md`.
+
 ## Verificación automatizada
 
 ```sh

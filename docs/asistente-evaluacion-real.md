@@ -68,10 +68,10 @@ a demostrar inmunidad ante cualquier ataque ni paráfrasis de instrucciones.
 ## Ejecución y continuación
 
 ```sh
-go run ./cmd/evaluar-vera -modo real -nivel-gratuito-confirmado \
+go run ./cmd/evaluar-vera -proveedor gemini -nivel-gratuito-confirmado \
   -max-solicitudes 20 -repeticiones 3 -intervalo 12s > parte-1.json
 
-go run ./cmd/evaluar-vera -modo real -nivel-gratuito-confirmado \
+go run ./cmd/evaluar-vera -proveedor gemini -nivel-gratuito-confirmado \
   -max-solicitudes 20 -repeticiones 3 -intervalo 12s \
   -continuar parte-1.json > parte-2.json
 ```
@@ -111,7 +111,7 @@ restricciones de respuesta aprobadas. El archivo registra modelo, versión de
 instrucciones, protocolo de evaluación, huella del corpus y configuración.
 
 ```sh
-go run ./cmd/evaluar-vera -modo real -nivel-gratuito-confirmado \
+go run ./cmd/evaluar-vera -proveedor gemini -nivel-gratuito-confirmado \
   -max-solicitudes 50 -repeticiones 3 \
   -base linea-base.json > comparacion.json
 ```

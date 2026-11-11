@@ -4,6 +4,8 @@
 # Variables de entorno locales con secretos. .env.example sí se versiona como plantilla.
 .env*
 !.env.example
+# Plantillas de banderas por destino (CF-A0-02): no llevan secretos.
+!.env.*.example
 
 # Lanzadores personales de pruebas: conservar sólo en cada máquina.
 *.cmd
