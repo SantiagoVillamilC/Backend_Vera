@@ -218,11 +218,11 @@ func (s *Servicio) Huella(ctx context.Context) (string, error) {
 			transaccion = uuid.UUID(fila.TransaccionID.Bytes).String()
 		}
 		_, _ = fmt.Fprintf(suma,
-			"%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%t\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
+			"%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%t\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
 			fila.UsuarioID, transaccion, fila.EntryAncla,
 			fila.OcurridoEn.Time.UTC().Format(time.RFC3339Nano), fila.Moneda, fila.Direccion,
 			fila.MontoCentavos, fila.Contraparte, fila.ContraparteResuelta,
-			fila.Descripcion.String, fila.Categoria, fila.OrigenCategoria,
+			fila.Descripcion.String, fila.Categoria, fila.OrigenCategoria, fila.Escalon,
 			fila.ComercioMid.String, fila.ComercioNombre.String, fila.Mcc.String, fila.VersionModelo,
 			fila.TipoDestino.String, fila.ContraparteLlave.String, fila.ContraparteNombreNormalizado.String)
 	}
@@ -537,6 +537,7 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		Descripcion:                  pgtype.Text{String: descripcion, Valid: descripcion != ""},
 		Categoria:                    string(categoria),
 		OrigenCategoria:              origen,
+		Escalon:                      int16(decision.Escalon),
 		ComercioMid:                  pgtype.Text{String: destinoPersistido.MID, Valid: destinoPersistido.MID != ""},
 		ComercioNombre:               pgtype.Text{String: comercioNombre, Valid: comercioNombre != ""},
 		Mcc:                          pgtype.Text{String: mcc, Valid: mcc != ""},

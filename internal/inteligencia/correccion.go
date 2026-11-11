@@ -206,5 +206,6 @@ func movimientoDeCorreccion(fila repositorio.FilaDeMovimientoRow) MovimientoDeLe
 		Categoria:           fila.Categoria,
 		CategoriaNombre:     fila.CategoriaNombre,
 		OrigenCategoria:     fila.OrigenCategoria,
+		Escalon:             int(fila.Escalon),
 	}
 }

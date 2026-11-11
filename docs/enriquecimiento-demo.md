@@ -22,7 +22,11 @@ MCC, catálogo, léxico y clasificador.
 | 3 | `mcc` | solo en la rama de QR a comercio: el escalón se mira después de descartar la rama de llave |
 | 4 | `catalogo` | solo si `inteligencia.catalogo_marca` tiene filas |
 | 5 | `lexico` | `LEXICO=v2` |
-| 6 | `tfidf` o `llm` | `CLASIFICADOR=tfidf` |
+| 6 | `tfidf` | `CLASIFICADOR=tfidf` |
+| 7 | `sin_categoria` | cierre de la cascada, o abstención del clasificador en el escalón 6 |
+
+La abstención del clasificador se guarda con origen `sin_categoria` y escalón 6: el origen dice que
+ningún peldaño dio categoría y el escalón dice que el último que la miró fue el 6.
 
 El escalón 3 no se evalúa en los pagos por llave ni cuando la contraparte es una persona.
 `Decidir` cierra esa rama con `sin_categoria` antes de mirar el MCC, y `escribirMovimiento` marca

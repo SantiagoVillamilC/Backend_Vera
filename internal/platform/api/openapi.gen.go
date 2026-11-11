@@ -117,6 +117,117 @@ func (e AccionResueltaResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for Categoria.
+const (
+	CategoriaAlimentosMercado      Categoria = "alimentos_mercado"
+	CategoriaComisiones            Categoria = "comisiones_costos_financieros"
+	CategoriaCompras               Categoria = "compras"
+	CategoriaEducacion             Categoria = "educacion"
+	CategoriaEntretenimiento       Categoria = "entretenimiento"
+	CategoriaOtrosGastos           Categoria = "otros_gastos"
+	CategoriaOtrosIngresos         Categoria = "otros_ingresos"
+	CategoriaReembolso             Categoria = "reembolso"
+	CategoriaRestaurantes          Categoria = "restaurantes_domicilios"
+	CategoriaSalario               Categoria = "salario"
+	CategoriaSalud                 Categoria = "salud"
+	CategoriaSinCategoria          Categoria = "sin_categoria"
+	CategoriaTransferenciaRecibida Categoria = "transferencia_recibida"
+	CategoriaTransporte            Categoria = "transporte"
+	CategoriaViviendaServicios     Categoria = "vivienda_servicios"
+)
+
+// Valid indicates whether the value is a known member of the Categoria enum.
+func (e Categoria) Valid() bool {
+	switch e {
+	case CategoriaAlimentosMercado:
+		return true
+	case CategoriaComisiones:
+		return true
+	case CategoriaCompras:
+		return true
+	case CategoriaEducacion:
+		return true
+	case CategoriaEntretenimiento:
+		return true
+	case CategoriaOtrosGastos:
+		return true
+	case CategoriaOtrosIngresos:
+		return true
+	case CategoriaReembolso:
+		return true
+	case CategoriaRestaurantes:
+		return true
+	case CategoriaSalario:
+		return true
+	case CategoriaSalud:
+		return true
+	case CategoriaSinCategoria:
+		return true
+	case CategoriaTransferenciaRecibida:
+		return true
+	case CategoriaTransporte:
+		return true
+	case CategoriaViviendaServicios:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CategoriaOfrecida.
+const (
+	OfrecidaAlimentosMercado      CategoriaOfrecida = "alimentos_mercado"
+	OfrecidaComisiones            CategoriaOfrecida = "comisiones_costos_financieros"
+	OfrecidaCompras               CategoriaOfrecida = "compras"
+	OfrecidaEducacion             CategoriaOfrecida = "educacion"
+	OfrecidaEntretenimiento       CategoriaOfrecida = "entretenimiento"
+	OfrecidaOtrosGastos           CategoriaOfrecida = "otros_gastos"
+	OfrecidaOtrosIngresos         CategoriaOfrecida = "otros_ingresos"
+	OfrecidaReembolso             CategoriaOfrecida = "reembolso"
+	OfrecidaRestaurantes          CategoriaOfrecida = "restaurantes_domicilios"
+	OfrecidaSalario               CategoriaOfrecida = "salario"
+	OfrecidaSalud                 CategoriaOfrecida = "salud"
+	OfrecidaTransferenciaRecibida CategoriaOfrecida = "transferencia_recibida"
+	OfrecidaTransporte            CategoriaOfrecida = "transporte"
+	OfrecidaViviendaServicios     CategoriaOfrecida = "vivienda_servicios"
+)
+
+// Valid indicates whether the value is a known member of the CategoriaOfrecida enum.
+func (e CategoriaOfrecida) Valid() bool {
+	switch e {
+	case OfrecidaAlimentosMercado:
+		return true
+	case OfrecidaComisiones:
+		return true
+	case OfrecidaCompras:
+		return true
+	case OfrecidaEducacion:
+		return true
+	case OfrecidaEntretenimiento:
+		return true
+	case OfrecidaOtrosGastos:
+		return true
+	case OfrecidaOtrosIngresos:
+		return true
+	case OfrecidaReembolso:
+		return true
+	case OfrecidaRestaurantes:
+		return true
+	case OfrecidaSalario:
+		return true
+	case OfrecidaSalud:
+		return true
+	case OfrecidaTransferenciaRecibida:
+		return true
+	case OfrecidaTransporte:
+		return true
+	case OfrecidaViviendaServicios:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConfirmarDepositoRequestEstado.
 const (
 	Aprobado  ConfirmarDepositoRequestEstado = "aprobado"
@@ -723,6 +834,39 @@ func (e InteligenciaAvisosResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaCategoriaGrupo.
+const (
+	Gasto   InteligenciaCategoriaGrupo = "gasto"
+	Ingreso InteligenciaCategoriaGrupo = "ingreso"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaCategoriaGrupo enum.
+func (e InteligenciaCategoriaGrupo) Valid() bool {
+	switch e {
+	case Gasto:
+		return true
+	case Ingreso:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaCategoriasResponseSuccess.
+const (
+	InteligenciaCategoriasResponseSuccessTrue InteligenciaCategoriasResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaCategoriasResponseSuccess enum.
+func (e InteligenciaCategoriasResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaCategoriasResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InteligenciaCorreccionResponseSuccess.
 const (
 	InteligenciaCorreccionResponseSuccessTrue InteligenciaCorreccionResponseSuccess = true
@@ -765,45 +909,6 @@ const (
 func (e InteligenciaMovimientoMoneda) Valid() bool {
 	switch e {
 	case InteligenciaMovimientoMonedaCOP:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InteligenciaMovimientoOrigenCategoria.
-const (
-	Catalogo           InteligenciaMovimientoOrigenCategoria = "catalogo"
-	ContraparteInterna InteligenciaMovimientoOrigenCategoria = "contraparte_interna"
-	Lexico             InteligenciaMovimientoOrigenCategoria = "lexico"
-	Llm                InteligenciaMovimientoOrigenCategoria = "llm"
-	Manual             InteligenciaMovimientoOrigenCategoria = "manual"
-	Mcc                InteligenciaMovimientoOrigenCategoria = "mcc"
-	Memoria            InteligenciaMovimientoOrigenCategoria = "memoria"
-	SinCategoria       InteligenciaMovimientoOrigenCategoria = "sin_categoria"
-	Tfidf              InteligenciaMovimientoOrigenCategoria = "tfidf"
-)
-
-// Valid indicates whether the value is a known member of the InteligenciaMovimientoOrigenCategoria enum.
-func (e InteligenciaMovimientoOrigenCategoria) Valid() bool {
-	switch e {
-	case Catalogo:
-		return true
-	case ContraparteInterna:
-		return true
-	case Lexico:
-		return true
-	case Llm:
-		return true
-	case Manual:
-		return true
-	case Mcc:
-		return true
-	case Memoria:
-		return true
-	case SinCategoria:
-		return true
-	case Tfidf:
 		return true
 	default:
 		return false
@@ -1095,6 +1200,39 @@ const (
 func (e OkResponseSuccess) Valid() bool {
 	switch e {
 	case OkResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrigenEnriquecido.
+const (
+	Catalogo           OrigenEnriquecido = "catalogo"
+	ContraparteInterna OrigenEnriquecido = "contraparte_interna"
+	Lexico             OrigenEnriquecido = "lexico"
+	Mcc                OrigenEnriquecido = "mcc"
+	Memoria            OrigenEnriquecido = "memoria"
+	SinCategoria       OrigenEnriquecido = "sin_categoria"
+	Tfidf              OrigenEnriquecido = "tfidf"
+)
+
+// Valid indicates whether the value is a known member of the OrigenEnriquecido enum.
+func (e OrigenEnriquecido) Valid() bool {
+	switch e {
+	case Catalogo:
+		return true
+	case ContraparteInterna:
+		return true
+	case Lexico:
+		return true
+	case Mcc:
+		return true
+	case Memoria:
+		return true
+	case SinCategoria:
+		return true
+	case Tfidf:
 		return true
 	default:
 		return false
@@ -1560,6 +1698,12 @@ type AccionResueltaResponse struct {
 
 // AccionResueltaResponseSuccess defines model for AccionResueltaResponse.Success.
 type AccionResueltaResponseSuccess bool
+
+// Categoria Los 15 codigos del catalogo cerrado, en el orden firmado en el punto 349 bis. sin_categoria existe para que la clave foranea de la copia no admita nulo y no se ofrece al usuario.
+type Categoria string
+
+// CategoriaOfrecida Las 14 categorias que se ofrecen al usuario para corregir un movimiento, en el mismo orden. Es Categoria sin sin_categoria.
+type CategoriaOfrecida string
 
 // ConfirmarAccionVeraRequest defines model for ConfirmarAccionVeraRequest.
 type ConfirmarAccionVeraRequest struct {
@@ -2047,6 +2191,29 @@ type InteligenciaAvisosResponse struct {
 // InteligenciaAvisosResponseSuccess defines model for InteligenciaAvisosResponse.Success.
 type InteligenciaAvisosResponseSuccess bool
 
+// InteligenciaCategoria defines model for InteligenciaCategoria.
+type InteligenciaCategoria struct {
+	// Codigo Las 14 categorias que se ofrecen al usuario para corregir un movimiento, en el mismo orden. Es Categoria sin sin_categoria.
+	Codigo CategoriaOfrecida          `json:"codigo"`
+	Grupo  InteligenciaCategoriaGrupo `json:"grupo"`
+	Nombre string                     `json:"nombre"`
+	Orden  int                        `json:"orden"`
+}
+
+// InteligenciaCategoriaGrupo defines model for InteligenciaCategoria.Grupo.
+type InteligenciaCategoriaGrupo string
+
+// InteligenciaCategoriasResponse defines model for InteligenciaCategoriasResponse.
+type InteligenciaCategoriasResponse struct {
+	Data    []InteligenciaCategoria               `json:"data"`
+	Error   *map[string]interface{}               `json:"error"`
+	Meta    *map[string]interface{}               `json:"meta"`
+	Success InteligenciaCategoriasResponseSuccess `json:"success"`
+}
+
+// InteligenciaCategoriasResponseSuccess defines model for InteligenciaCategoriasResponse.Success.
+type InteligenciaCategoriasResponseSuccess bool
+
 // InteligenciaCorreccion defines model for InteligenciaCorreccion.
 type InteligenciaCorreccion struct {
 	// FilasCambiadas Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
@@ -2083,13 +2250,18 @@ type InteligenciaMovimiento struct {
 	ContraparteResuelta bool                            `json:"contraparte_resuelta"`
 	Descripcion         *string                         `json:"descripcion"`
 	Direccion           InteligenciaMovimientoDireccion `json:"direccion"`
-	Moneda              InteligenciaMovimientoMoneda    `json:"moneda"`
+
+	// Escalon Escalon de la cascada que decidio la fila, de 1 a 7. Se persiste porque sin_categoria no distingue la abstencion del escalon 6 de un pago que nunca llego al clasificador.
+	Escalon int                          `json:"escalon"`
+	Moneda  InteligenciaMovimientoMoneda `json:"moneda"`
 
 	// MontoCentavos Monto en centavos, mayor que cero. La direccion del dinero viaja en su propio campo.
-	MontoCentavos   string                                `json:"monto_centavos"`
-	OcurridoEn      time.Time                             `json:"ocurrido_en"`
-	OrigenCategoria InteligenciaMovimientoOrigenCategoria `json:"origen_categoria"`
-	TransaccionId   openapi_types.UUID                    `json:"transaccion_id"`
+	MontoCentavos string    `json:"monto_centavos"`
+	OcurridoEn    time.Time `json:"ocurrido_en"`
+
+	// OrigenCategoria Origen que quedo escrito en la fila de la copia enriquecida. Es el conjunto cerrado del CHECK de la migracion 0031 y coincide con inteligencia.OrigenesEscribibles.
+	OrigenCategoria OrigenEnriquecido  `json:"origen_categoria"`
+	TransaccionId   openapi_types.UUID `json:"transaccion_id"`
 }
 
 // InteligenciaMovimientoDireccion defines model for InteligenciaMovimiento.Direccion.
@@ -2097,9 +2269,6 @@ type InteligenciaMovimientoDireccion string
 
 // InteligenciaMovimientoMoneda defines model for InteligenciaMovimiento.Moneda.
 type InteligenciaMovimientoMoneda string
-
-// InteligenciaMovimientoOrigenCategoria defines model for InteligenciaMovimiento.OrigenCategoria.
-type InteligenciaMovimientoOrigenCategoria string
 
 // InteligenciaMovimientosResponse defines model for InteligenciaMovimientosResponse.
 type InteligenciaMovimientosResponse struct {
@@ -2326,6 +2495,9 @@ type OkResponseSuccess bool
 
 // OperacionAccionVeraRequest Cuerpo opcional vacío; no admite destino, monto ni datos del desafío.
 type OperacionAccionVeraRequest = struct{}
+
+// OrigenEnriquecido Origen que quedo escrito en la fila de la copia enriquecida. Es el conjunto cerrado del CHECK de la migracion 0031 y coincide con inteligencia.OrigenesEscribibles.
+type OrigenEnriquecido string
 
 // PhoneChangeRequest defines model for PhoneChangeRequest.
 type PhoneChangeRequest struct {
@@ -3001,6 +3173,9 @@ type ServerInterface interface {
 	// DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
 	// (POST /v1/inteligencia/avisos/{id}/descartar)
 	DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string)
+	// ListarCategoriasInteligencia Catalogo de categorias que el usuario puede asignar a un movimiento, en el orden firmado.
+	// (GET /v1/inteligencia/categorias)
+	ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request)
 	// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
 	// (GET /v1/inteligencia/movimientos)
 	ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams)
@@ -3160,6 +3335,12 @@ func (_ Unimplemented) ListarAvisosInteligencia(w http.ResponseWriter, r *http.R
 // DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
 // (POST /v1/inteligencia/avisos/{id}/descartar)
 func (_ Unimplemented) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarCategoriasInteligencia Catalogo de categorias que el usuario puede asignar a un movimiento, en el orden firmado.
+// (GET /v1/inteligencia/categorias)
+func (_ Unimplemented) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3600,6 +3781,20 @@ func (siw *ServerInterfaceWrapper) DescartarAvisoInteligencia(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DescartarAvisoInteligencia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarCategoriasInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarCategoriasInteligencia(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4365,6 +4560,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/inteligencia/avisos/{id}/descartar", wrapper.DescartarAvisoInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/categorias", wrapper.ListarCategoriasInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/depositos", wrapper.CrearDeposito)

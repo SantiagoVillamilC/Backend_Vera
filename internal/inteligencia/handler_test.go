@@ -45,6 +45,10 @@ type servicioDeLecturaFalso struct {
 	avisoDescarte DescarteDeAviso
 	avisoErr      error
 	avisoBorrado  uuid.UUID
+
+	categorias         []EntradaCatalogo
+	categoriasErr      error
+	categoriasLlamadas int
 }
 
 func (f *servicioDeLecturaFalso) Movimientos(_ context.Context, usuarioID string, ancla *CursorDeMovimiento,
@@ -87,6 +91,11 @@ func (f *servicioDeLecturaFalso) DescartarAviso(_ context.Context, usuarioID str
 	f.usuario = usuarioID
 	f.avisoBorrado = avisoID
 	return f.avisoDescarte, f.avisoErr
+}
+
+func (f *servicioDeLecturaFalso) Categorias(_ context.Context) ([]EntradaCatalogo, error) {
+	f.categoriasLlamadas++
+	return f.categorias, f.categoriasErr
 }
 
 func TestNuevoHandlerConServicioNuloFallaAlConstruir(t *testing.T) {
@@ -199,6 +208,7 @@ func TestListarMovimientosDevuelveElSobreYElCursor(t *testing.T) {
 				Categoria:           "compras",
 				CategoriaNombre:     "Compras",
 				OrigenCategoria:     "memoria",
+				Escalon:             EscalonMemoria,
 			}},
 			Siguiente: &siguiente,
 			HayMas:    true,
@@ -233,6 +243,7 @@ func TestListarMovimientosDevuelveElSobreYElCursor(t *testing.T) {
 			Categoria           string  `json:"categoria"`
 			CategoriaNombre     string  `json:"categoria_nombre"`
 			OrigenCategoria     string  `json:"origen_categoria"`
+			Escalon             int     `json:"escalon"`
 		} `json:"data"`
 		Meta *struct {
 			Limit      int     `json:"limit"`
@@ -248,7 +259,8 @@ func TestListarMovimientosDevuelveElSobreYElCursor(t *testing.T) {
 	}
 	movimiento := respuesta.Data[0]
 	if movimiento.TransaccionID != transaccion.String() || movimiento.Direccion != "salida" ||
-		movimiento.MontoCentavos != "150000" || movimiento.Categoria != "compras" {
+		movimiento.MontoCentavos != "150000" || movimiento.Categoria != "compras" ||
+		movimiento.OrigenCategoria != "memoria" || movimiento.Escalon != EscalonMemoria {
 		t.Errorf("movimiento = %+v", movimiento)
 	}
 	if respuesta.Meta == nil || respuesta.Meta.Limit != LimiteMovimientosPorDefecto ||
@@ -270,6 +282,73 @@ func TestListarMovimientosVacioSerializaUnaLista(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"data":[]`) {
 		t.Errorf("data vacía no es lista: %s", rec.Body.String())
+	}
+}
+
+func TestListarCategoriasOfreceLasCatorceVisiblesEnOrden(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{categorias: CatalogoFijo()}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/categorias")
+	NuevoHandler(falso).ListarCategoriasInteligencia(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if contenido := rec.Header().Get("Content-Type"); !strings.HasPrefix(contenido, "application/json") {
+		t.Fatalf("Content-Type = %q", contenido)
+	}
+	var respuesta struct {
+		Data []struct {
+			Codigo string `json:"codigo"`
+			Nombre string `json:"nombre"`
+			Grupo  string `json:"grupo"`
+			Orden  int    `json:"orden"`
+		} `json:"data"`
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if respuesta.Error != nil {
+		t.Fatalf("error = %+v, want null", respuesta.Error)
+	}
+	if len(respuesta.Data) != 14 {
+		t.Fatalf("categorías = %d, want 14: %s", len(respuesta.Data), rec.Body.String())
+	}
+	for i, fila := range respuesta.Data {
+		if fila.Codigo != string(categoriasVisibles[i]) {
+			t.Fatalf("posición %d = %q, want %q", i, fila.Codigo, categoriasVisibles[i])
+		}
+		entrada, existe := BuscarCategoria(categoriasVisibles[i])
+		if !existe || fila.Nombre != entrada.Nombre || fila.Grupo != entrada.Grupo ||
+			fila.Orden != int(entrada.Orden) {
+			t.Errorf("fila %d = %+v, want %+v", i, fila, entrada)
+		}
+	}
+	for _, fila := range respuesta.Data {
+		if fila.Codigo == string(SinCategoria) {
+			t.Error("sin_categoria no se ofrece")
+		}
+	}
+	if falso.categoriasLlamadas != 1 {
+		t.Errorf("llamadas al servicio = %d, want 1", falso.categoriasLlamadas)
+	}
+}
+
+func TestListarCategoriasPropagaElFalloDelServicio(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{categoriasErr: errors.New("la base no responde")}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/categorias")
+	NuevoHandler(falso).ListarCategoriasInteligencia(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("código = %d, want 500", rec.Code)
 	}
 }
 
@@ -493,7 +572,8 @@ func TestCorregirMovimientoDevuelveElSobre(t *testing.T) {
 			ContraparteResuelta: false,
 			Categoria:           string(CategoriaCompras),
 			CategoriaNombre:     "Compras",
-			OrigenCategoria:     "memoria",
+			OrigenCategoria:     OrigenMemoria,
+			Escalon:             EscalonMemoria,
 		},
 		FilasCambiadas: 3,
 	}}

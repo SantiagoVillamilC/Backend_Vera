@@ -90,6 +90,7 @@ type InteligenciaHandler interface {
 	ResumenInteligencia(http.ResponseWriter, *http.Request, api.ResumenInteligenciaParams)
 	ListarAvisosInteligencia(http.ResponseWriter, *http.Request, api.ListarAvisosInteligenciaParams)
 	DescartarAvisoInteligencia(http.ResponseWriter, *http.Request, string)
+	ListarCategoriasInteligencia(http.ResponseWriter, *http.Request)
 }
 
 // DependenciasAuth agrupa los colaboradores que main inyecta en el router.
@@ -179,6 +180,14 @@ func (s servidorV1) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Re
 		return
 	}
 	s.inteligencia.DescartarAvisoInteligencia(w, r, id)
+}
+
+func (s servidorV1) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.ListarCategoriasInteligencia(w, r)
 }
 
 var _ api.ServerInterface = servidorV1{}

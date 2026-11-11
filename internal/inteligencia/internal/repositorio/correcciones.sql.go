@@ -24,6 +24,7 @@ SELECT m.transaccion_id,
        m.categoria,
        c.nombre AS categoria_nombre,
        m.origen_categoria,
+       m.escalon,
        m.tipo_destino,
        m.contraparte_llave,
        m.comercio_mid,
@@ -51,6 +52,7 @@ type FilaDeMovimientoRow struct {
 	Categoria                    string             `json:"categoria"`
 	CategoriaNombre              string             `json:"categoria_nombre"`
 	OrigenCategoria              string             `json:"origen_categoria"`
+	Escalon                      int16              `json:"escalon"`
 	TipoDestino                  pgtype.Text        `json:"tipo_destino"`
 	ContraparteLlave             pgtype.Text        `json:"contraparte_llave"`
 	ComercioMid                  pgtype.Text        `json:"comercio_mid"`
@@ -72,6 +74,7 @@ func (q *Queries) FilaDeMovimiento(ctx context.Context, arg FilaDeMovimientoPara
 		&i.Categoria,
 		&i.CategoriaNombre,
 		&i.OrigenCategoria,
+		&i.Escalon,
 		&i.TipoDestino,
 		&i.ContraparteLlave,
 		&i.ComercioMid,
@@ -179,6 +182,7 @@ WITH objetivo AS (
 UPDATE inteligencia.movimiento_enriquecido m
    SET categoria = o.categoria,
        origen_categoria = 'memoria',
+       escalon = 1,
        calculado_en = now()
   FROM objetivo o
  WHERE m.usuario_id = o.usuario_id

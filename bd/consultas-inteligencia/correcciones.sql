@@ -10,6 +10,7 @@ SELECT m.transaccion_id,
        m.categoria,
        c.nombre AS categoria_nombre,
        m.origen_categoria,
+       m.escalon,
        m.tipo_destino,
        m.contraparte_llave,
        m.comercio_mid,
@@ -69,6 +70,7 @@ WITH objetivo AS (
 UPDATE inteligencia.movimiento_enriquecido m
    SET categoria = o.categoria,
        origen_categoria = 'memoria',
+       escalon = 1,
        calculado_en = now()
   FROM objetivo o
  WHERE m.usuario_id = o.usuario_id

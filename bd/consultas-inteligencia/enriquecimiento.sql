@@ -38,7 +38,7 @@ SELECT je.id AS entry_id,
 -- name: InsertarMovimientoEnriquecido :exec
 INSERT INTO inteligencia.movimiento_enriquecido (
     usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
-    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
+    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria, escalon,
     comercio_mid, comercio_nombre, mcc, version_modelo,
     tipo_destino, contraparte_llave, contraparte_nombre_normalizado
 ) VALUES (
@@ -46,6 +46,7 @@ INSERT INTO inteligencia.movimiento_enriquecido (
     sqlc.arg('ocurrido_en'), sqlc.arg('moneda'), sqlc.arg('direccion'),
     sqlc.arg('monto_centavos'), sqlc.arg('contraparte'), sqlc.arg('contraparte_resuelta'),
     sqlc.arg('descripcion'), sqlc.arg('categoria'), sqlc.arg('origen_categoria'),
+    sqlc.arg('escalon'),
     sqlc.arg('comercio_mid'), sqlc.arg('comercio_nombre'), sqlc.arg('mcc'),
     sqlc.arg('version_modelo'), sqlc.arg('tipo_destino'), sqlc.arg('contraparte_llave'),
     sqlc.arg('contraparte_nombre_normalizado')
@@ -61,6 +62,7 @@ ON CONFLICT (usuario_id, transaccion_id) DO UPDATE SET
     descripcion = EXCLUDED.descripcion,
     categoria = EXCLUDED.categoria,
     origen_categoria = EXCLUDED.origen_categoria,
+    escalon = EXCLUDED.escalon,
     comercio_mid = EXCLUDED.comercio_mid,
     comercio_nombre = EXCLUDED.comercio_nombre,
     mcc = EXCLUDED.mcc,
@@ -86,7 +88,7 @@ UPDATE inteligencia.cursor_enriquecimiento
 
 -- name: ExportarCopia :many
 SELECT usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
-       contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
+       contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria, escalon,
        comercio_mid, comercio_nombre, mcc, version_modelo,
        tipo_destino, contraparte_llave, contraparte_nombre_normalizado
   FROM inteligencia.movimiento_enriquecido

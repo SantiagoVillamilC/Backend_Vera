@@ -134,6 +134,7 @@ type movimientoLeido struct {
 	Resuelta    bool
 	Categoria   string
 	Origen      string
+	Escalon     int16
 }
 
 func leerMovimiento(t *testing.T, pool *pgxpool.Pool, usuario string, transaccion uuid.UUID) movimientoLeido {
@@ -142,12 +143,13 @@ func leerMovimiento(t *testing.T, pool *pgxpool.Pool, usuario string, transaccio
 	_, err := enTransaccion(t.Context(), poolDeInteligencia{pool: pool},
 		func(ctx context.Context, tx transaccionDeInteligencia, _ *repositorio.Queries) (struct{}, error) {
 			return struct{}{}, tx.QueryRow(ctx, `
-SELECT direccion, monto_centavos, contraparte, contraparte_resuelta, categoria, origen_categoria
+SELECT direccion, monto_centavos, contraparte, contraparte_resuelta, categoria, origen_categoria,
+       escalon
   FROM inteligencia.movimiento_enriquecido
  WHERE usuario_id = $1 AND transaccion_id = $2`,
 				usuario, pgtype.UUID{Bytes: transaccion, Valid: true}).
 				Scan(&leido.Direccion, &leido.Monto, &leido.Contraparte, &leido.Resuelta,
-					&leido.Categoria, &leido.Origen)
+					&leido.Categoria, &leido.Origen, &leido.Escalon)
 		})
 	if err != nil {
 		t.Fatalf("leer movimiento de %q en %s: %v", usuario, transaccion, err)

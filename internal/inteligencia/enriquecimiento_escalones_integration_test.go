@@ -28,6 +28,7 @@ type casoDeEscalon struct {
 	origen            string
 	categoria         Categoria
 	usuarioConMemoria bool
+	abstuvo           bool
 }
 
 func (c casoDeEscalon) entrada() Entrada {
@@ -40,10 +41,10 @@ func (c casoDeEscalon) entrada() Entrada {
 	}
 }
 
-// TestElLoteEscribeElOrigenDeCadaEscalon recorre los seis escalones con el catálogo cargado por
+// TestElLoteEscribeElOrigenDeCadaEscalon recorre los escalones con el catálogo cargado por
 // CargarCatalogo, comprueba la decisión de la cascada y después corre un lote real sobre asientos
-// sembrados, de modo que el origen quede comprobado en inteligencia.movimiento_enriquecido y no
-// solo en la llamada a Decidir.
+// sembrados, de modo que el origen y el escalón queden comprobados en
+// inteligencia.movimiento_enriquecido y no solo en la llamada a Decidir.
 func TestElLoteEscribeElOrigenDeCadaEscalon(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	ctx := t.Context()
@@ -90,7 +91,7 @@ func TestElLoteEscribeElOrigenDeCadaEscalon(t *testing.T) {
 	for _, escalon := range []int{EscalonMemoria, EscalonInterna, EscalonMCC, EscalonCatalogo,
 		EscalonLexico, EscalonClasificador} {
 		if !escalones.Contiene(escalon) {
-			t.Fatalf("escalones = %v, quiero los seis encendidos", escalones)
+			t.Fatalf("escalones = %v, quiero los seis escalones del lote encendidos", escalones)
 		}
 	}
 
@@ -167,6 +168,15 @@ func TestElLoteEscribeElOrigenDeCadaEscalon(t *testing.T) {
 			origen:            OrigenTFIDF,
 			categoria:         CategoriaCompras,
 		},
+		{
+			nombre:            "abstención del clasificador",
+			descripcion:       "OMEGA " + sufijo,
+			cuentaContraparte: cuentaDelRiel,
+			escalon:           EscalonClasificador,
+			origen:            OrigenSinCategoria,
+			categoria:         SinCategoria,
+			abstuvo:           true,
+		},
 	}
 
 	for _, caso := range casos {
@@ -182,6 +192,13 @@ func TestElLoteEscribeElOrigenDeCadaEscalon(t *testing.T) {
 				recursos.Memoria[NormalizarNombre(caso.descripcion)] = caso.categoria
 			}
 			decision := Decidir(caso.entrada(), recursos, escalones)
+			if caso.abstuvo {
+				if decision.Escalon != caso.escalon || decision.Categoria != "" ||
+					decision.Origen != "" || !decision.PendienteLLM {
+					t.Fatalf("decisión = %+v, want abstención en el escalón %d", decision, caso.escalon)
+				}
+				return
+			}
 			if decision.Escalon != caso.escalon || decision.Origen != caso.origen ||
 				decision.Categoria != caso.categoria {
 				t.Fatalf("decisión = %+v, want escalón %d, origen %q y categoría %q",
@@ -233,6 +250,9 @@ func TestElLoteEscribeElOrigenDeCadaEscalon(t *testing.T) {
 			t.Errorf("%s en la copia = origen %q, categoría %q, want origen %q, categoría %q",
 				caso.nombre, leido.Origen, leido.Categoria, caso.origen, caso.categoria)
 		}
+		if leido.Escalon != int16(caso.escalon) {
+			t.Errorf("%s en la copia = escalón %d, want %d", caso.nombre, leido.Escalon, caso.escalon)
+		}
 		origenes[leido.Origen] = struct{}{}
 	}
 	queridos := make(map[string]struct{}, len(casos))
@@ -240,7 +260,7 @@ func TestElLoteEscribeElOrigenDeCadaEscalon(t *testing.T) {
 		queridos[caso.origen] = struct{}{}
 	}
 	if len(origenes) != len(queridos) {
-		t.Fatalf("orígenes distintos en la copia = %v, quiero exactamente los seis de %v", origenes,
+		t.Fatalf("orígenes distintos en la copia = %v, quiero exactamente los de %v", origenes,
 			queridos)
 	}
 	for origen := range queridos {
@@ -312,6 +332,26 @@ func borrarPorUsuarios(t *testing.T, pool *pgxpool.Pool, consulta string, usuari
 	}
 }
 
+// escalonDelOrigen es la misma tabla con la que la migración 0031 rellenó la columna.
+func escalonDelOrigen(origen string) int16 {
+	switch origen {
+	case OrigenMemoria:
+		return EscalonMemoria
+	case OrigenInterna:
+		return EscalonInterna
+	case OrigenMCC:
+		return EscalonMCC
+	case OrigenCatalogo:
+		return EscalonCatalogo
+	case OrigenLexico:
+		return EscalonLexico
+	case OrigenTFIDF:
+		return EscalonClasificador
+	default:
+		return EscalonSinCategoria
+	}
+}
+
 // insertarMovimientoParaConteo escribe una fila de la copia con la fecha y el origen pedidos.
 func insertarMovimientoParaConteo(t *testing.T, pool *pgxpool.Pool, usuario string, ocurrido time.Time, origen string) {
 	t.Helper()
@@ -329,6 +369,7 @@ func insertarMovimientoParaConteo(t *testing.T, pool *pgxpool.Pool, usuario stri
 				ContraparteResuelta: true,
 				Categoria:           string(SinCategoria),
 				OrigenCategoria:     origen,
+				Escalon:             escalonDelOrigen(origen),
 				VersionModelo:       VersionModelo,
 			})
 		})

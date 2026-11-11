@@ -83,6 +83,7 @@ type MovimientoEnriquecido struct {
 	TipoDestino                  pgtype.Text        `json:"tipo_destino"`
 	ContraparteLlave             pgtype.Text        `json:"contraparte_llave"`
 	ContraparteNombreNormalizado pgtype.Text        `json:"contraparte_nombre_normalizado"`
+	Escalon                      int16              `json:"escalon"`
 }
 
 type NucleoCuentum struct {

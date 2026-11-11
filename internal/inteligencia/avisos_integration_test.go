@@ -50,10 +50,10 @@ func sembrarCopia(t *testing.T, pool *pgxpool.Pool, fila filaDeCopia) {
 			_, err := tx.Exec(ctx, `
 INSERT INTO inteligencia.movimiento_enriquecido (
     usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
-    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
+    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria, escalon,
     comercio_mid, comercio_nombre, mcc, version_modelo, tipo_destino,
     contraparte_llave, contraparte_nombre_normalizado
-) VALUES ($1, $2, $3, $4, 'COP', $5, $6, $7, false, NULL, $8, 'sin_categoria',
+) VALUES ($1, $2, $3, $4, 'COP', $5, $6, $7, false, NULL, $8, 'sin_categoria', 7,
           NULL, $9, NULL, 'cascada-1:primer-corte', $10, $11, $12)`,
 				fila.usuario,
 				pgtype.UUID{Bytes: fila.transaccion, Valid: true},

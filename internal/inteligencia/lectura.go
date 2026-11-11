@@ -85,6 +85,7 @@ type MovimientoDeLectura struct {
 	Categoria           string
 	CategoriaNombre     string
 	OrigenCategoria     string
+	Escalon             int
 }
 
 // PaginaDeMovimientos es una página y el ancla de la siguiente, si la hay.
@@ -141,6 +142,7 @@ func (s *Servicio) Movimientos(ctx context.Context, usuarioID string, ancla *Cur
 			Categoria:           fila.Categoria,
 			CategoriaNombre:     fila.CategoriaNombre,
 			OrigenCategoria:     fila.OrigenCategoria,
+			Escalon:             int(fila.Escalon),
 		})
 	}
 	if hayMas && len(pagina.Movimientos) > 0 {

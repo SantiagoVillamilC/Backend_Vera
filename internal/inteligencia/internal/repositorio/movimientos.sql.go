@@ -23,7 +23,8 @@ SELECT m.transaccion_id,
        m.descripcion,
        m.categoria,
        c.nombre AS categoria_nombre,
-       m.origen_categoria
+       m.origen_categoria,
+       m.escalon
   FROM inteligencia.movimiento_enriquecido m
   JOIN inteligencia.categoria c ON c.codigo = m.categoria
  WHERE m.usuario_id = $1::text
@@ -53,6 +54,7 @@ type PaginaDeMovimientosRow struct {
 	Categoria           string             `json:"categoria"`
 	CategoriaNombre     string             `json:"categoria_nombre"`
 	OrigenCategoria     string             `json:"origen_categoria"`
+	Escalon             int16              `json:"escalon"`
 }
 
 func (q *Queries) PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimientosParams) ([]PaginaDeMovimientosRow, error) {
@@ -81,6 +83,7 @@ func (q *Queries) PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimient
 			&i.Categoria,
 			&i.CategoriaNombre,
 			&i.OrigenCategoria,
+			&i.Escalon,
 		); err != nil {
 			return nil, fmt.Errorf("query PaginaDeMovimientos: %w", err)
 		}

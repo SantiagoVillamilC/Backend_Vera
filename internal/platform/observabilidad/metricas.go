@@ -20,19 +20,16 @@ const espacioDeMetricas = "vera_inteligencia"
 // largoTopeDeEtiqueta es el máximo de caracteres que se conserva de una etiqueta libre.
 const largoTopeDeEtiqueta = 64
 
-// origenesConocidos es la lista cerrada de valores de origen_categoria: los nueve del CHECK de la
-// migración 0023 más el cajón para lo imprevisto, que acota la cardinalidad.
-var origenesConocidos = map[string]struct{}{
-	inteligencia.OrigenMemoria:      {},
-	inteligencia.OrigenInterna:      {},
-	inteligencia.OrigenMCC:          {},
-	inteligencia.OrigenCatalogo:     {},
-	inteligencia.OrigenLexico:       {},
-	inteligencia.OrigenTFIDF:        {},
-	inteligencia.OrigenLLM:          {},
-	inteligencia.OrigenSinCategoria: {},
-	"manual":                        {},
-}
+// origenesConocidos es la lista cerrada de valores de origen_categoria: los siete del CHECK de la
+// migración 0031. El cajón para lo imprevisto se agrega aparte, en la etiqueta, para acotar la
+// cardinalidad sin abrir el conjunto.
+var origenesConocidos = func() map[string]struct{} {
+	conocidos := make(map[string]struct{}, len(inteligencia.OrigenesEscribibles))
+	for _, origen := range inteligencia.OrigenesEscribibles {
+		conocidos[origen] = struct{}{}
+	}
+	return conocidos
+}()
 
 // versionValida acepta la etiqueta de versión del modelo tal como la produce el artefacto.
 var versionValida = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)

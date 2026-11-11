@@ -83,6 +83,7 @@ sql:
       - bd/migraciones/0028_add_mcc_a_journal_entry.sql
       - bd/migraciones/0029_create_catalogo_marca.sql
       - bd/migraciones/0030_categoria_visible_del_catalogo.sql
+      - bd/migraciones/0031_add_escalon_a_la_copia.sql
     queries: bd/consultas-inteligencia
     gen:
       go:

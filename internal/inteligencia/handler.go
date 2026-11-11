@@ -25,6 +25,7 @@ type ServicioDeLectura interface {
 	Resumen(ctx context.Context, usuarioID, mes string, ahora time.Time) (ResumenDelMes, error)
 	AvisosDelUsuario(ctx context.Context, usuarioID, mes string, ahora time.Time) ([]AvisoEmitido, error)
 	DescartarAviso(ctx context.Context, usuarioID string, avisoID uuid.UUID, ahora time.Time) (DescarteDeAviso, error)
+	Categorias(ctx context.Context) ([]EntradaCatalogo, error)
 }
 
 // Handler sirve la vista enriquecida y el resumen de consumo del usuario autenticado.
@@ -104,6 +105,29 @@ func (h *Handler) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.R
 		NextCursor: pagina.Siguiente,
 		HasMore:    pagina.HayMas,
 	})
+}
+
+// ListarCategoriasInteligencia responde el catálogo visible para corregir un movimiento, en el
+// orden firmado. sin_categoria queda fuera: no es una categoría que el usuario elija.
+func (h *Handler) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
+	catalogo, err := h.servicio.Categorias(r.Context())
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	respuesta := make([]api.InteligenciaCategoria, 0, len(catalogo))
+	for _, categoria := range catalogo {
+		if !EsCategoriaVisible(categoria.Codigo) {
+			continue
+		}
+		respuesta = append(respuesta, api.InteligenciaCategoria{
+			Codigo: api.CategoriaOfrecida(categoria.Codigo),
+			Nombre: categoria.Nombre,
+			Grupo:  api.InteligenciaCategoriaGrupo(categoria.Grupo),
+			Orden:  int(categoria.Orden),
+		})
+	}
+	api.WriteData(w, http.StatusOK, respuesta, nil)
 }
 
 // ResumenInteligencia responde el gasto del mes por categoría y la referencia de los meses completos.
@@ -262,7 +286,8 @@ func respuestaDeMovimiento(movimiento MovimientoDeLectura) api.InteligenciaMovim
 		ContraparteResuelta: movimiento.ContraparteResuelta,
 		Categoria:           movimiento.Categoria,
 		CategoriaNombre:     movimiento.CategoriaNombre,
-		OrigenCategoria:     api.InteligenciaMovimientoOrigenCategoria(movimiento.OrigenCategoria),
+		OrigenCategoria:     api.OrigenEnriquecido(movimiento.OrigenCategoria),
+		Escalon:             movimiento.Escalon,
 	}
 	if movimiento.Descripcion != "" {
 		descripcion := movimiento.Descripcion

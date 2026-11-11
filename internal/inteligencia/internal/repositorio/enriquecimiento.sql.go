@@ -113,7 +113,7 @@ func (q *Queries) ConteoPorOrigenYMes(ctx context.Context) ([]ConteoPorOrigenYMe
 
 const exportarCopia = `-- name: ExportarCopia :many
 SELECT usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
-       contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
+       contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria, escalon,
        comercio_mid, comercio_nombre, mcc, version_modelo,
        tipo_destino, contraparte_llave, contraparte_nombre_normalizado
   FROM inteligencia.movimiento_enriquecido
@@ -133,6 +133,7 @@ type ExportarCopiaRow struct {
 	Descripcion                  pgtype.Text        `json:"descripcion"`
 	Categoria                    string             `json:"categoria"`
 	OrigenCategoria              string             `json:"origen_categoria"`
+	Escalon                      int16              `json:"escalon"`
 	ComercioMid                  pgtype.Text        `json:"comercio_mid"`
 	ComercioNombre               pgtype.Text        `json:"comercio_nombre"`
 	Mcc                          pgtype.Text        `json:"mcc"`
@@ -164,6 +165,7 @@ func (q *Queries) ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
 			&i.Descripcion,
 			&i.Categoria,
 			&i.OrigenCategoria,
+			&i.Escalon,
 			&i.ComercioMid,
 			&i.ComercioNombre,
 			&i.Mcc,
@@ -185,7 +187,7 @@ func (q *Queries) ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
 const insertarMovimientoEnriquecido = `-- name: InsertarMovimientoEnriquecido :exec
 INSERT INTO inteligencia.movimiento_enriquecido (
     usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
-    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
+    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria, escalon,
     comercio_mid, comercio_nombre, mcc, version_modelo,
     tipo_destino, contraparte_llave, contraparte_nombre_normalizado
 ) VALUES (
@@ -193,9 +195,10 @@ INSERT INTO inteligencia.movimiento_enriquecido (
     $4, $5, $6,
     $7, $8, $9,
     $10, $11, $12,
-    $13, $14, $15,
-    $16, $17, $18,
-    $19
+    $13,
+    $14, $15, $16,
+    $17, $18, $19,
+    $20
 )
 ON CONFLICT (usuario_id, transaccion_id) DO UPDATE SET
     entry_ancla = EXCLUDED.entry_ancla,
@@ -208,6 +211,7 @@ ON CONFLICT (usuario_id, transaccion_id) DO UPDATE SET
     descripcion = EXCLUDED.descripcion,
     categoria = EXCLUDED.categoria,
     origen_categoria = EXCLUDED.origen_categoria,
+    escalon = EXCLUDED.escalon,
     comercio_mid = EXCLUDED.comercio_mid,
     comercio_nombre = EXCLUDED.comercio_nombre,
     mcc = EXCLUDED.mcc,
@@ -231,6 +235,7 @@ type InsertarMovimientoEnriquecidoParams struct {
 	Descripcion                  pgtype.Text        `json:"descripcion"`
 	Categoria                    string             `json:"categoria"`
 	OrigenCategoria              string             `json:"origen_categoria"`
+	Escalon                      int16              `json:"escalon"`
 	ComercioMid                  pgtype.Text        `json:"comercio_mid"`
 	ComercioNombre               pgtype.Text        `json:"comercio_nombre"`
 	Mcc                          pgtype.Text        `json:"mcc"`
@@ -254,6 +259,7 @@ func (q *Queries) InsertarMovimientoEnriquecido(ctx context.Context, arg Inserta
 		arg.Descripcion,
 		arg.Categoria,
 		arg.OrigenCategoria,
+		arg.Escalon,
 		arg.ComercioMid,
 		arg.ComercioNombre,
 		arg.Mcc,

@@ -1039,6 +1039,31 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/inteligencia/categorias:
+    get:
+      operationId: listarCategoriasInteligencia
+      summary: Catalogo de categorias que el usuario puede asignar a un movimiento, en el orden firmado.
+      description: >
+        Devuelve las 14 categorias visibles del catalogo cerrado. sin_categoria no aparece porque no
+        es una categoria que se elija: marca los movimientos que ningun escalon decidio. El orden es
+        el del catalogo y no cambia entre llamadas.
+      tags: [inteligencia]
+      responses:
+        "200":
+          description: Catalogo visible completo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaCategoriasResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
   /v1/depositos:
     post:
       operationId: crearDeposito
@@ -3196,7 +3221,7 @@ components:
       type: object
       required:
         [transaccion_id, ocurrido_en, moneda, direccion, monto_centavos, contraparte,
-         contraparte_resuelta, descripcion, categoria, categoria_nombre, origen_categoria]
+         contraparte_resuelta, descripcion, categoria, categoria_nombre, origen_categoria, escalon]
       properties:
         transaccion_id:
           type: string
@@ -3227,10 +3252,86 @@ components:
         categoria_nombre:
           type: string
         origen_categoria:
+          $ref: "#/components/schemas/OrigenEnriquecido"
+        escalon:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: >
+            Escalon de la cascada que decidio la fila, de 1 a 7. Se persiste porque sin_categoria
+            no distingue la abstencion del escalon 6 de un pago que nunca llego al clasificador.
+
+    OrigenEnriquecido:
+      type: string
+      description: >
+        Origen que quedo escrito en la fila de la copia enriquecida. Es el conjunto cerrado del
+        CHECK de la migracion 0031 y coincide con inteligencia.OrigenesEscribibles.
+      enum:
+        [memoria, contraparte_interna, mcc, catalogo, lexico, tfidf, sin_categoria]
+
+    Categoria:
+      type: string
+      description: >
+        Los 15 codigos del catalogo cerrado, en el orden firmado en el punto 349 bis. sin_categoria
+        existe para que la clave foranea de la copia no admita nulo y no se ofrece al usuario.
+      enum:
+        [salario, transferencia_recibida, reembolso, otros_ingresos, alimentos_mercado,
+         restaurantes_domicilios, transporte, vivienda_servicios, salud, educacion,
+         entretenimiento, compras, comisiones_costos_financieros, otros_gastos, sin_categoria]
+      x-enum-varnames:
+        [CategoriaSalario, CategoriaTransferenciaRecibida, CategoriaReembolso,
+         CategoriaOtrosIngresos, CategoriaAlimentosMercado, CategoriaRestaurantes,
+         CategoriaTransporte, CategoriaViviendaServicios, CategoriaSalud, CategoriaEducacion,
+         CategoriaEntretenimiento, CategoriaCompras, CategoriaComisiones, CategoriaOtrosGastos,
+         CategoriaSinCategoria]
+
+    CategoriaOfrecida:
+      type: string
+      description: >
+        Las 14 categorias que se ofrecen al usuario para corregir un movimiento, en el mismo orden.
+        Es Categoria sin sin_categoria.
+      enum:
+        [salario, transferencia_recibida, reembolso, otros_ingresos, alimentos_mercado,
+         restaurantes_domicilios, transporte, vivienda_servicios, salud, educacion,
+         entretenimiento, compras, comisiones_costos_financieros, otros_gastos]
+      x-enum-varnames:
+        [OfrecidaSalario, OfrecidaTransferenciaRecibida, OfrecidaReembolso, OfrecidaOtrosIngresos,
+         OfrecidaAlimentosMercado, OfrecidaRestaurantes, OfrecidaTransporte,
+         OfrecidaViviendaServicios, OfrecidaSalud, OfrecidaEducacion, OfrecidaEntretenimiento,
+         OfrecidaCompras, OfrecidaComisiones, OfrecidaOtrosGastos]
+
+    InteligenciaCategoria:
+      type: object
+      required: [codigo, nombre, grupo, orden]
+      properties:
+        codigo:
+          $ref: "#/components/schemas/CategoriaOfrecida"
+        nombre:
           type: string
-          enum:
-            [memoria, contraparte_interna, mcc, catalogo, lexico, tfidf, llm, sin_categoria,
-             manual]
+        grupo:
+          type: string
+          enum: [ingreso, gasto]
+        orden:
+          type: integer
+          minimum: 1
+
+    InteligenciaCategoriasResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaCategoria"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
 
     MetaCursor:
       type: object
