@@ -1,0 +1,24 @@
+# Matriz de banderas por entorno (CF-A0-02).
+#
+# Una fila por bandera y una columna por destino. 60-api.sh traduce DESTINO
+# (local, demo o produccion, declarado en aprovisionar.env) a la columna que
+# corresponde y emite esas banderas en el environment del compose de la API.
+# verificar-banderas.sh compara esa misma columna contra el contenedor
+# centinela-api. Ver docs/configuracion-entornos.md.
+#
+# Formato: cinco columnas separadas por tabulador. Una celda vacía se emite en
+# el compose como la variable definida y vacía (VERA_MODELO: ""), que para
+# os.Getenv es lo mismo que no encontrarla: la aplicación aplica su valor por
+# defecto. Las filas cuya primera columna no es un nombre de variable de
+# entorno describen un escalón que no se enciende con una bandera.
+variable	local	demo	produccion	nota
+CLASIFICADOR	tfidf	tfidf	apagado	Escalón 6 de la cascada. tfidf carga el artefacto embebido. producción lo deja apagado: no hay corte medido que justifique encenderlo.
+LEXICO	v2	v2	apagado	Escalón 5 de la cascada. v2 es el único léxico embebido. Apagado o vacío deja el escalón fuera.
+AVISOS_ACTIVO	false	false	false	Apagado en los tres destinos mientras no haya piloto con personas (README, infra/local/demostrar.sh). Encenderlo en demo o producción es una decisión de producto pendiente, no un valor que este repositorio sostenga.
+AVISOS_HORA	06:00	06:00	06:00	Hora de Colombia, formato HH:MM de 24 horas. Solo tiene efecto con AVISOS_ACTIVO=true.
+VERA_PROVEEDOR	simulado	simulado	simulado	gemini exige GEMINI_API_KEY y VERA_MODELO, que no viven en el repositorio. simulado no necesita red ni credenciales.
+VERA_MODELO				Sin modelo fijado en código: se elige por cuenta cuando VERA_PROVEEDOR=gemini.
+METRICAS_ACTIVO	false	false	false	/metrics exige METRICAS_TOKEN de 32 bytes o más y la API no arranca sin él. Las corridas de medición lo encienden con su propio token (cargas/inteligencia/entorno.sh, infra/local/demostrar.sh).
+ENRIQUECIMIENTO_INTERVAL	5m	5m	5m	Periodo del lote incremental. El banco de medición usa 24h para congelar el corte.
+(sin variable)	siempre	siempre	siempre	Escalón 3, MCC: escalonesDelLote lo evalúa en toda la rama de QR a comercio. No hay bandera que lo apague.
+(sin variable)	por datos	por datos	por datos	Escalón 4, catálogo: se enciende con filas en inteligencia.catalogo_marca, no con una variable de entorno. Sin filas la copia no cambia por él.
