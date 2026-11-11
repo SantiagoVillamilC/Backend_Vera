@@ -708,6 +708,21 @@ func (e InteligenciaAvisoDescarteResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaAvisoDetalleResponseSuccess.
+const (
+	InteligenciaAvisoDetalleResponseSuccessTrue InteligenciaAvisoDetalleResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoDetalleResponseSuccess enum.
+func (e InteligenciaAvisoDetalleResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaAvisoDetalleResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InteligenciaAvisosResponseSuccess.
 const (
 	InteligenciaAvisosResponseSuccessTrue InteligenciaAvisosResponseSuccess = true
@@ -2036,6 +2051,18 @@ type InteligenciaAvisoDescarteResponse struct {
 // InteligenciaAvisoDescarteResponseSuccess defines model for InteligenciaAvisoDescarteResponse.Success.
 type InteligenciaAvisoDescarteResponseSuccess bool
 
+// InteligenciaAvisoDetalleResponse defines model for InteligenciaAvisoDetalleResponse.
+type InteligenciaAvisoDetalleResponse struct {
+	// Data Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya.
+	Data    InteligenciaAviso                       `json:"data"`
+	Error   *map[string]interface{}                 `json:"error"`
+	Meta    *map[string]interface{}                 `json:"meta"`
+	Success InteligenciaAvisoDetalleResponseSuccess `json:"success"`
+}
+
+// InteligenciaAvisoDetalleResponseSuccess defines model for InteligenciaAvisoDetalleResponse.Success.
+type InteligenciaAvisoDetalleResponseSuccess bool
+
 // InteligenciaAvisosResponse defines model for InteligenciaAvisosResponse.
 type InteligenciaAvisosResponse struct {
 	Data    []InteligenciaAviso               `json:"data"`
@@ -2670,6 +2697,10 @@ type ConsultarDestinatarioParams struct {
 
 // ListarAvisosInteligenciaParams defines parameters for ListarAvisosInteligencia.
 type ListarAvisosInteligenciaParams struct {
+	Limite *string `form:"limite,omitempty" json:"limite,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Estado *string `form:"estado,omitempty" json:"estado,omitempty"`
+
 	// Mes Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido llegue al handler y salga como ValidationError.
 	Mes *string `form:"mes,omitempty" json:"mes,omitempty"`
 }
@@ -2994,6 +3025,9 @@ type ServerInterface interface {
 	// ListarAvisosInteligencia Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
 	// (GET /v1/inteligencia/avisos)
 	ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params ListarAvisosInteligenciaParams)
+	// DetalleAvisoInteligencia Devuelve una tarjeta de aviso propia por su identificador.
+	// (GET /v1/inteligencia/avisos/{id})
+	DetalleAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string)
 	// DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
 	// (POST /v1/inteligencia/avisos/{id}/descartar)
 	DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string)
@@ -3150,6 +3184,12 @@ func (_ Unimplemented) ConsultarDestinatario(w http.ResponseWriter, r *http.Requ
 // ListarAvisosInteligencia Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
 // (GET /v1/inteligencia/avisos)
 func (_ Unimplemented) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Request, params ListarAvisosInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DetalleAvisoInteligencia Devuelve una tarjeta de aviso propia por su identificador.
+// (GET /v1/inteligencia/avisos/{id})
+func (_ Unimplemented) DetalleAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3555,6 +3595,45 @@ func (siw *ServerInterfaceWrapper) ListarAvisosInteligencia(w http.ResponseWrite
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListarAvisosInteligenciaParams
 
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "estado" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "estado", r.URL.Query(), &params.Estado, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "estado"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "estado", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "mes" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "mes", r.URL.Query(), &params.Mes, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -3570,6 +3649,32 @@ func (siw *ServerInterfaceWrapper) ListarAvisosInteligencia(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListarAvisosInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DetalleAvisoInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) DetalleAvisoInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DetalleAvisoInteligencia(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4358,6 +4463,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/inteligencia/avisos", wrapper.ListarAvisosInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/avisos/{id}", wrapper.DetalleAvisoInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/inteligencia/avisos/{id}/descartar", wrapper.DescartarAvisoInteligencia)

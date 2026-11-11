@@ -316,24 +316,7 @@ func (s *Servicio) AvisosDelUsuario(ctx context.Context, usuarioID, mes string, 
 	}
 	avisosDelMes := make([]AvisoEmitido, 0, len(filas))
 	for _, fila := range filas {
-		tipo := avisos.Tipo(fila.Tipo)
-		aviso := AvisoEmitido{
-			ID:                uuid.UUID(fila.ID.Bytes),
-			Tipo:              tipo,
-			Clave:             fila.Clave,
-			Titulo:            avisos.TituloDe(tipo, fila.Clave),
-			Texto:             fila.Texto,
-			Porque:            avisos.PorqueDe(tipo),
-			Accion:            avisos.AccionDe(tipo),
-			Periodo:           fila.Periodo.Time,
-			SeveridadCentavos: fila.SeveridadCentavos,
-			Prioridad:         int(fila.Prioridad),
-			CreadoEn:          fila.CreadoEn.Time,
-		}
-		if fila.TransaccionID.Valid {
-			transaccion := uuid.UUID(fila.TransaccionID.Bytes)
-			aviso.TransaccionID = &transaccion
-		}
+		aviso := avisoDeFila(filaDeAviso(fila))
 		avisosDelMes = append(avisosDelMes, aviso)
 	}
 	return avisosDelMes, nil
@@ -391,4 +374,26 @@ func inicioDelMesPedido(mes string, ahora time.Time) (time.Time, error) {
 		return time.Time{}, ErrMesInvalido
 	}
 	return valor, nil
+}
+
+func avisoDeFila(fila filaDeAviso) AvisoEmitido {
+	tipo := avisos.Tipo(fila.Tipo)
+	aviso := AvisoEmitido{
+		ID:                uuid.UUID(fila.ID.Bytes),
+		Tipo:              tipo,
+		Clave:             fila.Clave,
+		Titulo:            avisos.TituloDe(tipo, fila.Clave),
+		Texto:             fila.Texto,
+		Porque:            avisos.PorqueDe(tipo),
+		Accion:            avisos.AccionDe(tipo),
+		Periodo:           fila.Periodo.Time,
+		SeveridadCentavos: fila.SeveridadCentavos,
+		Prioridad:         int(fila.Prioridad),
+		CreadoEn:          fila.CreadoEn.Time,
+	}
+	if fila.TransaccionID.Valid {
+		transaccion := uuid.UUID(fila.TransaccionID.Bytes)
+		aviso.TransaccionID = &transaccion
+	}
+	return aviso
 }

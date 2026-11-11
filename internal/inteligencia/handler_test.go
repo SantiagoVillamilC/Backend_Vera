@@ -668,3 +668,15 @@ func TestDescartarAvisoRespondeElSobre(t *testing.T) {
 		t.Fatalf("respuesta = %s", rec.Body.String())
 	}
 }
+
+func (f *servicioDeLecturaFalso) Aviso(_ context.Context, usuario string, id uuid.UUID) (AvisoEmitido, error) {
+	f.usuario = usuario
+	if len(f.avisos) > 0 {
+		return f.avisos[0], f.avisoErr
+	}
+	return AvisoEmitido{}, f.avisoErr
+}
+func (f *servicioDeLecturaFalso) AvisosDelUsuarioPaginados(_ context.Context, usuario string, _ EstadoDeAvisos, _ *CursorDeAviso, _ int) (PaginaDeAvisos, error) {
+	f.usuario = usuario
+	return PaginaDeAvisos{Avisos: f.avisos}, f.avisosErr
+}

@@ -13,9 +13,12 @@ import (
 type Querier interface {
 	AnclasPendientes(ctx context.Context, arg AnclasPendientesParams) ([]int64, error)
 	AvanzarCursor(ctx context.Context, ultimoEntryID int64) error
+	AvisoPorID(ctx context.Context, arg AvisoPorIDParams) (AvisoPorIDRow, error)
 	AvisoPorIdentidad(ctx context.Context, arg AvisoPorIdentidadParams) (AvisoPorIdentidadRow, error)
 	AvisosDelUsuarioEnVentana(ctx context.Context, arg AvisosDelUsuarioEnVentanaParams) ([]AvisosDelUsuarioEnVentanaRow, error)
+	AvisosDescartadosPorPagina(ctx context.Context, arg AvisosDescartadosPorPaginaParams) ([]AvisosDescartadosPorPaginaRow, error)
 	AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDelMesParams) ([]AvisosVigentesDelMesRow, error)
+	AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error)
 	BorrarCopia(ctx context.Context) error
 	BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMovimientoEnriquecidoParams) error
 	ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error)

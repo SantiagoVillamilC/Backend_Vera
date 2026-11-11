@@ -122,3 +122,47 @@ SELECT DISTINCT usuario_id
  WHERE usuario_id > sqlc.arg('despues_de')::text
  ORDER BY usuario_id
  LIMIT sqlc.arg('limite')::int;
+
+-- name: AvisoPorID :one
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE id = sqlc.arg('id')::uuid
+   AND usuario_id = sqlc.arg('usuario_id')::text;
+
+-- name: AvisosVigentesPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE usuario_id = sqlc.arg('usuario_id')::text
+   AND descartado_en IS NULL
+   AND (sqlc.narg('prioridad')::smallint IS NULL
+        OR prioridad > sqlc.narg('prioridad')::smallint
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos < sqlc.narg('severidad')::bigint)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave > sqlc.narg('clave')::text)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave = sqlc.narg('clave')::text
+            AND id > sqlc.narg('id')::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
+ LIMIT sqlc.arg('limite')::int;
+
+-- name: AvisosDescartadosPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE usuario_id = sqlc.arg('usuario_id')::text
+   AND descartado_en IS NOT NULL
+   AND (sqlc.narg('prioridad')::smallint IS NULL
+        OR prioridad > sqlc.narg('prioridad')::smallint
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos < sqlc.narg('severidad')::bigint)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave > sqlc.narg('clave')::text)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave = sqlc.narg('clave')::text
+            AND id > sqlc.narg('id')::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
+ LIMIT sqlc.arg('limite')::int;

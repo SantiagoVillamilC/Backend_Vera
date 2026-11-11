@@ -18,6 +18,8 @@ var ErrServicioDeLecturaNulo = errors.New("inteligencia: NuevoHandler necesita u
 
 // ServicioDeLectura es lo que el handler necesita del servicio de inteligencia.
 type ServicioDeLectura interface {
+	Aviso(context.Context, string, uuid.UUID) (AvisoEmitido, error)
+	AvisosDelUsuarioPaginados(context.Context, string, EstadoDeAvisos, *CursorDeAviso, int) (PaginaDeAvisos, error)
 	Movimientos(ctx context.Context, usuarioID string, ancla *CursorDeMovimiento, limite int) (PaginaDeMovimientos, error)
 	CorregirMovimiento(ctx context.Context, usuarioID string, transaccionID uuid.UUID, solicitud SolicitudDeCorreccion) (CorreccionAplicada, error)
 	Resumen(ctx context.Context, usuarioID, mes string) (ResumenDelMes, error)
@@ -111,6 +113,7 @@ func (h *Handler) ResumenInteligencia(w http.ResponseWriter, r *http.Request, pa
 		return
 	}
 	mes := ""
+
 	if params.Mes != nil {
 		mes = *params.Mes
 	}
@@ -306,23 +309,72 @@ func (h *Handler) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	mes := ""
-	if params.Mes != nil {
-		mes = strings.TrimSpace(*params.Mes)
+	if params.Mes != nil && (params.Limite != nil || params.Cursor != nil || params.Estado != nil) {
+		errorParametroAviso(w, "mes", "excluded_with")
+		return
 	}
-	delMes, err := h.servicio.AvisosDelUsuario(r.Context(), usuarioID, mes, h.reloj())
-	if err != nil {
-		if errors.Is(err, ErrMesInvalido) {
-			api.WriteError(w, http.StatusBadRequest, "ValidationError", "Request validation failed.",
-				[]api.FieldError{{Field: "mes", Rule: "format"}})
+	if params.Mes != nil {
+		if _, e := inicioDelMesPedido(*params.Mes, h.reloj()); e != nil {
+			errorParametroAviso(w, "mes", "format")
 			return
 		}
+	}
+
+	// Las llamadas antiguas que envían solo mes conservan la ventana mensual.
+	if params.Mes != nil && params.Limite == nil && params.Cursor == nil && params.Estado == nil {
+		avisos, e := h.servicio.AvisosDelUsuario(r.Context(), usuarioID, strings.TrimSpace(*params.Mes), h.reloj())
+		if e != nil {
+			if errors.Is(e, ErrMesInvalido) {
+				errorParametroAviso(w, "mes", "format")
+			} else {
+				api.WriteAPIError(w, r, e)
+			}
+			return
+		}
+		respuesta := make([]api.InteligenciaAviso, 0, len(avisos))
+		for _, a := range avisos {
+			respuesta = append(respuesta, respuestaDeAviso(a))
+		}
+		api.WriteData(w, 200, respuesta, nil)
+		return
+	}
+	limite := 20
+	if params.Limite != nil {
+		valor, e := strconv.Atoi(*params.Limite)
+		if e != nil || valor < 1 || valor > 50 {
+			errorParametroAviso(w, "limite", "range")
+			return
+		}
+		limite = valor
+	}
+	estado := EstadoVigentes
+	if params.Estado != nil {
+		estado = EstadoDeAvisos(*params.Estado)
+	}
+	if estado != EstadoVigentes && estado != EstadoDescartados {
+		errorParametroAviso(w, "estado", "oneof")
+		return
+	}
+	var ancla *CursorDeAviso
+	if params.Cursor != nil {
+		c, e := DecodificarCursorDeAviso(*params.Cursor)
+		if e != nil {
+			errorParametroAviso(w, "cursor", "format")
+			return
+		}
+		ancla = &c
+	}
+	pagina, err := h.servicio.AvisosDelUsuarioPaginados(r.Context(), usuarioID, estado, ancla, limite)
+	if err != nil {
 		api.WriteAPIError(w, r, err)
 		return
 	}
-	respuesta := make([]api.InteligenciaAviso, 0, len(delMes))
-	for _, aviso := range delMes {
+	respuesta := make([]api.InteligenciaAviso, 0, len(pagina.Avisos))
+	for _, aviso := range pagina.Avisos {
 		respuesta = append(respuesta, respuestaDeAviso(aviso))
+	}
+	if pagina.HayMas {
+		w.Header().Set("X-Vera-Siguiente-Cursor", pagina.Siguiente)
 	}
 	api.WriteData(w, http.StatusOK, respuesta, nil)
 }
@@ -341,7 +393,7 @@ func (h *Handler) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Requ
 	}
 	descarte, err := h.servicio.DescartarAviso(r.Context(), usuarioID, avisoID, h.reloj())
 	if errors.Is(err, ErrAvisoNoEncontrado) {
-		api.WriteError(w, http.StatusNotFound, "NotFound", "Notice not found.", nil)
+		responderAvisoNoEncontrado(w)
 		return
 	}
 	if err != nil {
@@ -373,4 +425,34 @@ func respuestaDeAviso(aviso AvisoEmitido) api.InteligenciaAviso {
 		respuesta.TransaccionId = &transaccion
 	}
 	return respuesta
+}
+
+func errorParametroAviso(w http.ResponseWriter, campo, regla string) {
+	api.WriteError(w, 400, "ValidationError", "Request validation failed.", []api.FieldError{{Field: campo, Rule: regla}})
+}
+func responderAvisoNoEncontrado(w http.ResponseWriter) {
+	api.WriteError(w, 404, "NotFound", "Notice not found.", nil)
+}
+
+// DetalleAvisoInteligencia devuelve solo una tarjeta del usuario autenticado.
+func (h *Handler) DetalleAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
+	usuario, ok := usuarioDeLaPeticion(w, r)
+	if !ok {
+		return
+	}
+	uid, e := uuid.Parse(strings.TrimSpace(id))
+	if e != nil {
+		errorParametroAviso(w, "id", "uuid")
+		return
+	}
+	aviso, e := h.servicio.Aviso(r.Context(), usuario, uid)
+	if errors.Is(e, ErrAvisoNoEncontrado) {
+		responderAvisoNoEncontrado(w)
+		return
+	}
+	if e != nil {
+		api.WriteAPIError(w, r, e)
+		return
+	}
+	api.WriteData(w, 200, respuestaDeAviso(aviso), nil)
 }
