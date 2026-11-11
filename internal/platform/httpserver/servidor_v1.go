@@ -84,6 +84,7 @@ type NucleoHandler interface {
 
 // InteligenciaHandler agrupa las operaciones del contexto de inteligencia.
 type InteligenciaHandler interface {
+	DetalleAvisoInteligencia(http.ResponseWriter, *http.Request, string)
 	ListarMovimientosInteligencia(http.ResponseWriter, *http.Request, api.ListarMovimientosInteligenciaParams)
 	CorregirMovimientoInteligencia(http.ResponseWriter, *http.Request, string)
 	ResumenInteligencia(http.ResponseWriter, *http.Request, api.ResumenInteligenciaParams)
@@ -347,4 +348,12 @@ func (s servidorV1) TransferirInterbancaria(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.nucleo.TransferirInterbancaria(w, r)
+}
+
+func (s servidorV1) DetalleAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.DetalleAvisoInteligencia(w, r, id)
 }

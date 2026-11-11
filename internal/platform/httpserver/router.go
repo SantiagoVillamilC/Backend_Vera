@@ -54,6 +54,7 @@ type LimitadorUsoVera interface {
 
 // DependenciasVera reúne los puertos del asistente y sus conversaciones por texto y voz.
 type DependenciasVera struct {
+	Modelos        DependenciasDeModelos
 	Sintetizador   copilot.SintetizadorVoz
 	TokenVoz       string
 	Proveedor      copilot.ProveedorIA
@@ -108,14 +109,14 @@ func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, auten
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "Idempotency-Key", "X-Vera-Token"},
-		ExposedHeaders: []string{"Retry-After", "X-Vera-Audio", "X-Conversacion-Id", "X-Mensaje-Usuario-Id"},
+		ExposedHeaders: []string{"X-Vera-Siguiente-Cursor", "Retry-After", "X-Vera-Audio", "X-Conversacion-Id", "X-Mensaje-Usuario-Id"},
 		MaxAge:         300,
 	}))
-	r.Use(RateLimitExempting([]string{"/healthz", "/readyz", "/metrics"}, rateLimitRequests, rateLimitWindow))
+	r.Use(RateLimitExempting([]string{"/healthz", "/readyz", "/readyz/modelos", "/metrics"}, rateLimitRequests, rateLimitWindow))
 	r.Use(MethodNotAllowedEnvelope)
 
 	receiptHandler := receipts.NewHandler(receipts.NewService(nil))
-	health := NewHealthResource(pool)
+	health := NewHealthResource(pool, ConModelos(vera.Modelos))
 	nucleoHandler := nucleo.NewHandler(nucleoServicio, pseURL...)
 	srv := servidorV1{auth: authDeps.Auth, kyc: authDeps.KYC, consent: authDeps.Consent, phoneChange: authDeps.PhoneChange, companies: authDeps.Companies, nucleo: nucleoHandler, destinatarios: authDeps.Destinatarios, inteligencia: authDeps.Inteligencia}
 	srv.Vera = vera
@@ -133,6 +134,7 @@ func NewRouterConVera(pool *pgxpool.Pool, nucleoServicio *nucleo.Servicio, auten
 		r.Post("/v1/auth/recovery/reset", restablecimientoDeContrasena(authDeps.ResetClave))
 		r.Get("/healthz", health.Live)
 		r.Get("/readyz", health.Ready)
+		r.Get("/readyz/modelos", health.Modelos)
 	})
 
 	// Grupo autenticado: RequireAuth deja la identidad completa y solo acá corre.
