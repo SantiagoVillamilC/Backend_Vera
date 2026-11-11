@@ -180,7 +180,7 @@ func cicloPrueba(t *testing.T, p ProveedorIA, manejadores map[string]ManejadorHe
 
 func TestOrquestadorRespuestaDirecta(t *testing.T) {
 	p := proveedorCicloPrueba{generar: func(_ context.Context, s SolicitudIA) (RespuestaIA, error) {
-		if !strings.Contains(s.Instrucciones, "2026-10-18T00:30:00-05:00") || !strings.Contains(s.Instrucciones, "Vera") || len(s.Funciones) != 7 || s.Historial[0].Rol != "usuario" {
+		if !strings.Contains(s.Instrucciones, "2026-10-18T00:30:00-05:00") || !strings.Contains(s.Instrucciones, "Vera") || len(s.Funciones) != 8 || s.Historial[0].Rol != "usuario" {
 			t.Fatalf("solicitud incompleta: %+v", s)
 		}
 		return RespuestaIA{Turno: TurnoIA{Rol: "asistente", Partes: []ParteIA{{Texto: "Hola, ¿cómo te ayudo?"}}}, TokensEntrada: 10, TokensSalida: 5}, nil

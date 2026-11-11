@@ -167,13 +167,14 @@ func run() error {
 		return fmt.Errorf("preparación IA: %w", err)
 	}
 	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
-		"preparar_transferencia":  preparadorIA.Manejar,
-		"buscar_destinatario":     copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, limiteDestinatarios, referenciasDestinatario),
-		"consultar_saldo":         copilot.ConsultaSaldoIA(servicio),
-		"consultar_limites":       copilot.ConsultaLimitesIA(servicio),
-		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
-		"resumir_movimientos":     copilot.ResumenMovimientosIA(servicio, resolutorDestino),
-		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
+		"preparar_transferencia":        preparadorIA.Manejar,
+		"buscar_destinatario":           copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, limiteDestinatarios, referenciasDestinatario),
+		"consultar_saldo":               copilot.ConsultaSaldoIA(servicio),
+		"consultar_limites":             copilot.ConsultaLimitesIA(servicio),
+		"listar_movimientos":            copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
+		"resumir_movimientos":           copilot.ResumenMovimientosIA(servicio, resolutorDestino),
+		"consultar_transferencia":       copilot.ConsultaTransferenciaIA(servicio),
+		"resumir_consumo_por_categoria": copilot.ResumenConsumoIA(servicioInteligencia),
 	}, slog.Default(), copilot.ConAuditoriaLlamadas(copilot.NuevaAuditoriaPostgres(pool)))
 	if err != nil {
 		return fmt.Errorf("catálogo IA: %w", err)

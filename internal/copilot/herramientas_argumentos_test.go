@@ -12,13 +12,14 @@ import (
 )
 
 var argumentosValidos = map[string]string{
-	"consultar_saldo":         `{}`,
-	"consultar_limites":       `{}`,
-	"listar_movimientos":      `{"desde":"2026-10-01","hasta":"2026-10-17","tipo":"envio","limite":20}`,
-	"resumir_movimientos":     `{"desde":"2026-10-01","hasta":"2026-10-17","agrupar_por":"motivo"}`,
-	"buscar_destinatario":     `{"nombre":"Laura"}`,
-	"consultar_transferencia": `{"transferencia_id":"11111111-1111-4111-8111-111111111111"}`,
-	"preparar_transferencia":  `{"destinatario_ref":"referencia_opaca_123","monto_pesos":"50000"}`,
+	"consultar_saldo":               `{}`,
+	"consultar_limites":             `{}`,
+	"listar_movimientos":            `{"desde":"2026-10-01","hasta":"2026-10-17","tipo":"envio","limite":20}`,
+	"resumir_movimientos":           `{"desde":"2026-10-01","hasta":"2026-10-17","agrupar_por":"motivo"}`,
+	"buscar_destinatario":           `{"nombre":"Laura"}`,
+	"consultar_transferencia":       `{"transferencia_id":"11111111-1111-4111-8111-111111111111"}`,
+	"preparar_transferencia":        `{"destinatario_ref":"referencia_opaca_123","monto_pesos":"50000"}`,
+	"resumir_consumo_por_categoria": `{"mes":"2026-10"}`,
 }
 
 func TestValidacionDeCadaFuncion(t *testing.T) {
@@ -73,6 +74,10 @@ func TestRestriccionesDeArgumentos(t *testing.T) {
 			`{"destinatario_ref":"referencia_opaca_123","monto_pesos":"0"}`, `{"destinatario_ref":"referencia_opaca_123","monto_pesos":"1.5"}`,
 			`{"destinatario_ref":"referencia_opaca_123","monto_pesos":"-1"}`, `{"destinatario_ref":"referencia_opaca_123","monto_pesos":"1e3"}`,
 			`{"destinatario_ref":"referencia_opaca_123","monto_pesos":"92233720368547759"}`, `{"llave_breb":"   ","monto_pesos":"1"}`,
+		},
+		"resumir_consumo_por_categoria": {
+			`{"mes":"2026-13"}`, `{"mes":"2026-1"}`, `{"mes":202610}`, `{"mes":"2026-10-01"}`, `{"mes":"2026-00"}`, `{"mes":""}`,
+			`{"mes":"2026-10","desde":"2026-10-01"}`, `{"usuario":"otra"}`,
 		},
 	}
 	for nombre, invalidos := range casos {
