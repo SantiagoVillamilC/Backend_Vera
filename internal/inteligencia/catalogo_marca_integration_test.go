@@ -257,7 +257,7 @@ func TestCargarCatalogoNoConservaClavesDeLaCargaAnterior(t *testing.T) {
 	}
 }
 
-// TestLaBaseRechazaSinCategoriaEnElCatalogo cubre el disparador de la migración 0030: sin_categoria
+// TestLaBaseRechazaSinCategoriaEnElCatalogo cubre el disparador de la migración 0031: sin_categoria
 // existe en inteligencia.categoria, así que la clave foránea la aceptaría, y la que la rechaza es la
 // regla de visibilidad.
 func TestLaBaseRechazaSinCategoriaEnElCatalogo(t *testing.T) {

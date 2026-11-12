@@ -138,6 +138,7 @@ SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transacci
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
+   AND periodo = sqlc.arg('periodo')::date
    AND descartado_en IS NULL
    AND (sqlc.narg('prioridad')::smallint IS NULL
         OR prioridad > sqlc.narg('prioridad')::smallint
@@ -157,6 +158,7 @@ SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transacci
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
+   AND periodo = sqlc.arg('periodo')::date
    AND descartado_en IS NOT NULL
    AND (sqlc.narg('prioridad')::smallint IS NULL
         OR prioridad > sqlc.narg('prioridad')::smallint

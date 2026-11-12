@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/internal/repositorio"
@@ -93,8 +94,9 @@ func (s *Servicio) Aviso(ctx context.Context, usuario string, id uuid.UUID) (Avi
 	return avisoDeFila(filaDeAviso(f)), nil
 }
 
-// AvisosDelUsuarioPaginados usa una fila extra y un orden estable, sin OFFSET.
-func (s *Servicio) AvisosDelUsuarioPaginados(ctx context.Context, usuario string, estado EstadoDeAvisos, c *CursorDeAviso, limite int) (PaginaDeAvisos, error) {
+// AvisosDelUsuarioPaginados usa una fila extra y un orden estable, sin OFFSET. El periodo es el
+// criterio del cupo y del resumen, así que la bandeja y el conteo coinciden para el mismo mes.
+func (s *Servicio) AvisosDelUsuarioPaginados(ctx context.Context, usuario string, periodo time.Time, estado EstadoDeAvisos, c *CursorDeAviso, limite int) (PaginaDeAvisos, error) {
 	pagina := PaginaDeAvisos{Avisos: make([]AvisoEmitido, 0)}
 	if estado != EstadoVigentes && estado != EstadoDescartados {
 		return pagina, ErrEstadoAvisosInvalido
@@ -102,7 +104,12 @@ func (s *Servicio) AvisosDelUsuarioPaginados(ctx context.Context, usuario string
 	if limite < 1 || limite > 50 {
 		return pagina, ErrCursorInvalido
 	}
-	p := repositorio.AvisosVigentesPorPaginaParams{UsuarioID: usuario, Limite: int32(limite + 1)}
+	periodo = inicioDelMesDe(periodo, 0)
+	p := repositorio.AvisosVigentesPorPaginaParams{
+		UsuarioID: usuario,
+		Periodo:   pgtype.Date{Time: periodo, Valid: true},
+		Limite:    int32(limite + 1),
+	}
 	if c != nil {
 		if _, e := DecodificarCursorDeAviso(CodificarCursorDeAviso(*c)); e != nil {
 			return pagina, e

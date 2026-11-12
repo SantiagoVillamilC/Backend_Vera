@@ -686,6 +686,48 @@ func TestListarAvisosValidaElMes(t *testing.T) {
 	assertErrorDelSobre(t, rec, "ValidationError")
 }
 
+func TestListarAvisosRechazaMesJuntoAPaginacion(t *testing.T) {
+	t.Parallel()
+
+	mes := "2026-07"
+	for _, params := range []api.ListarAvisosInteligenciaParams{
+		{Mes: &mes, Limite: ptr("5")},
+		{Mes: &mes, Estado: ptr("vigentes")},
+		{Mes: &mes, Cursor: ptr("djF8MXwxMTAwfDA=")},
+	} {
+		falso := &servicioDeLecturaFalso{}
+		rec := httptest.NewRecorder()
+		req := peticionConIdentidad(t, "/v1/inteligencia/avisos?mes="+mes)
+		NuevoHandler(falso).ListarAvisosInteligencia(rec, req, params)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("código = %d, want 400", rec.Code)
+		}
+		assertErrorDelSobre(t, rec, "ValidationError")
+		if falso.usuario != "" {
+			t.Fatal("no debe consultar el servicio con parámetros incompatibles")
+		}
+	}
+}
+
+func TestListarAvisosPaginaElMesEnCurso(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/avisos?limite=1")
+	NuevoHandler(falso).ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{
+		Limite: ptr("1"),
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d: %s", rec.Code, rec.Body.String())
+	}
+	if falso.usuario == "" {
+		t.Fatal("la bandeja paginada debe consultar el mes en curso")
+	}
+}
+
+func ptr[T any](valor T) *T { return &valor }
+
 func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 	t.Parallel()
 
@@ -792,7 +834,7 @@ func (f *servicioDeLecturaFalso) Aviso(_ context.Context, usuario string, id uui
 	}
 	return AvisoEmitido{}, f.avisoErr
 }
-func (f *servicioDeLecturaFalso) AvisosDelUsuarioPaginados(_ context.Context, usuario string, _ EstadoDeAvisos, _ *CursorDeAviso, _ int) (PaginaDeAvisos, error) {
+func (f *servicioDeLecturaFalso) AvisosDelUsuarioPaginados(_ context.Context, usuario string, _ time.Time, _ EstadoDeAvisos, _ *CursorDeAviso, _ int) (PaginaDeAvisos, error) {
 	f.usuario = usuario
 	return PaginaDeAvisos{Avisos: f.avisos}, f.avisosErr
 }

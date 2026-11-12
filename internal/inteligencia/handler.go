@@ -19,7 +19,7 @@ var ErrServicioDeLecturaNulo = errors.New("inteligencia: NuevoHandler necesita u
 // ServicioDeLectura es lo que el handler necesita del servicio de inteligencia.
 type ServicioDeLectura interface {
 	Aviso(context.Context, string, uuid.UUID) (AvisoEmitido, error)
-	AvisosDelUsuarioPaginados(context.Context, string, EstadoDeAvisos, *CursorDeAviso, int) (PaginaDeAvisos, error)
+	AvisosDelUsuarioPaginados(context.Context, string, time.Time, EstadoDeAvisos, *CursorDeAviso, int) (PaginaDeAvisos, error)
 	Movimientos(ctx context.Context, usuarioID string, ancla *CursorDeMovimiento, limite int) (PaginaDeMovimientos, error)
 	CorregirMovimiento(ctx context.Context, usuarioID string, transaccionID uuid.UUID, solicitud SolicitudDeCorreccion) (CorreccionAplicada, error)
 	Resumen(ctx context.Context, usuarioID, mes string, ahora time.Time) (ResumenDelMes, error)
@@ -389,7 +389,9 @@ func (h *Handler) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Reques
 		}
 		ancla = &c
 	}
-	pagina, err := h.servicio.AvisosDelUsuarioPaginados(r.Context(), usuarioID, estado, ancla, limite)
+	// Sin mes, la bandeja pagina el mes en curso: es el periodo que cuenta el cupo y el resumen.
+	periodo := inicioDelMesDe(h.reloj(), 0)
+	pagina, err := h.servicio.AvisosDelUsuarioPaginados(r.Context(), usuarioID, periodo, estado, ancla, limite)
 	if err != nil {
 		api.WriteAPIError(w, r, err)
 		return

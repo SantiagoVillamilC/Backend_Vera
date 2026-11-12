@@ -136,24 +136,26 @@ const avisosDescartadosPorPagina = `-- name: AvisosDescartadosPorPagina :many
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = $1::text
+   AND periodo = $2::date
    AND descartado_en IS NOT NULL
-   AND ($2::smallint IS NULL
-        OR prioridad > $2::smallint
-        OR (prioridad = $2::smallint
-            AND severidad_centavos < $3::bigint)
-        OR (prioridad = $2::smallint
-            AND severidad_centavos = $3::bigint
-            AND clave > $4::text)
-        OR (prioridad = $2::smallint
-            AND severidad_centavos = $3::bigint
-            AND clave = $4::text
-            AND id > $5::uuid))
+   AND ($3::smallint IS NULL
+        OR prioridad > $3::smallint
+        OR (prioridad = $3::smallint
+            AND severidad_centavos < $4::bigint)
+        OR (prioridad = $3::smallint
+            AND severidad_centavos = $4::bigint
+            AND clave > $5::text)
+        OR (prioridad = $3::smallint
+            AND severidad_centavos = $4::bigint
+            AND clave = $5::text
+            AND id > $6::uuid))
  ORDER BY prioridad, severidad_centavos DESC, clave, id
- LIMIT $6::int
+ LIMIT $7::int
 `
 
 type AvisosDescartadosPorPaginaParams struct {
 	UsuarioID string      `json:"usuario_id"`
+	Periodo   pgtype.Date `json:"periodo"`
 	Prioridad pgtype.Int2 `json:"prioridad"`
 	Severidad pgtype.Int8 `json:"severidad"`
 	Clave     pgtype.Text `json:"clave"`
@@ -176,6 +178,7 @@ type AvisosDescartadosPorPaginaRow struct {
 func (q *Queries) AvisosDescartadosPorPagina(ctx context.Context, arg AvisosDescartadosPorPaginaParams) ([]AvisosDescartadosPorPaginaRow, error) {
 	rows, err := q.db.Query(ctx, avisosDescartadosPorPagina,
 		arg.UsuarioID,
+		arg.Periodo,
 		arg.Prioridad,
 		arg.Severidad,
 		arg.Clave,
@@ -276,24 +279,26 @@ const avisosVigentesPorPagina = `-- name: AvisosVigentesPorPagina :many
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = $1::text
+   AND periodo = $2::date
    AND descartado_en IS NULL
-   AND ($2::smallint IS NULL
-        OR prioridad > $2::smallint
-        OR (prioridad = $2::smallint
-            AND severidad_centavos < $3::bigint)
-        OR (prioridad = $2::smallint
-            AND severidad_centavos = $3::bigint
-            AND clave > $4::text)
-        OR (prioridad = $2::smallint
-            AND severidad_centavos = $3::bigint
-            AND clave = $4::text
-            AND id > $5::uuid))
+   AND ($3::smallint IS NULL
+        OR prioridad > $3::smallint
+        OR (prioridad = $3::smallint
+            AND severidad_centavos < $4::bigint)
+        OR (prioridad = $3::smallint
+            AND severidad_centavos = $4::bigint
+            AND clave > $5::text)
+        OR (prioridad = $3::smallint
+            AND severidad_centavos = $4::bigint
+            AND clave = $5::text
+            AND id > $6::uuid))
  ORDER BY prioridad, severidad_centavos DESC, clave, id
- LIMIT $6::int
+ LIMIT $7::int
 `
 
 type AvisosVigentesPorPaginaParams struct {
 	UsuarioID string      `json:"usuario_id"`
+	Periodo   pgtype.Date `json:"periodo"`
 	Prioridad pgtype.Int2 `json:"prioridad"`
 	Severidad pgtype.Int8 `json:"severidad"`
 	Clave     pgtype.Text `json:"clave"`
@@ -316,6 +321,7 @@ type AvisosVigentesPorPaginaRow struct {
 func (q *Queries) AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error) {
 	rows, err := q.db.Query(ctx, avisosVigentesPorPagina,
 		arg.UsuarioID,
+		arg.Periodo,
 		arg.Prioridad,
 		arg.Severidad,
 		arg.Clave,

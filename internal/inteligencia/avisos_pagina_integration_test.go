@@ -16,23 +16,33 @@ func TestPaginaAvisosEmpatesPrivacidadYDescarte(t *testing.T) {
 	usuario, otro := uuid.NewString(), uuid.NewString()
 	s := NuevoServicio(pool)
 	ids := make([]uuid.UUID, 5)
+	periodo := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
+	tx, e := pool.Begin(t.Context())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = tx.Exec(t.Context(), `SET LOCAL ROLE rol_inteligencia`); e != nil {
+		t.Fatal(e)
+	}
 	for i := range ids {
 		ids[i] = uuid.New()
-		_, e := pool.Exec(t.Context(), `INSERT INTO inteligencia.aviso(id,usuario_id,tipo,clave,periodo,severidad_centavos,prioridad,texto) VALUES($1,$2,'cobro_nuevo',$3,$4::date,100,1,'aviso de prueba')`, ids[i], usuario, fmt.Sprintf("clave|%d", i/2), fmt.Sprintf("2026-07-%02d", i+1))
-		if e != nil {
+		if _, e = tx.Exec(t.Context(), `INSERT INTO inteligencia.aviso(id,usuario_id,tipo,clave,periodo,severidad_centavos,prioridad,texto) VALUES($1,$2,$3,$4,'2026-07-01'::date,100,1,'aviso de prueba')`, ids[i], usuario, tipoDeRelleno(i), fmt.Sprintf("clave|%d", i/2)); e != nil {
 			t.Fatal(e)
 		}
 	}
+	if e = tx.Commit(t.Context()); e != nil {
+		t.Fatal(e)
+	}
 	vistos := map[uuid.UUID]bool{}
 	for _, limite := range []int{1, 50} {
-		p, err := s.AvisosDelUsuarioPaginados(t.Context(), usuario, EstadoVigentes, nil, limite)
+		p, err := s.AvisosDelUsuarioPaginados(t.Context(), usuario, periodo, EstadoVigentes, nil, limite)
 		if err != nil || len(p.Avisos) != min(limite, len(ids)) {
 			t.Fatalf("limite=%d: %d avisos, error=%v", limite, len(p.Avisos), err)
 		}
 	}
 	var cursor *CursorDeAviso
 	for {
-		p, e := s.AvisosDelUsuarioPaginados(t.Context(), usuario, EstadoVigentes, cursor, 2)
+		p, e := s.AvisosDelUsuarioPaginados(t.Context(), usuario, periodo, EstadoVigentes, cursor, 2)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -76,8 +86,17 @@ func TestPaginaAvisosEmpatesPrivacidadYDescarte(t *testing.T) {
 	if e != nil || !primero.DescartadoEn.Equal(segundo.DescartadoEn) {
 		t.Fatal("descarte no idempotente", e)
 	}
-	p, e := s.AvisosDelUsuarioPaginados(t.Context(), usuario, EstadoDescartados, nil, 20)
+	p, e := s.AvisosDelUsuarioPaginados(t.Context(), usuario, periodo, EstadoDescartados, nil, 20)
 	if e != nil || len(p.Avisos) != 1 {
 		t.Fatal(p, e)
 	}
+}
+
+// tipoDeRelleno alterna dos tipos para que dos filas puedan compartir clave dentro del mismo
+// periodo: la clave única es (usuario, tipo, clave, periodo), y el cursor ordena por clave e id.
+func tipoDeRelleno(i int) string {
+	if i%2 == 0 {
+		return "cobro_nuevo"
+	}
+	return "caida_ingreso"
 }
