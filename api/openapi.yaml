@@ -3479,9 +3479,11 @@ components:
       type: object
       description: >
         Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no
-        sean sus montos ni fechas que no sean la suya.
+        sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto
+        afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no
+        tiene linea base.
       required:
-        [id, tipo, clave, periodo, severidad_centavos, prioridad, titulo, texto, porque, accion, transaccion_id, creado_en]
+        [id, tipo, clave, periodo, severidad_centavos, monto_centavos, prioridad, titulo, texto, porque, accion, transaccion_id, creado_en]
       properties:
         id:
           type: string
@@ -3501,6 +3503,13 @@ components:
         severidad_centavos:
           type: string
           pattern: "^[0-9]+$"
+        monto_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+        referencia_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+          nullable: true
         prioridad:
           type: integer
           minimum: 1

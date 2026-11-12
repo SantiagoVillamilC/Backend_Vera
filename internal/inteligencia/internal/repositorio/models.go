@@ -9,18 +9,20 @@ import (
 )
 
 type Aviso struct {
-	ID                pgtype.UUID        `json:"id"`
-	UsuarioID         string             `json:"usuario_id"`
-	Tipo              string             `json:"tipo"`
-	Clave             string             `json:"clave"`
-	Periodo           pgtype.Date        `json:"periodo"`
-	SeveridadCentavos int64              `json:"severidad_centavos"`
-	Prioridad         int16              `json:"prioridad"`
-	Texto             string             `json:"texto"`
-	TextoVerificado   bool               `json:"texto_verificado"`
-	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
-	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
-	DescartadoEn      pgtype.Timestamptz `json:"descartado_en"`
+	ID                 pgtype.UUID        `json:"id"`
+	UsuarioID          string             `json:"usuario_id"`
+	Tipo               string             `json:"tipo"`
+	Clave              string             `json:"clave"`
+	Periodo            pgtype.Date        `json:"periodo"`
+	SeveridadCentavos  int64              `json:"severidad_centavos"`
+	Prioridad          int16              `json:"prioridad"`
+	Texto              string             `json:"texto"`
+	TextoVerificado    bool               `json:"texto_verificado"`
+	TransaccionID      pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+	DescartadoEn       pgtype.Timestamptz `json:"descartado_en"`
+	MontoCentavos      int64              `json:"monto_centavos"`
+	ReferenciaCentavos pgtype.Int8        `json:"referencia_centavos"`
 }
 
 type AvisoEntrega struct {

@@ -30,18 +30,20 @@ var EtiquetasGenericas = []string{
 
 // AvisoEmitido es una tarjeta guardada, lista para la bandeja.
 type AvisoEmitido struct {
-	ID                uuid.UUID
-	Tipo              avisos.Tipo
-	Clave             string
-	Titulo            string
-	Texto             string
-	Porque            string
-	Accion            string
-	Periodo           time.Time
-	SeveridadCentavos int64
-	Prioridad         int
-	TransaccionID     *uuid.UUID
-	CreadoEn          time.Time
+	ID                 uuid.UUID
+	Tipo               avisos.Tipo
+	Clave              string
+	Titulo             string
+	Texto              string
+	Porque             string
+	Accion             string
+	Periodo            time.Time
+	SeveridadCentavos  int64
+	MontoCentavos      int64
+	ReferenciaCentavos *int64
+	Prioridad          int
+	TransaccionID      *uuid.UUID
+	CreadoEn           time.Time
 }
 
 // DescarteDeAviso es el resultado de descartar un aviso.
@@ -270,16 +272,18 @@ func guardarAviso(ctx context.Context, q *repositorio.Queries, usuarioID string,
 	tarjeta avisos.Tarjeta, ahora time.Time) (bool, error) {
 	id := uuid.New()
 	_, err := q.EmitirAviso(ctx, repositorio.EmitirAvisoParams{
-		ID:                pgtype.UUID{Bytes: id, Valid: true},
-		UsuarioID:         usuarioID,
-		Tipo:              string(tarjeta.Tipo),
-		Clave:             tarjeta.Clave,
-		Periodo:           pgtype.Date{Time: tarjeta.Periodo, Valid: true},
-		SeveridadCentavos: avisos.SeveridadDe(tarjeta),
-		Prioridad:         avisos.Prioridad(tarjeta.Tipo),
-		Texto:             tarjeta.Texto,
-		TextoVerificado:   true,
-		CreadoEn:          pgtype.Timestamptz{Time: ahora, Valid: true},
+		ID:                 pgtype.UUID{Bytes: id, Valid: true},
+		UsuarioID:          usuarioID,
+		Tipo:               string(tarjeta.Tipo),
+		Clave:              tarjeta.Clave,
+		Periodo:            pgtype.Date{Time: tarjeta.Periodo, Valid: true},
+		SeveridadCentavos:  avisos.SeveridadDe(tarjeta),
+		MontoCentavos:      tarjeta.MontoCentavos,
+		ReferenciaCentavos: referenciaNullable(tarjeta.ReferenciaCentavos),
+		Prioridad:          avisos.Prioridad(tarjeta.Tipo),
+		Texto:              tarjeta.Texto,
+		TextoVerificado:    true,
+		CreadoEn:           pgtype.Timestamptz{Time: ahora, Valid: true},
 	})
 	if err == nil {
 		return true, nil
@@ -395,12 +399,26 @@ func avisoDeFila(fila filaDeAviso) AvisoEmitido {
 		Accion:            avisos.AccionDe(tipo),
 		Periodo:           fila.Periodo.Time,
 		SeveridadCentavos: fila.SeveridadCentavos,
+		MontoCentavos:     fila.MontoCentavos,
 		Prioridad:         int(fila.Prioridad),
 		CreadoEn:          fila.CreadoEn.Time,
+	}
+	if fila.ReferenciaCentavos.Valid {
+		referencia := fila.ReferenciaCentavos.Int64
+		aviso.ReferenciaCentavos = &referencia
 	}
 	if fila.TransaccionID.Valid {
 		transaccion := uuid.UUID(fila.TransaccionID.Bytes)
 		aviso.TransaccionID = &transaccion
 	}
 	return aviso
+}
+
+// referenciaNullable lleva la línea base al insert, que la guarda nula cuando el tipo no compara
+// contra un histórico.
+func referenciaNullable(referencia *int64) pgtype.Int8 {
+	if referencia == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *referencia, Valid: true}
 }

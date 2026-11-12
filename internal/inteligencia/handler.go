@@ -440,12 +440,17 @@ func respuestaDeAviso(aviso AvisoEmitido) api.InteligenciaAviso {
 		Clave:             aviso.Clave,
 		Periodo:           aviso.Periodo.Format("2006-01-02"),
 		SeveridadCentavos: strconv.FormatInt(aviso.SeveridadCentavos, 10),
+		MontoCentavos:     strconv.FormatInt(aviso.MontoCentavos, 10),
 		Prioridad:         aviso.Prioridad,
 		Titulo:            aviso.Titulo,
 		Texto:             aviso.Texto,
 		Porque:            aviso.Porque,
 		Accion:            aviso.Accion,
 		CreadoEn:          aviso.CreadoEn,
+	}
+	if aviso.ReferenciaCentavos != nil {
+		referencia := strconv.FormatInt(*aviso.ReferenciaCentavos, 10)
+		respuesta.ReferenciaCentavos = &referencia
 	}
 	if aviso.TransaccionID != nil {
 		transaccion := *aviso.TransaccionID

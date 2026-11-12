@@ -2155,24 +2155,26 @@ type FieldError struct {
 	Rule  string  `json:"rule"`
 }
 
-// InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya.
+// InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no tiene linea base.
 type InteligenciaAviso struct {
 	Accion string `json:"accion"`
 
 	// Clave Identidad estable del aviso dentro de su tipo y periodo.
-	Clave    string             `json:"clave"`
-	CreadoEn time.Time          `json:"creado_en"`
-	Id       openapi_types.UUID `json:"id"`
+	Clave         string             `json:"clave"`
+	CreadoEn      time.Time          `json:"creado_en"`
+	Id            openapi_types.UUID `json:"id"`
+	MontoCentavos string             `json:"monto_centavos"`
 
 	// Periodo Primer dia del mes en los avisos mensuales, o la fecha del pago o del primer cobro en los demas.
-	Periodo           string                `json:"periodo"`
-	Porque            string                `json:"porque"`
-	Prioridad         int                   `json:"prioridad"`
-	SeveridadCentavos string                `json:"severidad_centavos"`
-	Texto             string                `json:"texto"`
-	Tipo              InteligenciaAvisoTipo `json:"tipo"`
-	Titulo            string                `json:"titulo"`
-	TransaccionId     *openapi_types.UUID   `json:"transaccion_id"`
+	Periodo            string                `json:"periodo"`
+	Porque             string                `json:"porque"`
+	Prioridad          int                   `json:"prioridad"`
+	ReferenciaCentavos *string               `json:"referencia_centavos,omitempty"`
+	SeveridadCentavos  string                `json:"severidad_centavos"`
+	Texto              string                `json:"texto"`
+	Tipo               InteligenciaAvisoTipo `json:"tipo"`
+	Titulo             string                `json:"titulo"`
+	TransaccionId      *openapi_types.UUID   `json:"transaccion_id"`
 }
 
 // InteligenciaAvisoTipo defines model for InteligenciaAviso.Tipo.
@@ -2197,7 +2199,7 @@ type InteligenciaAvisoDescarteResponseSuccess bool
 
 // InteligenciaAvisoDetalleResponse defines model for InteligenciaAvisoDetalleResponse.
 type InteligenciaAvisoDetalleResponse struct {
-	// Data Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya.
+	// Data Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no tiene linea base.
 	Data    InteligenciaAviso                       `json:"data"`
 	Error   *map[string]interface{}                 `json:"error"`
 	Meta    *map[string]interface{}                 `json:"meta"`

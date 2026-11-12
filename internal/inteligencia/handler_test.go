@@ -738,7 +738,8 @@ func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 		Titulo: "Tus próximos pagos suman más que tu saldo", Texto: "Tu saldo es $300.000.",
 		Porque: "Los pagos recurrentes de la ventana suman más que tu saldo.", Accion: "Ver los pagos que vencen",
 		Periodo: time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC), SeveridadCentavos: 50_000_000,
-		Prioridad: 1, TransaccionID: &transaccion, CreadoEn: time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC),
+		MontoCentavos: 30_000_000,
+		Prioridad:     1, TransaccionID: &transaccion, CreadoEn: time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC),
 	}}}
 	rec := httptest.NewRecorder()
 	req := peticionConIdentidad(t, "/v1/inteligencia/avisos")
@@ -749,11 +750,13 @@ func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 	var respuesta struct {
 		Success bool `json:"success"`
 		Data    []struct {
-			ID                string  `json:"id"`
-			SeveridadCentavos string  `json:"severidad_centavos"`
-			Periodo           string  `json:"periodo"`
-			TransaccionID     *string `json:"transaccion_id"`
-			Titulo            string  `json:"titulo"`
+			ID                 string  `json:"id"`
+			SeveridadCentavos  string  `json:"severidad_centavos"`
+			MontoCentavos      string  `json:"monto_centavos"`
+			ReferenciaCentavos *string `json:"referencia_centavos"`
+			Periodo            string  `json:"periodo"`
+			TransaccionID      *string `json:"transaccion_id"`
+			Titulo             string  `json:"titulo"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
@@ -764,9 +767,49 @@ func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 	}
 	aviso := respuesta.Data[0]
 	if aviso.ID != avisoID.String() || aviso.SeveridadCentavos != "50000000" ||
+		aviso.MontoCentavos != "30000000" || aviso.ReferenciaCentavos != nil ||
 		aviso.Periodo != "2026-07-17" || aviso.TransaccionID == nil ||
 		*aviso.TransaccionID != transaccion.String() {
 		t.Fatalf("aviso = %+v", aviso)
+	}
+}
+
+func TestDetalleAvisoExponeLosMontosDeLaProyeccion(t *testing.T) {
+	t.Parallel()
+
+	referencia := int64(90_000_000)
+	avisoID := uuid.MustParse("123e4567-e89b-42d3-a456-426614174003")
+	falso := &servicioDeLecturaFalso{avisos: []AvisoEmitido{{
+		ID: avisoID, Tipo: "presupuesto_anticipado", Clave: "gasto-total",
+		Titulo: "Tu proyección de gastos supera lo habitual",
+		Texto:  "En julio de 2026 llevas $1.500.000 en gastos. Lo habitual en tus meses completos es $900.000.",
+		Porque: "El gasto del mes en curso ya supera lo habitual.", Accion: "Ver tus gastos del mes",
+		Periodo: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), SeveridadCentavos: 60_000_000,
+		MontoCentavos: 150_000_000, ReferenciaCentavos: &referencia,
+		Prioridad: 4, CreadoEn: time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC),
+	}}}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/avisos/"+avisoID.String())
+	NuevoHandler(falso).DetalleAvisoInteligencia(rec, req, avisoID.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d: %s", rec.Code, rec.Body.String())
+	}
+	var respuesta struct {
+		Success bool `json:"success"`
+		Data    struct {
+			MontoCentavos      string  `json:"monto_centavos"`
+			ReferenciaCentavos *string `json:"referencia_centavos"`
+			SeveridadCentavos  string  `json:"severidad_centavos"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if !respuesta.Success || respuesta.Data.MontoCentavos != "150000000" ||
+		respuesta.Data.ReferenciaCentavos == nil ||
+		*respuesta.Data.ReferenciaCentavos != "90000000" ||
+		respuesta.Data.SeveridadCentavos != "60000000" {
+		t.Fatalf("respuesta = %s", rec.Body.String())
 	}
 }
 

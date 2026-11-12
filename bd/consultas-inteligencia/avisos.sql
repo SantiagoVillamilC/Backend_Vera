@@ -70,7 +70,7 @@ SELECT tipo, clave, periodo
 -- Las dos consultas de abajo usan ese periodo y excluyen los descartados, así que descartar libera
 -- cupo, y el resumen, la bandeja y el emisor informan la misma cifra para el mismo mes.
 -- name: AvisosVigentesDelMes :many
-SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
    AND descartado_en IS NULL
@@ -88,8 +88,8 @@ SELECT count(*)::bigint AS avisos_emitidos
 
 -- name: EmitirAviso :one
 INSERT INTO inteligencia.aviso (
-    id, usuario_id, tipo, clave, periodo, severidad_centavos, prioridad,
-    texto, texto_verificado, transaccion_id, creado_en
+    id, usuario_id, tipo, clave, periodo, severidad_centavos, monto_centavos,
+    referencia_centavos, prioridad, texto, texto_verificado, transaccion_id, creado_en
 ) VALUES (
     sqlc.arg('id')::uuid,
     sqlc.arg('usuario_id')::text,
@@ -97,6 +97,8 @@ INSERT INTO inteligencia.aviso (
     sqlc.arg('clave')::text,
     sqlc.arg('periodo')::date,
     sqlc.arg('severidad_centavos')::bigint,
+    sqlc.arg('monto_centavos')::bigint,
+    sqlc.narg('referencia_centavos')::bigint,
     sqlc.arg('prioridad')::smallint,
     sqlc.arg('texto')::text,
     sqlc.arg('texto_verificado')::boolean,
@@ -129,13 +131,13 @@ SELECT DISTINCT usuario_id
  LIMIT sqlc.arg('limite')::int;
 
 -- name: AvisoPorID :one
-SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE id = sqlc.arg('id')::uuid
    AND usuario_id = sqlc.arg('usuario_id')::text;
 
 -- name: AvisosVigentesPorPagina :many
-SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
    AND periodo = sqlc.arg('periodo')::date
@@ -155,7 +157,7 @@ SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transacci
  LIMIT sqlc.arg('limite')::int;
 
 -- name: AvisosDescartadosPorPagina :many
-SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
    AND periodo = sqlc.arg('periodo')::date
