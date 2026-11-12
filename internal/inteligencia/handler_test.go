@@ -432,9 +432,10 @@ func TestElResumenYLaBandejaResuelvenElMesConElMismoReloj(t *testing.T) {
 		t.Fatalf("resumen: código = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
+	mes := "2026-07"
 	rec = httptest.NewRecorder()
-	req = peticionConIdentidad(t, "/v1/inteligencia/avisos")
-	handler.ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{})
+	req = peticionConIdentidad(t, "/v1/inteligencia/avisos?mes="+mes)
+	handler.ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{Mes: &mes})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("bandeja: código = %d, want 200: %s", rec.Code, rec.Body.String())
 	}

@@ -332,7 +332,7 @@ func borrarPorUsuarios(t *testing.T, pool *pgxpool.Pool, consulta string, usuari
 	}
 }
 
-// escalonDelOrigen es la misma tabla con la que la migración 0031 rellenó la columna.
+// escalonDelOrigen es la misma tabla con la que la migración 0032 rellenó la columna.
 func escalonDelOrigen(origen string) int16 {
 	switch origen {
 	case OrigenMemoria:

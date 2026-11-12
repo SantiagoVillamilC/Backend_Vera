@@ -21,7 +21,7 @@ const espacioDeMetricas = "vera_inteligencia"
 const largoTopeDeEtiqueta = 64
 
 // origenesConocidos es la lista cerrada de valores de origen_categoria: los siete del CHECK de la
-// migración 0031. El cajón para lo imprevisto se agrega aparte, en la etiqueta, para acotar la
+// migración 0032. El cajón para lo imprevisto se agrega aparte, en la etiqueta, para acotar la
 // cardinalidad sin abrir el conjunto.
 var origenesConocidos = func() map[string]struct{} {
 	conocidos := make(map[string]struct{}, len(inteligencia.OrigenesEscribibles))

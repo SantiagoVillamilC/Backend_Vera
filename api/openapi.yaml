@@ -949,9 +949,11 @@ paths:
         puede entregarse un mes y pertenecer a otro, y en ese caso cuenta y aparece en el mes al que
         pertenece. Por eso esta bandeja y el numero de avisos del resumen coinciden para el mismo mes.
         Un aviso descartado sale de la bandeja y deja de ocupar cupo, porque descartar libera cupo: la
-        bandeja y el conteo excluyen los descartados.
+        bandeja y el conteo excluyen los descartados. Paginación de 20 avisos por defecto, límite 1 a
+        50. La continuación se devuelve en X-Vera-Siguiente-Cursor. Las llamadas antiguas con solo mes
+        conservan su ventana mensual sin paginación. Combinar mes con limite, cursor o estado devuelve
+        400.
       tags: [inteligencia]
-      description: Paginación de 20 avisos por defecto, límite 1 a 50. La continuación se devuelve en X-Vera-Siguiente-Cursor. Las llamadas antiguas con solo mes conservan su ventana mensual sin paginación. Combinar mes con limite, cursor o estado devuelve 400.
       parameters:
         - {name: limite, in: query, required: false, schema: {type: integer, x-go-type: string}}
         - {name: cursor, in: query, required: false, schema: {type: string}}
@@ -3265,7 +3267,7 @@ components:
       type: string
       description: >
         Origen que quedo escrito en la fila de la copia enriquecida. Es el conjunto cerrado del
-        CHECK de la migracion 0031 y coincide con inteligencia.OrigenesEscribibles.
+        CHECK de la migracion 0032 y coincide con inteligencia.OrigenesEscribibles.
       enum:
         [memoria, contraparte_interna, mcc, catalogo, lexico, tfidf, sin_categoria]
 

@@ -79,7 +79,7 @@ type Entrada struct {
 	MID              string
 }
 
-// Los orígenes de una fila, los mismos códigos que admite el CHECK de la migración 0031. Son los
+// Los orígenes de una fila, los mismos códigos que admite el CHECK de la migración 0032. Son los
 // únicos valores que el lote escribe, y TestContratoDeOrigenesYCatalogo compara el conjunto contra
 // el enum OrigenEnriquecido del contrato.
 const (

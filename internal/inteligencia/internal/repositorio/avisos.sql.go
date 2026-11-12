@@ -12,6 +12,50 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const avisoPorID = `-- name: AvisoPorID :one
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE id = $1::uuid
+   AND usuario_id = $2::text
+`
+
+type AvisoPorIDParams struct {
+	ID        pgtype.UUID `json:"id"`
+	UsuarioID string      `json:"usuario_id"`
+}
+
+type AvisoPorIDRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	Tipo              string             `json:"tipo"`
+	Clave             string             `json:"clave"`
+	Periodo           pgtype.Date        `json:"periodo"`
+	Prioridad         int16              `json:"prioridad"`
+	SeveridadCentavos int64              `json:"severidad_centavos"`
+	Texto             string             `json:"texto"`
+	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
+}
+
+func (q *Queries) AvisoPorID(ctx context.Context, arg AvisoPorIDParams) (AvisoPorIDRow, error) {
+	row := q.db.QueryRow(ctx, avisoPorID, arg.ID, arg.UsuarioID)
+	var i AvisoPorIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Tipo,
+		&i.Clave,
+		&i.Periodo,
+		&i.Prioridad,
+		&i.SeveridadCentavos,
+		&i.Texto,
+		&i.TransaccionID,
+		&i.CreadoEn,
+	)
+	if err != nil {
+		err = fmt.Errorf("query AvisoPorID: %w", err)
+	}
+	return i, err
+}
+
 const avisoPorIdentidad = `-- name: AvisoPorIdentidad :one
 SELECT id, creado_en
   FROM inteligencia.aviso
@@ -88,6 +132,84 @@ func (q *Queries) AvisosDelUsuarioEnVentana(ctx context.Context, arg AvisosDelUs
 	return items, nil
 }
 
+const avisosDescartadosPorPagina = `-- name: AvisosDescartadosPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE usuario_id = $1::text
+   AND descartado_en IS NOT NULL
+   AND ($2::smallint IS NULL
+        OR prioridad > $2::smallint
+        OR (prioridad = $2::smallint
+            AND severidad_centavos < $3::bigint)
+        OR (prioridad = $2::smallint
+            AND severidad_centavos = $3::bigint
+            AND clave > $4::text)
+        OR (prioridad = $2::smallint
+            AND severidad_centavos = $3::bigint
+            AND clave = $4::text
+            AND id > $5::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
+ LIMIT $6::int
+`
+
+type AvisosDescartadosPorPaginaParams struct {
+	UsuarioID string      `json:"usuario_id"`
+	Prioridad pgtype.Int2 `json:"prioridad"`
+	Severidad pgtype.Int8 `json:"severidad"`
+	Clave     pgtype.Text `json:"clave"`
+	ID        pgtype.UUID `json:"id"`
+	Limite    int32       `json:"limite"`
+}
+
+type AvisosDescartadosPorPaginaRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	Tipo              string             `json:"tipo"`
+	Clave             string             `json:"clave"`
+	Periodo           pgtype.Date        `json:"periodo"`
+	Prioridad         int16              `json:"prioridad"`
+	SeveridadCentavos int64              `json:"severidad_centavos"`
+	Texto             string             `json:"texto"`
+	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
+}
+
+func (q *Queries) AvisosDescartadosPorPagina(ctx context.Context, arg AvisosDescartadosPorPaginaParams) ([]AvisosDescartadosPorPaginaRow, error) {
+	rows, err := q.db.Query(ctx, avisosDescartadosPorPagina,
+		arg.UsuarioID,
+		arg.Prioridad,
+		arg.Severidad,
+		arg.Clave,
+		arg.ID,
+		arg.Limite,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query AvisosDescartadosPorPagina: %w", err)
+	}
+	defer rows.Close()
+	items := []AvisosDescartadosPorPaginaRow{}
+	for rows.Next() {
+		var i AvisosDescartadosPorPaginaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tipo,
+			&i.Clave,
+			&i.Periodo,
+			&i.Prioridad,
+			&i.SeveridadCentavos,
+			&i.Texto,
+			&i.TransaccionID,
+			&i.CreadoEn,
+		); err != nil {
+			return nil, fmt.Errorf("query AvisosDescartadosPorPagina: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query AvisosDescartadosPorPagina: %w", err)
+	}
+	return items, nil
+}
+
 const avisosVigentesDelMes = `-- name: AvisosVigentesDelMes :many
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
@@ -146,6 +268,84 @@ func (q *Queries) AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDe
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("query AvisosVigentesDelMes: %w", err)
+	}
+	return items, nil
+}
+
+const avisosVigentesPorPagina = `-- name: AvisosVigentesPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE usuario_id = $1::text
+   AND descartado_en IS NULL
+   AND ($2::smallint IS NULL
+        OR prioridad > $2::smallint
+        OR (prioridad = $2::smallint
+            AND severidad_centavos < $3::bigint)
+        OR (prioridad = $2::smallint
+            AND severidad_centavos = $3::bigint
+            AND clave > $4::text)
+        OR (prioridad = $2::smallint
+            AND severidad_centavos = $3::bigint
+            AND clave = $4::text
+            AND id > $5::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
+ LIMIT $6::int
+`
+
+type AvisosVigentesPorPaginaParams struct {
+	UsuarioID string      `json:"usuario_id"`
+	Prioridad pgtype.Int2 `json:"prioridad"`
+	Severidad pgtype.Int8 `json:"severidad"`
+	Clave     pgtype.Text `json:"clave"`
+	ID        pgtype.UUID `json:"id"`
+	Limite    int32       `json:"limite"`
+}
+
+type AvisosVigentesPorPaginaRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	Tipo              string             `json:"tipo"`
+	Clave             string             `json:"clave"`
+	Periodo           pgtype.Date        `json:"periodo"`
+	Prioridad         int16              `json:"prioridad"`
+	SeveridadCentavos int64              `json:"severidad_centavos"`
+	Texto             string             `json:"texto"`
+	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
+}
+
+func (q *Queries) AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error) {
+	rows, err := q.db.Query(ctx, avisosVigentesPorPagina,
+		arg.UsuarioID,
+		arg.Prioridad,
+		arg.Severidad,
+		arg.Clave,
+		arg.ID,
+		arg.Limite,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query AvisosVigentesPorPagina: %w", err)
+	}
+	defer rows.Close()
+	items := []AvisosVigentesPorPaginaRow{}
+	for rows.Next() {
+		var i AvisosVigentesPorPaginaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tipo,
+			&i.Clave,
+			&i.Periodo,
+			&i.Prioridad,
+			&i.SeveridadCentavos,
+			&i.Texto,
+			&i.TransaccionID,
+			&i.CreadoEn,
+		); err != nil {
+			return nil, fmt.Errorf("query AvisosVigentesPorPagina: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query AvisosVigentesPorPagina: %w", err)
 	}
 	return items, nil
 }
