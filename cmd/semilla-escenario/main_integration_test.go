@@ -14,12 +14,18 @@ import (
 )
 
 func TestEscenarioDosCorridasYReinicio(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" {
-		t.Skip("requiere base migrada de demo")
+	// Variable propia: DATABASE_URL la comparten las demás pruebas de integración y apunta a la base
+	// principal, que el guard de validarDSN rechaza a propósito. Esta prueba escribe y con
+	// REINICIAR=si borra datos, así que exige su base desechable en 127.0.0.1:55437/vera_semilla_*.
+	dsn := os.Getenv("SEMILLA_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("requiere SEMILLA_DATABASE_URL con una base migrada de demo")
 	}
-	if e := validarDSN(os.Getenv("DATABASE_URL")); e != nil {
+	if e := validarDSN(dsn); e != nil {
 		t.Fatal(e)
 	}
+	// run() lee DATABASE_URL, igual que el CLI, y la restaura al terminar la prueba.
+	t.Setenv("DATABASE_URL", dsn)
 	ruta := filepath.Join(t.TempDir(), "estado.json")
 	usuario := uuid.NewString()
 	t.Setenv("DEMO_USUARIO", usuario)
@@ -42,7 +48,7 @@ func TestEscenarioDosCorridasYReinicio(t *testing.T) {
 		}
 		return st
 	}
-	pool, e := pgxpool.New(t.Context(), os.Getenv("DATABASE_URL"))
+	pool, e := pgxpool.New(t.Context(), dsn)
 	if e != nil {
 		t.Fatal(e)
 	}
