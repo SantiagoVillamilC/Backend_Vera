@@ -57,9 +57,9 @@ out/hardware-2026-11-13/stt-venv/bin/python \
 
 ## Pendientes
 
-- El job `transcripcion` ya corrió en GitHub Actions (run 43448949777) y salió verde; el card
-  CF-A5-04 sigue parcial porque faltan humo de voz, razonador de 12 casos y gate de release;
-  el card pide WER 0,10 y el gate ya usa 0,10.
+- Los jobs `voz` y `transcripcion` ya corrieron en GitHub Actions (run 43454401867) y salieron
+  verdes; el card CF-A5-04 sigue parcial porque faltan el humo del razonador de 12 casos y la
+  compuerta de release, que necesitan GPU. El card pide WER 0,10 y el gate ya usa 0,10.
 - `vera-voz:local` se construyó y el E2E real pasó; ver `docs/e2e-voz-local-2026-11-13.md`.
 - Cerrar los hallazgos menores del proveedor compuesto y ajustar el `409` de la corrida combinada
   (usar `-p 1` o reintento).

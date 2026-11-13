@@ -1,6 +1,6 @@
 # Compuertas de calidad de los modelos
 
-Tres compuertas corren en CI sin GPU, sin imagenes y sin credenciales, mas una cuarta que necesita
+Cuatro compuertas corren en CI sin GPU, sin imagenes y sin credenciales, mas una quinta que necesita
 los discos de pesos. El trabajo `calidad-modelos.yml` las separa para que un fallo diga qué compuerta
 rompió y no un rojo genérico. Toda cifra citada aquí sale de un archivo del repositorio o de una
 medición con comando escrito, como pide el resto del cierre.
@@ -9,6 +9,7 @@ medición con comando escrito, como pide el resto del cierre.
 | --- | --- | --- | --- |
 | Lockfile de pesos | `lockfile` | `modelos/lock.json` es un inventario válido y el verificador no se rompe | Go |
 | Aceptación archivada | `aceptacion-archivada` | El informe del proveedor local sigue cumpliendo sus umbrales | Python |
+| Humo de voz | `voz` | El servidor de voz responde 200 con token, 401 sin token y produce un WAV válido | Python y dependencias de `infra/voz-local` |
 | Transcripción | `transcripcion` | El WER sobre los clips sintéticos no supera 0,10 | Los clips, sus referencias y el medidor |
 | Bytes de los pesos | fuera de CI | Los pesos en disco coinciden con las huellas del lockfile | Los discos con varios GB |
 
@@ -46,25 +47,26 @@ Si falta el archivo o falta cualquiera de esos campos, el job falla nombrando lo
 informe a la baja también falla: las cifras que la tesis cita tienen que seguir sosteniendo la
 aceptación, y un informe ausente no puede pasar por verde.
 
-## 3. Transcripción
+## 3. Humo del servicio de voz
 
-La línea base del WER (0,0808 sobre 24 clips sintéticos) es del repositorio de modelos y está citada
-en `docs/evidencia-stt-tts-seed.md`. El conjunto no vive en este repositorio: el mismo documento lo
-dice en las líneas 176 y 177, y Whisper se probó aquí con un WAV de Kokoro, no con esos 24 clips.
-El job por eso exige primero `infra/stt-local/clips/manifiesto.json` con los clips y sus
-transcripciones de referencia, y después `infra/stt-local/medir_wer.py`. Mientras falten, **el job
-queda en rojo nombrando lo que falta**. Es deliberado: un dato ausente no se omite, se reporta, igual
-que en la aceptación archivada. Cuando los clips y el medidor se commiteen, el job corre
-`medir_wer.py --manifiesto ... --tope 0.10` y falla por encima de 0,10.
+El job `voz` corre las pruebas de `infra/voz-local/test_servidor.py`. Cubre healthcheck 200 con
+token y 401 sin token, `/sintetizar` con WAV PCM mono y `/flujo` con el orden de los eventos. No
+descarga pesos ni necesita GPU: usa el motor falso de la prueba para aislar el contrato HTTP. La
+corrida 43454401867 pasó en 53 s.
 
-Reproducción local, cuando existan los assets:
+## 4. Transcripción
+
+La línea base del WER (0,0808 sobre 24 clips sintéticos) se reprodujo localmente el 13-11-2026 y
+vive en `docs/mediciones-locales-2026-11-13.md`. El conjunto ya está en `infra/stt-local/clips`,
+con `manifiesto.json` y `medir_wer.py` versionados; el job exige los tres y corre
+`medir_wer.py --manifiesto ... --tope 0.10`. La corrida 43454401867 pasó en 1 min 15 s con el
+tope 0,10; el agregado es 0,0808.
+
+Reproducción local:
 
 ```bash
 python3 infra/stt-local/medir_wer.py --manifiesto infra/stt-local/clips/manifiesto.json --tope 0.10
 ```
-
-Hoy el comando no existe y por eso no se cita ningún WER medido aquí. El 0,0808 es del repositorio de
-modelos, con su procedencia escrita.
 
 ## Criterio pre-registrado de mejora
 
