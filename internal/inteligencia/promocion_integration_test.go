@@ -36,8 +36,27 @@ SELECT categoria FROM inteligencia.promocion_destino
 // TestDosUsuariosPromuevenYElTerceroHereda cubre el criterio de R-08: dos usuarios que corrigen el
 // mismo destino a la misma categoría cambian lo que recibe un tercero en un movimiento nuevo, y uno
 // solo no cambia nada.
+
+// limpiarVotosYPromociones deja las dos tablas de R-08 vacías: la suite comparte la base y un voto
+// de una corrida anterior no puede promover un destino en esta.
+func limpiarVotosYPromociones(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	_, err := enTransaccion(t.Context(), poolDeInteligencia{pool: pool},
+		func(ctx context.Context, tx transaccionDeInteligencia, _ *repositorio.Queries) (struct{}, error) {
+			if _, err := tx.Exec(ctx, "DELETE FROM inteligencia.promocion_destino"); err != nil {
+				return struct{}{}, err
+			}
+			_, err := tx.Exec(ctx, "DELETE FROM inteligencia.voto_destino")
+			return struct{}{}, err
+		})
+	if err != nil {
+		t.Fatalf("limpiar votos y promociones: %v", err)
+	}
+}
+
 func TestDosUsuariosPromuevenYElTerceroHereda(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
+	limpiarVotosYPromociones(t, pool)
 	ctx := t.Context()
 	lexico, err := CargarLexicoV2()
 	if err != nil {

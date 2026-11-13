@@ -225,6 +225,7 @@ func TestCorregirCategoriaAislaUsuariosYPersonas(t *testing.T) {
 
 func TestCorregirMovimientoAjenoOInexistenteEsNoEncontrado(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
+	limpiarVotosYPromociones(t, pool)
 	ctx := t.Context()
 
 	duenio, atacante := uuid.NewString(), uuid.NewString()
@@ -256,6 +257,7 @@ func TestCorregirMovimientoAjenoOInexistenteEsNoEncontrado(t *testing.T) {
 
 func TestCorregirCategoriaNoVisibleNoEscribeNada(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
+	limpiarVotosYPromociones(t, pool)
 	ctx := t.Context()
 
 	usuario := uuid.NewString()
