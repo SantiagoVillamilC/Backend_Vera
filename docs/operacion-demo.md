@@ -121,6 +121,80 @@ Apagado: `Ctrl+C` en la API y `bash infra/local/levantar-base.sh --limpiar`.
   es cero en esta sesión y lo aprueba Christian Rubio. Las acciones de dinero quedan bloqueadas
   por el control de acciones, no por el proveedor.
 
+## Pod de GPU
+
+Runbook para la sesión de prueba y la presentación con el razonador E4B, Whisper y Kokoro en un pod
+con GPU. La pila y sus variables están en `docs/pila-modelos-pod.md`, los costos y el umbral en
+`docs/costos-pod-demo.md`, y el comando de encendido es `infra/modelos/pod-demo.sh`.
+
+**Estado: NO PROBADO.** Hoy no hay pods de RunPod. Lo único comprobado es el script
+con `bash -n`, shellcheck y `infra/modelos/pod-demo_test.sh` (`docker`, `curl` y `nvidia-smi`
+simulados, sin tocar el docker real), y el compose con `docker compose config` (sin
+`build` ni `up`). Todo paso marcado "no probado" se confirma la primera vez que haya pod, y lo que
+falle se anota aquí.
+
+### El día anterior
+
+1. Revalidar precio y stock de la 4090 Secure. La 4090 suele estar en stock bajo (handoff, sección 10)
+   y la tabla de `docs/costos-pod-demo.md` es de la cotización del 13 de noviembre de 2026.
+2. Reservar o crear el pod 4090 Secure con volumen de 30 GB. Confirmar que el volumen es de **red**
+   del proveedor y no el disco local del pod, porque solo así persiste al terminar el pod
+   (`docs/pila-modelos-pod.md`). No probado.
+3. Decidir el plan B antes de necesitarlo: **L4 o A40** (0,44 y 0,35 USD/h según
+   `docs/costos-pod-demo.md`). Si la 4090 no tiene stock, se usa una de las dos. Si cambia la GPU, se
+   anota el cambio y se revalida que E4B quepa en su memoria, cosa que no está medida aquí.
+4. Tener a mano `WHISPER_TOKEN` y `KOKORO_TOKEN` (mínimo 32 caracteres cada uno, desde Infisical) y
+   confirmar que el GGUF de E4B está registrado en Ollama dentro del volumen. El compose no lo registra
+   por sí solo: `OLLAMA_MODELO` solo nombra el modelo que se espera. No probado.
+5. Confirmar que el pod permite correr Docker. Un pod suele ser ya un contenedor, así que esto
+   puede no estar disponible, y si no lo está hay que cambiar el enfoque antes de la sesión. No probado.
+
+### Encender y precalentar
+
+Con el pod ya creado y el repositorio dentro:
+
+```bash
+export WHISPER_TOKEN=... KOKORO_TOKEN=... OLLAMA_MODELO=gemma-4-e4b-it-q4_k_m   # desde Infisical, sin escribirlos en archivos
+bash infra/modelos/pod-demo.sh encender
+```
+
+El subcomando levanta el compose con el override CUDA, espera en orden `vera-llm`, `vera-voz` y
+`vera-kokoro`, manda una petición mínima al razonador para cargar el GGUF en la GPU y muestra la
+salud. Falla con un mensaje claro si falta `WHISPER_TOKEN`, `KOKORO_TOKEN` u `OLLAMA_MODELO`, o si un
+token tiene menos de 32 caracteres. No abre la sesión por sí solo: la sesión empieza cuando el script
+termina en `pila lista`. No probado en un pod: la construcción de la imagen CUDA, la carga del modelo
+en la GPU y el tiempo del primer arranque no están medidos. Lo único medido es la carga en frío de E2B
+en una GPU local de 4 GB, de unos 34 segundos (`docs/mediciones-locales-2026-11-13.md`), que no sirve
+como estimación para E4B en la 4090.
+
+Durante la sesión, `bash infra/modelos/pod-demo.sh verificar` repite la comprobación y falla si algo
+no responde.
+
+### Alerta de presupuesto
+
+**NO PROBADA hasta tener la cuenta.** Es lo que hay que configurar el día que exista, no algo ya hecho.
+
+- Responsable: Christian Rubio. Umbral: el de `docs/costos-pod-demo.md` (4,82 USD al mes, propuesto).
+- En la cuenta del proveedor, activar la alerta de gasto o saldo que ofrezca y fijarla en el umbral.
+  El nombre exacto de la opción y si existe no están verificados.
+- Si la cuenta no ofrece alerta, el respaldo es no cargar más saldo que el umbral y revisar el gasto
+  a mano al terminar cada sesión. Tampoco está comprobado que la cuenta funcione por saldo.
+- La alerta avisa, no apaga nada. Lo que corta el gasto es terminar el pod.
+
+### Apagar
+
+1. Terminar la sesión y guardar los artefactos que se quieran conservar fuera del pod.
+2. `bash infra/modelos/pod-demo.sh apagar` baja los contenedores y conserva el volumen.
+3. En la consola del proveedor, **Terminate** y no Stop: la regla de `docs/pila-modelos-pod.md` es
+   terminar el pod entre sesiones para no pagar GPU ociosa. Qué cobra un pod en Stop no se evaluó,
+   por eso no se usa.
+4. Comprobar en la consola que no queda ningún pod activo. El volumen de 30 GB sigue cobrando aparte
+   (2,10 USD al mes según `docs/costos-pod-demo.md`) hasta que se borre.
+
+Lo que se pierde al terminar: las imágenes construidas (el siguiente encendido las reconstruye, y
+Kokoro vuelve a bajar sus 0,14 GB) y el estado en memoria. Los pesos de E4B y Whisper no se vuelven a
+descargar si el volumen persiste.
+
 ## Si algo no arranca
 
 1. Postgres no acepta consultas: `docker logs vera_sandbox_pg`, `--limpiar` y volver a levantar.
