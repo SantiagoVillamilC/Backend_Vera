@@ -86,6 +86,24 @@ func ConRelojOrquestador(ahora func() time.Time) OpcionOrquestador {
 	return func(o *Orquestador) { o.ahora = ahora }
 }
 
+// ConPlazo fija el corte del ciclo completo. El valor vive en la configuración, no en el
+// constructor: tiene que alcanzar al menos dos intentos del proveedor local para que el reintento
+// corra de verdad.
+func traducirCorte(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrTimeoutIA
+	}
+	return err
+}
+
+func ConPlazo(plazo time.Duration) OpcionOrquestador {
+	return func(o *Orquestador) {
+		if plazo > 0 {
+			o.plazo = plazo
+		}
+	}
+}
+
 // ConConfirmacionPreparacionServidor cierra una preparación válida con texto
 // del backend, sin pedir al modelo que vuelva a interpretar una acción ya creada.
 func ConConfirmacionPreparacionServidor() OpcionOrquestador {
@@ -178,17 +196,20 @@ func (o *Orquestador) Responder(ctx context.Context, e EntradaOrquestador) (resp
 	}
 	for vuelta := previas + 1; vuelta <= 5; vuelta++ {
 		if err := ctx.Err(); err != nil {
-			return SalidaOrquestador{}, err
+			return SalidaOrquestador{}, traducirCorte(err)
 		}
 		if err := o.autorizacion.Exigir(ctx); err != nil {
 			return SalidaOrquestador{}, err
 		}
 		inicio := time.Now()
 		respuesta, err := o.proveedor.Generar(ctx, SolicitudIA{Instrucciones: instrucciones, Historial: historial, Funciones: o.catalogo.Declaraciones()})
-		if ctx.Err() != nil {
-			return SalidaOrquestador{}, ctx.Err()
+		if corte := ctx.Err(); corte != nil {
+			return SalidaOrquestador{}, traducirCorte(corte)
 		}
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return SalidaOrquestador{}, ErrTimeoutIA
+			}
 			return SalidaOrquestador{}, err
 		}
 		texto, llamadas, err := examinarRespuestaCiclo(respuesta, ids)

@@ -199,7 +199,7 @@ func run() error {
 	if modeloIA == "" {
 		modeloIA = "simulado"
 	}
-	orquestadorIA, err := copilot.NuevoOrquestador(proveedorIA, catalogoIA, copilot.NuevaMemoriaCicloPostgres(pool), controlIA, modeloIA, slog.Default())
+	orquestadorIA, err := copilot.NuevoOrquestador(proveedorIA, catalogoIA, copilot.NuevaMemoriaCicloPostgres(pool), controlIA, modeloIA, slog.Default(), copilot.ConPlazo(cfg.Vera.PlazoOrquestador))
 	if err != nil {
 		return fmt.Errorf("orquestador IA: %w", err)
 	}

@@ -25,6 +25,7 @@ type ConfigVera struct {
 	Modelo        string
 	OllamaURL     string
 	Timeout       time.Duration
+	PlazoOrquestador time.Duration
 	Temperatura   float32
 	Limites       copilot.LimitesUso
 	Preparacion   copilot.ConfigPreparacion
@@ -58,14 +59,21 @@ func cargarConfigVera() (ConfigVera, []error) {
 	}
 	plazoPorDefecto, plazoMaximo := "10s", 30*time.Second
 	if c.Proveedor == "local" {
-		// La inferencia en una GPU de 4 GB es más lenta que una API remota.
-		plazoPorDefecto, plazoMaximo = "120s", 5*time.Minute
+		// La inferencia en una GPU de 4 GB es más lenta que una API remota, pero el plazo por
+		// intento tiene que dejar dos intentos dentro del corte del orquestador (45 s).
+		plazoPorDefecto, plazoMaximo = "20s", 5*time.Minute
 	}
 	d, err := time.ParseDuration(envOr("VERA_TIMEOUT_LLAMADA", plazoPorDefecto))
 	if err != nil || d <= 0 || d > plazoMaximo {
 		errs = append(errs, fmt.Errorf("VERA_TIMEOUT_LLAMADA debe ser mayor que 0 y hasta %s", plazoMaximo))
 	} else {
 		c.Timeout = d
+	}
+	plazoOrquestador, errPlazo := time.ParseDuration(envOr("VERA_PLAZO_ORQUESTADOR", "45s"))
+	if errPlazo != nil || plazoOrquestador < time.Second || plazoOrquestador > 5*time.Minute {
+		errs = append(errs, errors.New("VERA_PLAZO_ORQUESTADOR debe ser una duración entre 1s y 5m"))
+	} else {
+		c.PlazoOrquestador = plazoOrquestador
 	}
 	t, err := strconv.ParseFloat(envOr("VERA_TEMPERATURA", "0.2"), 32)
 	if err != nil || math.IsNaN(t) || t < 0 || t > 1 {

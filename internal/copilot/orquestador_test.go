@@ -250,7 +250,7 @@ func TestOrquestadorTopesYCancelacion(t *testing.T) {
 	}}
 	o, s, ctx := cicloPrueba(t, p, nil)
 	o.plazo = time.Millisecond
-	if _, err := o.Responder(ctx, EntradaOrquestador{ConversacionID: uuid.New(), MensajeID: uuid.New()}); !errors.Is(err, context.DeadlineExceeded) || !s.cerrada {
+	if _, err := o.Responder(ctx, EntradaOrquestador{ConversacionID: uuid.New(), MensajeID: uuid.New()}); !errors.Is(err, ErrTimeoutIA) || !s.cerrada {
 		t.Fatal(err)
 	}
 }

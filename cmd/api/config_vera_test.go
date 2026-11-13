@@ -33,16 +33,16 @@ func TestConfigVera(t *testing.T) {
 		{"temperatura", map[string]string{"VERA_TEMPERATURA": "2"}, "VERA_TEMPERATURA", 0, "", ""},
 		{"nan", map[string]string{"VERA_TEMPERATURA": "NaN"}, "VERA_TEMPERATURA", 0, "", ""},
 		{"inf", map[string]string{"VERA_TEMPERATURA": "Inf"}, "VERA_TEMPERATURA", 0, "", ""},
-		{"local", map[string]string{"VERA_PROVEEDOR": "local"}, "", 120 * time.Second, "gemma4-e4b-local", "http://127.0.0.1:11434"},
-		{"localUrl", map[string]string{"VERA_PROVEEDOR": "local", "VERA_OLLAMA_URL": "http://127.0.0.1:11435"}, "", 120 * time.Second, "gemma4-e4b-local", "http://127.0.0.1:11435"},
-		{"localModelo", map[string]string{"VERA_PROVEEDOR": "local", "VERA_MODELO": "gemma4-e2b-local"}, "", 120 * time.Second, "gemma4-e2b-local", "http://127.0.0.1:11434"},
+		{"local", map[string]string{"VERA_PROVEEDOR": "local"}, "", 20 * time.Second, "gemma4-e4b-local", "http://127.0.0.1:11434"},
+		{"localUrl", map[string]string{"VERA_PROVEEDOR": "local", "VERA_OLLAMA_URL": "http://127.0.0.1:11435"}, "", 20 * time.Second, "gemma4-e4b-local", "http://127.0.0.1:11435"},
+		{"localModelo", map[string]string{"VERA_PROVEEDOR": "local", "VERA_MODELO": "gemma4-e2b-local"}, "", 20 * time.Second, "gemma4-e2b-local", "http://127.0.0.1:11434"},
 		{"localUrlSinEsquema", map[string]string{"VERA_PROVEEDOR": "local", "VERA_OLLAMA_URL": "127.0.0.1:11434"}, "VERA_OLLAMA_URL", 0, "", ""},
 		{"localUrlConRuta", map[string]string{"VERA_PROVEEDOR": "local", "VERA_OLLAMA_URL": "http://127.0.0.1:11434/api"}, "VERA_OLLAMA_URL", 0, "", ""},
 		{"localTimeoutLargo", map[string]string{"VERA_PROVEEDOR": "local", "VERA_TIMEOUT_LLAMADA": "6m"}, "VERA_TIMEOUT_LLAMADA", 0, "", ""},
 		{"localSinModelo", map[string]string{"VERA_PROVEEDOR": "local", "VERA_MODELO": "   "}, "VERA_MODELO", 0, "", ""},
 	} {
 		t.Run(caso.nombre, func(t *testing.T) {
-			for _, key := range []string{"VERA_PROVEEDOR", "GEMINI_API_KEY", "VERA_MODELO", "VERA_OLLAMA_URL", "VERA_TIMEOUT_LLAMADA", "VERA_TEMPERATURA"} {
+			for _, key := range []string{"VERA_PROVEEDOR", "GEMINI_API_KEY", "VERA_MODELO", "VERA_OLLAMA_URL", "VERA_TIMEOUT_LLAMADA", "VERA_TEMPERATURA", "VERA_PLAZO_ORQUESTADOR", "VERA_TIMEOUT_LLAMADA"} {
 				t.Setenv(key, "")
 			}
 			for k, v := range caso.vars {
@@ -123,5 +123,23 @@ func TestConfigVeraNoFiltraClave(t *testing.T) {
 	slog.New(slog.NewJSONHandler(&b, nil)).Info("config", "config", cfg)
 	if strings.Contains(b.String(), cfg.Vera.APIKey) || !strings.Contains(b.String(), `"gemini_api_key_set":true`) {
 		t.Fatalf("log inseguro: %s", b.String())
+	}
+}
+
+func TestConfigVeraPlazoOrquestador(t *testing.T) {
+	baseDeConfig(t)
+	t.Setenv("VERA_PROVEEDOR", "local")
+	t.Setenv("VERA_PLAZO_ORQUESTADOR", "2m")
+	cfg, errs := cargarConfigVera()
+	if len(errs) != 0 {
+		t.Fatalf("cargarConfigVera con plazo válido: %v", errs)
+	}
+	if cfg.PlazoOrquestador != 2*time.Minute {
+		t.Fatalf("plazo = %v, quiero 2m", cfg.PlazoOrquestador)
+	}
+
+	t.Setenv("VERA_PLAZO_ORQUESTADOR", "0s")
+	if _, errs := cargarConfigVera(); len(errs) == 0 || !strings.Contains(errs[0].Error(), "VERA_PLAZO_ORQUESTADOR") {
+		t.Fatalf("errs = %v, quiero un error de VERA_PLAZO_ORQUESTADOR", errs)
 	}
 }

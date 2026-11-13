@@ -62,7 +62,8 @@ Decisiones del contrato:
 | `VERA_PROVEEDOR` | valor inicial `simulado`, admite `simulado`, `gemini` o `local` |
 | `VERA_OLLAMA_URL` | valor inicial `http://127.0.0.1:11434`, un origen http(s) sin ruta, credenciales, consulta ni fragmento |
 | `VERA_MODELO` | `gemma4-e4b-local` con `local`, obligatorio y no puede quedar vacío |
-| `VERA_TIMEOUT_LLAMADA` | `120s` con `local`, mayor que cero y máximo `5m`, por intento |
+| `VERA_TIMEOUT_LLAMADA` | `20s` con `local`, mayor que cero y máximo `5m`, por intento |
+| `VERA_PLAZO_ORQUESTADOR` | `45s`, entre `1s` y `5m`, corte del ciclo completo |
 | `VERA_TEMPERATURA` | `0.2`, finita entre 0 y 1 |
 
 `LoadConfig` acumula errores. `ConfigVera.LogValue` registra el origen de Ollama y la
@@ -71,6 +72,13 @@ al arrancar: el proceso puede levantar antes que Ollama y el primer turno inform
 
 Con `gemini` o `simulado` los valores por defecto no cambian: el plazo sigue en `10s` con
 máximo `30s`.
+
+El plazo por intento de `local` bajó de `120s` a `20s` para que quepan dos intentos dentro del
+corte del orquestador de `45s`: con el valor viejo el reintento nunca corría y el ciclo moría en
+un `DeadlineExceeded` que salía como 504. El corte del ciclo vive en `VERA_PLAZO_ORQUESTADOR`, no
+en el constructor, y cuando el reloj del orquestador vence el error se clasifica como
+`ErrTimeoutIA` (503 en el envelope), igual que el vencimiento dentro del proveedor. Ninguna ruta
+real termina en 504 por corte interno sin clasificar.
 
 ## Errores públicos
 
