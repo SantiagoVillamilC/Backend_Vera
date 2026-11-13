@@ -81,3 +81,53 @@ out/bin/api
 `cargas/inteligencia/entorno.sh` exporta `AVISOS_ACTIVO=false`, así que hay que encenderlo a mano
 después de sourcearlo. Al terminar, `bash infra/local/levantar-base.sh --limpiar` borra los
 contenedores.
+
+## Runbook por sesión
+
+Encendido, en orden:
+
+```bash
+bash infra/local/levantar-base.sh --semilla          # base desechable con datos
+set -a && source cargas/inteligencia/entorno.sh && set +a
+export AVISOS_ACTIVO=true AVISOS_CUPO=5              # el entorno los deja apagados a propósito
+out/bin/enriquecer lote 5000                         # siembra el enriquecimiento
+out/bin/api                                          # primer plano, 127.0.0.1:8080
+```
+
+`make demo` hace lo mismo emitiendo con `cmd/avisos` antes de arrancar; el orden de arriba es el
+del disparo al arrancar de PR-05.
+
+Lista de verificación de cinco comandos:
+
+```bash
+curl -fsS http://127.0.0.1:8080/readyz
+docker exec vera_sandbox_pg psql -U dueno -d vera_semilla_m8 -Atc 'select count(*) from inteligencia.movimiento_enriquecido'
+bash infra/local/levantar-base.sh --ayuda >/dev/null && echo base-ok
+grep -c 'avisos emitidos al arrancar' out/local/api.log 2>/dev/null || true
+bash infra/servidor/verificar-banderas.sh local
+```
+
+Apagado: `Ctrl+C` en la API y `bash infra/local/levantar-base.sh --limpiar`.
+
+## Arranque en frío, consumo y gasto
+
+- Arranque en frío medido en esta VPS: la base quedó lista en torno a 1 minuto (build, migraciones y
+  clave del rol), con Postgres aceptando consultas en unos 40 segundos y Redis antes. La siembra
+  suma un par de minutos. No se midió el arranque de Ollama ni Whisper: esta VPS no los tiene.
+- Contenedores con `--memory 512m --cpus 0.5` (pg) y `--memory 256m --cpus 0.2` (redis). La API y
+  la siembra corren en el host. La suma queda bajo 2 CPU y 2 GB.
+- Gasto: la demo no toca nube. `VERA_PROVEEDOR=simulado` no necesita red ni clave; `local` usa
+  Ollama en loopback; `gemini` exigiría clave y cuota. El umbral para pruebas con proveedor real
+  es cero en esta sesión y lo aprueba Christian Rubio. Las acciones de dinero quedan bloqueadas
+  por el control de acciones, no por el proveedor.
+
+## Si algo no arranca
+
+1. Postgres no acepta consultas: `docker logs vera_sandbox_pg`, `--limpiar` y volver a levantar.
+   Los puertos 55437 y 6380 tienen que estar libres.
+2. `catálogo curado no disponible` en el log: la cascada sigue sin el escalón 4 y la demo funciona
+   con menos categorías curadas.
+3. Ollama o Whisper no responden: la demo sigue sin voz y sin transcripción; usa
+   `VERA_PROVEEDOR=simulado` y deja el audio como lo que falta, sin improvisarlo.
+4. Avisos sin tarjetas: confirma `AVISOS_ACTIVO=true`, `AVISOS_CUPO=5` y la siembra. El log
+   `avisos emitidos al arrancar` dice cuántos se guardaron.
