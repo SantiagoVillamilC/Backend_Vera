@@ -57,6 +57,16 @@ func ConConfiguracionDeAvisos(cfg avisos.Configuracion) OpcionServicio {
 	return func(s *Servicio) { s.avisosCfg = cfg }
 }
 
+// ConCupoDeAvisos fija solo el tope mensual de avisos por usuario y deja el resto de la
+// configuración como está. Un tope menor que uno se ignora: la configuración ya lo rechaza.
+func ConCupoDeAvisos(cupo int) OpcionServicio {
+	return func(s *Servicio) {
+		if cupo >= 1 {
+			s.avisosCfg.TopeAvisosMes = cupo
+		}
+	}
+}
+
 // EmitirAvisos evalúa a todos los usuarios con historial y guarda los avisos que disparan.
 func (s *Servicio) EmitirAvisos(ctx context.Context, ahora time.Time) (int, error) {
 	inicio := time.Now()

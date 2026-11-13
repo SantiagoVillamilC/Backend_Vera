@@ -24,6 +24,7 @@ destino (`local`, `demo`, `produccion`). Lo demás sale de ahí.
 | `LEXICO` | `v2` | `v2` | `apagado` | Ciencia de datos | Escalón 5 de la cascada. `v2` es el único léxico embebido. |
 | `AVISOS_ACTIVO` | `false` | `false` | `false` | Producto | Emisión programada de avisos de consumo. |
 | `AVISOS_HORA` | `06:00` | `06:00` | `06:00` | Producto | Hora de Colombia, formato `HH:MM` de 24 horas. |
+| `AVISOS_CUPO` | `3` | `5` | `3` | Producto | Tope de avisos por usuario y mes, entero positivo. |
 | `VERA_PROVEEDOR` | `simulado` | `simulado` | `simulado` | Backend IA | Proveedor del asistente. `gemini` exige `GEMINI_API_KEY` y `VERA_MODELO`. |
 | `VERA_MODELO` | vacío | vacío | vacío | Backend IA | Modelo de Gemini. No hay valor fijado en el código. |
 | `METRICAS_ACTIVO` | `false` | `false` | `false` | Operación | Superficie `/metrics`. |
@@ -37,6 +38,40 @@ variable:
 | 3, MCC | siempre | `escalonesDelLote` lo evalúa en toda la rama de QR a comercio. No hay interruptor. |
 | 4, catálogo | por datos | Se enciende con filas en `inteligencia.catalogo_marca`. Sin filas la copia no cambia por él. |
 
+## Cupo de avisos
+
+`AVISOS_CUPO` es cuántos avisos puede recibir un usuario en un mes. Lo leen los dos emisores,
+`cmd/api/config.go` para la API y `cmd/avisos/main.go` para la corrida suelta, y llega al servicio
+por `inteligencia.ConCupoDeAvisos`, que cambia solo el tope de la configuración de avisos. Sin la
+variable, ambos toman `avisos.CupoMensualPorDefecto`. El resumen del mes informa la misma cifra,
+así que subir el cupo cambia cuántos avisos ve el usuario y lo que la API le promete en el resumen.
+
+El emisor ordena las tarjetas del mes por prioridad y recorta por severidad dentro de la misma
+prioridad. Las prioridades son pago (`1`), ingreso (`2`), cobro (`3`), presupuesto (`4`) y categoría
+(`5`). Con `3`, que es el valor de producto, el aviso de presupuesto nunca entra: los tres primeros
+puestos se los llevan pago, ingreso y cobro, y la categoría tampoco entra.
+
+- `3` conserva el comportamiento actual y es el valor de `local` y de `produccion`.
+- `5` deja caber los cinco avisos y es solo para `demo`, donde la demostración tiene que poder
+  mostrarlos si los datos los disparan. El cupo es un techo y no una garantía. Medición del
+  12 de noviembre de 2026 sobre una siembra de 300 usuarios con semilla `20261020` y 9.300
+  movimientos enriquecidos: 51 avisos a 50 usuarios, 49 de caída de ingreso y 2 de cobro nuevo,
+  con un máximo de 2 por usuario. La emisión es idéntica con `AVISOS_CUPO=3` y con
+  `AVISOS_CUPO=5`, porque ningún usuario llegó a tres disparos, y en esa corrida los otros tres
+  tipos no aparecen: el `5` de la demo les deja lugar y no los inventa. Esa corrida se reprodujo
+  con `go run ./cmd/semilla-inteligencia`, `go run ./cmd/enriquecer lote`, `go run ./cmd/avisos`
+  con el mismo `-ahora` y esta consulta para el desglose por tipo:
+  `select tipo, count(*) from inteligencia.aviso group by tipo order by tipo;`.
+  Quedan `out/evidencia-pr02/semilla.json`, `avisos-cupo3.json` y `avisos-cupo5.json` (ignorados
+  por git), que prueban el conteo total; el desglose por tipo sale de la consulta, no de un
+  archivo escrito a mano.
+
+Subirlo no cambia la calidad de un aviso, solo cuántos caben en el mes. Cualquier otro valor
+positivo es válido, y cero, negativo o no numérico detienen el arranque de la API y la corrida de
+`cmd/avisos` con un error de `AVISOS_CUPO`. `infra/local/demostrar.sh` fija `AVISOS_CUPO=5` a
+mano para que la demo, que emite con `cmd/avisos`, deje caber los cinco avisos: el script no lee
+`banderas.tsv`, así que la columna `demo` no es lo que arranca la demo.
+
 Decisiones que la matriz deja escritas, para que no se rediscutan por accidente:
 
 - **`AVISOS_ACTIVO` sigue apagado en los tres destinos.** El repositorio sostiene ese valor hasta
@@ -49,8 +84,11 @@ Decisiones que la matriz deja escritas, para que no se rediscutan por accidente:
 - **`VERA_PROVEEDOR=simulado` en los tres destinos** porque no hay credencial de Gemini en el
   repositorio. Cambiarlo a `gemini` sin `GEMINI_API_KEY` y `VERA_MODELO` deja la API sin arrancar,
   a propósito.
-- **`demo` y `local` coinciden hoy.** La demo tiene que mostrar los seis escalones. Cuando deje de
-  ser cierto, se cambia la matriz y no el paso.
+- **`local` y `demo` solo difieren en `AVISOS_CUPO`.** `local` y `produccion` llevan `3`, que es
+  el valor de producto, y `demo` lleva `5` para que quepan los cinco avisos. `local` y `demo`
+  coinciden en el resto de la matriz. `produccion` no: además del cupo, apaga `CLASIFICADOR` y
+  `LEXICO`, que en `local` y `demo` van en `tfidf` y `v2`. Cuando deje de ser cierto, se cambia la
+  matriz y no el paso.
 
 El banco de medición de M8 (`cargas/inteligencia/entorno.sh`) no es el destino `local`: fija sus
 propios valores para congelar el corte (`ENRIQUECIMIENTO_INTERVAL=24h`, `METRICAS_ACTIVO=true` con

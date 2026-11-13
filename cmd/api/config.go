@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
@@ -47,6 +48,7 @@ type Config struct {
 	Lexico                  inteligencia.ModoLexico
 	AvisosActivo            bool
 	AvisosHora              string
+	AvisosCupo              int
 	MetricasActivo          bool
 	MetricasToken           string
 	A6PosicionLiquidacion   nucleo.Centavos
@@ -171,6 +173,10 @@ func LoadConfig() (*Config, error) {
 	if !horaValida.MatchString(cfg.AvisosHora) {
 		errs = append(errs, fmt.Errorf("AVISOS_HORA must be HH:MM, got %q", cfg.AvisosHora))
 	}
+	cfg.AvisosCupo, errAvisos = enteroPositivoRequerido("AVISOS_CUPO", envOr("AVISOS_CUPO", strconv.Itoa(avisos.CupoMensualPorDefecto)))
+	if errAvisos != nil {
+		errs = append(errs, errAvisos)
+	}
 	var errClasificador error
 	cfg.Clasificador, errClasificador = inteligencia.InterpretarModoClasificador(os.Getenv("CLASIFICADOR"))
 	if errClasificador != nil {
@@ -268,6 +274,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("lexico", string(c.Lexico)),
 		slog.Bool("avisos_activo", c.AvisosActivo),
 		slog.String("avisos_hora", c.AvisosHora),
+		slog.Int("avisos_cupo", c.AvisosCupo),
 		slog.Bool("metricas_activo", c.MetricasActivo),
 		slog.Bool("metricas_token_set", c.MetricasToken != ""),
 		slog.Bool("a6_prefondeo_activo", c.A6PrefondeoActivo),

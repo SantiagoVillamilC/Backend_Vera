@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 )
 
 type lectorConsumoFalso struct {
@@ -53,7 +54,7 @@ func resumenDePrueba() inteligencia.ResumenDelMes {
 	return inteligencia.ResumenDelMes{
 		Mes: "2026-09", Desde: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), Hasta: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
 		Alcance: "billetera", Moneda: "COP", Evaluable: true, MesesCompletos: 4, MesesRequeridos: 3,
-		TotalCentavos: 7000000, CupoAvisos: 3, AvisosEmitidos: 2,
+		TotalCentavos: 7000000, CupoAvisos: avisos.CupoMensualPorDefecto, AvisosEmitidos: 2,
 		Categorias: []inteligencia.ResumenDeCategoria{
 			{Codigo: "alimentos_mercado", Nombre: "Alimentos y mercado", TotalCentavos: 5000000, MedianaCentavos: &mediana, MesesConGasto: 4},
 			{Codigo: "transporte", Nombre: "Transporte", TotalCentavos: 2000000, MesesConGasto: 1},

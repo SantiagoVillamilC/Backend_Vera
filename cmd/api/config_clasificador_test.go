@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 )
 
 func TestLoadConfigClasificadorPorDefectoApagado(t *testing.T) {
@@ -80,6 +81,43 @@ func TestLoadConfigAvisosApagadosPorDefecto(t *testing.T) {
 	}
 	if cfg.AvisosHora != "06:00" {
 		t.Fatalf("hora = %q, want 06:00", cfg.AvisosHora)
+	}
+	if cfg.AvisosCupo != avisos.CupoMensualPorDefecto {
+		t.Fatalf("cupo = %d, want %d", cfg.AvisosCupo, avisos.CupoMensualPorDefecto)
+	}
+}
+
+func TestLoadConfigAvisosCupo(t *testing.T) {
+	baseDeConfig(t)
+	t.Setenv("AVISOS_CUPO", "5")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig con AVISOS_CUPO=5: %v", err)
+	}
+	if cfg.AvisosCupo != 5 {
+		t.Fatalf("cupo = %d, want 5", cfg.AvisosCupo)
+	}
+	for _, valor := range []string{"0", "-1", "tres", "5.5", " 5"} {
+		t.Run(valor, func(t *testing.T) {
+			baseDeConfig(t)
+			t.Setenv("AVISOS_CUPO", valor)
+			if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "AVISOS_CUPO") {
+				t.Fatalf("err = %v, want un error de AVISOS_CUPO", err)
+			}
+		})
+	}
+}
+
+func TestConfigLogValueRegistraElCupoDeAvisos(t *testing.T) {
+	cfg := Config{AvisosCupo: 5, LogLevel: "info", LogFormat: "json"}
+	var encontrado bool
+	for _, atributo := range cfg.LogValue().Group() {
+		if atributo.Key == "avisos_cupo" {
+			encontrado = true
+		}
+	}
+	if !encontrado {
+		t.Fatalf("el log del arranque no registra el cupo de avisos")
 	}
 }
 

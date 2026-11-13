@@ -134,7 +134,8 @@ func run() error {
 	catalogoNombres := make(map[string]inteligencia.Categoria)
 	catalogoLlaves := make(map[string]inteligencia.Categoria)
 	opcionesInteligencia = append(opcionesInteligencia,
-		inteligencia.ConCatalogo(catalogoNombres, catalogoLlaves))
+		inteligencia.ConCatalogo(catalogoNombres, catalogoLlaves),
+		inteligencia.ConCupoDeAvisos(cfg.AvisosCupo))
 	servicioInteligencia := inteligencia.NuevoServicio(pool, opcionesInteligencia...)
 	if err := servicioInteligencia.CargarCatalogo(ctx); err != nil {
 		slog.Error("catálogo curado no disponible, la cascada sigue sin el escalón 4", "error", err)
