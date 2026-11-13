@@ -1,11 +1,15 @@
 # Imágenes locales del razonador y de la voz (R-04).
 #
-# Dos servicios, dos imágenes, pesos montados desde el volume `pesos` y nunca dentro de la imagen.
+# Tres servicios, tres imágenes: razonador (vera-llm), transcripción (vera-voz) y voz neural
+# (vera-kokoro). Los pesos del razonador y de Whisper se montan desde el volume `pesos` y no van dentro
+# de la imagen. Los de Kokoro (unos 0,14 GB) se descargan en el build con huella verificada.
 # Los secretos llegan por entorno (Infisical o el archivo del operador), no se hornean.
 #
 # Uso:
-#   WHISPER_TOKEN=... docker compose -f infra/modelos/compose.yaml config
-#   WHISPER_TOKEN=... docker compose -f infra/modelos/compose.yaml up --build
+#   WHISPER_TOKEN=... KOKORO_TOKEN=... docker compose -f infra/modelos/compose.yaml config
+#   WHISPER_TOKEN=... KOKORO_TOKEN=... docker compose -f infra/modelos/compose.yaml up --build
+#
+# Con GPU (pod): añadir -f infra/modelos/compose.cuda.yaml, ver docs/pila-modelos-pod.md.
 #
 # La red es loopback: los puertos solo escuchan en 127.0.0.1.
 name: vera-modelos
@@ -21,7 +25,7 @@ services:
       OLLAMA_MODELS: /pesos/modelos
       OLLAMA_HOST: 127.0.0.1:11434
       OLLAMA_MODELO: ${OLLAMA_MODELO:-gemma-4-e2b-it-q4_k_m}
-    # Red del host para conservar el invariante de loopback: los dos servicios escuchan solo
+    # Red del host para conservar el invariante de loopback: los tres servicios escuchan solo
     # 127.0.0.1 y no hay puertos publicados en interfaces externas.
     network_mode: host
     volumes:
@@ -40,7 +44,7 @@ services:
     image: vera-voz:local
     restart: unless-stopped
     environment:
-      WHISPER_TOKEN: "${WHISPER_TOKEN:?falta WHISPER_TOKEN, exportalo desde Infisical y no lo hornees}"
+      WHISPER_TOKEN: "${WHISPER_TOKEN:?falta WHISPER_TOKEN, expórtalo desde Infisical y no lo hornees}"
       WHISPER_MODELO: ${WHISPER_MODELO:-small}
       WHISPER_DIRECCION: 127.0.0.1:8767
       WHISPER_GPU: ${WHISPER_GPU:-no}
@@ -60,6 +64,32 @@ services:
       timeout: 5s
       start_period: 120s
       retries: 18
+
+  # Voz neural (Kokoro, voz ef_dora). Imagen aparte por la licencia GPL-3.0 del sidecar de
+  # fonemización y para que un fallo no tumbe a Whisper. Los pesos van dentro de la imagen, con
+  # SHA256 verificado en el build. El token llega por KOKORO_TOKEN y el servidor lo lee como
+  # VERA_LAB_TOKEN (mínimo 32 caracteres).
+  vera-kokoro:
+    build:
+      context: ../..
+      dockerfile: infra/modelos/vera-kokoro/Dockerfile
+    image: vera-kokoro:local
+    restart: unless-stopped
+    environment:
+      VERA_LAB_TOKEN: "${KOKORO_TOKEN:?falta KOKORO_TOKEN, expórtalo desde Infisical y no lo hornees}"
+    network_mode: host
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request;r=urllib.request.Request('http://127.0.0.1:8766/healthz',headers={'X-Vera-Token':os.environ['VERA_LAB_TOKEN']});urllib.request.urlopen(r,timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 12
 
 volumes:
   pesos:

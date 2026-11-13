@@ -1,0 +1,52 @@
+# vera-voz, variante CUDA. ESTADO: sin construir ni ejecutar: solo el compose fue validado con docker compose config.
+#
+# No se construyó ni se ejecutó en la VPS de trabajo porque no hay runtime NVIDIA. Se construye en el
+# pod con GPU. Mismo servidor y mismo contrato que Dockerfile (infra/stt-local, /healthz y
+# /transcribir), pero sobre una base CUDA 12 con cuDNN 9, que es lo que pide ctranslate2 (el motor de
+# faster-whisper 1.2.1) para correr en la tarjeta.
+#
+# La imagen no lleva pesos ni secretos: WHISPER_TOKEN llega por entorno y la caché de Hugging Face
+# va a /pesos/huggingface, que es el volume.
+#
+# Construir en el pod (desde la raíz del repo):
+#   docker build -f infra/modelos/vera-voz/Dockerfile.cuda -t vera-voz:cuda .
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/pesos/huggingface \
+    WHISPER_MODELO=small \
+    WHISPER_DIRECCION=127.0.0.1:8767 \
+    WHISPER_GPU=si \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    PATH=/opt/venv/bin:$PATH
+
+WORKDIR /opt/stt
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/venv \
+    && groupadd --gid 1000 vera \
+    && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin vera \
+    && mkdir -p /pesos/huggingface /opt/stt \
+    && chown -R vera:vera /pesos /opt/stt
+
+COPY infra/stt-local/requirements.txt /opt/stt/requirements.txt
+RUN pip install --no-cache-dir -r /opt/stt/requirements.txt
+
+COPY infra/stt-local/servidor.py /opt/stt/servidor.py
+
+USER 1000:1000
+
+VOLUME ["/pesos"]
+
+# Con WHISPER_GPU=si el servidor falla al cargar si no ve la tarjeta, en vez de caer a CPU sin avisar:
+# el healthcheck lo deja visible como unhealthy.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=18 \
+    CMD python -c "import os,urllib.request;r=urllib.request.Request('http://127.0.0.1:8767/healthz',headers={'X-Vera-Token':os.environ['WHISPER_TOKEN']});urllib.request.urlopen(r,timeout=3)" || exit 1
+
+EXPOSE 8767
+ENTRYPOINT ["python", "/opt/stt/servidor.py"]
