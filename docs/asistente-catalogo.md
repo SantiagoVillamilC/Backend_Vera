@@ -17,7 +17,7 @@ SCRUM-138 agrega auditoría de inicio/fin con argumentos saneados y correlación
 con el mensaje autorizado. `cmd/api` la exige para ejecutar manejadores;
 ver [trazabilidad y seguridad](asistente-trazabilidad-seguridad.md).
 
-El catálogo no permite registro dinámico de funciones adicionales. Hay seis
+El catálogo no permite registro dinámico de funciones adicionales. Hay siete
 funciones de lectura y una de preparación; no hay clase de escritura. Agregar
 una función exige cambiar código, pruebas y este anexo y revisar el cambio con
 otro integrante, conforme a la HU.
@@ -32,10 +32,11 @@ otro integrante, conforme a la HU.
 | `resumir_movimientos` | lectura | `desde`, `hasta`, `agrupar_por` | Conectado al núcleo en SCRUM-127 |
 | `buscar_destinatario` | lectura | Exactamente uno: `celular` o `nombre` | Conectado a auth e historial propio en SCRUM-128 |
 | `consultar_transferencia` | lectura | `transferencia_id` | Conectado al núcleo en esta HU |
+| `resumir_consumo_por_categoria` | lectura | Opcional: `mes` | Conectado al resumen del mes de inteligencia en CF-A3-04 |
 | `preparar_transferencia` | preparación | `monto_pesos` y exactamente uno: `destinatario_ref`, `celular` o `llave_breb` | Conectado a prevalidación del núcleo y acciones pendientes en SCRUM-131 |
 
 Un manejador pendiente devuelve `FunctionUnavailable`, sin inventar saldo ni
-crear acciones. Las siete declaraciones están disponibles mediante
+crear acciones. Las ocho declaraciones están disponibles mediante
 `Catalogo.Declaraciones()`; la orquestación se implementará en SCRUM-124.
 `cmd/api` construye el catálogo junto al proveedor e inyecta ambos mediante
 `DependenciasVera`. Los endpoints del asistente siguen respondiendo 501 hasta
@@ -53,6 +54,10 @@ implementar sus historias, incluido el consentimiento.
 - `tipo`: `deposito`, `transferencia_recibida`, `envio`, `gravamen`, `devolucion`
   o `devolucion_gravamen`; `limite`: entero de 1 a 20, predeterminado 20.
 - `agrupar_por`: `motivo` o `contraparte`.
+- `mes`: opcional, año de cuatro dígitos y mes de `01` a `12` (`YYYY-MM`), en calendario
+  de Colombia. Omitirlo resuelve el mes actual con el mismo reloj del resumen de la bandeja.
+  La instrucción v9 pide omitirlo cuando la consulta es del mes actual, así que «este mes»
+  se invoca con argumentos vacíos y la evaluación compara ese objeto estricto.
 - `nombre`: de 2 a 100 caracteres, no sólo espacios. `celular`: de 7 a 24 caracteres
   de teléfono, normalizado y validado con `auth.NormalizarCelular` a E.164.
 - `transferencia_id`: UUID canónico no nulo. El núcleo verifica titularidad; el
@@ -72,7 +77,7 @@ con enteros, sin conversiones por `float64`.
 
 ### Resultados y minimización
 
-Los manejadores devuelven una de siete vistas internas (`DatosHerramienta`). El
+Los manejadores devuelven una de ocho vistas internas (`DatosHerramienta`). El
 catálogo comprueba que el tipo corresponda a la función y construye una proyección
 explícita. No admite mapas arbitrarios, entidades del núcleo ni DTOs de auth.
 
@@ -86,6 +91,9 @@ explícita. No admite mapas arbitrarios, entidades del núcleo ni DTOs de auth.
   Destinatarios: máximo 5 coincidencias.
   Los resúmenes muestran máximo 10 grupos, ordenados por entradas más salidas.
   Si se recorta una lista, `hay_mas=true`. Las listas vacías se serializan como `[]`.
+- Consumo por categoría: hasta 10 categorías con `total` y `mediana`. `mediana` es `null`
+  cuando la categoría no tiene meses completos suficientes, y la vista nunca incluye el
+  cupo ni los avisos emitidos por el emisor. Al recortar, `hay_mas=true`.
 - Resultado completo: máximo 16 KiB; si excede ese tamaño, se rechaza íntegramente.
 - Fechas: RFC3339 con UTC-5. Los estados y motivos son valores conocidos.
 - Una preparación sólo puede devolver estado `pendiente` y
@@ -130,7 +138,7 @@ golangci-lint run ./internal/copilot/...
 ```
 
 Pruebas: inventario cerrado y clases; copia inmutable de declaraciones; argumentos
-válidos/inválidos para las siete funciones; identidad, duplicados y campos extra;
+válidos/inválidos para las ocho funciones; identidad, duplicados y campos extra;
 fechas y formatos; conversión y desbordamiento de montos; destino único; simulación
 de errores; privacidad de logs y resultados; listas y tamaño; titularidad de
 transferencias; ejecución concurrente y cancelación. No requieren proveedor IA,

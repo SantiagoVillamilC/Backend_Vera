@@ -9,18 +9,20 @@ import (
 )
 
 type Aviso struct {
-	ID                pgtype.UUID        `json:"id"`
-	UsuarioID         string             `json:"usuario_id"`
-	Tipo              string             `json:"tipo"`
-	Clave             string             `json:"clave"`
-	Periodo           pgtype.Date        `json:"periodo"`
-	SeveridadCentavos int64              `json:"severidad_centavos"`
-	Prioridad         int16              `json:"prioridad"`
-	Texto             string             `json:"texto"`
-	TextoVerificado   bool               `json:"texto_verificado"`
-	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
-	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
-	DescartadoEn      pgtype.Timestamptz `json:"descartado_en"`
+	ID                 pgtype.UUID        `json:"id"`
+	UsuarioID          string             `json:"usuario_id"`
+	Tipo               string             `json:"tipo"`
+	Clave              string             `json:"clave"`
+	Periodo            pgtype.Date        `json:"periodo"`
+	SeveridadCentavos  int64              `json:"severidad_centavos"`
+	Prioridad          int16              `json:"prioridad"`
+	Texto              string             `json:"texto"`
+	TextoVerificado    bool               `json:"texto_verificado"`
+	TransaccionID      pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+	DescartadoEn       pgtype.Timestamptz `json:"descartado_en"`
+	MontoCentavos      int64              `json:"monto_centavos"`
+	ReferenciaCentavos pgtype.Int8        `json:"referencia_centavos"`
 }
 
 type AvisoEntrega struct {
@@ -28,6 +30,15 @@ type AvisoEntrega struct {
 	Canal     string             `json:"canal"`
 	Estado    string             `json:"estado"`
 	EnviadoEn pgtype.Timestamptz `json:"enviado_en"`
+}
+
+type CatalogoMarca struct {
+	NombreNormalizado string             `json:"nombre_normalizado"`
+	Categoria         string             `json:"categoria"`
+	Llave             pgtype.Text        `json:"llave"`
+	Origen            string             `json:"origen"`
+	Version           string             `json:"version"`
+	CreadaEn          pgtype.Timestamptz `json:"creada_en"`
 }
 
 type Categoria struct {
@@ -41,6 +52,23 @@ type CursorEnriquecimiento struct {
 	ID            int16              `json:"id"`
 	UltimoEntryID int64              `json:"ultimo_entry_id"`
 	ActualizadoEn pgtype.Timestamptz `json:"actualizado_en"`
+}
+
+type InteligenciaPromocionDestino struct {
+	TipoDestino string             `json:"tipo_destino"`
+	Nivel       string             `json:"nivel"`
+	Valor       string             `json:"valor"`
+	Categoria   string             `json:"categoria"`
+	PromovidoEn pgtype.Timestamptz `json:"promovido_en"`
+}
+
+type InteligenciaVotoDestino struct {
+	TipoDestino string             `json:"tipo_destino"`
+	Nivel       string             `json:"nivel"`
+	Valor       string             `json:"valor"`
+	UsuarioID   string             `json:"usuario_id"`
+	Categoria   string             `json:"categoria"`
+	CreadoEn    pgtype.Timestamptz `json:"creado_en"`
 }
 
 type MemoriaCorreccion struct {
@@ -74,6 +102,7 @@ type MovimientoEnriquecido struct {
 	TipoDestino                  pgtype.Text        `json:"tipo_destino"`
 	ContraparteLlave             pgtype.Text        `json:"contraparte_llave"`
 	ContraparteNombreNormalizado pgtype.Text        `json:"contraparte_nombre_normalizado"`
+	Escalon                      int16              `json:"escalon"`
 }
 
 type NucleoCuentum struct {
@@ -92,6 +121,7 @@ type NucleoJournalEntry struct {
 	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
 	RegistradoEn    pgtype.Timestamptz `json:"registrado_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
+	Mcc             pgtype.Text        `json:"mcc"`
 }
 
 type NucleoPosting struct {

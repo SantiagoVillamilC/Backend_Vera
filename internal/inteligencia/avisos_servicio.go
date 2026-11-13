@@ -10,12 +10,23 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ErrAvisoNoEncontrado reporta un aviso inexistente o de otro usuario. Los dos casos son el mismo
 // para no filtrar existencia.
 var ErrAvisoNoEncontrado = errors.New("inteligencia: aviso no encontrado")
+
+// ErrDescarteAnteriorAlAlta reporta un descarte cuyo instante es anterior al alta del aviso. Pasa
+// cuando creado_en es posterior al reloj (una semilla con fecha simulada, por ejemplo) y lo impide el
+// CHECK aviso_descarte_no_anterior_al_alta. Es un conflicto con el estado del aviso, no un fallo.
+var ErrDescarteAnteriorAlAlta = errors.New("inteligencia: el descarte es anterior al alta del aviso")
+
+const (
+	codigoCheckViolation          = "23514"
+	restriccionDescarteAnteriorAl = "aviso_descarte_no_anterior_al_alta"
+)
 
 // EtiquetasGenericas son las contrapartes que no identifican un destino recurrente. Salen de la
 // misma lista que usa la corrección para rechazar un destino genérico.
@@ -30,18 +41,21 @@ var EtiquetasGenericas = []string{
 
 // AvisoEmitido es una tarjeta guardada, lista para la bandeja.
 type AvisoEmitido struct {
-	ID                uuid.UUID
-	Tipo              avisos.Tipo
-	Clave             string
-	Titulo            string
-	Texto             string
-	Porque            string
-	Accion            string
-	Periodo           time.Time
-	SeveridadCentavos int64
-	Prioridad         int
-	TransaccionID     *uuid.UUID
-	CreadoEn          time.Time
+	ID                 uuid.UUID
+	Tipo               avisos.Tipo
+	Clave              string
+	Titulo             string
+	Texto              string
+	Porque             string
+	Accion             string
+	AccionCodigo       string
+	Periodo            time.Time
+	SeveridadCentavos  int64
+	MontoCentavos      int64
+	ReferenciaCentavos *int64
+	Prioridad          int
+	TransaccionID      *uuid.UUID
+	CreadoEn           time.Time
 }
 
 // DescarteDeAviso es el resultado de descartar un aviso.
@@ -53,6 +67,24 @@ type DescarteDeAviso struct {
 // ConConfiguracionDeAvisos cambia la configuración del emisor. Sin ella usa la de la referencia.
 func ConConfiguracionDeAvisos(cfg avisos.Configuracion) OpcionServicio {
 	return func(s *Servicio) { s.avisosCfg = cfg }
+}
+
+// ConCupoDeAvisos fija solo el tope mensual de avisos por usuario y deja el resto de la
+// configuración como está. Un tope menor que uno se ignora: la configuración ya lo rechaza.
+func ConCupoDeAvisos(cupo int) OpcionServicio {
+	return func(s *Servicio) {
+		if cupo >= 1 {
+			s.avisosCfg.TopeAvisosMes = cupo
+		}
+	}
+}
+
+// EmitirAvisosDelUsuario evalúa a un solo usuario y guarda los avisos que disparan. Es la misma
+// emisión de la corrida completa, con el candado, la deduplicación por clave y período y el cupo,
+// para dispararla cuando se asienta un gasto sin esperar el lote.
+func (s *Servicio) EmitirAvisosDelUsuario(ctx context.Context, usuarioID string, ahora time.Time) (int, error) {
+	insertados, _, err := s.emitirAvisosDeUsuario(ctx, usuarioID, ahora)
+	return insertados, err
 }
 
 // EmitirAvisos evalúa a todos los usuarios con historial y guarda los avisos que disparan.
@@ -91,9 +123,7 @@ func (s *Servicio) EmitirAvisos(ctx context.Context, ahora time.Time) (int, erro
 				return emitidos, err
 			}
 			emitidos += insertados
-			resumen.Emitidos += insertados
-			resumen.YaEmitidos += recuento.YaEmitidas
-			resumen.SuprimidosPorCupo += recuento.Recortadas
+			resumen.AcumularRecuento(insertados, recuento)
 		}
 		despuesDe = usuarios[len(usuarios)-1]
 	}
@@ -116,23 +146,27 @@ func (s *Servicio) emitirAvisosDeUsuario(ctx context.Context, usuarioID string,
 			if err != nil {
 				return struct{}{}, err
 			}
-			yaEmitidas, emitidosDelMes, err := estadoDeAvisos(ctx, q, usuarioID, ahora)
-			if err != nil {
-				return struct{}{}, err
-			}
-			tarjetas, recuentoDelUsuario, err := avisos.TarjetasDelDiaConRecuento(
-				hechos, yaEmitidas, emitidosDelMes, s.avisosCfg.TopeAvisosMes)
-			if err != nil {
-				return struct{}{}, err
-			}
-			for _, tarjeta := range tarjetas {
-				nuevo, err := guardarAviso(ctx, q, usuarioID, tarjeta, ahora)
+			recuentoDelUsuario := avisos.Recuento{}
+			for _, grupo := range avisos.AgruparPorPeriodo(hechos, ahora) {
+				yaEmitidas, emitidosDelPeriodo, err := estadoDelPeriodo(ctx, q, usuarioID, grupo.Inicio)
 				if err != nil {
 					return struct{}{}, err
 				}
-				if nuevo {
-					insertados++
+				tarjetas, recuentoDelPeriodo, err := avisos.TarjetasDelDiaConRecuento(
+					grupo.Hechos, yaEmitidas, emitidosDelPeriodo, s.avisosCfg.CupoMensualDeAvisos())
+				if err != nil {
+					return struct{}{}, err
 				}
+				for _, tarjeta := range tarjetas {
+					nuevo, err := guardarAviso(ctx, q, usuarioID, tarjeta, ahora)
+					if err != nil {
+						return struct{}{}, err
+					}
+					if nuevo {
+						insertados++
+					}
+				}
+				recuentoDelUsuario.Sumar(recuentoDelPeriodo)
 			}
 			recuento = recuentoDelUsuario
 			return struct{}{}, nil
@@ -229,14 +263,17 @@ func (s *Servicio) contextoDeAvisos(ctx context.Context, q *repositorio.Queries,
 	return avisos.NuevoContexto(instante, ahora, s.avisosCfg)
 }
 
-func estadoDeAvisos(ctx context.Context, q *repositorio.Queries, usuarioID string,
-	ahora time.Time) (map[avisos.ClaveDeAviso]struct{}, int, error) {
-	desde := inicioDelMesDe(ahora, 0)
-	hasta := inicioDelMesDe(ahora, 1)
+// estadoDelPeriodo lee la deduplicación y la ocupación del cupo de un mes. El período de un aviso es
+// el mes del hecho que lo dispara, no el mes en que se entrega, así que la ventana es exactamente ese
+// mes: un aviso de otro período no entra como candidato ni choca contra la clave única.
+func estadoDelPeriodo(ctx context.Context, q *repositorio.Queries, usuarioID string,
+	inicio time.Time) (map[avisos.ClaveDeAviso]struct{}, int, error) {
+	desde := fechaCivil(inicio)
+	hasta := fechaCivil(inicio.AddDate(0, 1, 0))
 	filas, err := q.AvisosDelUsuarioEnVentana(ctx, repositorio.AvisosDelUsuarioEnVentanaParams{
 		UsuarioID: usuarioID,
-		Desde:     pgtype.Date{Time: desde.AddDate(0, -3, 0), Valid: true},
-		Hasta:     pgtype.Date{Time: hasta.AddDate(0, 3, 0), Valid: true},
+		Desde:     pgtype.Date{Time: desde, Valid: true},
+		Hasta:     pgtype.Date{Time: hasta, Valid: true},
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inteligencia: leer los avisos de %q: %w", usuarioID, err)
@@ -249,10 +286,10 @@ func estadoDeAvisos(ctx context.Context, q *repositorio.Queries, usuarioID strin
 			Periodo: fila.Periodo.Time.Format("2006-01-02"),
 		}] = struct{}{}
 	}
-	emitidos, err := q.ContarAvisosEmitidosEnElMes(ctx, repositorio.ContarAvisosEmitidosEnElMesParams{
+	emitidos, err := q.ContarAvisosDelMes(ctx, repositorio.ContarAvisosDelMesParams{
 		UsuarioID: usuarioID,
-		Desde:     pgtype.Timestamptz{Time: desde, Valid: true},
-		Hasta:     pgtype.Timestamptz{Time: hasta, Valid: true},
+		Desde:     pgtype.Date{Time: desde, Valid: true},
+		Hasta:     pgtype.Date{Time: hasta, Valid: true},
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inteligencia: contar los avisos de %q: %w", usuarioID, err)
@@ -265,16 +302,18 @@ func guardarAviso(ctx context.Context, q *repositorio.Queries, usuarioID string,
 	tarjeta avisos.Tarjeta, ahora time.Time) (bool, error) {
 	id := uuid.New()
 	_, err := q.EmitirAviso(ctx, repositorio.EmitirAvisoParams{
-		ID:                pgtype.UUID{Bytes: id, Valid: true},
-		UsuarioID:         usuarioID,
-		Tipo:              string(tarjeta.Tipo),
-		Clave:             tarjeta.Clave,
-		Periodo:           pgtype.Date{Time: tarjeta.Periodo, Valid: true},
-		SeveridadCentavos: avisos.SeveridadDe(tarjeta),
-		Prioridad:         avisos.Prioridad(tarjeta.Tipo),
-		Texto:             tarjeta.Texto,
-		TextoVerificado:   true,
-		CreadoEn:          pgtype.Timestamptz{Time: ahora, Valid: true},
+		ID:                 pgtype.UUID{Bytes: id, Valid: true},
+		UsuarioID:          usuarioID,
+		Tipo:               string(tarjeta.Tipo),
+		Clave:              tarjeta.Clave,
+		Periodo:            pgtype.Date{Time: tarjeta.Periodo, Valid: true},
+		SeveridadCentavos:  avisos.SeveridadDe(tarjeta),
+		MontoCentavos:      tarjeta.MontoCentavos,
+		ReferenciaCentavos: referenciaNullable(tarjeta.ReferenciaCentavos),
+		Prioridad:          avisos.Prioridad(tarjeta.Tipo),
+		Texto:              tarjeta.Texto,
+		TextoVerificado:    true,
+		CreadoEn:           pgtype.Timestamptz{Time: ahora, Valid: true},
 	})
 	if err == nil {
 		return true, nil
@@ -297,6 +336,8 @@ func guardarAviso(ctx context.Context, q *repositorio.Queries, usuarioID string,
 }
 
 // AvisosDelUsuario devuelve las tarjetas vigentes del mes pedido, en orden de prioridad y severidad.
+// El mes filtra por el periodo del aviso, el mismo criterio con el que se cuenta el cupo, así que la
+// bandeja y el resumen coinciden. Los descartados no se listan ni ocupan cupo.
 func (s *Servicio) AvisosDelUsuario(ctx context.Context, usuarioID, mes string, ahora time.Time) ([]AvisoEmitido, error) {
 	desde, err := inicioDelMesPedido(mes, ahora)
 	if err != nil {
@@ -307,8 +348,8 @@ func (s *Servicio) AvisosDelUsuario(ctx context.Context, usuarioID, mes string, 
 		func(ctx context.Context, _ transaccionDeInteligencia, q *repositorio.Queries) ([]repositorio.AvisosVigentesDelMesRow, error) {
 			return q.AvisosVigentesDelMes(ctx, repositorio.AvisosVigentesDelMesParams{
 				UsuarioID: usuarioID,
-				Desde:     pgtype.Timestamptz{Time: desde, Valid: true},
-				Hasta:     pgtype.Timestamptz{Time: hasta, Valid: true},
+				Desde:     pgtype.Date{Time: fechaCivil(desde), Valid: true},
+				Hasta:     pgtype.Date{Time: fechaCivil(hasta), Valid: true},
 			})
 		})
 	if err != nil {
@@ -336,6 +377,10 @@ func (s *Servicio) DescartarAviso(ctx context.Context, usuarioID string, avisoID
 		})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return DescarteDeAviso{}, ErrAvisoNoEncontrado
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == codigoCheckViolation && pgErr.ConstraintName == restriccionDescarteAnteriorAl {
+		return DescarteDeAviso{}, fmt.Errorf("inteligencia: descartar el aviso %s de %q: %w", avisoID, usuarioID, ErrDescarteAnteriorAlAlta)
 	}
 	if err != nil {
 		return DescarteDeAviso{}, fmt.Errorf("inteligencia: descartar el aviso %s de %q: %w", avisoID, usuarioID, err)
@@ -386,14 +431,29 @@ func avisoDeFila(fila filaDeAviso) AvisoEmitido {
 		Texto:             fila.Texto,
 		Porque:            avisos.PorqueDe(tipo),
 		Accion:            avisos.AccionDe(tipo),
+		AccionCodigo:      avisos.AccionCodigoDe(tipo),
 		Periodo:           fila.Periodo.Time,
 		SeveridadCentavos: fila.SeveridadCentavos,
+		MontoCentavos:     fila.MontoCentavos,
 		Prioridad:         int(fila.Prioridad),
 		CreadoEn:          fila.CreadoEn.Time,
+	}
+	if fila.ReferenciaCentavos.Valid {
+		referencia := fila.ReferenciaCentavos.Int64
+		aviso.ReferenciaCentavos = &referencia
 	}
 	if fila.TransaccionID.Valid {
 		transaccion := uuid.UUID(fila.TransaccionID.Bytes)
 		aviso.TransaccionID = &transaccion
 	}
 	return aviso
+}
+
+// referenciaNullable lleva la línea base al insert, que la guarda nula cuando el tipo no compara
+// contra un histórico.
+func referenciaNullable(referencia *int64) pgtype.Int8 {
+	if referencia == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *referencia, Valid: true}
 }

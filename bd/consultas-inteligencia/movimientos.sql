@@ -9,7 +9,8 @@ SELECT m.transaccion_id,
        m.descripcion,
        m.categoria,
        c.nombre AS categoria_nombre,
-       m.origen_categoria
+       m.origen_categoria,
+       m.escalon
   FROM inteligencia.movimiento_enriquecido m
   JOIN inteligencia.categoria c ON c.codigo = m.categoria
  WHERE m.usuario_id = sqlc.arg('usuario_id')::text
@@ -37,10 +38,3 @@ SELECT m.categoria,
    AND m.ocurrido_en < sqlc.arg('hasta')::timestamptz
  GROUP BY m.categoria, c.nombre, mes
  ORDER BY m.categoria, mes;
-
--- name: ContarAvisosDelMes :one
-SELECT count(*)::bigint AS avisos_emitidos
-  FROM inteligencia.aviso
- WHERE usuario_id = sqlc.arg('usuario_id')::text
-   AND periodo >= sqlc.arg('desde')::date
-   AND periodo < sqlc.arg('hasta')::date;

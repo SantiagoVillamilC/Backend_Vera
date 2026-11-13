@@ -8,3 +8,7 @@ internal/inteligencia/testdata/*.json -text
 internal/inteligencia/avisos/testdata/*.json -text
 # Este catálogo se publicó con CRLF; su manifiesto comprueba esos mismos bytes.
 internal/inteligencia/lexico/*.csv -text whitespace=cr-at-eol
+# El catálogo v3 llegó tal cual desde la herramienta de evaluación: su manifiesto comprueba los
+# mismos bytes, así que un checkout con autocrlf no puede reescribirlos.
+bd/datos/catalogo-v3/*.csv -text
+bd/datos/catalogo-v3/*.json -text

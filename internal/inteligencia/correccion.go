@@ -18,7 +18,20 @@ import (
 const (
 	// LargoNombreComercio es el máximo de puntos de código del nombre visible corregido.
 	LargoNombreComercio = 80
+	// kVotosParaPromover es la K mínima de la promoción: dos usuarios distintos con la misma categoría.
+	kVotosParaPromover = 2
 )
+
+// categoriaQueAlcanzaK devuelve la categoría con al menos K votos distintos. La consulta ya ordena
+// por votos de mayor a menor, así que gana la que más apoyo tiene; un empate a uno no promueve nada.
+func categoriaQueAlcanzaK(votos []repositorio.ContarVotosPorCategoriaRow, k int) (Categoria, bool) {
+	for _, fila := range votos {
+		if int(fila.Votos) >= k {
+			return Categoria(fila.Categoria), true
+		}
+	}
+	return "", false
+}
 
 // ErrMovimientoNoEncontrado reporta un movimiento que no existe para el usuario.
 var ErrMovimientoNoEncontrado = errors.New("inteligencia: el movimiento no existe para el usuario")
@@ -132,6 +145,42 @@ func (s *Servicio) CorregirMovimiento(ctx context.Context, usuarioID string, tra
 				}
 			}
 
+			if solicitud.Categoria != nil {
+				for _, clave := range claves {
+					if err := q.RegistrarVoto(ctx, repositorio.RegistrarVotoParams{
+						TipoDestino: string(clave.TipoDestino),
+						Nivel:       clave.Nivel,
+						Valor:       clave.Valor,
+						UsuarioID:   clave.Usuario,
+						Categoria:   string(*solicitud.Categoria),
+					}); err != nil {
+						return CorreccionAplicada{}, fmt.Errorf("inteligencia: registrar el voto: %w", err)
+					}
+				}
+				for _, clave := range claves {
+					votos, err := q.ContarVotosPorCategoria(ctx, repositorio.ContarVotosPorCategoriaParams{
+						TipoDestino: string(clave.TipoDestino),
+						Nivel:       clave.Nivel,
+						Valor:       clave.Valor,
+					})
+					if err != nil {
+						return CorreccionAplicada{}, fmt.Errorf("inteligencia: contar los votos: %w", err)
+					}
+					categoria, alcanza := categoriaQueAlcanzaK(votos, kVotosParaPromover)
+					if !alcanza {
+						continue
+					}
+					if err := q.PromoverDestino(ctx, repositorio.PromoverDestinoParams{
+						TipoDestino: string(clave.TipoDestino),
+						Nivel:       clave.Nivel,
+						Valor:       clave.Valor,
+						Categoria:   string(categoria),
+					}); err != nil {
+						return CorreccionAplicada{}, fmt.Errorf("inteligencia: promover el destino: %w", err)
+					}
+				}
+			}
+
 			cambiadas := make(map[uuid.UUID]struct{})
 			if solicitud.Categoria != nil {
 				ids, err := q.RecalcularCategoriaPorDestino(ctx, repositorio.RecalcularCategoriaPorDestinoParams{
@@ -206,5 +255,6 @@ func movimientoDeCorreccion(fila repositorio.FilaDeMovimientoRow) MovimientoDeLe
 		Categoria:           fila.Categoria,
 		CategoriaNombre:     fila.CategoriaNombre,
 		OrigenCategoria:     fila.OrigenCategoria,
+		Escalon:             int(fila.Escalon),
 	}
 }

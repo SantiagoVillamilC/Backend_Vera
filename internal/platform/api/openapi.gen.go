@@ -117,6 +117,117 @@ func (e AccionResueltaResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for Categoria.
+const (
+	CategoriaAlimentosMercado      Categoria = "alimentos_mercado"
+	CategoriaComisiones            Categoria = "comisiones_costos_financieros"
+	CategoriaCompras               Categoria = "compras"
+	CategoriaEducacion             Categoria = "educacion"
+	CategoriaEntretenimiento       Categoria = "entretenimiento"
+	CategoriaOtrosGastos           Categoria = "otros_gastos"
+	CategoriaOtrosIngresos         Categoria = "otros_ingresos"
+	CategoriaReembolso             Categoria = "reembolso"
+	CategoriaRestaurantes          Categoria = "restaurantes_domicilios"
+	CategoriaSalario               Categoria = "salario"
+	CategoriaSalud                 Categoria = "salud"
+	CategoriaSinCategoria          Categoria = "sin_categoria"
+	CategoriaTransferenciaRecibida Categoria = "transferencia_recibida"
+	CategoriaTransporte            Categoria = "transporte"
+	CategoriaViviendaServicios     Categoria = "vivienda_servicios"
+)
+
+// Valid indicates whether the value is a known member of the Categoria enum.
+func (e Categoria) Valid() bool {
+	switch e {
+	case CategoriaAlimentosMercado:
+		return true
+	case CategoriaComisiones:
+		return true
+	case CategoriaCompras:
+		return true
+	case CategoriaEducacion:
+		return true
+	case CategoriaEntretenimiento:
+		return true
+	case CategoriaOtrosGastos:
+		return true
+	case CategoriaOtrosIngresos:
+		return true
+	case CategoriaReembolso:
+		return true
+	case CategoriaRestaurantes:
+		return true
+	case CategoriaSalario:
+		return true
+	case CategoriaSalud:
+		return true
+	case CategoriaSinCategoria:
+		return true
+	case CategoriaTransferenciaRecibida:
+		return true
+	case CategoriaTransporte:
+		return true
+	case CategoriaViviendaServicios:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CategoriaOfrecida.
+const (
+	OfrecidaAlimentosMercado      CategoriaOfrecida = "alimentos_mercado"
+	OfrecidaComisiones            CategoriaOfrecida = "comisiones_costos_financieros"
+	OfrecidaCompras               CategoriaOfrecida = "compras"
+	OfrecidaEducacion             CategoriaOfrecida = "educacion"
+	OfrecidaEntretenimiento       CategoriaOfrecida = "entretenimiento"
+	OfrecidaOtrosGastos           CategoriaOfrecida = "otros_gastos"
+	OfrecidaOtrosIngresos         CategoriaOfrecida = "otros_ingresos"
+	OfrecidaReembolso             CategoriaOfrecida = "reembolso"
+	OfrecidaRestaurantes          CategoriaOfrecida = "restaurantes_domicilios"
+	OfrecidaSalario               CategoriaOfrecida = "salario"
+	OfrecidaSalud                 CategoriaOfrecida = "salud"
+	OfrecidaTransferenciaRecibida CategoriaOfrecida = "transferencia_recibida"
+	OfrecidaTransporte            CategoriaOfrecida = "transporte"
+	OfrecidaViviendaServicios     CategoriaOfrecida = "vivienda_servicios"
+)
+
+// Valid indicates whether the value is a known member of the CategoriaOfrecida enum.
+func (e CategoriaOfrecida) Valid() bool {
+	switch e {
+	case OfrecidaAlimentosMercado:
+		return true
+	case OfrecidaComisiones:
+		return true
+	case OfrecidaCompras:
+		return true
+	case OfrecidaEducacion:
+		return true
+	case OfrecidaEntretenimiento:
+		return true
+	case OfrecidaOtrosGastos:
+		return true
+	case OfrecidaOtrosIngresos:
+		return true
+	case OfrecidaReembolso:
+		return true
+	case OfrecidaRestaurantes:
+		return true
+	case OfrecidaSalario:
+		return true
+	case OfrecidaSalud:
+		return true
+	case OfrecidaTransferenciaRecibida:
+		return true
+	case OfrecidaTransporte:
+		return true
+	case OfrecidaViviendaServicios:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConfirmarDepositoRequestEstado.
 const (
 	Aprobado  ConfirmarDepositoRequestEstado = "aprobado"
@@ -693,6 +804,33 @@ func (e InteligenciaAvisoTipo) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaAvisoAccionCodigo.
+const (
+	RevisarCategoria   InteligenciaAvisoAccionCodigo = "revisar_categoria"
+	RevisarCobro       InteligenciaAvisoAccionCodigo = "revisar_cobro"
+	RevisarIngreso     InteligenciaAvisoAccionCodigo = "revisar_ingreso"
+	RevisarPagos       InteligenciaAvisoAccionCodigo = "revisar_pagos"
+	RevisarPresupuesto InteligenciaAvisoAccionCodigo = "revisar_presupuesto"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoAccionCodigo enum.
+func (e InteligenciaAvisoAccionCodigo) Valid() bool {
+	switch e {
+	case RevisarCategoria:
+		return true
+	case RevisarCobro:
+		return true
+	case RevisarIngreso:
+		return true
+	case RevisarPagos:
+		return true
+	case RevisarPresupuesto:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InteligenciaAvisoDescarteResponseSuccess.
 const (
 	InteligenciaAvisoDescarteResponseSuccessTrue InteligenciaAvisoDescarteResponseSuccess = true
@@ -732,6 +870,39 @@ const (
 func (e InteligenciaAvisosResponseSuccess) Valid() bool {
 	switch e {
 	case InteligenciaAvisosResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaCategoriaGrupo.
+const (
+	Gasto   InteligenciaCategoriaGrupo = "gasto"
+	Ingreso InteligenciaCategoriaGrupo = "ingreso"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaCategoriaGrupo enum.
+func (e InteligenciaCategoriaGrupo) Valid() bool {
+	switch e {
+	case Gasto:
+		return true
+	case Ingreso:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaCategoriasResponseSuccess.
+const (
+	InteligenciaCategoriasResponseSuccessTrue InteligenciaCategoriasResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaCategoriasResponseSuccess enum.
+func (e InteligenciaCategoriasResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaCategoriasResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -780,45 +951,6 @@ const (
 func (e InteligenciaMovimientoMoneda) Valid() bool {
 	switch e {
 	case InteligenciaMovimientoMonedaCOP:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InteligenciaMovimientoOrigenCategoria.
-const (
-	Catalogo           InteligenciaMovimientoOrigenCategoria = "catalogo"
-	ContraparteInterna InteligenciaMovimientoOrigenCategoria = "contraparte_interna"
-	Lexico             InteligenciaMovimientoOrigenCategoria = "lexico"
-	Llm                InteligenciaMovimientoOrigenCategoria = "llm"
-	Manual             InteligenciaMovimientoOrigenCategoria = "manual"
-	Mcc                InteligenciaMovimientoOrigenCategoria = "mcc"
-	Memoria            InteligenciaMovimientoOrigenCategoria = "memoria"
-	SinCategoria       InteligenciaMovimientoOrigenCategoria = "sin_categoria"
-	Tfidf              InteligenciaMovimientoOrigenCategoria = "tfidf"
-)
-
-// Valid indicates whether the value is a known member of the InteligenciaMovimientoOrigenCategoria enum.
-func (e InteligenciaMovimientoOrigenCategoria) Valid() bool {
-	switch e {
-	case Catalogo:
-		return true
-	case ContraparteInterna:
-		return true
-	case Lexico:
-		return true
-	case Llm:
-		return true
-	case Manual:
-		return true
-	case Mcc:
-		return true
-	case Memoria:
-		return true
-	case SinCategoria:
-		return true
-	case Tfidf:
 		return true
 	default:
 		return false
@@ -879,6 +1011,21 @@ const (
 func (e InteligenciaResumenResponseSuccess) Valid() bool {
 	switch e {
 	case InteligenciaResumenResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteligenciaSeriesResponseSuccess.
+const (
+	InteligenciaSeriesResponseSuccessTrue InteligenciaSeriesResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaSeriesResponseSuccess enum.
+func (e InteligenciaSeriesResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaSeriesResponseSuccessTrue:
 		return true
 	default:
 		return false
@@ -1110,6 +1257,39 @@ const (
 func (e OkResponseSuccess) Valid() bool {
 	switch e {
 	case OkResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrigenEnriquecido.
+const (
+	Catalogo           OrigenEnriquecido = "catalogo"
+	ContraparteInterna OrigenEnriquecido = "contraparte_interna"
+	Lexico             OrigenEnriquecido = "lexico"
+	Mcc                OrigenEnriquecido = "mcc"
+	Memoria            OrigenEnriquecido = "memoria"
+	SinCategoria       OrigenEnriquecido = "sin_categoria"
+	Tfidf              OrigenEnriquecido = "tfidf"
+)
+
+// Valid indicates whether the value is a known member of the OrigenEnriquecido enum.
+func (e OrigenEnriquecido) Valid() bool {
+	switch e {
+	case Catalogo:
+		return true
+	case ContraparteInterna:
+		return true
+	case Lexico:
+		return true
+	case Mcc:
+		return true
+	case Memoria:
+		return true
+	case SinCategoria:
+		return true
+	case Tfidf:
 		return true
 	default:
 		return false
@@ -1576,6 +1756,12 @@ type AccionResueltaResponse struct {
 // AccionResueltaResponseSuccess defines model for AccionResueltaResponse.Success.
 type AccionResueltaResponseSuccess bool
 
+// Categoria Los 15 codigos del catalogo cerrado, en el orden firmado en el punto 349 bis. sin_categoria existe para que la clave foranea de la copia no admita nulo y no se ofrece al usuario.
+type Categoria string
+
+// CategoriaOfrecida Las 14 categorias que se ofrecen al usuario para corregir un movimiento, en el mismo orden. Es Categoria sin sin_categoria.
+type CategoriaOfrecida string
+
 // ConfirmarAccionVeraRequest defines model for ConfirmarAccionVeraRequest.
 type ConfirmarAccionVeraRequest struct {
 	Codigo               *string             `json:"codigo,omitempty" validate:"omitempty,len=6,numeric"`
@@ -2011,28 +2197,37 @@ type FieldError struct {
 	Rule  string  `json:"rule"`
 }
 
-// InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya.
+// InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no tiene linea base.
 type InteligenciaAviso struct {
+	// Accion Etiqueta visible de la accion. Es texto de la app y puede cambiar de redaccion, no sirve para decidir el destino.
 	Accion string `json:"accion"`
 
+	// AccionCodigo Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado. Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro, presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria. Un cliente debe tolerar un valor que no conozca.
+	AccionCodigo *InteligenciaAvisoAccionCodigo `json:"accion_codigo,omitempty"`
+
 	// Clave Identidad estable del aviso dentro de su tipo y periodo.
-	Clave    string             `json:"clave"`
-	CreadoEn time.Time          `json:"creado_en"`
-	Id       openapi_types.UUID `json:"id"`
+	Clave         string             `json:"clave"`
+	CreadoEn      time.Time          `json:"creado_en"`
+	Id            openapi_types.UUID `json:"id"`
+	MontoCentavos string             `json:"monto_centavos"`
 
 	// Periodo Primer dia del mes en los avisos mensuales, o la fecha del pago o del primer cobro en los demas.
-	Periodo           string                `json:"periodo"`
-	Porque            string                `json:"porque"`
-	Prioridad         int                   `json:"prioridad"`
-	SeveridadCentavos string                `json:"severidad_centavos"`
-	Texto             string                `json:"texto"`
-	Tipo              InteligenciaAvisoTipo `json:"tipo"`
-	Titulo            string                `json:"titulo"`
-	TransaccionId     *openapi_types.UUID   `json:"transaccion_id"`
+	Periodo            string                `json:"periodo"`
+	Porque             string                `json:"porque"`
+	Prioridad          int                   `json:"prioridad"`
+	ReferenciaCentavos *string               `json:"referencia_centavos,omitempty"`
+	SeveridadCentavos  string                `json:"severidad_centavos"`
+	Texto              string                `json:"texto"`
+	Tipo               InteligenciaAvisoTipo `json:"tipo"`
+	Titulo             string                `json:"titulo"`
+	TransaccionId      *openapi_types.UUID   `json:"transaccion_id"`
 }
 
 // InteligenciaAvisoTipo defines model for InteligenciaAviso.Tipo.
 type InteligenciaAvisoTipo string
+
+// InteligenciaAvisoAccionCodigo Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado. Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro, presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria. Un cliente debe tolerar un valor que no conozca.
+type InteligenciaAvisoAccionCodigo string
 
 // InteligenciaAvisoDescarte defines model for InteligenciaAvisoDescarte.
 type InteligenciaAvisoDescarte struct {
@@ -2053,7 +2248,7 @@ type InteligenciaAvisoDescarteResponseSuccess bool
 
 // InteligenciaAvisoDetalleResponse defines model for InteligenciaAvisoDetalleResponse.
 type InteligenciaAvisoDetalleResponse struct {
-	// Data Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya.
+	// Data Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no tiene linea base.
 	Data    InteligenciaAviso                       `json:"data"`
 	Error   *map[string]interface{}                 `json:"error"`
 	Meta    *map[string]interface{}                 `json:"meta"`
@@ -2073,6 +2268,29 @@ type InteligenciaAvisosResponse struct {
 
 // InteligenciaAvisosResponseSuccess defines model for InteligenciaAvisosResponse.Success.
 type InteligenciaAvisosResponseSuccess bool
+
+// InteligenciaCategoria defines model for InteligenciaCategoria.
+type InteligenciaCategoria struct {
+	// Codigo Las 14 categorias que se ofrecen al usuario para corregir un movimiento, en el mismo orden. Es Categoria sin sin_categoria.
+	Codigo CategoriaOfrecida          `json:"codigo"`
+	Grupo  InteligenciaCategoriaGrupo `json:"grupo"`
+	Nombre string                     `json:"nombre"`
+	Orden  int                        `json:"orden"`
+}
+
+// InteligenciaCategoriaGrupo defines model for InteligenciaCategoria.Grupo.
+type InteligenciaCategoriaGrupo string
+
+// InteligenciaCategoriasResponse defines model for InteligenciaCategoriasResponse.
+type InteligenciaCategoriasResponse struct {
+	Data    []InteligenciaCategoria               `json:"data"`
+	Error   *map[string]interface{}               `json:"error"`
+	Meta    *map[string]interface{}               `json:"meta"`
+	Success InteligenciaCategoriasResponseSuccess `json:"success"`
+}
+
+// InteligenciaCategoriasResponseSuccess defines model for InteligenciaCategoriasResponse.Success.
+type InteligenciaCategoriasResponseSuccess bool
 
 // InteligenciaCorreccion defines model for InteligenciaCorreccion.
 type InteligenciaCorreccion struct {
@@ -2110,13 +2328,18 @@ type InteligenciaMovimiento struct {
 	ContraparteResuelta bool                            `json:"contraparte_resuelta"`
 	Descripcion         *string                         `json:"descripcion"`
 	Direccion           InteligenciaMovimientoDireccion `json:"direccion"`
-	Moneda              InteligenciaMovimientoMoneda    `json:"moneda"`
+
+	// Escalon Escalon de la cascada que decidio la fila, de 1 a 7. Se persiste porque sin_categoria no distingue la abstencion del escalon 6 de un pago que nunca llego al clasificador.
+	Escalon int                          `json:"escalon"`
+	Moneda  InteligenciaMovimientoMoneda `json:"moneda"`
 
 	// MontoCentavos Monto en centavos, mayor que cero. La direccion del dinero viaja en su propio campo.
-	MontoCentavos   string                                `json:"monto_centavos"`
-	OcurridoEn      time.Time                             `json:"ocurrido_en"`
-	OrigenCategoria InteligenciaMovimientoOrigenCategoria `json:"origen_categoria"`
-	TransaccionId   openapi_types.UUID                    `json:"transaccion_id"`
+	MontoCentavos string    `json:"monto_centavos"`
+	OcurridoEn    time.Time `json:"ocurrido_en"`
+
+	// OrigenCategoria Origen que quedo escrito en la fila de la copia enriquecida. Es el conjunto cerrado del CHECK de la migracion 0032 y coincide con inteligencia.OrigenesEscribibles.
+	OrigenCategoria OrigenEnriquecido  `json:"origen_categoria"`
+	TransaccionId   openapi_types.UUID `json:"transaccion_id"`
 }
 
 // InteligenciaMovimientoDireccion defines model for InteligenciaMovimiento.Direccion.
@@ -2124,9 +2347,6 @@ type InteligenciaMovimientoDireccion string
 
 // InteligenciaMovimientoMoneda defines model for InteligenciaMovimiento.Moneda.
 type InteligenciaMovimientoMoneda string
-
-// InteligenciaMovimientoOrigenCategoria defines model for InteligenciaMovimiento.OrigenCategoria.
-type InteligenciaMovimientoOrigenCategoria string
 
 // InteligenciaMovimientosResponse defines model for InteligenciaMovimientosResponse.
 type InteligenciaMovimientosResponse struct {
@@ -2142,18 +2362,22 @@ type InteligenciaMovimientosResponseSuccess bool
 // InteligenciaResumen defines model for InteligenciaResumen.
 type InteligenciaResumen struct {
 	// Alcance El resumen solo ve los movimientos de la billetera y no los de otras entidades.
-	Alcance         InteligenciaResumenAlcance     `json:"alcance"`
-	AvisosEmitidos  int                            `json:"avisos_emitidos"`
-	Categorias      []InteligenciaResumenCategoria `json:"categorias"`
-	CupoAvisos      int                            `json:"cupo_avisos"`
-	Desde           time.Time                      `json:"desde"`
-	Evaluable       bool                           `json:"evaluable"`
-	Hasta           time.Time                      `json:"hasta"`
-	Mes             string                         `json:"mes"`
-	MesesCompletos  int                            `json:"meses_completos"`
-	MesesRequeridos int                            `json:"meses_requeridos"`
-	Moneda          InteligenciaResumenMoneda      `json:"moneda"`
-	TotalCentavos   string                         `json:"total_centavos"`
+	Alcance InteligenciaResumenAlcance `json:"alcance"`
+
+	// AvisosEmitidos Avisos vigentes del mes, contados por el periodo del aviso. Los descartados no cuentan, porque descartar libera cupo.
+	AvisosEmitidos int                            `json:"avisos_emitidos"`
+	Categorias     []InteligenciaResumenCategoria `json:"categorias"`
+
+	// CupoAvisos Tope mensual de avisos que aplica el emisor, tomado de su configuracion.
+	CupoAvisos      int                       `json:"cupo_avisos"`
+	Desde           time.Time                 `json:"desde"`
+	Evaluable       bool                      `json:"evaluable"`
+	Hasta           time.Time                 `json:"hasta"`
+	Mes             string                    `json:"mes"`
+	MesesCompletos  int                       `json:"meses_completos"`
+	MesesRequeridos int                       `json:"meses_requeridos"`
+	Moneda          InteligenciaResumenMoneda `json:"moneda"`
+	TotalCentavos   string                    `json:"total_centavos"`
 }
 
 // InteligenciaResumenAlcance El resumen solo ve los movimientos de la billetera y no los de otras entidades.
@@ -2183,6 +2407,37 @@ type InteligenciaResumenResponse struct {
 
 // InteligenciaResumenResponseSuccess defines model for InteligenciaResumenResponse.Success.
 type InteligenciaResumenResponseSuccess bool
+
+// InteligenciaSerie defines model for InteligenciaSerie.
+type InteligenciaSerie struct {
+	// Cadencia semanal, quincenal_14, mensual, bimestral o semestral.
+	Cadencia     string  `json:"cadencia"`
+	CadenciaDias int     `json:"cadencia_dias"`
+	Categoria    *string `json:"categoria,omitempty"`
+
+	// Estado emergente, madura, dormida o cancelada.
+	Estado    string `json:"estado"`
+	Identidad string `json:"identidad"`
+
+	// ProximoFecha Centro de la banda del proximo pago esperado, ausente cuando la serie no lo tiene.
+	ProximoFecha         *time.Time `json:"proximo_fecha,omitempty"`
+	ProximoMontoCentavos *string    `json:"proximo_monto_centavos,omitempty"`
+
+	// TipoIdentidad llave o nombre normalizado de la contraparte del propio usuario.
+	TipoIdentidad string    `json:"tipo_identidad"`
+	UltimoPago    time.Time `json:"ultimo_pago"`
+}
+
+// InteligenciaSeriesResponse defines model for InteligenciaSeriesResponse.
+type InteligenciaSeriesResponse struct {
+	Data    []InteligenciaSerie               `json:"data"`
+	Error   *map[string]interface{}           `json:"error"`
+	Meta    *map[string]interface{}           `json:"meta"`
+	Success InteligenciaSeriesResponseSuccess `json:"success"`
+}
+
+// InteligenciaSeriesResponseSuccess defines model for InteligenciaSeriesResponse.Success.
+type InteligenciaSeriesResponseSuccess bool
 
 // KycEstado defines model for KycEstado.
 type KycEstado struct {
@@ -2349,6 +2604,9 @@ type OkResponseSuccess bool
 
 // OperacionAccionVeraRequest Cuerpo opcional vacío; no admite destino, monto ni datos del desafío.
 type OperacionAccionVeraRequest = struct{}
+
+// OrigenEnriquecido Origen que quedo escrito en la fila de la copia enriquecida. Es el conjunto cerrado del CHECK de la migracion 0032 y coincide con inteligencia.OrigenesEscribibles.
+type OrigenEnriquecido string
 
 // PhoneChangeRequest defines model for PhoneChangeRequest.
 type PhoneChangeRequest struct {
@@ -2586,7 +2844,7 @@ type SintesisDegradada struct {
 
 // SintetizarVeraRequest defines model for SintetizarVeraRequest.
 type SintetizarVeraRequest struct {
-	Texto string `json:"texto" validate:"required,max=8192"`
+	Texto string `json:"texto" validate:"required,max=400"`
 }
 
 // Tokens defines model for Tokens.
@@ -2701,7 +2959,7 @@ type ListarAvisosInteligenciaParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Estado *string `form:"estado,omitempty" json:"estado,omitempty"`
 
-	// Mes Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido llegue al handler y salga como ValidationError.
+	// Mes Mes calendario del periodo del aviso, con formato YYYY-MM. Filtra por el mes al que pertenece el hecho que disparo el aviso, el mismo criterio con el que se cuenta el cupo y se informa en el resumen. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido llegue al handler y salga como ValidationError.
 	Mes *string `form:"mes,omitempty" json:"mes,omitempty"`
 }
 
@@ -2757,11 +3015,6 @@ type EnviarMensajeVeraParams struct {
 type EnviarMensajeVozVeraParams struct {
 	// IdempotencyKey UUID único por envío de voz; reutilizarlo sólo con el mismo audio y conversación.
 	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
-}
-
-// SintetizarVeraParams defines parameters for SintetizarVera.
-type SintetizarVeraParams struct {
-	XVeraToken string `json:"X-Vera-Token"`
 }
 
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
@@ -3031,6 +3284,9 @@ type ServerInterface interface {
 	// DescartarAvisoInteligencia Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
 	// (POST /v1/inteligencia/avisos/{id}/descartar)
 	DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Request, id string)
+	// ListarCategoriasInteligencia Catalogo de categorias que el usuario puede asignar a un movimiento, en el orden firmado.
+	// (GET /v1/inteligencia/categorias)
+	ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request)
 	// ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
 	// (GET /v1/inteligencia/movimientos)
 	ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams)
@@ -3040,6 +3296,9 @@ type ServerInterface interface {
 	// ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
 	// (GET /v1/inteligencia/resumen)
 	ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams)
+	// ListarSeriesInteligencia Series recurrentes del usuario con estado, cadencia y proximo pago esperado.
+	// (GET /v1/inteligencia/series)
+	ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request)
 	// KycEstado Consulta el producto, el estado de KYC y los limites.
 	// (GET /v1/kyc/estado)
 	KycEstado(w http.ResponseWriter, r *http.Request)
@@ -3090,7 +3349,7 @@ type ServerInterface interface {
 	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams)
 	// SintetizarVera Sintetiza texto con Kokoro local.
 	// (POST /v1/vera/sintetizar)
-	SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams)
+	SintetizarVera(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -3199,6 +3458,12 @@ func (_ Unimplemented) DescartarAvisoInteligencia(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListarCategoriasInteligencia Catalogo de categorias que el usuario puede asignar a un movimiento, en el orden firmado.
+// (GET /v1/inteligencia/categorias)
+func (_ Unimplemented) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListarMovimientosInteligencia Lista una pagina de la vista enriquecida del usuario autenticado, del movimiento mas nuevo al mas viejo.
 // (GET /v1/inteligencia/movimientos)
 func (_ Unimplemented) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request, params ListarMovimientosInteligenciaParams) {
@@ -3214,6 +3479,12 @@ func (_ Unimplemented) CorregirMovimientoInteligencia(w http.ResponseWriter, r *
 // ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
 // (GET /v1/inteligencia/resumen)
 func (_ Unimplemented) ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarSeriesInteligencia Series recurrentes del usuario con estado, cadencia y proximo pago esperado.
+// (GET /v1/inteligencia/series)
+func (_ Unimplemented) ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3315,7 +3586,7 @@ func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Reque
 
 // SintetizarVera Sintetiza texto con Kokoro local.
 // (POST /v1/vera/sintetizar)
-func (_ Unimplemented) SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams) {
+func (_ Unimplemented) SintetizarVera(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3710,6 +3981,20 @@ func (siw *ServerInterfaceWrapper) DescartarAvisoInteligencia(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// ListarCategoriasInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarCategoriasInteligencia(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListarMovimientosInteligencia operation middleware
 func (siw *ServerInterfaceWrapper) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.Request) {
 
@@ -3806,6 +4091,20 @@ func (siw *ServerInterfaceWrapper) ResumenInteligencia(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResumenInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarSeriesInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarSeriesInteligencia(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4249,39 +4548,8 @@ func (siw *ServerInterfaceWrapper) EnviarMensajeVozVera(w http.ResponseWriter, r
 // SintetizarVera operation middleware
 func (siw *ServerInterfaceWrapper) SintetizarVera(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SintetizarVeraParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-Vera-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Vera-Token")]; found {
-		var XVeraToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Vera-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Vera-Token", valueList[0], &XVeraToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Vera-Token", Err: err})
-			return
-		}
-
-		params.XVeraToken = XVeraToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-Vera-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Vera-Token", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SintetizarVera(w, r, params)
+		siw.Handler.SintetizarVera(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4459,6 +4727,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/v1/inteligencia/resumen", wrapper.ResumenInteligencia)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/series", wrapper.ListarSeriesInteligencia)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/inteligencia/movimientos/{transaccion_id}/correcciones", wrapper.CorregirMovimientoInteligencia)
 	})
 	r.Group(func(r chi.Router) {
@@ -4469,6 +4740,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/inteligencia/avisos/{id}/descartar", wrapper.DescartarAvisoInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/categorias", wrapper.ListarCategoriasInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/depositos", wrapper.CrearDeposito)

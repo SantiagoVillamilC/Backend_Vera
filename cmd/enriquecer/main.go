@@ -67,7 +67,16 @@ func run() error {
 		}
 		opciones = append(opciones, inteligencia.ConLexico(lexico))
 	}
+	// El catálogo curado enciende el escalón 4, igual que en la API. Lo que no se puede es fallar la
+	// consulta: sin la tabla el lote aborta. Con la tabla vacía sigue adelante y el escalón 4 queda
+	// apagado, así que la copia sale con los orígenes que la cascada decide sin catálogo.
+	catalogoNombres := make(map[string]inteligencia.Categoria)
+	catalogoLlaves := make(map[string]inteligencia.Categoria)
+	opciones = append(opciones, inteligencia.ConCatalogo(catalogoNombres, catalogoLlaves))
 	servicio := inteligencia.NuevoServicio(pool, opciones...)
+	if err := servicio.CargarCatalogo(ctx); err != nil {
+		return fmt.Errorf("catálogo curado: %w", err)
+	}
 	switch os.Args[1] {
 	case "lote":
 		resultado, err := servicio.Enriquecer(ctx, limite)

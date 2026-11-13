@@ -16,6 +16,9 @@ source "${DIRECTORIO_SCRIPT}/variables.sh"
 
 SIMULAR="no"
 REGISTRAR_PROVEEDORES="no"
+SOLO_ENV="no"
+DESTINO_SERVIDOR="produccion"
+RUTA_APROVISIONAR="${APROVISIONAR_ENV:-${DIRECTORIO_SCRIPT}/../servidor/aprovisionar.env}"
 
 mostrar_ayuda() {
   cat <<'EOF'
@@ -35,6 +38,14 @@ Opciones:
                              este script: no existe en
                              infra/servidor/aprovisionar.sh, cuyas banderas
                              son --lista, --solo y --ayuda.
+  --destino DESTINO          local, demo o produccion: valor de DESTINO en
+                             aprovisionar.env. Por defecto produccion, porque
+                             esta VM es la que atiende el servicio real.
+                             Se puede cambiar con APROVISIONAR_ENV (ruta del
+                             archivo) para probar en seco.
+  --solo-env                 Escribe (o imprime con --simular) aprovisionar.env
+                             y sale sin tocar Azure. Sirve para preparar la VM
+                             nueva y para probar el archivo en seco.
   --registrar-proveedores   Registra explícitamente los proveedores de
                              recurso obligatorios (Microsoft.Compute,
                              Microsoft.Network) que falten. Nunca se
@@ -390,6 +401,14 @@ principal() {
       --registrar-proveedores)
         REGISTRAR_PROVEEDORES="si"
         ;;
+      --solo-env)
+        SOLO_ENV="si"
+        ;;
+      --destino)
+        shift
+        [[ $# -gt 0 ]] || error_fatal "Falta el valor de --destino (local, demo o produccion)."
+        DESTINO_SERVIDOR="$1"
+        ;;
       --ayuda | -h)
         mostrar_ayuda
         return 0
@@ -401,9 +420,37 @@ principal() {
     shift
   done
 
+  case "${DESTINO_SERVIDOR}" in
+    local | demo | produccion) ;;
+    *) error_fatal "DESTINO debe ser local, demo o produccion, no \"${DESTINO_SERVIDOR}\"." ;;
+  esac
+
+  if [[ "${SOLO_ENV}" == "si" ]]; then
+    escribir_aprovisionar
+    return 0
+  fi
+
   verificar_preflight
   crear_recursos
+  escribir_aprovisionar
   mostrar_cierre
+}
+
+# Deja el DESTINO que el paso 60 lee antes de elegir la columna de banderas. Sin secretos: los
+# secretos viven en los archivos del servidor, no en el repositorio.
+escribir_aprovisionar() {
+  local contenido="DESTINO=${DESTINO_SERVIDOR}"
+
+  if [[ "${SIMULAR}" == "si" ]]; then
+    paso "Escribiría ${RUTA_APROVISIONAR} con 600"
+    printf '%s\n' "${contenido}"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "${RUTA_APROVISIONAR}")"
+  printf '%s\n' "${contenido}" > "${RUTA_APROVISIONAR}"
+  chmod 600 "${RUTA_APROVISIONAR}"
+  info "aprovisionar.env escrito en ${RUTA_APROVISIONAR} con DESTINO=${DESTINO_SERVIDOR}"
 }
 
 principal "$@"

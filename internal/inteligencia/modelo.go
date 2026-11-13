@@ -22,7 +22,7 @@ var (
 )
 
 // VersionArtefacto es la única versión que esta implementación sabe leer.
-const VersionArtefacto = "tfidf-2"
+const VersionArtefacto = "tfidf-3"
 
 // LargoHuellaCorta es el prefijo del sha256 que viaja en `version_modelo`.
 const LargoHuellaCorta = 12

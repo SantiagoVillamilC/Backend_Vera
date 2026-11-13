@@ -21,6 +21,7 @@ import (
 
 func TestVistasMinimasDeCadaFuncion(t *testing.T) {
 	fecha := time.Date(2026, 10, 17, 15, 0, 0, 0, time.UTC)
+	mediana := nucleo.Centavos(4000000)
 	casos := map[string]DatosHerramienta{
 		"consultar_saldo":         SaldoHerramienta{Disponible: math.MaxInt64, Retenido: 1},
 		"consultar_limites":       LimitesHerramienta{MaximoEnviable: 100, TopeOperacion: 200, CupoMensualRestante: 300, GMF: 1},
@@ -29,6 +30,11 @@ func TestVistasMinimasDeCadaFuncion(t *testing.T) {
 		"buscar_destinatario":     DestinatariosHerramienta{Destinatarios: []DestinatarioHerramienta{{Nombre: "Laura Rodriguez", Celular: "+573001234567", Referencia: "referencia_opaca_123"}}},
 		"consultar_transferencia": TransferenciaHerramienta{Estado: "confirmada", Monto: 12345, CreadaEn: fecha, ActualizadaEn: fecha},
 		"preparar_transferencia":  AccionHerramienta{AccionID: uuid.MustParse("11111111-1111-4111-8111-111111111111"), Destinatario: DestinatarioHerramienta{Nombre: "Laura Rodriguez", Celular: "+573001234567"}, Monto: 5000000, ExpiraEn: fecha.Add(5 * time.Minute)},
+		"resumir_consumo_por_categoria": ConsumoHerramienta{
+			Mes: "2026-10", Alcance: "billetera", Moneda: "COP", Evaluable: true,
+			MesesCompletos: 4, MesesRequeridos: 3, Total: 7000000,
+			Categorias: []CategoriaConsumoHerramienta{{Codigo: "alimentos_mercado", Nombre: "Alimentos y mercado", Total: 5000000, Mediana: &mediana}}, HayMas: true,
+		},
 	}
 	for nombre, datos := range casos {
 		t.Run(nombre, func(t *testing.T) {
@@ -62,10 +68,14 @@ func TestResultadosAcotados(t *testing.T) {
 	movimientos := make([]MovimientoHerramienta, 21)
 	grupos := make([]GrupoHerramienta, 21)
 	destinatarios := make([]DestinatarioHerramienta, 21)
+	categorias := make([]CategoriaConsumoHerramienta, 12)
 	for i := range 21 {
 		movimientos[i] = MovimientoHerramienta{Fecha: fecha, Motivo: "deposito", Monto: 100}
 		grupos[i] = GrupoHerramienta{Nombre: "Laura Rodriguez", Cantidad: 1}
 		destinatarios[i] = DestinatarioHerramienta{Nombre: "Laura Rodriguez", Celular: "3001234567", Referencia: "referencia_opaca_123"}
+	}
+	for i := range categorias {
+		categorias[i] = CategoriaConsumoHerramienta{Codigo: "transporte", Nombre: "Transporte", Total: nucleo.Centavos(1000 + i)}
 	}
 	for _, caso := range []struct {
 		nombre, campo string
@@ -76,6 +86,7 @@ func TestResultadosAcotados(t *testing.T) {
 		{"listar_movimientos", "movimientos", ArgumentosHerramienta{Limite: 2}, MovimientosHerramienta{Movimientos: movimientos}, 2},
 		{"resumir_movimientos", "grupos", ArgumentosHerramienta{AgruparPor: "contraparte"}, ResumenHerramienta{Grupos: grupos}, 10},
 		{"buscar_destinatario", "destinatarios", ArgumentosHerramienta{}, DestinatariosHerramienta{Destinatarios: destinatarios}, 5},
+		{"resumir_consumo_por_categoria", "categorias", ArgumentosHerramienta{}, ConsumoHerramienta{Mes: "2026-10", Alcance: "billetera", Moneda: "COP", MesesCompletos: 4, MesesRequeridos: 3, Total: 1000, Categorias: categorias}, 10},
 	} {
 		b, err := serializarDatos(caso.nombre, caso.args, caso.datos)
 		if err != nil {
@@ -100,6 +111,30 @@ func TestResultadosAcotados(t *testing.T) {
 	b, err := serializarDatos("listar_movimientos", ArgumentosHerramienta{Limite: 20}, MovimientosHerramienta{})
 	if err != nil || !bytes.Contains(b, []byte(`"movimientos":[]`)) {
 		t.Fatalf("lista vacía no es array: %s %v", b, err)
+	}
+}
+
+func TestVistaDeConsumoValidaEtiquetasDelBackend(t *testing.T) {
+	base := func() ConsumoHerramienta {
+		return ConsumoHerramienta{Mes: "2026-10", Alcance: "billetera", Moneda: "COP", MesesCompletos: 4, MesesRequeridos: 3, Total: 1000, Categorias: []CategoriaConsumoHerramienta{{Codigo: "transporte", Nombre: "Transporte", Total: 1000}}}
+	}
+	if _, err := serializarDatos("resumir_consumo_por_categoria", ArgumentosHerramienta{}, base()); err != nil {
+		t.Fatalf("rechazó una vista válida: %v", err)
+	}
+	for nombre, romper := range map[string]func(*ConsumoHerramienta){
+		"mes fuera de rango": func(d *ConsumoHerramienta) { d.Mes = "2026-13" },
+		"mes incompleto":     func(d *ConsumoHerramienta) { d.Mes = "2026-1" },
+		"mes vacío":          func(d *ConsumoHerramienta) { d.Mes = "" },
+		"alcance ajeno":      func(d *ConsumoHerramienta) { d.Alcance = "global" },
+		"moneda ajena":       func(d *ConsumoHerramienta) { d.Moneda = "USD" },
+	} {
+		t.Run(nombre, func(t *testing.T) {
+			d := base()
+			romper(&d)
+			if _, err := serializarDatos("resumir_consumo_por_categoria", ArgumentosHerramienta{}, d); !errors.Is(err, ErrHerramientaValidacion) {
+				t.Fatalf("aceptó %s: %v", nombre, err)
+			}
+		})
 	}
 }
 

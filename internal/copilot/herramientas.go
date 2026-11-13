@@ -43,7 +43,7 @@ type Catalogo struct {
 	auditoria AuditorLlamadas
 }
 
-// NuevoCatalogo sólo permite conectar las siete funciones conocidas. La ausencia
+// NuevoCatalogo sólo permite conectar las ocho funciones conocidas. La ausencia
 // de un manejador devuelve FunctionUnavailable, nunca una respuesta inventada.
 func NuevoCatalogo(manejadores map[string]ManejadorHerramienta, logger *slog.Logger, opciones ...OpcionCatalogo) (*Catalogo, error) {
 	if logger == nil {

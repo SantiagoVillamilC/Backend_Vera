@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 )
 
 // metricasGrabadas es el doble del puerto: guarda lo que se le informó y no mide nada.
@@ -209,5 +211,27 @@ func TestVersionDelClasificadorDeclaraLaAusencia(t *testing.T) {
 	servicio.clasificador = modelo
 	if version := servicio.versionDelClasificador(); version != modelo.VersionModelo() {
 		t.Fatalf("versión = %q, quiero %q", version, modelo.VersionModelo())
+	}
+}
+
+// TestAcumularRecuentoSumaPorUsuario comprueba que la corrida suma lo que el cupo recortó y que un
+// recorte de cero no se convierte en supresión.
+func TestAcumularRecuentoSumaPorUsuario(t *testing.T) {
+	t.Parallel()
+	resumen := ResumenDeAvisos{Usuarios: 2}
+	resumen.AcumularRecuento(1, avisos.Recuento{YaEmitidas: 2, Recortadas: 1})
+	resumen.AcumularRecuento(0, avisos.Recuento{YaEmitidas: 1, Recortadas: 0})
+
+	if resumen.Emitidos != 1 {
+		t.Fatalf("emitidos = %d, quiero 1", resumen.Emitidos)
+	}
+	if resumen.YaEmitidos != 3 {
+		t.Fatalf("ya emitidos = %d, quiero 3", resumen.YaEmitidos)
+	}
+	if resumen.SuprimidosPorCupo != 1 {
+		t.Fatalf("suprimidos por cupo = %d, quiero 1: un recorte de cero no suma", resumen.SuprimidosPorCupo)
+	}
+	if resumen.Usuarios != 2 {
+		t.Fatalf("usuarios = %d, quiero 2: el acumulador no cuenta usuarios", resumen.Usuarios)
 	}
 }

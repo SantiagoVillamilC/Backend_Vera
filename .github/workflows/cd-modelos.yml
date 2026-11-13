@@ -1,0 +1,263 @@
+name: CD modelos
+
+# Publica en GHCR las imágenes de la pila de modelos (vera-llm, vera-voz y vera-kokoro) y emite el
+# digest de cada una. No despliega: el despliegue por digest lo hace infra/modelos/deploy-modelos.sh,
+# que lee los digests declarados en infra/modelos/imagenes.json (ver docs/despliegue-digest-rollback.md).
+#
+# Lo que NO se publica:
+#   - La variante CUDA de vera-voz (Dockerfile.cuda): sigue sin construir ni ejecutar.
+#   - Pesos de vera-llm ni de vera-voz: viven en el volume `pesos`. vera-kokoro lleva dentro unos
+#     0,14 GB de pesos por diseño, verificados con SHA256 por infra/voz-local/descargar.py en el build.
+#
+# Los filtros de paths listan las entradas de build de cada imagen y excluyen a propósito
+# infra/modelos/imagenes.json, el script de despliegue y los compose: si registrar un digest en
+# imagenes.json disparara este workflow, se reconstruirían las imágenes y saldría un digest distinto
+# al que se acaba de declarar.
+
+on:
+  push:
+    branches: [staging, main]
+    paths:
+      - "infra/modelos/vera-llm/**"
+      - "infra/modelos/vera-voz/**"
+      - "!infra/modelos/vera-voz/Dockerfile.cuda"
+      - "infra/modelos/vera-kokoro/**"
+      - "infra/voz-local/descargar.py"
+      - "infra/voz-local/servidor.py"
+      - "infra/voz-local/requirements.txt"
+      - "infra/stt-local/servidor.py"
+      - "infra/stt-local/requirements.txt"
+      - ".github/workflows/cd-modelos.yml"
+  # Permite publicar a mano desde cualquier rama, por ejemplo para probar este workflow antes de
+  # promoverlo. La etiqueta de rama sale de metadata-action y no pisa la de main ni la de staging.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cd-modelos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  vera-voz:
+    name: Build and push vera-voz
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      imagen: ${{ steps.registro.outputs.base }}/vera-voz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # GHCR rechaza mayúsculas en el nombre y github.repository las trae.
+      - name: Registro en minúsculas
+        id: registro
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.registro.outputs.base }}/vera-voz
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: infra/modelos/vera-voz/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Digest en el resumen
+        env:
+          IMAGEN: ${{ steps.registro.outputs.base }}/vera-voz
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf -- '- vera-voz: `%s@%s`\n' "$IMAGEN" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+  vera-kokoro:
+    name: Build and push vera-kokoro
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      imagen: ${{ steps.registro.outputs.base }}/vera-kokoro
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Registro en minúsculas
+        id: registro
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.registro.outputs.base }}/vera-kokoro
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+
+      # El build baja los pesos de Kokoro (unos 0,14 GB) con huella verificada, así que necesita red
+      # hacia la release de kokoro-onnx. Un fallo de esa descarga corta el job.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: infra/modelos/vera-kokoro/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Digest en el resumen
+        env:
+          IMAGEN: ${{ steps.registro.outputs.base }}/vera-kokoro
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf -- '- vera-kokoro: `%s@%s`\n' "$IMAGEN" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+  vera-llm:
+    name: Build and push vera-llm
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      imagen: ${{ steps.registro.outputs.base }}/vera-llm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Registro en minúsculas
+        id: registro
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      # RIESGO DECLARADO: la imagen local de vera-llm pesa unos 8,4 GB (docs/mediciones-locales-2026-11-13.md)
+      # y construirla y subirla necesita varias veces ese espacio en el runner. No hay una medición del
+      # espacio libre de ubuntu-latest en este repo, así que este paso libera lo que ocupan las
+      # herramientas preinstaladas que el build no usa e imprime `df` antes y después. Si el job muere por
+      # falta de disco, el margen real queda a la vista en ese log y hay que ampliar la limpieza o pasar
+      # a un runner con más disco. La primera corrida de este workflow es la que lo confirma.
+      - name: Liberar disco del runner
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          docker image prune --all --force
+          df -h /
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.registro.outputs.base }}/vera-llm
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+
+      # El Dockerfile de vera-llm no hace COPY, así que el contexto es solo su carpeta y no se sube el
+      # repositorio entero. Sin caché de GitHub Actions: guardar capas de 8 GB agotaría la cuota de caché.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: infra/modelos/vera-llm
+          file: infra/modelos/vera-llm/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Espacio tras el build
+        if: always()
+        run: df -h /
+
+      - name: Digest en el resumen
+        env:
+          IMAGEN: ${{ steps.registro.outputs.base }}/vera-llm
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf -- '- vera-llm: `%s@%s`\n' "$IMAGEN" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+  resumen:
+    name: Digests publicados
+    needs: [vera-voz, vera-kokoro, vera-llm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Solo lee salidas de otros jobs y escribe el resumen: no publica nada, así que no necesita packages: write.
+    permissions:
+      contents: read
+    outputs:
+      # JSON con los tres digests, pensado para pegarlo en infra/modelos/imagenes.json.
+      digests: ${{ steps.resumen.outputs.digests }}
+    steps:
+      - name: Resumen y salida
+        id: resumen
+        env:
+          DIGEST_LLM: ${{ needs.vera-llm.outputs.digest }}
+          DIGEST_VOZ: ${{ needs.vera-voz.outputs.digest }}
+          DIGEST_KOKORO: ${{ needs.vera-kokoro.outputs.digest }}
+          IMAGEN_LLM: ${{ needs.vera-llm.outputs.imagen }}
+          IMAGEN_VOZ: ${{ needs.vera-voz.outputs.imagen }}
+          IMAGEN_KOKORO: ${{ needs.vera-kokoro.outputs.imagen }}
+          RAMA: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for variable in DIGEST_LLM DIGEST_VOZ DIGEST_KOKORO; do
+            if [[ ! "${!variable}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::${variable} no es un digest sha256 válido"
+              exit 1
+            fi
+          done
+          json="$(printf '{"vera-llm":"%s","vera-voz":"%s","vera-kokoro":"%s"}' \
+            "$DIGEST_LLM" "$DIGEST_VOZ" "$DIGEST_KOKORO")"
+          echo "digests=${json}" >> "$GITHUB_OUTPUT"
+          {
+            printf '## Imágenes de modelos publicadas\n\n'
+            printf 'Rama `%s`, commit `%s`.\n\n' "$RAMA" "$COMMIT"
+            printf '| Imagen | Digest |\n| --- | --- |\n'
+            printf '| `%s` | `%s` |\n' "$IMAGEN_LLM" "$DIGEST_LLM"
+            printf '| `%s` | `%s` |\n' "$IMAGEN_VOZ" "$DIGEST_VOZ"
+            printf '| `%s` | `%s` |\n' "$IMAGEN_KOKORO" "$DIGEST_KOKORO"
+            printf '\nPara desplegar, registra estos tres digests en `infra/modelos/imagenes.json`, '
+            printf 'promuévelos por PR y ejecuta `infra/modelos/deploy-modelos.sh`.\n'
+            printf '\n```json\n%s\n```\n' "$json"
+          } >> "$GITHUB_STEP_SUMMARY"

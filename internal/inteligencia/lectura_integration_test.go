@@ -6,23 +6,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ahoraDelResumen es el reloj que el handler inyecta: posterior a todos los movimientos sembrados, para
+// que el corte del resumen no dependa del día en que se corre la prueba.
+var ahoraDelResumen = time.Date(2026, time.November, 15, 12, 0, 0, 0, zonaBogota)
 
 func sembrarTransferencia(t *testing.T, pool *pgxpool.Pool, desde, hacia string, monto int64,
 	momento time.Time) uuid.UUID {
 	t.Helper()
 	transferencia := uuid.New()
-	sembrarAsiento(t, pool, "retencion", &transferencia, "", momento, []lineaDePrueba{
+	sembrarAsiento(t, pool, "retencion", &transferencia, "", "", momento, []lineaDePrueba{
 		{"pasivo:usuario:" + desde + ":disponible", monto},
 		{"pasivo:usuario:" + desde + ":retenido", -monto},
 	})
-	sembrarAsiento(t, pool, "despacho_riel", &transferencia, "", momento.Add(time.Minute), []lineaDePrueba{
+	sembrarAsiento(t, pool, "despacho_riel", &transferencia, "", "", momento.Add(time.Minute), []lineaDePrueba{
 		{"pasivo:usuario:" + desde + ":retenido", monto},
 		{"pasivo:liquidacion_pendiente:riel", -monto},
 	})
-	sembrarAsiento(t, pool, "liquidacion_confirmada", &transferencia, "", momento.Add(2*time.Minute),
+	sembrarAsiento(t, pool, "liquidacion_confirmada", &transferencia, "", "", momento.Add(2*time.Minute),
 		[]lineaDePrueba{
 			{"pasivo:liquidacion_pendiente:riel", monto},
 			{"pasivo:usuario:" + hacia + ":disponible", -monto},
@@ -33,7 +38,7 @@ func sembrarTransferencia(t *testing.T, pool *pgxpool.Pool, desde, hacia string,
 func sembrarPagoExterno(t *testing.T, pool *pgxpool.Pool, usuario, descripcion string, monto int64,
 	momento time.Time) int64 {
 	t.Helper()
-	return sembrarAsiento(t, pool, "pago_qr", nil, descripcion, momento, []lineaDePrueba{
+	return sembrarAsiento(t, pool, "pago_qr", nil, descripcion, "", momento, []lineaDePrueba{
 		{"pasivo:usuario:" + usuario + ":disponible", monto},
 		{"pasivo:liquidacion_pendiente:riel", -monto},
 	})
@@ -139,7 +144,7 @@ func TestResumenDelMesConMedianaMesesCompletosYAlcance(t *testing.T) {
 		t.Fatalf("Reconstruir: %v", err)
 	}
 
-	resumen, err := servicio.Resumen(ctx, usuario, "2026-09")
+	resumen, err := servicio.Resumen(ctx, usuario, "2026-09", ahoraDelResumen)
 	if err != nil {
 		t.Fatalf("Resumen: %v", err)
 	}
@@ -152,7 +157,7 @@ func TestResumenDelMesConMedianaMesesCompletosYAlcance(t *testing.T) {
 	if resumen.TotalCentavos != 570000 {
 		t.Errorf("total = %d, want 570000", resumen.TotalCentavos)
 	}
-	if resumen.CupoAvisos != CupoMensualDeAvisos || resumen.AvisosEmitidos != 0 {
+	if resumen.CupoAvisos != avisos.CupoMensualPorDefecto || resumen.AvisosEmitidos != 0 {
 		t.Errorf("cupo = %d, emitidos = %d", resumen.CupoAvisos, resumen.AvisosEmitidos)
 	}
 
@@ -169,7 +174,7 @@ func TestResumenDelMesConMedianaMesesCompletosYAlcance(t *testing.T) {
 		t.Errorf("sin categoría = %+v, want total 70000 sin mediana", sinCategoria)
 	}
 
-	cortoResumen, err := servicio.Resumen(ctx, corto, "2026-09")
+	cortoResumen, err := servicio.Resumen(ctx, corto, "2026-09", ahoraDelResumen)
 	if err != nil {
 		t.Fatalf("Resumen del usuario con dos meses: %v", err)
 	}
@@ -182,7 +187,7 @@ func TestResumenDelMesConMedianaMesesCompletosYAlcance(t *testing.T) {
 		t.Errorf("mediana con un mes con gasto = %v, want nil", cortoCompras.MedianaCentavos)
 	}
 
-	vacio, err := servicio.Resumen(ctx, uuid.NewString(), "2026-09")
+	vacio, err := servicio.Resumen(ctx, uuid.NewString(), "2026-09", ahoraDelResumen)
 	if err != nil {
 		t.Fatalf("Resumen sin movimientos: %v", err)
 	}
@@ -207,14 +212,14 @@ func TestResumenRespetaLaFronteraDeMesEnBogota(t *testing.T) {
 		t.Fatalf("Reconstruir: %v", err)
 	}
 
-	septiembre, err := servicio.Resumen(ctx, usuario, "2026-09")
+	septiembre, err := servicio.Resumen(ctx, usuario, "2026-09", ahoraDelResumen)
 	if err != nil {
 		t.Fatalf("Resumen de septiembre: %v", err)
 	}
 	if septiembre.TotalCentavos != 11100 {
 		t.Errorf("septiembre = %d, want 11100", septiembre.TotalCentavos)
 	}
-	octubre, err := servicio.Resumen(ctx, usuario, "2026-10")
+	octubre, err := servicio.Resumen(ctx, usuario, "2026-10", ahoraDelResumen)
 	if err != nil {
 		t.Fatalf("Resumen de octubre: %v", err)
 	}

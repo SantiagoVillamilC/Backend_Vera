@@ -37,6 +37,17 @@ var acciones = map[Tipo]string{
 	CategoriaSobreMedia:   "Ver los movimientos de esta categoría",
 }
 
+// accionCodigos es el código estable de la acción de cada tipo. Describe el destino en la app y no
+// cambia aunque cambie la redacción de acciones. Es un contrato con el frontend: ver
+// docs/contrato-frontend-avisos.md.
+var accionCodigos = map[Tipo]string{
+	PagoNoAlcanza:         "revisar_pagos",
+	CaidaIngreso:          "revisar_ingreso",
+	CobroNuevo:            "revisar_cobro",
+	PresupuestoAnticipado: "revisar_presupuesto",
+	CategoriaSobreMedia:   "revisar_categoria",
+}
+
 var porques = map[Tipo]string{
 	PagoNoAlcanza:         "Los pagos recurrentes de la ventana suman más que tu saldo.",
 	CaidaIngreso:          "El ingreso del último mes completo quedó por debajo de lo habitual.",
@@ -290,3 +301,17 @@ func PorqueDe(tipo Tipo) string { return porques[tipo] }
 
 // AccionDe devuelve la acción sugerida del tipo.
 func AccionDe(tipo Tipo) string { return acciones[tipo] }
+
+// AccionCodigoDe devuelve el código estable de la acción del tipo, o vacío si el tipo no existe.
+func AccionCodigoDe(tipo Tipo) string { return accionCodigos[tipo] }
+
+// AccionCodigos lista los códigos de acción en el orden de prioridad de los tipos. Es lo que declara
+// el enum InteligenciaAvisoAccionCodigo de api/openapi.yaml.
+func AccionCodigos() []string {
+	orden := []Tipo{PagoNoAlcanza, CaidaIngreso, CobroNuevo, PresupuestoAnticipado, CategoriaSobreMedia}
+	codigos := make([]string, 0, len(orden))
+	for _, tipo := range orden {
+		codigos = append(codigos, accionCodigos[tipo])
+	}
+	return codigos
+}

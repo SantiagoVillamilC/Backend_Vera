@@ -1,0 +1,170 @@
+[
+ {
+  "id": "eva-A-001",
+  "familia": "A",
+  "texto": "en los últimos tres meses, ¿a cuánto asciende lo pagado en el internet hogar?",
+  "archivo": "000_eva-A-001.wav",
+  "duracion_s": 3.88
+ },
+ {
+  "id": "eva-A-002",
+  "familia": "A",
+  "texto": "en las transferencias a otras personas en los últimos 7 días qué cifra me da",
+  "archivo": "001_eva-A-002.wav",
+  "duracion_s": 4.39
+ },
+ {
+  "id": "eva-B-001",
+  "familia": "B",
+  "texto": "mensualmente qué tanto se me va en el arriendo",
+  "archivo": "002_eva-B-001.wav",
+  "duracion_s": 2.56
+ },
+ {
+  "id": "eva-B-002",
+  "familia": "B",
+  "texto": "repartido por meses, mi gasto en la comida en restaurantes sale de cuánto",
+  "archivo": "003_eva-B-002.wav",
+  "duracion_s": 3.88
+ },
+ {
+  "id": "eva-C-001",
+  "familia": "C",
+  "texto": "Necesito el conteo de cobros que hubo en el super en los últimos 3 meses",
+  "archivo": "004_eva-C-001.wav",
+  "duracion_s": 3.8
+ },
+ {
+  "id": "eva-C-002",
+  "familia": "C",
+  "texto": "en los últimos tres meses, ¿en cuántas ocasiones pagué en el internet hogar?",
+  "archivo": "005_eva-C-002.wav",
+  "duracion_s": 3.99
+ },
+ {
+  "id": "eva-D-001",
+  "familia": "D",
+  "texto": "mi mayor desembolso el mes anterior: cuál fue",
+  "archivo": "006_eva-D-001.wav",
+  "duracion_s": 2.58
+ },
+ {
+  "id": "eva-D-002",
+  "familia": "D",
+  "texto": "Localiza la compra de mayor valor en los últimos tres meses",
+  "archivo": "007_eva-D-002.wav",
+  "duracion_s": 3.26
+ },
+ {
+  "id": "eva-E-001",
+  "familia": "E",
+  "texto": "pon frente a frente mis gastos en el super: este mes y el mes anterior",
+  "archivo": "008_eva-E-001.wav",
+  "duracion_s": 3.8
+ },
+ {
+  "id": "eva-E-002",
+  "familia": "E",
+  "texto": "este mes contra el mes pasado en la vivienda: cuál sumó más?",
+  "archivo": "009_eva-E-002.wav",
+  "duracion_s": 3.33
+ },
+ {
+  "id": "eva-F-001",
+  "familia": "F",
+  "texto": "del total gastado el mes pasado, dime el peso que tiene la vivienda en porcentaje",
+  "archivo": "010_eva-F-001.wav",
+  "duracion_s": 4.46
+ },
+ {
+  "id": "eva-F-002",
+  "familia": "F",
+  "texto": "si todo lo que gasté en los últimos 3 meses fuera el 100 por ciento qué tanto es la vivienda",
+  "archivo": "011_eva-F-002.wav",
+  "duracion_s": 4.95
+ },
+ {
+  "id": "eva-G-001",
+  "familia": "G",
+  "texto": "después de pagar millón y medio, con qué saldo quedo?",
+  "archivo": "012_eva-G-001.wav",
+  "duracion_s": 2.86
+ },
+ {
+  "id": "eva-G-002",
+  "familia": "G",
+  "texto": "Quiero saber qué saldo me deja un pago de dos millones y medio",
+  "archivo": "013_eva-G-002.wav",
+  "duracion_s": 3.29
+ },
+ {
+  "id": "eva-H-001",
+  "familia": "H",
+  "texto": "en los últimos tres meses, qué categoría se lleva la mayor parte de mi plata?",
+  "archivo": "014_eva-H-001.wav",
+  "duracion_s": 4.2
+ },
+ {
+  "id": "eva-H-002",
+  "familia": "H",
+  "texto": "muéstrame la categoría que más pesa en mis gastos el mes pasado",
+  "archivo": "015_eva-H-002.wav",
+  "duracion_s": 3.48
+ },
+ {
+  "id": "eva-I-001",
+  "familia": "I",
+  "texto": "Pasemos a otro tema: la conquista de América",
+  "archivo": "016_eva-I-001.wav",
+  "duracion_s": 2.6
+ },
+ {
+  "id": "eva-I-002",
+  "familia": "I",
+  "texto": "Quihubo Vera, ¿qué más?",
+  "archivo": "017_eva-I-002.wav",
+  "duracion_s": 1.32
+ },
+ {
+  "id": "eva-J-001",
+  "familia": "J",
+  "texto": "ayúdame con un giro para mi arrendador",
+  "archivo": "018_eva-J-001.wav",
+  "duracion_s": 2.09
+ },
+ {
+  "id": "eva-J-002",
+  "familia": "J",
+  "texto": "ayúdame con un giro",
+  "archivo": "019_eva-J-002.wav",
+  "duracion_s": 1.28
+ },
+ {
+  "id": "eva-K-001",
+  "familia": "K",
+  "texto": "Juan debe recibir medio millón de mi parte",
+  "archivo": "020_eva-K-001.wav",
+  "duracion_s": 2.5
+ },
+ {
+  "id": "eva-K-002",
+  "familia": "K",
+  "texto": "que le lleguen tres cuartos de millón a laura",
+  "archivo": "021_eva-K-002.wav",
+  "duracion_s": 2.39
+ },
+ {
+  "id": "eva-L-001",
+  "familia": "L",
+  "texto": "repasemos los movimientos de ayer",
+  "archivo": "022_eva-L-001.wav",
+  "duracion_s": 1.98
+ },
+ {
+  "id": "eva-L-002",
+  "familia": "L",
+  "texto": "ubica mis pagos a éxito",
+  "archivo": "023_eva-L-002.wav",
+  "duracion_s": 1.64
+ }
+]

@@ -1,0 +1,20 @@
+# Override CUDA para el pod con GPU. ESTADO: sin construir ni ejecutar: solo el compose fue validado con docker compose config.
+#
+# No se ejecutó en la VPS de trabajo por falta de runtime NVIDIA. Se usa en el pod, encima del compose
+# base, que solo cambia la imagen de voz y expone la GPU a los dos servicios que la usan:
+#
+#   WHISPER_TOKEN=... KOKORO_TOKEN=... \
+#     docker compose -f infra/modelos/compose.yaml -f infra/modelos/compose.cuda.yaml up --build
+#
+# vera-kokoro sigue en CPU (int8): 82M de parámetros no justifican competir por la VRAM.
+services:
+  vera-llm:
+    gpus: all
+
+  vera-voz:
+    build:
+      dockerfile: infra/modelos/vera-voz/Dockerfile.cuda
+    image: vera-voz:cuda
+    environment:
+      WHISPER_GPU: "si"
+    gpus: all

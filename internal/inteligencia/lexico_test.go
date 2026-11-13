@@ -99,15 +99,15 @@ func TestEscalonesDelLoteComponeLosDosEscalones(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CargarLexicoV2: %v", err)
 	}
-	sinNada := escalonesDelLote(nil, nil)
-	if len(sinNada) != 2 || sinNada.Contiene(EscalonLexico) || sinNada.Contiene(EscalonClasificador) {
-		t.Fatalf("sin nada = %v, quiero solo memoria e interna", sinNada)
+	sinNada := escalonesDelLote(CatalogoCurado{}, nil, nil)
+	if len(sinNada) != 3 || sinNada.Contiene(EscalonLexico) || sinNada.Contiene(EscalonClasificador) {
+		t.Fatalf("sin nada = %v, quiero memoria, interna y MCC", sinNada)
 	}
-	soloLexico := escalonesDelLote(nil, lexico.Pares)
+	soloLexico := escalonesDelLote(CatalogoCurado{}, nil, lexico.Pares)
 	if !soloLexico.Contiene(EscalonLexico) || soloLexico.Contiene(EscalonClasificador) {
 		t.Fatalf("solo léxico = %v", soloLexico)
 	}
-	ambos := escalonesDelLote(&Modelo{}, lexico.Pares)
+	ambos := escalonesDelLote(CatalogoCurado{}, &Modelo{}, lexico.Pares)
 	if !ambos.Contiene(EscalonLexico) || !ambos.Contiene(EscalonClasificador) {
 		t.Fatalf("ambos = %v", ambos)
 	}
@@ -128,7 +128,7 @@ func TestLexicoDecideAntesQueElClasificador(t *testing.T) {
 
 	decision := Decidir(entradaDeComercio("DROGUERIA NORTE 12"), Recursos{
 		Lexico: lexico.Pares, Clasificador: modelo,
-	}, escalonesDelLote(modelo, lexico.Pares))
+	}, escalonesDelLote(CatalogoCurado{}, modelo, lexico.Pares))
 
 	if decision.Origen != OrigenLexico {
 		t.Fatalf("origen = %q, quiero %q", decision.Origen, OrigenLexico)

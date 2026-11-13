@@ -1,0 +1,32 @@
+{
+  "archivos_sha256": {
+    "catalogo_v3.csv": "f58eb87ebd08ddac733d7ff91098a6e413ab48911e1eb310a827795a93348ccb",
+    "marcas.csv": "e26cacb119b84a0ad8543294840fa6b62f26041edf1d1488adf24d50ef24e1be",
+    "propietarios_excluidos.csv": "80f54ee07289cf11429d979aadf060e8a7880fa2d4bba4518c285218f02e8667"
+  },
+  "derivado_de": "v2",
+  "generado_el": "2026-10-20T22:00:38+00:00",
+  "llamadas": 0,
+  "marcas": 430,
+  "marcas_no_se": 56,
+  "marcas_por_categoria": {
+    "alimentos_mercado": 71,
+    "compras": 109,
+    "entretenimiento": 22,
+    "no_se": 56,
+    "otros_gastos": 8,
+    "restaurantes_domicilios": 48,
+    "salud": 87,
+    "transporte": 29
+  },
+  "nombres_con_conflicto": 0,
+  "nombres_del_oro_en_el_catalogo": 13,
+  "nombres_del_oro_fuera_del_catalogo": 6134,
+  "nombres_en_catalogo": 5728,
+  "oro": "oro/v1/conjunto.csv",
+  "propietarios_del_oro": 32,
+  "propietarios_excluidos_antes_de_descargar": 8,
+  "propietarios_excluidos_en_esta_derivacion": 24,
+  "regla": "sin ningún propietario del oro",
+  "version": "v3"
+}

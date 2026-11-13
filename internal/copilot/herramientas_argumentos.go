@@ -19,6 +19,7 @@ type ArgumentosHerramienta struct {
 	Tipo            string `json:"tipo"`
 	Limite          int    `json:"limite"`
 	AgruparPor      string `json:"agrupar_por"`
+	Mes             string `json:"mes"`
 	Celular         string `json:"celular"`
 	Nombre          string `json:"nombre"`
 	TransferenciaID string `json:"transferencia_id"`

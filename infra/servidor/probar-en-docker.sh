@@ -12,7 +12,11 @@ limpiar() {
 trap limpiar EXIT
 
 echo "==> Levantando contenedor debian:13 (${NOMBRE_CONTENEDOR})"
+# El contenedor no lleva aprovisionar.env, y 60-api.sh aborta sin DESTINO: la
+# idempotencia se prueba declarando "local" aquí, no dejando que un servidor
+# real caiga en un destino por omisión.
 docker run -d --name "${NOMBRE_CONTENEDOR}" \
+  -e DESTINO=local \
   -v "${DIRECTORIO_SCRIPT}:/infra-servidor:ro" \
   debian:13 sleep infinity >/dev/null
 

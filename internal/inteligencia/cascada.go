@@ -32,7 +32,6 @@ const (
 	EscalonLexico       = 5
 	EscalonClasificador = 6
 	EscalonSinCategoria = 7
-	EscalonLLM          = EscalonClasificador
 )
 
 // Escalones es el conjunto de escalones activos.
@@ -55,7 +54,7 @@ func PrimerCorteConClasificador() Escalones {
 	return Escalones{EscalonMemoria: {}, EscalonInterna: {}, EscalonClasificador: {}}
 }
 
-// TodosLosEscalones activa la cascada completa, incluido el clasificador local o el LLM.
+// TodosLosEscalones activa la cascada completa, incluido el clasificador local.
 func TodosLosEscalones() Escalones {
 	return Escalones{
 		EscalonMemoria: {}, EscalonInterna: {}, EscalonMCC: {},
@@ -80,7 +79,9 @@ type Entrada struct {
 	MID              string
 }
 
-// Los orígenes de una fila, los mismos códigos que admite el CHECK de la migración 0023.
+// Los orígenes de una fila, los mismos códigos que admite el CHECK de la migración 0032. Son los
+// únicos valores que el lote escribe, y TestContratoDeOrigenesYCatalogo compara el conjunto contra
+// el enum OrigenEnriquecido del contrato.
 const (
 	OrigenMemoria      = "memoria"
 	OrigenInterna      = "contraparte_interna"
@@ -88,9 +89,21 @@ const (
 	OrigenCatalogo     = "catalogo"
 	OrigenLexico       = "lexico"
 	OrigenTFIDF        = "tfidf"
-	OrigenLLM          = "llm"
 	OrigenSinCategoria = "sin_categoria"
 )
+
+// OrigenesEscribibles es el conjunto cerrado de origen_categoria que la cascada puede escribir, en
+// el orden de los escalones. sin_categoria cierra la lista porque también es una decisión: la
+// abstención del clasificador se guarda con ella aunque el escalón que la miró fuera el 6.
+var OrigenesEscribibles = []string{
+	OrigenMemoria,
+	OrigenInterna,
+	OrigenMCC,
+	OrigenCatalogo,
+	OrigenLexico,
+	OrigenTFIDF,
+	OrigenSinCategoria,
+}
 
 // Recursos son las tablas que la cascada consulta.
 type Recursos struct {
@@ -98,7 +111,6 @@ type Recursos struct {
 	CatalogoLlaves  map[string]Categoria
 	CatalogoNombres map[string]Categoria
 	Lexico          []ParLexico
-	CacheLLM        map[string]Categoria
 	Clasificador    *Modelo
 }
 
@@ -155,7 +167,8 @@ func Decidir(entrada Entrada, recursos Recursos, escalones Escalones) Decision {
 		if categoria, encontrada := buscarCategoria(recursos.CatalogoLlaves, entrada.Llave); encontrada {
 			return Decision{Categoria: categoria, Escalon: EscalonCatalogo, Origen: OrigenCatalogo}
 		}
-		if categoria, encontrada := buscarCategoria(recursos.CatalogoNombres, nombre); encontrada {
+		if categoria, encontrada := buscarCategoria(recursos.CatalogoNombres,
+			ClaveDeCatalogo(entrada.Nombre)); encontrada {
 			return Decision{Categoria: categoria, Escalon: EscalonCatalogo, Origen: OrigenCatalogo}
 		}
 	}
@@ -168,9 +181,6 @@ func Decidir(entrada Entrada, recursos Recursos, escalones Escalones) Decision {
 
 	if !escalones.Contiene(EscalonClasificador) || entrada.TipoDestino != DestinoComercio || nombre == "" {
 		return Decision{Escalon: EscalonSinCategoria, Origen: OrigenSinCategoria}
-	}
-	if categoria, encontrada := buscarCategoria(recursos.CacheLLM, nombre+"|"+entrada.Llave); encontrada {
-		return Decision{Categoria: categoria, Escalon: EscalonClasificador, Origen: OrigenLLM}
 	}
 	if recursos.Clasificador != nil {
 		if categoria, decidida := Predecir(recursos.Clasificador, nombre, mccCategoriaDe(entrada.MCC)); decidida {

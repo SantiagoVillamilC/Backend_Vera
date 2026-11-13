@@ -88,8 +88,10 @@ type InteligenciaHandler interface {
 	ListarMovimientosInteligencia(http.ResponseWriter, *http.Request, api.ListarMovimientosInteligenciaParams)
 	CorregirMovimientoInteligencia(http.ResponseWriter, *http.Request, string)
 	ResumenInteligencia(http.ResponseWriter, *http.Request, api.ResumenInteligenciaParams)
+	ListarSeriesInteligencia(http.ResponseWriter, *http.Request)
 	ListarAvisosInteligencia(http.ResponseWriter, *http.Request, api.ListarAvisosInteligenciaParams)
 	DescartarAvisoInteligencia(http.ResponseWriter, *http.Request, string)
+	ListarCategoriasInteligencia(http.ResponseWriter, *http.Request)
 }
 
 // DependenciasAuth agrupa los colaboradores que main inyecta en el router.
@@ -157,6 +159,14 @@ func (s servidorV1) ResumenInteligencia(w http.ResponseWriter, r *http.Request, 
 	s.inteligencia.ResumenInteligencia(w, r, params)
 }
 
+func (s servidorV1) ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.ListarSeriesInteligencia(w, r)
+}
+
 func (s servidorV1) CorregirMovimientoInteligencia(w http.ResponseWriter, r *http.Request, transaccionID string) {
 	if s.inteligencia == nil {
 		sinImplementar(w, r)
@@ -179,6 +189,14 @@ func (s servidorV1) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Re
 		return
 	}
 	s.inteligencia.DescartarAvisoInteligencia(w, r, id)
+}
+
+func (s servidorV1) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
+	if s.inteligencia == nil {
+		sinImplementar(w, r)
+		return
+	}
+	s.inteligencia.ListarCategoriasInteligencia(w, r)
 }
 
 var _ api.ServerInterface = servidorV1{}

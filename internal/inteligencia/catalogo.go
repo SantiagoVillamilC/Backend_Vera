@@ -11,6 +11,18 @@ type EntradaCatalogo struct {
 	Orden  int16
 }
 
+// CatalogoCurado son los nombres y las llaves del catálogo de marcas, ya normalizados. La llave de
+// los nombres es el nombre tal como lo busca la cascada, que es la forma en la que se cargó.
+type CatalogoCurado struct {
+	Nombres map[string]Categoria
+	Llaves  map[string]Categoria
+}
+
+// HayEntradas informa si el catálogo tiene alguna fila que pueda decidir.
+func (c CatalogoCurado) HayEntradas() bool {
+	return len(c.Nombres) > 0 || len(c.Llaves) > 0
+}
+
 // Los 14 códigos visibles y la fila de los movimientos sin categoría, firmados en el punto 349 bis.
 const (
 	CategoriaSalario               Categoria = "salario"
@@ -75,8 +87,37 @@ func EsCategoria(codigo Categoria) bool {
 	return existe
 }
 
+// Las 14 categorías que se ofrecen al usuario, en el orden firmado en el punto 349 bis. La regla
+// vive en inteligencia.categoria_es_visible y esta es su copia declarada, porque la cascada decide en
+// memoria y no puede consultar la base por fila. TestLasCategoriasVisiblesCoincidenConLaBase
+// comprueba que las dos listas no se separen.
+var categoriasVisibles = [...]Categoria{
+	CategoriaSalario,
+	CategoriaTransferenciaRecibida,
+	CategoriaReembolso,
+	CategoriaOtrosIngresos,
+	CategoriaAlimentosMercado,
+	CategoriaRestaurantes,
+	CategoriaTransporte,
+	CategoriaViviendaServicios,
+	CategoriaSalud,
+	CategoriaEducacion,
+	CategoriaEntretenimiento,
+	CategoriaCompras,
+	CategoriaComisiones,
+	CategoriaOtrosGastos,
+}
+
+var visiblesPorCodigo = func() map[Categoria]struct{} {
+	indice := make(map[Categoria]struct{}, len(categoriasVisibles))
+	for _, codigo := range categoriasVisibles {
+		indice[codigo] = struct{}{}
+	}
+	return indice
+}()
+
 // EsCategoriaVisible informa si el código se puede ofrecer al usuario.
 func EsCategoriaVisible(codigo Categoria) bool {
-	entrada, existe := catalogoPorCodigo[codigo]
-	return existe && entrada.Grupo != "ninguno"
+	_, visible := visiblesPorCodigo[codigo]
+	return visible
 }

@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,6 +23,8 @@ type movimiento struct {
 	fecha        time.Time
 	nombre, tipo string
 	centavos     int64
+	mcc          string
+	gmf          int64
 }
 type estado struct {
 	Usuario        string         `json:"usuario"`
@@ -61,7 +65,7 @@ func plan(ahora time.Time) []movimiento {
 	mes := time.Date(ahora.Year(), ahora.Month(), 1, 12, 0, 0, 0, ahora.Location())
 	var out []movimiento
 	agregar := func(m, d int, n, t string, pesos int64) {
-		out = append(out, movimiento{mes.AddDate(0, m, d-1), n, t, pesos * 100})
+		out = append(out, movimiento{fecha: mes.AddDate(0, m, d-1), nombre: n, tipo: t, centavos: pesos * 100})
 	}
 	agregar(-5, 1, "Saldo inicial", "deposito", 4000)
 	nombres := []string{"SUPERMERCADO DEMO", "TAXI DEMO", "RESTAURANTE DEMO", "FARMACIA DEMO", "CINE DEMO"}
@@ -82,7 +86,84 @@ func plan(ahora time.Time) []movimiento {
 	agregar(-1, 28, "STREAMING", "liquidacion_confirmada", -24900)
 	agregar(0, 12, "STREAMING", "liquidacion_confirmada", -24900)
 	agregar(0, 13, "ZXQ987654", "liquidacion_confirmada", -1000)
+	// Compra grande y su reembolso: el gasto del mes supera la mediana de los meses completos y el saldo sigue positivo pero por debajo de los pagos de la ventana.
+	agregar(0, 7, "TECNOLOGIA DEMO", "liquidacion_confirmada", -120000)
+	agregar(0, 10, "Reembolso equipo demo", "deposito", 100000)
+	// Entradas que encienden los escalones que faltaban al censo (CF-A2-03): MCC en el QR, marca
+	// del catálogo, corrección en memoria privada y contraparte interna (GMF). Montos pequeños para
+	// no mover el saldo ni los avisos del escenario.
+	agregar(0, 14, "COMPRA QR DEMO", "liquidacion_confirmada", -500)
+	out[len(out)-1].mcc = "5411"
+	agregar(0, 15, "TIENDA CATALOGO DEMO", "liquidacion_confirmada", -600)
+	agregar(0, 16, "TIENDA MEMORIA DEMO", "liquidacion_confirmada", -700)
+	agregar(0, 17, "PAGO CON GMF DEMO", "liquidacion_confirmada", -800)
+	out[len(out)-1].gmf = 80
 	return out
+}
+
+// cupoDesdeEntorno lee AVISOS_CUPO igual que la API: vacío toma el default del dominio.
+func cupoDesdeEntorno(valor string) (int, error) {
+	if valor == "" {
+		return avisos.CupoMensualPorDefecto, nil
+	}
+	cupo, e := strconv.Atoi(valor)
+	if e != nil || cupo < 1 {
+		return 0, fmt.Errorf("AVISOS_CUPO debe ser un entero positivo, llegó %q", valor)
+	}
+	return cupo, nil
+}
+
+// avisosDelEscenario es lo que la demo debe disparar con cupo 5. Las cuatro entradas de los
+// escalones suman un quinto aviso de categoria sobre la media; con cupo 5 caben todos.
+var avisosDelEscenario = map[string]int{
+	"caida_ingreso":          1,
+	"categoria_sobre_media":  1,
+	"cobro_nuevo":            1,
+	"pago_no_alcanza":        1,
+	"presupuesto_anticipado": 1,
+}
+
+// categoriasDelEscenario y origenesDelEscenario son el censo que la tarjeta publica como evidencia.
+var (
+	categoriasDelEscenario = map[string]int{
+		"alimentos_mercado":             7,
+		"compras":                       2,
+		"comisiones_costos_financieros": 9,
+		"entretenimiento":               7,
+		"restaurantes_domicilios":       6,
+		"salud":                         6,
+		"sin_categoria":                 13,
+		"transporte":                    6,
+	}
+	origenesDelEscenario = map[string]int{
+		"catalogo":            1,
+		"contraparte_interna": 1,
+		"lexico":              39,
+		"mcc":                 1,
+		"memoria":             1,
+		"sin_categoria":       13,
+	}
+)
+
+// cumpleAceptacion exige los cuatro avisos, 52 asientos, 7 series maduras y el censo exacto de
+// categorías y orígenes que declara la evidencia. Otra repartición con las mismas claves no pasa.
+func cumpleAceptacion(st estado) bool {
+	return len(st.Asientos) == 56 && st.Series == 7 &&
+		censoIgual(st.Avisos, avisosDelEscenario) &&
+		censoIgual(st.Categorias, categoriasDelEscenario) &&
+		censoIgual(st.Origenes, origenesDelEscenario)
+}
+
+func censoIgual(obtenido, esperado map[string]int) bool {
+	if len(obtenido) != len(esperado) {
+		return false
+	}
+	for clave, n := range esperado {
+		if obtenido[clave] != n {
+			return false
+		}
+	}
+	return true
 }
 
 func run() error {
@@ -93,6 +174,10 @@ func run() error {
 	usuario, e := uuid.Parse(os.Getenv("DEMO_USUARIO"))
 	if e != nil || usuario == uuid.Nil {
 		return errors.New("DEMO_USUARIO debe ser un UUID no nulo exclusivo de demo")
+	}
+	cupo, e := cupoDesdeEntorno(os.Getenv("AVISOS_CUPO"))
+	if e != nil {
+		return e
 	}
 	reiniciar := os.Getenv("REINICIAR")
 	if reiniciar != "" && reiniciar != "no" && reiniciar != "si" {
@@ -135,7 +220,10 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	servicio := inteligencia.NuevoServicio(pool, inteligencia.ConLexico(lexico))
+	servicio := inteligencia.NuevoServicio(pool, inteligencia.ConLexico(lexico), inteligencia.ConCupoDeAvisos(cupo))
+	if e = servicio.CargarCatalogo(ctx); e != nil {
+		return e
+	}
 	st.Series, e = servicio.ProcesarEscenario(ctx, usuario.String(), st.Asientos, st.Fecha)
 	if e != nil {
 		return e
@@ -152,8 +240,8 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	if len(st.Avisos) < 3 || st.Series < 2 || len(st.Categorias) < 6 || st.Categorias["sin_categoria"] < 1 {
-		return fmt.Errorf("escenario no cumple aceptación: avisos=%v series=%d categorías=%v", st.Avisos, st.Series, st.Categorias)
+	if !cumpleAceptacion(st) {
+		return fmt.Errorf("escenario no cumple aceptación: avisos=%v series=%d categorías=%v orígenes=%v asientos=%d", st.Avisos, st.Series, st.Categorias, st.Origenes, len(st.Asientos))
 	}
 	b, e := json.MarshalIndent(st, "", "  ")
 	if e != nil {
@@ -181,17 +269,13 @@ func sembrar(ctx context.Context, conn *pgxpool.Conn, usuario uuid.UUID, ahora t
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	// Manifiesto transaccional: una reejecución conserva la fecha original, incluso otro mes.
-	_, e = tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS public.demo_escenario (usuario_id uuid PRIMARY KEY, fecha timestamptz NOT NULL, asientos bigint[] NOT NULL, transferencias uuid[] NOT NULL)`)
-	if e != nil {
-		return st, e
-	}
 	e = tx.QueryRow(ctx, `SELECT fecha,asientos,transferencias FROM public.demo_escenario WHERE usuario_id=$1`, usuario).Scan(&st.Fecha, &st.Asientos, &st.Transferencias)
 	existe := e == nil
 	if existe {
 		st.Fecha = st.Fecha.In(ahora.Location())
 	}
 	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
-		return st, e
+		return st, fmt.Errorf("no se pudo leer el manifiesto public.demo_escenario, revisa las migraciones: %w", e)
 	}
 	cuenta := "pasivo:usuario:" + usuario.String() + ":disponible"
 	var ajenos int
@@ -201,6 +285,16 @@ func sembrar(ctx context.Context, conn *pgxpool.Conn, usuario uuid.UUID, ahora t
 	}
 	if ajenos != 0 {
 		return st, errors.New("el usuario tiene asientos ajenos al escenario; usa otro DEMO_USUARIO")
+	}
+	// Entradas de los escalones del censo: una marca del catálogo v3 y una corrección en memoria
+	// privada del usuario de demo. Idempotentes: reejecutar actualiza la categoría, no duplica.
+	catalogo := inteligencia.NormalizarNombre("TIENDA CATALOGO DEMO")
+	if _, e = tx.Exec(ctx, `INSERT INTO inteligencia.catalogo_marca(nombre_normalizado,categoria,llave,origen,version) VALUES($1,'compras',NULL,'escenario','v3') ON CONFLICT (nombre_normalizado) DO UPDATE SET categoria=excluded.categoria`, catalogo); e != nil {
+		return st, e
+	}
+	memoria := inteligencia.NormalizarNombre("TIENDA MEMORIA DEMO")
+	if _, e = tx.Exec(ctx, `INSERT INTO inteligencia.memoria_correccion(usuario_id,tipo_destino,nivel,valor,categoria,actualizado_en) VALUES($1,'comercio','nombre',$2,'entretenimiento',now()) ON CONFLICT (usuario_id,tipo_destino,nivel,valor) DO UPDATE SET categoria=excluded.categoria, actualizado_en=now()`, usuario.String(), memoria); e != nil {
+		return st, e
 	}
 	if existe && !reiniciar {
 		return st, tx.Commit(ctx)
@@ -231,14 +325,18 @@ func sembrar(ctx context.Context, conn *pgxpool.Conn, usuario uuid.UUID, ahora t
 	for i, m := range plan(ahora) {
 		transferencia := uuid.NewSHA1(usuario, []byte(fmt.Sprintf("escenario-v1:%s:%d", ahora.Format("2006-01"), i)))
 		var id int64
-		if e = tx.QueryRow(ctx, `INSERT INTO nucleo.journal_entry(tipo,transferencia_id,ocurrido_en,descripcion) VALUES($1,$2,$3,$4) RETURNING id`, m.tipo, transferencia, m.fecha, m.nombre).Scan(&id); e != nil {
+		if e = tx.QueryRow(ctx, `INSERT INTO nucleo.journal_entry(tipo,transferencia_id,ocurrido_en,descripcion,mcc) VALUES($1,$2,$3,$4,NULLIF($5,'')) RETURNING id`, m.tipo, transferencia, m.fecha, m.nombre, m.mcc).Scan(&id); e != nil {
 			return st, e
 		}
 		contra := externa
 		if m.tipo == "deposito" {
 			contra = custodia
 		}
-		if _, e = tx.Exec(ctx, `INSERT INTO nucleo.posting(entry_id,cuenta_id,monto,moneda) VALUES($1,$2,$3,'COP'),($1,$4,$5,'COP')`, id, cuenta, -m.centavos, contra, m.centavos); e != nil {
+		if m.gmf > 0 {
+			if _, e = tx.Exec(ctx, `INSERT INTO nucleo.posting(entry_id,cuenta_id,monto,moneda) VALUES($1,$2,$3,'COP'),($1,$4,$5,'COP'),($1,'pasivo:gmf_por_pagar',$6,'COP')`, id, cuenta, -m.centavos, contra, m.centavos-m.gmf, m.gmf); e != nil {
+				return st, e
+			}
+		} else if _, e = tx.Exec(ctx, `INSERT INTO nucleo.posting(entry_id,cuenta_id,monto,moneda) VALUES($1,$2,$3,'COP'),($1,$4,$5,'COP')`, id, cuenta, -m.centavos, contra, m.centavos); e != nil {
 			return st, e
 		}
 		st.Asientos = append(st.Asientos, id)

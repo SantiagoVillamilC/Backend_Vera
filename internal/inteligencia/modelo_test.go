@@ -81,7 +81,7 @@ func TestCargarModeloRechazaArtefactoInvalido(t *testing.T) {
 }
 
 func TestCargarModeloRechazaVersionDesconocida(t *testing.T) {
-	for _, version := range []string{"", "tfidf-3"} {
+	for _, version := range []string{"", "tfidf-4"} {
 		t.Run("version="+version, func(t *testing.T) {
 			datos := artefactoDePrueba(t, version, map[string]string{"w:A": "1"}, umbralesDePrueba(),
 				map[string]map[string]string{"compras": {"w:A": "1"}}, nil)

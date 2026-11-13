@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/api"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
@@ -39,9 +40,19 @@ type servicioDeLecturaFalso struct {
 	avisos        []AvisoEmitido
 	avisosErr     error
 	avisosMes     string
+	avisosAhora   time.Time
+	resumenAhora  time.Time
+	series        []SerieConsultable
+	seriesErr     error
+	seriesAhora   time.Time
+	seriesUsuario string
 	avisoDescarte DescarteDeAviso
 	avisoErr      error
 	avisoBorrado  uuid.UUID
+
+	categorias         []EntradaCatalogo
+	categoriasErr      error
+	categoriasLlamadas int
 }
 
 func (f *servicioDeLecturaFalso) Movimientos(_ context.Context, usuarioID string, ancla *CursorDeMovimiento,
@@ -62,17 +73,27 @@ func (f *servicioDeLecturaFalso) CorregirMovimiento(_ context.Context, usuarioID
 	return f.correccion, f.correccionErr
 }
 
-func (f *servicioDeLecturaFalso) Resumen(_ context.Context, usuarioID, mes string) (ResumenDelMes, error) {
+func (f *servicioDeLecturaFalso) Resumen(_ context.Context, usuarioID, mes string,
+	ahora time.Time) (ResumenDelMes, error) {
 	f.llamado = true
 	f.usuario = usuarioID
 	f.mes = mes
+	f.resumenAhora = ahora
 	return f.resumen, f.err
 }
 
+func (f *servicioDeLecturaFalso) SeriesDelUsuario(_ context.Context, usuarioID string,
+	ahora time.Time) ([]SerieConsultable, error) {
+	f.seriesUsuario = usuarioID
+	f.seriesAhora = ahora
+	return f.series, f.seriesErr
+}
+
 func (f *servicioDeLecturaFalso) AvisosDelUsuario(_ context.Context, usuarioID, mes string,
-	_ time.Time) ([]AvisoEmitido, error) {
+	ahora time.Time) ([]AvisoEmitido, error) {
 	f.usuario = usuarioID
 	f.avisosMes = mes
+	f.avisosAhora = ahora
 	return f.avisos, f.avisosErr
 }
 
@@ -81,6 +102,11 @@ func (f *servicioDeLecturaFalso) DescartarAviso(_ context.Context, usuarioID str
 	f.usuario = usuarioID
 	f.avisoBorrado = avisoID
 	return f.avisoDescarte, f.avisoErr
+}
+
+func (f *servicioDeLecturaFalso) Categorias(_ context.Context) ([]EntradaCatalogo, error) {
+	f.categoriasLlamadas++
+	return f.categorias, f.categoriasErr
 }
 
 func TestNuevoHandlerConServicioNuloFallaAlConstruir(t *testing.T) {
@@ -193,6 +219,7 @@ func TestListarMovimientosDevuelveElSobreYElCursor(t *testing.T) {
 				Categoria:           "compras",
 				CategoriaNombre:     "Compras",
 				OrigenCategoria:     "memoria",
+				Escalon:             EscalonMemoria,
 			}},
 			Siguiente: &siguiente,
 			HayMas:    true,
@@ -227,6 +254,7 @@ func TestListarMovimientosDevuelveElSobreYElCursor(t *testing.T) {
 			Categoria           string  `json:"categoria"`
 			CategoriaNombre     string  `json:"categoria_nombre"`
 			OrigenCategoria     string  `json:"origen_categoria"`
+			Escalon             int     `json:"escalon"`
 		} `json:"data"`
 		Meta *struct {
 			Limit      int     `json:"limit"`
@@ -242,7 +270,8 @@ func TestListarMovimientosDevuelveElSobreYElCursor(t *testing.T) {
 	}
 	movimiento := respuesta.Data[0]
 	if movimiento.TransaccionID != transaccion.String() || movimiento.Direccion != "salida" ||
-		movimiento.MontoCentavos != "150000" || movimiento.Categoria != "compras" {
+		movimiento.MontoCentavos != "150000" || movimiento.Categoria != "compras" ||
+		movimiento.OrigenCategoria != "memoria" || movimiento.Escalon != EscalonMemoria {
 		t.Errorf("movimiento = %+v", movimiento)
 	}
 	if respuesta.Meta == nil || respuesta.Meta.Limit != LimiteMovimientosPorDefecto ||
@@ -267,6 +296,73 @@ func TestListarMovimientosVacioSerializaUnaLista(t *testing.T) {
 	}
 }
 
+func TestListarCategoriasOfreceLasCatorceVisiblesEnOrden(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{categorias: CatalogoFijo()}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/categorias")
+	NuevoHandler(falso).ListarCategoriasInteligencia(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if contenido := rec.Header().Get("Content-Type"); !strings.HasPrefix(contenido, "application/json") {
+		t.Fatalf("Content-Type = %q", contenido)
+	}
+	var respuesta struct {
+		Data []struct {
+			Codigo string `json:"codigo"`
+			Nombre string `json:"nombre"`
+			Grupo  string `json:"grupo"`
+			Orden  int    `json:"orden"`
+		} `json:"data"`
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if respuesta.Error != nil {
+		t.Fatalf("error = %+v, want null", respuesta.Error)
+	}
+	if len(respuesta.Data) != 14 {
+		t.Fatalf("categorías = %d, want 14: %s", len(respuesta.Data), rec.Body.String())
+	}
+	for i, fila := range respuesta.Data {
+		if fila.Codigo != string(categoriasVisibles[i]) {
+			t.Fatalf("posición %d = %q, want %q", i, fila.Codigo, categoriasVisibles[i])
+		}
+		entrada, existe := BuscarCategoria(categoriasVisibles[i])
+		if !existe || fila.Nombre != entrada.Nombre || fila.Grupo != entrada.Grupo ||
+			fila.Orden != int(entrada.Orden) {
+			t.Errorf("fila %d = %+v, want %+v", i, fila, entrada)
+		}
+	}
+	for _, fila := range respuesta.Data {
+		if fila.Codigo == string(SinCategoria) {
+			t.Error("sin_categoria no se ofrece")
+		}
+	}
+	if falso.categoriasLlamadas != 1 {
+		t.Errorf("llamadas al servicio = %d, want 1", falso.categoriasLlamadas)
+	}
+}
+
+func TestListarCategoriasPropagaElFalloDelServicio(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{categoriasErr: errors.New("la base no responde")}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/categorias")
+	NuevoHandler(falso).ListarCategoriasInteligencia(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("código = %d, want 500", rec.Code)
+	}
+}
+
 func TestResumenDevuelveMontosComoTextoYMedianaNula(t *testing.T) {
 	t.Parallel()
 
@@ -282,7 +378,7 @@ func TestResumenDevuelveMontosComoTextoYMedianaNula(t *testing.T) {
 			MesesCompletos:  3,
 			MesesRequeridos: MesesRequeridosParaEvaluar,
 			TotalCentavos:   570000,
-			CupoAvisos:      CupoMensualDeAvisos,
+			CupoAvisos:      avisos.CupoMensualPorDefecto,
 			AvisosEmitidos:  1,
 			Categorias: []ResumenDeCategoria{
 				{Codigo: "compras", Nombre: "Compras", TotalCentavos: 500000, MedianaCentavos: &mediana, MesesConGasto: 3},
@@ -331,6 +427,36 @@ func TestResumenPasaElMesYRechazaElInvalido(t *testing.T) {
 		t.Fatalf("código = %d, want 400", rec.Code)
 	}
 	assertErrorDelSobre(t, rec, "ValidationError")
+}
+
+func TestElResumenYLaBandejaResuelvenElMesConElMismoReloj(t *testing.T) {
+	t.Parallel()
+
+	ahora := time.Date(2026, time.July, 1, 0, 0, 5, 0, zonaBogota)
+	falso := &servicioDeLecturaFalso{}
+	handler := NuevoHandlerConReloj(falso, func() time.Time { return ahora })
+
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/resumen")
+	handler.ResumenInteligencia(rec, req, api.ResumenInteligenciaParams{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("resumen: código = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	mes := "2026-07"
+	rec = httptest.NewRecorder()
+	req = peticionConIdentidad(t, "/v1/inteligencia/avisos?mes="+mes)
+	handler.ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{Mes: &mes})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bandeja: código = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if !falso.resumenAhora.Equal(ahora) {
+		t.Errorf("el resumen recibió %v, want %v", falso.resumenAhora, ahora)
+	}
+	if !falso.avisosAhora.Equal(ahora) {
+		t.Errorf("la bandeja recibió %v, want %v", falso.avisosAhora, ahora)
+	}
 }
 
 func TestServicioQueFallaResponde500Generico(t *testing.T) {
@@ -458,7 +584,8 @@ func TestCorregirMovimientoDevuelveElSobre(t *testing.T) {
 			ContraparteResuelta: false,
 			Categoria:           string(CategoriaCompras),
 			CategoriaNombre:     "Compras",
-			OrigenCategoria:     "memoria",
+			OrigenCategoria:     OrigenMemoria,
+			Escalon:             EscalonMemoria,
 		},
 		FilasCambiadas: 3,
 	}}
@@ -570,6 +697,48 @@ func TestListarAvisosValidaElMes(t *testing.T) {
 	assertErrorDelSobre(t, rec, "ValidationError")
 }
 
+func TestListarAvisosRechazaMesJuntoAPaginacion(t *testing.T) {
+	t.Parallel()
+
+	mes := "2026-07"
+	for _, params := range []api.ListarAvisosInteligenciaParams{
+		{Mes: &mes, Limite: ptr("5")},
+		{Mes: &mes, Estado: ptr("vigentes")},
+		{Mes: &mes, Cursor: ptr("djF8MXwxMTAwfDA=")},
+	} {
+		falso := &servicioDeLecturaFalso{}
+		rec := httptest.NewRecorder()
+		req := peticionConIdentidad(t, "/v1/inteligencia/avisos?mes="+mes)
+		NuevoHandler(falso).ListarAvisosInteligencia(rec, req, params)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("código = %d, want 400", rec.Code)
+		}
+		assertErrorDelSobre(t, rec, "ValidationError")
+		if falso.usuario != "" {
+			t.Fatal("no debe consultar el servicio con parámetros incompatibles")
+		}
+	}
+}
+
+func TestListarAvisosPaginaElMesEnCurso(t *testing.T) {
+	t.Parallel()
+
+	falso := &servicioDeLecturaFalso{}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/avisos?limite=1")
+	NuevoHandler(falso).ListarAvisosInteligencia(rec, req, api.ListarAvisosInteligenciaParams{
+		Limite: ptr("1"),
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d: %s", rec.Code, rec.Body.String())
+	}
+	if falso.usuario == "" {
+		t.Fatal("la bandeja paginada debe consultar el mes en curso")
+	}
+}
+
+func ptr[T any](valor T) *T { return &valor }
+
 func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 	t.Parallel()
 
@@ -580,7 +749,8 @@ func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 		Titulo: "Tus próximos pagos suman más que tu saldo", Texto: "Tu saldo es $300.000.",
 		Porque: "Los pagos recurrentes de la ventana suman más que tu saldo.", Accion: "Ver los pagos que vencen",
 		Periodo: time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC), SeveridadCentavos: 50_000_000,
-		Prioridad: 1, TransaccionID: &transaccion, CreadoEn: time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC),
+		MontoCentavos: 30_000_000,
+		Prioridad:     1, TransaccionID: &transaccion, CreadoEn: time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC),
 	}}}
 	rec := httptest.NewRecorder()
 	req := peticionConIdentidad(t, "/v1/inteligencia/avisos")
@@ -591,11 +761,13 @@ func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 	var respuesta struct {
 		Success bool `json:"success"`
 		Data    []struct {
-			ID                string  `json:"id"`
-			SeveridadCentavos string  `json:"severidad_centavos"`
-			Periodo           string  `json:"periodo"`
-			TransaccionID     *string `json:"transaccion_id"`
-			Titulo            string  `json:"titulo"`
+			ID                 string  `json:"id"`
+			SeveridadCentavos  string  `json:"severidad_centavos"`
+			MontoCentavos      string  `json:"monto_centavos"`
+			ReferenciaCentavos *string `json:"referencia_centavos"`
+			Periodo            string  `json:"periodo"`
+			TransaccionID      *string `json:"transaccion_id"`
+			Titulo             string  `json:"titulo"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
@@ -606,9 +778,49 @@ func TestListarAvisosRespondeElSobreConLaTarjeta(t *testing.T) {
 	}
 	aviso := respuesta.Data[0]
 	if aviso.ID != avisoID.String() || aviso.SeveridadCentavos != "50000000" ||
+		aviso.MontoCentavos != "30000000" || aviso.ReferenciaCentavos != nil ||
 		aviso.Periodo != "2026-07-17" || aviso.TransaccionID == nil ||
 		*aviso.TransaccionID != transaccion.String() {
 		t.Fatalf("aviso = %+v", aviso)
+	}
+}
+
+func TestDetalleAvisoExponeLosMontosDeLaProyeccion(t *testing.T) {
+	t.Parallel()
+
+	referencia := int64(90_000_000)
+	avisoID := uuid.MustParse("123e4567-e89b-42d3-a456-426614174003")
+	falso := &servicioDeLecturaFalso{avisos: []AvisoEmitido{{
+		ID: avisoID, Tipo: "presupuesto_anticipado", Clave: "gasto-total",
+		Titulo: "Tu proyección de gastos supera lo habitual",
+		Texto:  "En julio de 2026 llevas $1.500.000 en gastos. Lo habitual en tus meses completos es $900.000.",
+		Porque: "El gasto del mes en curso ya supera lo habitual.", Accion: "Ver tus gastos del mes",
+		Periodo: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), SeveridadCentavos: 60_000_000,
+		MontoCentavos: 150_000_000, ReferenciaCentavos: &referencia,
+		Prioridad: 4, CreadoEn: time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC),
+	}}}
+	rec := httptest.NewRecorder()
+	req := peticionConIdentidad(t, "/v1/inteligencia/avisos/"+avisoID.String())
+	NuevoHandler(falso).DetalleAvisoInteligencia(rec, req, avisoID.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("código = %d: %s", rec.Code, rec.Body.String())
+	}
+	var respuesta struct {
+		Success bool `json:"success"`
+		Data    struct {
+			MontoCentavos      string  `json:"monto_centavos"`
+			ReferenciaCentavos *string `json:"referencia_centavos"`
+			SeveridadCentavos  string  `json:"severidad_centavos"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &respuesta); err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if !respuesta.Success || respuesta.Data.MontoCentavos != "150000000" ||
+		respuesta.Data.ReferenciaCentavos == nil ||
+		*respuesta.Data.ReferenciaCentavos != "90000000" ||
+		respuesta.Data.SeveridadCentavos != "60000000" {
+		t.Fatalf("respuesta = %s", rec.Body.String())
 	}
 }
 
@@ -669,14 +881,14 @@ func TestDescartarAvisoRespondeElSobre(t *testing.T) {
 	}
 }
 
-func (f *servicioDeLecturaFalso) Aviso(_ context.Context, usuario string, id uuid.UUID) (AvisoEmitido, error) {
+func (f *servicioDeLecturaFalso) Aviso(_ context.Context, usuario string, _ uuid.UUID) (AvisoEmitido, error) {
 	f.usuario = usuario
 	if len(f.avisos) > 0 {
 		return f.avisos[0], f.avisoErr
 	}
 	return AvisoEmitido{}, f.avisoErr
 }
-func (f *servicioDeLecturaFalso) AvisosDelUsuarioPaginados(_ context.Context, usuario string, _ EstadoDeAvisos, _ *CursorDeAviso, _ int) (PaginaDeAvisos, error) {
+func (f *servicioDeLecturaFalso) AvisosDelUsuarioPaginados(_ context.Context, usuario string, _ time.Time, _ EstadoDeAvisos, _ *CursorDeAviso, _ int) (PaginaDeAvisos, error) {
 	f.usuario = usuario
 	return PaginaDeAvisos{Avisos: f.avisos}, f.avisosErr
 }

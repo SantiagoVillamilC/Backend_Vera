@@ -19,12 +19,14 @@ var ErrServicioDeLecturaNulo = errors.New("inteligencia: NuevoHandler necesita u
 // ServicioDeLectura es lo que el handler necesita del servicio de inteligencia.
 type ServicioDeLectura interface {
 	Aviso(context.Context, string, uuid.UUID) (AvisoEmitido, error)
-	AvisosDelUsuarioPaginados(context.Context, string, EstadoDeAvisos, *CursorDeAviso, int) (PaginaDeAvisos, error)
+	AvisosDelUsuarioPaginados(context.Context, string, time.Time, EstadoDeAvisos, *CursorDeAviso, int) (PaginaDeAvisos, error)
 	Movimientos(ctx context.Context, usuarioID string, ancla *CursorDeMovimiento, limite int) (PaginaDeMovimientos, error)
 	CorregirMovimiento(ctx context.Context, usuarioID string, transaccionID uuid.UUID, solicitud SolicitudDeCorreccion) (CorreccionAplicada, error)
-	Resumen(ctx context.Context, usuarioID, mes string) (ResumenDelMes, error)
+	Resumen(ctx context.Context, usuarioID, mes string, ahora time.Time) (ResumenDelMes, error)
+	SeriesDelUsuario(ctx context.Context, usuarioID string, ahora time.Time) ([]SerieConsultable, error)
 	AvisosDelUsuario(ctx context.Context, usuarioID, mes string, ahora time.Time) ([]AvisoEmitido, error)
 	DescartarAviso(ctx context.Context, usuarioID string, avisoID uuid.UUID, ahora time.Time) (DescarteDeAviso, error)
+	Categorias(ctx context.Context) ([]EntradaCatalogo, error)
 }
 
 // Handler sirve la vista enriquecida y el resumen de consumo del usuario autenticado.
@@ -106,6 +108,66 @@ func (h *Handler) ListarMovimientosInteligencia(w http.ResponseWriter, r *http.R
 	})
 }
 
+// ListarCategoriasInteligencia responde el catálogo visible para corregir un movimiento, en el
+// orden firmado. sin_categoria queda fuera: no es una categoría que el usuario elija.
+func (h *Handler) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Request) {
+	catalogo, err := h.servicio.Categorias(r.Context())
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	respuesta := make([]api.InteligenciaCategoria, 0, len(catalogo))
+	for _, categoria := range catalogo {
+		if !EsCategoriaVisible(categoria.Codigo) {
+			continue
+		}
+		respuesta = append(respuesta, api.InteligenciaCategoria{
+			Codigo: api.CategoriaOfrecida(categoria.Codigo),
+			Nombre: categoria.Nombre,
+			Grupo:  api.InteligenciaCategoriaGrupo(categoria.Grupo),
+			Orden:  int(categoria.Orden),
+		})
+	}
+	api.WriteData(w, http.StatusOK, respuesta, nil)
+}
+
+// ListarSeriesInteligencia publica las series recurrentes del usuario autenticado.
+func (h *Handler) ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request) {
+	usuarioID, ok := usuarioDeLaPeticion(w, r)
+	if !ok {
+		return
+	}
+	series, err := h.servicio.SeriesDelUsuario(r.Context(), usuarioID, h.reloj())
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	respuesta := make([]api.InteligenciaSerie, 0, len(series))
+	for _, serie := range series {
+		item := api.InteligenciaSerie{
+			TipoIdentidad: serie.IdentidadTipo,
+			Identidad:     serie.IdentidadValor,
+			Estado:        serie.Estado,
+			Cadencia:      serie.Cadencia,
+			CadenciaDias:  serie.CadenciaDias,
+			UltimoPago:    serie.UltimoPago,
+		}
+		if serie.Categoria != "" {
+			categoria := serie.Categoria
+			item.Categoria = &categoria
+		}
+		if serie.ProximoFecha != nil {
+			item.ProximoFecha = serie.ProximoFecha
+		}
+		if serie.ProximoMonto != nil {
+			monto := strconv.FormatInt(*serie.ProximoMonto, 10)
+			item.ProximoMontoCentavos = &monto
+		}
+		respuesta = append(respuesta, item)
+	}
+	api.WriteData(w, http.StatusOK, respuesta, nil)
+}
+
 // ResumenInteligencia responde el gasto del mes por categoría y la referencia de los meses completos.
 func (h *Handler) ResumenInteligencia(w http.ResponseWriter, r *http.Request, params api.ResumenInteligenciaParams) {
 	usuarioID, ok := usuarioDeLaPeticion(w, r)
@@ -117,7 +179,7 @@ func (h *Handler) ResumenInteligencia(w http.ResponseWriter, r *http.Request, pa
 	if params.Mes != nil {
 		mes = *params.Mes
 	}
-	resumen, err := h.servicio.Resumen(r.Context(), usuarioID, mes)
+	resumen, err := h.servicio.Resumen(r.Context(), usuarioID, mes, h.reloj())
 	if errors.Is(err, ErrMesInvalido) {
 		api.WriteError(w, http.StatusBadRequest, "ValidationError", "mes must use the YYYY-MM format", nil)
 		return
@@ -262,7 +324,8 @@ func respuestaDeMovimiento(movimiento MovimientoDeLectura) api.InteligenciaMovim
 		ContraparteResuelta: movimiento.ContraparteResuelta,
 		Categoria:           movimiento.Categoria,
 		CategoriaNombre:     movimiento.CategoriaNombre,
-		OrigenCategoria:     api.InteligenciaMovimientoOrigenCategoria(movimiento.OrigenCategoria),
+		OrigenCategoria:     api.OrigenEnriquecido(movimiento.OrigenCategoria),
+		Escalon:             movimiento.Escalon,
 	}
 	if movimiento.Descripcion != "" {
 		descripcion := movimiento.Descripcion
@@ -364,7 +427,9 @@ func (h *Handler) ListarAvisosInteligencia(w http.ResponseWriter, r *http.Reques
 		}
 		ancla = &c
 	}
-	pagina, err := h.servicio.AvisosDelUsuarioPaginados(r.Context(), usuarioID, estado, ancla, limite)
+	// Sin mes, la bandeja pagina el mes en curso: es el periodo que cuenta el cupo y el resumen.
+	periodo := inicioDelMesDe(h.reloj(), 0)
+	pagina, err := h.servicio.AvisosDelUsuarioPaginados(r.Context(), usuarioID, periodo, estado, ancla, limite)
 	if err != nil {
 		api.WriteAPIError(w, r, err)
 		return
@@ -396,6 +461,11 @@ func (h *Handler) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Requ
 		responderAvisoNoEncontrado(w)
 		return
 	}
+	if errors.Is(err, ErrDescarteAnteriorAlAlta) {
+		api.WriteError(w, http.StatusConflict, "DescarteAnteriorAlAlta",
+			"The notice cannot be dismissed before its creation time.", nil)
+		return
+	}
 	if err != nil {
 		api.WriteAPIError(w, r, err)
 		return
@@ -413,12 +483,21 @@ func respuestaDeAviso(aviso AvisoEmitido) api.InteligenciaAviso {
 		Clave:             aviso.Clave,
 		Periodo:           aviso.Periodo.Format("2006-01-02"),
 		SeveridadCentavos: strconv.FormatInt(aviso.SeveridadCentavos, 10),
+		MontoCentavos:     strconv.FormatInt(aviso.MontoCentavos, 10),
 		Prioridad:         aviso.Prioridad,
 		Titulo:            aviso.Titulo,
 		Texto:             aviso.Texto,
 		Porque:            aviso.Porque,
 		Accion:            aviso.Accion,
 		CreadoEn:          aviso.CreadoEn,
+	}
+	if aviso.AccionCodigo != "" {
+		codigo := api.InteligenciaAvisoAccionCodigo(aviso.AccionCodigo)
+		respuesta.AccionCodigo = &codigo
+	}
+	if aviso.ReferenciaCentavos != nil {
+		referencia := strconv.FormatInt(*aviso.ReferenciaCentavos, 10)
+		respuesta.ReferenciaCentavos = &referencia
 	}
 	if aviso.TransaccionID != nil {
 		transaccion := *aviso.TransaccionID

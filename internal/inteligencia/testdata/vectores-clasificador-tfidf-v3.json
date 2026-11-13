@@ -1,5 +1,5 @@
 {
-  "artefacto_sha256": "fe69c5efda1f885cb9bd0de0fcd835d7cf098c976f9eb868fddf29d79e864253",
+  "artefacto_sha256": "7aa998a833ec111de76c6d3c56a8f0780903b2c1927f839d9c41c211d9e0bbea",
   "casos": [
     {
       "clase": "coseno_fuerte",
@@ -71,7 +71,7 @@
       "esperado": {
         "abstencion": true,
         "categoria": null,
-        "rama": "abstencion"
+        "rama": "nombre_vacio"
       },
       "id": "nombre-vacio",
       "mcc_categoria": null,
@@ -249,7 +249,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "coseno-debil-con-lexico": {
       "categorias_prohibidas": [
@@ -300,7 +300,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "coseno-debil-sin-lexico": {
       "categorias_prohibidas": [
@@ -341,7 +341,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "coseno-fuerte": {
       "categorias_prohibidas": [
@@ -383,7 +383,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "empate-alfabetico": {
       "categorias_prohibidas": [
@@ -426,7 +426,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "fuerte-con-lexico-en-contra": {
       "categorias_prohibidas": [
@@ -486,7 +486,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "mcc-cambia": {
       "categorias_prohibidas": [
@@ -559,7 +559,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "mcc-no-cambia": {
       "categorias_prohibidas": [
@@ -617,7 +617,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "nombre-vacio": {
       "categorias_prohibidas": [
@@ -640,7 +640,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "solo-genericos": {
       "categorias_prohibidas": [
@@ -663,7 +663,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     },
     "tildes-y-minusculas": {
       "categorias_prohibidas": [
@@ -721,7 +721,7 @@
       "umbral_coseno": "0.16",
       "umbral_coseno_fuerte": "0.5",
       "umbral_jw": "0.85",
-      "version": "tfidf-2"
+      "version": "tfidf-3"
     }
   },
   "nota": "Solo datos sinteticos y el catalogo publico v2. No se alimenta de nombres, extractos ni montos reales.",

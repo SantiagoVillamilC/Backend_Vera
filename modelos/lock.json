@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "raices": {
+    "gguf": "../../modelos-gemma/modelos",
+    "voz": "/opt/voz/modelos"
+  },
+  "artefactos": [
+    {
+      "nombre": "gemma-4-e2b-it-q4_k_m",
+      "raiz": "gguf",
+      "origen": "Hugging Face unsloth/gemma-4-E2B-it-GGUF, cuantizacion Q4_K_M. Huella y tamano calculados sobre el archivo en disco en modelos-gemma/modelos el 2026-11-10.",
+      "ruta": "gemma4/gemma-4-E2B-it-Q4_K_M.gguf",
+      "sha256": "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
+      "bytes": 3106738272,
+      "licencia": "Gemma Terms of Use",
+      "fecha_captura": "2026-11-10",
+      "version_herramienta": "ollama 0.40.10"
+    },
+    {
+      "nombre": "gemma-4-e4b-it-q4_k_m",
+      "raiz": "gguf",
+      "origen": "Hugging Face unsloth/gemma-4-E4B-it-GGUF, cuantizacion Q4_K_M. Huella y tamano calculados sobre el archivo en disco en modelos-gemma/modelos el 2026-11-10.",
+      "ruta": "gemma4/gemma-4-E4B-it-Q4_K_M.gguf",
+      "sha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87",
+      "bytes": 4977171584,
+      "licencia": "Gemma Terms of Use",
+      "fecha_captura": "2026-11-10",
+      "version_herramienta": "ollama 0.40.10"
+    },
+    {
+      "nombre": "kokoro-v1.0-int8-onnx",
+      "raiz": "voz",
+      "origen": "Release model-files-v1.1 de thewh1teagle/kokoro-onnx, asset kokoro-v1.0.int8.onnx. El peso no esta en este disco: huella y tamano salen del manifiesto infra/voz-local/descargar.py, que los comprueba al construir la imagen, y coinciden con el tamano y el digest que declara la API de esa release. Lo carga infra/voz-local/servidor.py desde /opt/voz/modelos.",
+      "ruta": "kokoro-v1.0.int8.onnx",
+      "sha256": "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c",
+      "bytes": 114119327,
+      "licencia": "Apache-2.0 (Kokoro-82M), MIT (exportacion kokoro-onnx)",
+      "fecha_captura": "2026-11-10",
+      "version_herramienta": "kokoro-onnx 0.6.1"
+    },
+    {
+      "nombre": "kokoro-voces-v1.0",
+      "raiz": "voz",
+      "origen": "Release model-files-v1.1 de thewh1teagle/kokoro-onnx, asset voices-v1.0.bin. Huella y tamano salen del manifiesto infra/voz-local/descargar.py. La copia local de este equipo en modelos-gemma/modelos/kokoro/voices.bin coincide byte a byte con ese asset. Incluye las 54 voces v1.0, entre ellas ef_dora en espanol. Lo carga infra/voz-local/servidor.py desde /opt/voz/modelos.",
+      "ruta": "voices-v1.0.bin",
+      "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+      "bytes": 28214398,
+      "licencia": "Apache-2.0 (Kokoro-82M)",
+      "fecha_captura": "2026-11-10",
+      "version_herramienta": "kokoro-onnx 0.6.1"
+    },
+    {
+      "nombre": "whisper-small",
+      "origen": "Descarga automatica de faster-whisper a la cache de Hugging Face en el primer arranque de infra/stt-local. No hay binario en el repositorio ni en este disco: se fija por version de paquete y nombre de modelo.",
+      "ruta": "whisper/small",
+      "pin": "faster-whisper==1.2.1, modelo small, int8 en CPU y float16 en GPU",
+      "licencia": "MIT (faster-whisper y openai/whisper small)",
+      "fecha_captura": "2026-11-10",
+      "version_herramienta": "faster-whisper 1.2.1"
+    }
+  ]
+}

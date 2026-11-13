@@ -50,6 +50,11 @@ class VozLocalTest(unittest.TestCase):
         self.assertEqual(self.motor.textos[0][0], "Saldo: 120000 pesos colombianos.")
         self.assertTrue(all(o["voice"] == "ef_dora" and o["lang"] == "es" for _, o in self.motor.textos))
 
+    def test_healthz_200_con_token(self):
+        with self.solicitar("/healthz") as respuesta:
+            self.assertEqual(respuesta.status, 200)
+            self.assertEqual(json.loads(respuesta.read()), {"voz": "ef_dora", "modelo": "Kokoro-82M"})
+
     def test_rechaza_token_y_textos_invalidos_sin_inferencia(self):
         for ruta, datos, token, esperado in [("/healthz", None, "otro", 401), ("/sintetizar", {"texto": " "}, "token-ficticio", 422), ("/sintetizar", {"texto": 12}, "token-ficticio", 422)]:
             with self.assertRaises(urllib.error.HTTPError) as fallo:

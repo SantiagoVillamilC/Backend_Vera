@@ -113,9 +113,8 @@ func TestElArtefactoProhibeComisiones(t *testing.T) {
 	if len(modelo.Prohibidas) != 1 {
 		t.Fatalf("el artefacto prohíbe %d categorías, want 1", len(modelo.Prohibidas))
 	}
-	if _, existe := modelo.Centroides[CategoriaComisiones]; !existe {
-		t.Fatalf("el centroide de %q no puede faltar: sin él la prohibición no fuerza la abstención",
-			CategoriaComisiones)
+	if _, existe := modelo.Centroides[CategoriaComisiones]; existe {
+		t.Fatalf("el artefacto v3 ya no entrena %q y trae su centroide", CategoriaComisiones)
 	}
 }
 

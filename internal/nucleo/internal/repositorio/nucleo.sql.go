@@ -38,9 +38,9 @@ func (q *Queries) GravamenRetenidoDeTransferencia(ctx context.Context, arg Grava
 }
 
 const insertarAsiento = `-- name: InsertarAsiento :one
-INSERT INTO nucleo.journal_entry (tipo, transferencia_id, deposito_id, ocurrido_en, descripcion)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
+INSERT INTO nucleo.journal_entry (tipo, transferencia_id, deposito_id, ocurrido_en, descripcion, mcc)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id, mcc
 `
 
 type InsertarAsientoParams struct {
@@ -49,6 +49,7 @@ type InsertarAsientoParams struct {
 	DepositoID      pgtype.UUID        `json:"deposito_id"`
 	OcurridoEn      pgtype.Timestamptz `json:"ocurrido_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
+	Mcc             pgtype.Text        `json:"mcc"`
 }
 
 func (q *Queries) InsertarAsiento(ctx context.Context, arg InsertarAsientoParams) (JournalEntry, error) {
@@ -58,6 +59,7 @@ func (q *Queries) InsertarAsiento(ctx context.Context, arg InsertarAsientoParams
 		arg.DepositoID,
 		arg.OcurridoEn,
 		arg.Descripcion,
+		arg.Mcc,
 	)
 	var i JournalEntry
 	err := row.Scan(
@@ -68,6 +70,7 @@ func (q *Queries) InsertarAsiento(ctx context.Context, arg InsertarAsientoParams
 		&i.RegistradoEn,
 		&i.Descripcion,
 		&i.DepositoID,
+		&i.Mcc,
 	)
 	if err != nil {
 		err = fmt.Errorf("query InsertarAsiento: %w", err)

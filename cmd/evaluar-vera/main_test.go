@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/evaluacion"
 )
@@ -67,15 +68,39 @@ func TestComandoFallaAnteRegresionYEntradaInvalida(t *testing.T) {
 func TestModoRealNoEsImplicitoNiSeEjecutaEnCI(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "")
 	t.Setenv("VERA_MODELO", "")
-	for _, args := range [][]string{{"-modo", "otro"}, {"-modo", "real"}, {"-modo", "real", "-nivel-gratuito-confirmado"}, {"-continuar", "archivo.json"}} {
+	for _, args := range [][]string{{"-proveedor", "otro"}, {"-proveedor", "gemini"}, {"-proveedor", "gemini", "-nivel-gratuito-confirmado"}, {"-continuar", "archivo.json"}, {"-proveedor", "local"}, {"-proveedor", "local", "-familias", "consulta,inexistente"}, {"-ids", "saldo_coloquial"}, {"-proveedor", "local", "-nivel-gratuito-confirmado"}} {
 		var salida, diagnostico bytes.Buffer
 		if codigo := ejecutar(t.Context(), args, &salida, &diagnostico); codigo != 2 || salida.Len() != 0 {
 			t.Fatalf("aceptó configuración incompleta: %v", args)
 		}
 	}
-	t.Setenv("CI", "true")
+	t.Setenv("VERA_MODELO", "modelo-de-prueba")
 	var salida, diagnostico bytes.Buffer
-	if codigo := ejecutar(t.Context(), []string{"-modo", "real", "-nivel-gratuito-confirmado"}, &salida, &diagnostico); codigo != 2 || !bytes.Contains(diagnostico.Bytes(), []byte("CI")) {
+	if codigo := ejecutar(t.Context(), []string{"-proveedor", "local", "-ids", "no_existe"}, &salida, &diagnostico); codigo != 2 || !bytes.Contains(diagnostico.Bytes(), []byte("no existe")) {
+		t.Fatalf("aceptó un id inexistente: %d %s", codigo, &diagnostico)
+	}
+	t.Setenv("CI", "true")
+	salida.Reset()
+	diagnostico.Reset()
+	if codigo := ejecutar(t.Context(), []string{"-proveedor", "gemini", "-nivel-gratuito-confirmado"}, &salida, &diagnostico); codigo != 2 || !bytes.Contains(diagnostico.Bytes(), []byte("CI")) {
 		t.Fatal("habilitó modo real en CI")
+	}
+}
+
+func TestModoLocalValidaEntradaSinExigirNivelGratuito(t *testing.T) {
+	if err := proveedorLocalValido("http://127.0.0.1:11434", 45*time.Second, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		url     string
+		timeout time.Duration
+		temp    float64
+	}{{"", time.Second, 0}, {"http://127.0.0.1:11434", 0, 0}, {"http://127.0.0.1:11434", 6 * time.Minute, 0}, {"http://127.0.0.1:11434", time.Second, 2}} {
+		if err := proveedorLocalValido(tc.url, tc.timeout, tc.temp); err == nil {
+			t.Fatalf("aceptó configuración local inválida: %+v", tc)
+		}
+	}
+	if got := lista(" consulta , , inyeccion "); len(got) != 2 || got[0] != "consulta" || got[1] != "inyeccion" {
+		t.Fatalf("lista=%v", got)
 	}
 }

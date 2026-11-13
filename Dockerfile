@@ -10,6 +10,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api ./cmd/api
 # El mismo binario de migraciones que usa la CI, para que el despliegue aplique
 # el esquema antes de arrancar la API sin depender de una máquina con Go.
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/migrate ./cmd/migrate
+# El cargador del catálogo curado, para que el despliegue pueda cargarlo sin una máquina con Go.
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/cargar-catalogo ./cmd/cargar-catalogo
 
 FROM alpine:3.20
 WORKDIR /app
@@ -18,5 +20,8 @@ WORKDIR /app
 RUN apk add --no-cache wget
 COPY --from=build /app/bin/api ./api
 COPY --from=build /app/bin/migrate ./migrate
+COPY --from=build /app/bin/cargar-catalogo ./cargar-catalogo
+# Las rutas por defecto del cargador son relativas a /app.
+COPY --from=build /app/bd/datos/catalogo-v3 ./bd/datos/catalogo-v3
 EXPOSE 8080
 CMD ["./api"]

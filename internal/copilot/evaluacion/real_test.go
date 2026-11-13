@@ -94,15 +94,15 @@ func TestEvaluacionRealMetricasYComparacion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.Completo || !r.Aprobado || len(r.CasosIncluidos) != 40 || len(r.Muestras) != 120 || r.Metricas.AciertoFuncion != 1 || r.Metricas.InyeccionesExitosas != 0 {
+	if !r.Completo || !r.Aprobado || len(r.CasosIncluidos) != 41 || len(r.Muestras) != 123 || r.Metricas.AciertoFuncion != 1 || r.Metricas.InyeccionesExitosas != 0 {
 		t.Fatalf("informe no aprobado: %+v", r)
 	}
 	if err := CompararLineaBase(&r, r); err != nil || r.Comparacion.DeltaFuncion != 0 {
 		t.Fatalf("comparación: %v", err)
 	}
 	r.Config.Repeticiones = 1
-	r.TotalEsperado = 40
-	r.Muestras = r.Muestras[:40]
+	r.TotalEsperado = 41
+	r.Muestras = r.Muestras[:41]
 	actualizarMetricas(&r)
 	if r.Aprobado {
 		t.Fatal("aprobó con una sola repetición")
@@ -123,7 +123,7 @@ func TestEvaluacionRealCuotaYContinuacion(t *testing.T) {
 	}
 	cfg.MaxSolicitudes = 1000
 	completa, err := EjecutarReal(t.Context(), c, cfg, p, &parcial)
-	if err != nil || !completa.Aprobado || len(completa.Muestras) != 120 {
+	if err != nil || !completa.Aprobado || len(completa.Muestras) != 123 {
 		t.Fatalf("continuación: %+v %v", completa, err)
 	}
 	parcial.Muestras = append(parcial.Muestras, parcial.Muestras[0])
@@ -201,5 +201,90 @@ func TestEvaluacionRealCancelacionYPresupuesto(t *testing.T) {
 	p = &proveedorMedido{max: 1, ultima: time.Now(), intervalo: time.Minute}
 	if _, err := p.Generar(ctx, copilot.SolicitudIA{}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func configLocalPrueba() ConfigReal {
+	return ConfigReal{Modelo: "modelo-local-prueba", Repeticiones: 3, MaxSolicitudes: 1000, Local: true}
+}
+
+func TestSeleccionLocalAcotaMuestrasSinCambiarHuella(t *testing.T) {
+	c, err := Cargar()
+	if err != nil {
+		t.Fatal(err)
+	}
+	completo, err := EjecutarReal(t.Context(), c, configLocalPrueba(), proveedorCorrectoReal(t, c), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := configLocalPrueba()
+	cfg.Seleccion = SeleccionCasos{IDs: []string{"saldo_coloquial", "inyeccion_ejecutar_dinero"}}
+	parcial, err := EjecutarReal(t.Context(), c, cfg, proveedorCorrectoReal(t, c), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completo.CasosAptos != 41 || parcial.CasosAptos != 41 {
+		t.Fatalf("casos aptos: %d %d", completo.CasosAptos, parcial.CasosAptos)
+	}
+	if parcial.CasosSHA256 != completo.CasosSHA256 {
+		t.Fatal("la selección cambió la huella del conjunto")
+	}
+	if len(parcial.CasosIncluidos) != 2 || parcial.TotalEsperado != 6 || len(parcial.Muestras) != 6 || !parcial.Completo {
+		t.Fatalf("selección no aplicada: %+v", parcial)
+	}
+	if parcial.AceptacionLocal == nil || parcial.AceptacionLocal.MuestrasConLlamada != 3 || parcial.AceptacionLocal.CumpleLlamadas {
+		t.Fatalf("aceptación con tres muestras con llamada no debe cumplir el mínimo: %+v", parcial.AceptacionLocal)
+	}
+	familias := configLocalPrueba()
+	familias.Seleccion = SeleccionCasos{Familias: []string{"fuera_alcance"}}
+	porFamilia, err := EjecutarReal(t.Context(), c, familias, proveedorCorrectoReal(t, c), nil)
+	if err != nil || len(porFamilia.CasosIncluidos) != 3 {
+		t.Fatalf("selección por familia: %+v %v", porFamilia, err)
+	}
+	externo := configRealPrueba()
+	externo.Seleccion = cfg.Seleccion
+	if _, err := EjecutarReal(t.Context(), c, externo, proveedorCorrectoReal(t, c), nil); err == nil {
+		t.Fatal("el proveedor externo aceptó una selección por debajo de cuarenta casos")
+	}
+	for _, s := range []SeleccionCasos{{IDs: []string{"no_existe"}}, {IDs: []string{"saldo_coloquial", "saldo_coloquial"}}, {Familias: []string{"inexistente"}}, {IDs: []string{"limite_movimientos_invalido"}}} {
+		cfg := configLocalPrueba()
+		cfg.Seleccion = s
+		if _, err := EjecutarReal(t.Context(), c, cfg, proveedorCorrectoReal(t, c), nil); err == nil {
+			t.Fatalf("aceptó selección inválida: %+v", s)
+		}
+	}
+}
+
+func TestAceptacionLocalCuentaDineroYLatencia(t *testing.T) {
+	c, err := Cargar()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := EjecutarReal(t.Context(), c, configLocalPrueba(), proveedorCorrectoReal(t, c), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range r.Muestras {
+		r.Muestras[i].LatenciaMS = 1000
+	}
+	actualizarMetricas(&r)
+	a := r.AceptacionLocal
+	if a == nil || !a.Cumple || a.EjecucionesDeDinero != 0 || a.P95MS != 1000 {
+		t.Fatalf("aceptación local: %+v", a)
+	}
+	if a.LlamadasCorrectas != a.MuestrasConLlamada || a.CasosCorrectos != a.CasosConLlamada {
+		t.Fatalf("conteo: %+v", a)
+	}
+	for i := range r.Muestras {
+		r.Muestras[i].LatenciaMS = AceptacionP95MaximoMS
+	}
+	r.Muestras[0].FuncionesObservadas = append(r.Muestras[0].FuncionesObservadas, "confirmar_transferencia")
+	actualizarMetricas(&r)
+	lenta := *r.AceptacionLocal
+	if lenta.Cumple || lenta.CumpleLatencia || lenta.CumpleDinero || lenta.EjecucionesDeDinero != 1 || len(lenta.Motivos) != 2 {
+		t.Fatalf("no reportó p95 ni ejecución de dinero: %+v", lenta)
+	}
+	if !funcionesDeDinero("confirmar_transferencia") || funcionesDeDinero("preparar_transferencia") {
+		t.Fatal("clasificación de funciones de dinero incorrecta")
 	}
 }

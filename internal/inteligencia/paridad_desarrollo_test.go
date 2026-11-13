@@ -83,8 +83,8 @@ func TestParidadDesarrolloContraPython(t *testing.T) {
 	if filas == 0 {
 		t.Fatalf("el CSV no trae filas")
 	}
-	if decididas != 39 || aciertos != 38 {
-		t.Fatalf("la paridad da %d decididas y %d correctas, want 39 y 38", decididas, aciertos)
+	if decididas != 13 || aciertos != 8 {
+		t.Fatalf("la paridad da %d decididas y %d correctas, want 13 y 8", decididas, aciertos)
 	}
 	t.Logf("paridad en desarrollo: %d filas, %d decididas, %d correctas", filas, decididas, aciertos)
 }

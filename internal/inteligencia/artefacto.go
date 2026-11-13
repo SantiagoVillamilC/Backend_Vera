@@ -12,18 +12,18 @@ import (
 	"sort"
 )
 
-// El artefacto y su manifiesto viajan dentro del binario. Se entrenan con el catálogo público v2 y
+// El artefacto y su manifiesto viajan dentro del binario. Se entrenan con el catálogo público v3 y
 // se copian byte a byte, así que el sha256 del archivo es la identidad del modelo.
 //
-//go:embed modelo/tfidf-v2.json
+//go:embed modelo/tfidf-v3.json
 var artefactoTFIDF []byte
 
-//go:embed modelo/tfidf-v2.manifest.json
+//go:embed modelo/tfidf-v3.manifest.json
 var manifiestoArtefactoTFIDF []byte
 
 // HuellaArtefactoTFIDF es el sha256 del artefacto congelado. Una prueba lo recalcula sobre los bytes
 // embebidos, así que editar el artefacto a mano falla aunque esta constante se actualice.
-const HuellaArtefactoTFIDF = "fe69c5efda1f885cb9bd0de0fcd835d7cf098c976f9eb868fddf29d79e864253"
+const HuellaArtefactoTFIDF = "7aa998a833ec111de76c6d3c56a8f0780903b2c1927f839d9c41c211d9e0bbea"
 
 // Manifiesto describe el artefacto embebido: de dónde salió y qué contiene.
 type Manifiesto struct {

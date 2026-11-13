@@ -21,7 +21,7 @@ type LectorLimitesIA interface {
 // ConsultaSaldoIA deriva ambas cuentas de la identidad autenticada, nunca de argumentos IA.
 func ConsultaSaldoIA(lector LectorSaldoIA) ManejadorHerramienta {
 	return func(ctx context.Context, id identidad.Identidad, _ ArgumentosHerramienta) (DatosHerramienta, error) {
-		if lector == nil {
+		if lectorAusente(lector) {
 			return nil, ErrHerramientaNoDisponible
 		}
 		disponible, err := lector.Saldo(ctx, nucleo.NombreCuentaDisponible(id.UsuarioID))
@@ -42,7 +42,7 @@ func ConsultaSaldoIA(lector LectorSaldoIA) ManejadorHerramienta {
 // ConsultaLimitesIA usa el reloj del servidor y el mismo usuario que el endpoint del núcleo.
 func ConsultaLimitesIA(lector LectorLimitesIA) ManejadorHerramienta {
 	return func(ctx context.Context, id identidad.Identidad, _ ArgumentosHerramienta) (DatosHerramienta, error) {
-		if lector == nil {
+		if lectorAusente(lector) {
 			return nil, ErrHerramientaNoDisponible
 		}
 		d, err := lector.DesgloseLimites(ctx, id.UsuarioID, time.Now().UTC())

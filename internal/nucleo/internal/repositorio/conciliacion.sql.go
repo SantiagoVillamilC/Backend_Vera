@@ -189,7 +189,7 @@ func (q *Queries) InsertarDescuadreSiNoHayAbierto(ctx context.Context, arg Inser
 }
 
 const leerAsientosDeTransferencia = `-- name: LeerAsientosDeTransferencia :many
-SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
+SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id, mcc
   FROM nucleo.journal_entry
  WHERE transferencia_id = $1
  ORDER BY ocurrido_en, id
@@ -212,6 +212,7 @@ func (q *Queries) LeerAsientosDeTransferencia(ctx context.Context, transferencia
 			&i.RegistradoEn,
 			&i.Descripcion,
 			&i.DepositoID,
+			&i.Mcc,
 		); err != nil {
 			return nil, fmt.Errorf("query LeerAsientosDeTransferencia: %w", err)
 		}
@@ -224,7 +225,7 @@ func (q *Queries) LeerAsientosDeTransferencia(ctx context.Context, transferencia
 }
 
 const leerAsientosDeVentana = `-- name: LeerAsientosDeVentana :many
-SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id
+SELECT id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id, mcc
   FROM nucleo.journal_entry
  WHERE ocurrido_en >= $1
    AND ocurrido_en < $2
@@ -253,6 +254,7 @@ func (q *Queries) LeerAsientosDeVentana(ctx context.Context, arg LeerAsientosDeV
 			&i.RegistradoEn,
 			&i.Descripcion,
 			&i.DepositoID,
+			&i.Mcc,
 		); err != nil {
 			return nil, fmt.Errorf("query LeerAsientosDeVentana: %w", err)
 		}
