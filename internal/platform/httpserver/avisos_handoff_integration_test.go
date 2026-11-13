@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
@@ -20,13 +21,34 @@ import (
 func TestAvisosHandoffHTTPReal(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
 	usuario, otro := uuid.NewString(), uuid.NewString()
+	// rol_api no tiene USAGE sobre el esquema inteligencia (migración 0021): el único camino es
+	// SET LOCAL ROLE rol_inteligencia dentro de una transacción, igual que en producción.
+	sembrar, e := pool.Begin(t.Context())
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer func() { _ = sembrar.Rollback(t.Context()) }()
+	if _, e = sembrar.Exec(t.Context(), "SET LOCAL ROLE "+inteligencia.RolInteligencia); e != nil {
+		t.Fatal(e)
+	}
+	// Todos caen en el periodo del mes en curso (el primer día del mes). Se alterna el tipo para no
+	// chocar con la clave de deduplicación y se deja la clave repetida para forzar el desempate por id.
 	for i := range 5 {
-		_, e := pool.Exec(t.Context(), `INSERT INTO inteligencia.aviso(id,usuario_id,tipo,clave,periodo,severidad_centavos,prioridad,texto) VALUES($1,$2,'cobro_nuevo',$3,$4::date,100,1,'aviso HTTP')`, uuid.New(), usuario, fmt.Sprintf("empate|%d", i/2), fmt.Sprintf("2026-07-%02d", i+1))
+		tipo := "cobro_nuevo"
+		if i%2 == 1 {
+			tipo = "caida_ingreso"
+		}
+		_, e = sembrar.Exec(t.Context(), `INSERT INTO inteligencia.aviso(id,usuario_id,tipo,clave,periodo,severidad_centavos,prioridad,texto) VALUES($1,$2,$3,$4,'2026-07-01'::date,100,1,'aviso HTTP')`, uuid.New(), usuario, tipo, fmt.Sprintf("empate|%d", i/2))
 		if e != nil {
 			t.Fatal(e)
 		}
 	}
-	handler := inteligencia.NuevoHandler(inteligencia.NuevoServicio(pool))
+	if e = sembrar.Commit(t.Context()); e != nil {
+		t.Fatal(e)
+	}
+	// La bandeja pagina el mes en curso del reloj del handler: se fija en julio de 2026 para que
+	// coincida con el periodo sembrado y la prueba no dependa de la fecha real.
+	handler := inteligencia.NuevoHandlerConReloj(inteligencia.NuevoServicio(pool), func() time.Time { return time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC) })
 	montar := func(u string) *httptest.Server {
 		return httptest.NewServer(NewRouterConVera(pool, nucleo.NewServicio(pool, nil, nil, nil, nil), custodioDePrueba, DependenciasAuth{Identidad: identidadDeContextoFijo{id: identidad.Identidad{UsuarioID: u, ParteID: u}}, Inteligencia: handler}, DependenciasVera{}))
 	}
