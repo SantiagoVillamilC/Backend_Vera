@@ -101,7 +101,7 @@ Lista de verificación de cinco comandos:
 
 ```bash
 curl -fsS http://127.0.0.1:8080/readyz
-docker exec vera_sandbox_pg psql -U dueno -d vera_semilla_m8 -Atc 'select count(*) from inteligencia.movimiento_enriquecido'
+docker exec vera-demo-pg psql -U dueno -d vera_semilla_m8 -Atc 'select count(*) from inteligencia.movimiento_enriquecido'
 bash infra/local/levantar-base.sh --ayuda >/dev/null && echo base-ok
 grep -c 'avisos emitidos al arrancar' out/local/api.log 2>/dev/null || true
 bash infra/servidor/verificar-banderas.sh local
@@ -197,7 +197,7 @@ descargar si el volumen persiste.
 
 ## Si algo no arranca
 
-1. Postgres no acepta consultas: `docker logs vera_sandbox_pg`, `--limpiar` y volver a levantar.
+1. Postgres no acepta consultas: `docker logs vera-demo-pg`, `--limpiar` y volver a levantar.
    Los puertos 55437 y 6380 tienen que estar libres.
 2. `catálogo curado no disponible` en el log: la cascada sigue sin el escalón 4 y la demo funciona
    con menos categorías curadas.
