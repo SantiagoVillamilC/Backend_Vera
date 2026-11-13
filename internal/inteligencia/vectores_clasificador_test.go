@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const huellaVectoresClasificador = "6a948bb0d0fb2de7a328538fa0510af380fca0bb452085ee19080209b6ad001b"
+const huellaVectoresClasificador = "d754fea0f946704141979faffd6b739284b3fe63260346603e3552ed2ca93c88"
 
 // clasesObligatorias son las que el documento tiene que cubrir. Borrar el caso difícil falla.
 var clasesObligatorias = []string{
@@ -50,7 +50,7 @@ type casoDeClasificadorVector struct {
 
 func cargarVectoresDelClasificador(t *testing.T) documentoDeVectoresClasificador {
 	t.Helper()
-	ruta := filepath.Join("testdata", "vectores-clasificador-tfidf.json")
+	ruta := filepath.Join("testdata", "vectores-clasificador-tfidf-v3.json")
 	datos, err := os.ReadFile(ruta)
 	if err != nil {
 		t.Fatalf("leer vectores del clasificador: %v", err)
