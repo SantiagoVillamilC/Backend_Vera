@@ -9,9 +9,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,6 +22,19 @@ func main() {
 		fmt.Fprintln(os.Stderr, "avisos:", err)
 		os.Exit(1)
 	}
+}
+
+// cupoDesdeEntorno lee AVISOS_CUPO con el default del dominio. El emisor suelto acepta y rechaza
+// lo mismo que la API: vacío toma el default, y cero, negativo o ilegible detienen la corrida.
+func cupoDesdeEntorno(valor string) (int, error) {
+	if valor == "" {
+		return avisos.CupoMensualPorDefecto, nil
+	}
+	cupo, err := strconv.Atoi(valor)
+	if err != nil || cupo < 1 {
+		return 0, fmt.Errorf("AVISOS_CUPO debe ser un entero positivo, llegó %q", valor)
+	}
+	return cupo, nil
 }
 
 func run() error {
@@ -31,6 +46,10 @@ func run() error {
 	dsn := os.Getenv("APP_DATABASE_URL")
 	if dsn == "" {
 		return errors.New("APP_DATABASE_URL es obligatoria")
+	}
+	cupo, errCupo := cupoDesdeEntorno(os.Getenv("AVISOS_CUPO"))
+	if errCupo != nil {
+		return errCupo
 	}
 	instante := time.Now()
 	if *ahora != "" {
@@ -48,7 +67,7 @@ func run() error {
 	}
 	defer pool.Close()
 
-	servicio := inteligencia.NuevoServicio(pool)
+	servicio := inteligencia.NuevoServicio(pool, inteligencia.ConCupoDeAvisos(cupo))
 	inicio := time.Now()
 	emitidos, err := servicio.EmitirAvisos(ctx, instante)
 	duracion := time.Since(inicio)

@@ -181,6 +181,59 @@ func TestTarjetasDelDiaFallaSiElTextoNoReproduce(t *testing.T) {
 	}
 }
 
+// TestLaTarjetaDiceLasCifrasDelHecho ata el texto del aviso a las cifras que el hecho trae. Cada tipo
+// se arma desde su hecho y los montos del texto se comparan contra los campos estructurados, sin
+// volver a calcular la proyección por fuera: si el texto dijera otra cifra, la prueba cae.
+func TestLaTarjetaDiceLasCifrasDelHecho(t *testing.T) {
+	mes := mesPuntero(Mes{2026, 7})
+	fechaDelPago := fecha(2026, 7, 17)
+	casos := []Hecho{
+		{Tipo: PresupuestoAnticipado, Clave: "gasto-total", MontoCentavos: 150_000_000,
+			ReferenciaCentavos: puntero(90_000_000), Mes: mes},
+		{Tipo: CategoriaSobreMedia, Clave: "alimentos_mercado", MontoCentavos: 123_456_789,
+			ReferenciaCentavos: puntero(90_000_000), Mes: mes},
+		{Tipo: CaidaIngreso, Clave: "ingreso-mensual", MontoCentavos: 2_500_000,
+			ReferenciaCentavos: puntero(90_000_000), Mes: mes},
+		{Tipo: PagoNoAlcanza, Clave: "pago-proximo", MontoCentavos: 10_000_000,
+			ReferenciaCentavos: puntero(15_000_000), Fecha: &fechaDelPago},
+		{Tipo: CobroNuevo, Clave: "cobro-nuevo", MontoCentavos: 12_345,
+			Fecha: &fechaDelPago},
+	}
+	for _, hecho := range casos {
+		tarjeta, err := TarjetaDe(hecho)
+		if err != nil {
+			t.Fatalf("%s: armar la tarjeta: %v", hecho.Tipo, err)
+		}
+		if tarjeta.MontoCentavos != hecho.MontoCentavos {
+			t.Fatalf("%s: la tarjeta devuelve %d y el hecho trae %d",
+				hecho.Tipo, tarjeta.MontoCentavos, hecho.MontoCentavos)
+		}
+		if !strings.Contains(tarjeta.Texto, Pesos(hecho.MontoCentavos)) {
+			t.Fatalf("%s: el texto no lleva %q: %q", hecho.Tipo,
+				Pesos(hecho.MontoCentavos), tarjeta.Texto)
+		}
+		if hecho.ReferenciaCentavos != nil {
+			if tarjeta.ReferenciaCentavos == nil ||
+				*tarjeta.ReferenciaCentavos != *hecho.ReferenciaCentavos {
+				t.Fatalf("%s: la referencia de la tarjeta no es la del hecho", hecho.Tipo)
+			}
+			if !strings.Contains(tarjeta.Texto, Pesos(*hecho.ReferenciaCentavos)) {
+				t.Fatalf("%s: el texto no lleva %q: %q", hecho.Tipo,
+					Pesos(*hecho.ReferenciaCentavos), tarjeta.Texto)
+			}
+		}
+		if hecho.Mes != nil && !strings.Contains(tarjeta.Texto, mesLargo(*hecho.Mes)) {
+			t.Fatalf("%s: el texto no nombra el mes del hecho: %q", hecho.Tipo, tarjeta.Texto)
+		}
+		if hecho.Fecha != nil && !strings.Contains(tarjeta.Texto, fechaDe(*hecho.Fecha)) {
+			t.Fatalf("%s: el texto no lleva la fecha del hecho: %q", hecho.Tipo, tarjeta.Texto)
+		}
+		if reproduce, motivo := VerificarTarjeta(tarjeta); !reproduce {
+			t.Fatalf("%s: el verificador rechazó el texto del hecho: %s", hecho.Tipo, motivo)
+		}
+	}
+}
+
 func mesPuntero(mes Mes) *Mes {
 	return &mes
 }

@@ -225,6 +225,7 @@ func TestCorregirCategoriaAislaUsuariosYPersonas(t *testing.T) {
 
 func TestCorregirMovimientoAjenoOInexistenteEsNoEncontrado(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
+	limpiarVotosYPromociones(t, pool)
 	ctx := t.Context()
 
 	duenio, atacante := uuid.NewString(), uuid.NewString()
@@ -256,6 +257,7 @@ func TestCorregirMovimientoAjenoOInexistenteEsNoEncontrado(t *testing.T) {
 
 func TestCorregirCategoriaNoVisibleNoEscribeNada(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
+	limpiarVotosYPromociones(t, pool)
 	ctx := t.Context()
 
 	usuario := uuid.NewString()
@@ -403,8 +405,9 @@ func TestCorregirFilaSinDestinoPideReconstruir(t *testing.T) {
 			_, err := tx.Exec(ctx, `
 INSERT INTO inteligencia.movimiento_enriquecido (
     usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
-    contraparte, contraparte_resuelta, categoria, origen_categoria, version_modelo
-) VALUES ($1, $2, 1, now(), 'COP', 'salida', 100, 'Vieja', false, 'sin_categoria', 'sin_categoria', 'prueba')`,
+    contraparte, contraparte_resuelta, categoria, origen_categoria, escalon, version_modelo
+) VALUES ($1, $2, 1, now(), 'COP', 'salida', 100, 'Vieja', false, 'sin_categoria', 'sin_categoria',
+          7, 'prueba')`,
 				usuario, pgtype.UUID{Bytes: transaccion, Valid: true})
 			return struct{}{}, err
 		})

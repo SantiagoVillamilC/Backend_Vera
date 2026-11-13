@@ -105,14 +105,24 @@ func Nuevo(cfg evaluacion.ConfigReal, p copilot.ProveedorIA, token, host string,
 	}
 	r := chi.NewRouter()
 	r.Use(s.proteger)
-	for ruta, nombre := range map[string]string{"/": "index.html", "/app.js": "app.js", "/audio.mjs": "audio.mjs", "/voz-flujo.mjs": "voz-flujo.mjs", "/sesion.mjs": "sesion.mjs", "/grabador.js": "grabador.js", "/estilos.css": "estilos.css"} {
+	for ruta, nombre := range map[string]string{
+		"/": "index.html", "/app.js": "app.js", "/audio.mjs": "audio.mjs", "/voz-flujo.mjs": "voz-flujo.mjs",
+		"/sesion.mjs": "sesion.mjs", "/grabador.js": "grabador.js", "/estilos.css": "estilos.css",
+		"/fuentes/plus-jakarta-latin.woff2": "fuentes/plus-jakarta-latin.woff2",
+		"/fuentes/playfair-latin.woff2":     "fuentes/playfair-latin.woff2",
+		"/fuentes/jetbrains-latin.woff2":    "fuentes/jetbrains-latin.woff2",
+	} {
 		r.Get(ruta, func(w http.ResponseWriter, _ *http.Request) {
 			b, err := archivos.ReadFile("web/" + nombre)
 			if err != nil {
 				api.WriteError(w, 500, "InternalError", "No se pudo abrir la interfaz.", nil)
 				return
 			}
-			content := map[string]string{"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "audio.mjs": "text/javascript; charset=utf-8", "voz-flujo.mjs": "text/javascript; charset=utf-8", "sesion.mjs": "text/javascript; charset=utf-8", "grabador.js": "text/javascript; charset=utf-8", "estilos.css": "text/css; charset=utf-8"}
+			content := map[string]string{
+				"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "audio.mjs": "text/javascript; charset=utf-8",
+				"voz-flujo.mjs": "text/javascript; charset=utf-8", "sesion.mjs": "text/javascript; charset=utf-8", "grabador.js": "text/javascript; charset=utf-8", "estilos.css": "text/css; charset=utf-8",
+				"fuentes/plus-jakarta-latin.woff2": "font/woff2", "fuentes/playfair-latin.woff2": "font/woff2", "fuentes/jetbrains-latin.woff2": "font/woff2",
+			}
 			w.Header().Set("Content-Type", content[nombre])
 			_, _ = w.Write(b)
 		})
@@ -137,7 +147,7 @@ func (s *servidor) proteger(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; media-src 'self' blob:; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; worker-src 'self'; media-src 'self' blob:; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		if r.Host != "localhost:"+s.puerto && r.Host != "127.0.0.1:"+s.puerto {
 			api.WriteError(w, 403, "Forbidden", "Abre el enlace local del lanzador.", nil)
 			return

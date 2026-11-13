@@ -6,6 +6,9 @@
 #
 # Uso: ./infra/local/demostrar.sh
 # Variables: USUARIOS, MESES, EXTRA, LOTES, PUERTO_PG, PUERTO_REDIS, PUERTO_API y DEJAR=si.
+# AVISOS_CUPO=5 va fijo para dejar holgura. El valor de producto es 3 y es techo, no garantía: lo que
+# aparece depende de los datos. Medido: con esta semilla salen dos avisos por usuario y la emisión es
+# idéntica con 3 y con 5, así que el cupo no decide qué tipos entran.
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -88,6 +91,7 @@ export REDIS_URL="redis://127.0.0.1:${PUERTO_REDIS}/0"
 export PORT="$PUERTO_API"
 export METRICAS_ACTIVO=true
 export AVISOS_ACTIVO=true
+export AVISOS_CUPO=5
 export CLASIFICADOR=tfidf
 export LEXICO=v2
 export ENRIQUECIMIENTO_INTERVAL=24h

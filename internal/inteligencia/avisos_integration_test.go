@@ -50,10 +50,10 @@ func sembrarCopia(t *testing.T, pool *pgxpool.Pool, fila filaDeCopia) {
 			_, err := tx.Exec(ctx, `
 INSERT INTO inteligencia.movimiento_enriquecido (
     usuario_id, transaccion_id, entry_ancla, ocurrido_en, moneda, direccion, monto_centavos,
-    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria,
+    contraparte, contraparte_resuelta, descripcion, categoria, origen_categoria, escalon,
     comercio_mid, comercio_nombre, mcc, version_modelo, tipo_destino,
     contraparte_llave, contraparte_nombre_normalizado
-) VALUES ($1, $2, $3, $4, 'COP', $5, $6, $7, false, NULL, $8, 'sin_categoria',
+) VALUES ($1, $2, $3, $4, 'COP', $5, $6, $7, false, NULL, $8, 'sin_categoria', 7,
           NULL, $9, NULL, 'cascada-1:primer-corte', $10, $11, $12)`,
 				fila.usuario,
 				pgtype.UUID{Bytes: fila.transaccion, Valid: true},
@@ -78,7 +78,7 @@ INSERT INTO inteligencia.movimiento_enriquecido (
 // monto en negativo y el activo en positivo.
 func sembrarDeposito(t *testing.T, pool *pgxpool.Pool, usuario string, monto int64, cuando time.Time) {
 	t.Helper()
-	sembrarAsiento(t, pool, "deposito", nil, "fondeo", cuando, []lineaDePrueba{
+	sembrarAsiento(t, pool, "deposito", nil, "fondeo", "", cuando, []lineaDePrueba{
 		{"activo:custodia:banco", monto},
 		{"pasivo:usuario:" + usuario + ":disponible", -monto},
 	})
@@ -105,9 +105,16 @@ func usuarioDeAvisos(t *testing.T, pool *pgxpool.Pool) string {
 
 func tiposDeAvisos(t *testing.T, servicio *Servicio, usuario string) map[avisos.Tipo]AvisoEmitido {
 	t.Helper()
-	delMes, err := servicio.AvisosDelUsuario(t.Context(), usuario, "2026-07", ahoraDeAvisos)
+	return tiposDeAvisosDeMes(t, servicio, usuario, "2026-07")
+}
+
+// tiposDeAvisosDeMes indexa las tarjetas del mes por tipo. El mes de una tarjeta es el de su periodo,
+// que puede no coincidir con el mes en que se entregó.
+func tiposDeAvisosDeMes(t *testing.T, servicio *Servicio, usuario, mes string) map[avisos.Tipo]AvisoEmitido {
+	t.Helper()
+	delMes, err := servicio.AvisosDelUsuario(t.Context(), usuario, mes, ahoraDeAvisos)
 	if err != nil {
-		t.Fatalf("listar avisos de %q: %v", usuario, err)
+		t.Fatalf("listar avisos de %q en %q: %v", usuario, mes, err)
 	}
 	porTipo := map[avisos.Tipo]AvisoEmitido{}
 	for _, aviso := range delMes {
@@ -119,6 +126,11 @@ func tiposDeAvisos(t *testing.T, servicio *Servicio, usuario string) map[avisos.
 func TestEmitirAvisosGuardaLasSieteTarjetas(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	servicio := NuevoServicio(pool)
+
+	// Calienta la base para que la corrida medida solo vea las candidatas de estos cinco usuarios.
+	if _, err := servicio.EmitirAvisos(t.Context(), ahoraDeAvisos); err != nil {
+		t.Fatalf("corrida de calentamiento: %v", err)
+	}
 
 	presupuesto := usuarioDeAvisos(t, pool)
 	gastoMensual(t, pool, presupuesto, 5, 90_000_000, "alimentos_mercado", "MERCADO", "L-MERCADO")
@@ -197,14 +209,14 @@ func TestEmitirAvisosGuardaLasSieteTarjetas(t *testing.T) {
 	if _, existe := tiposDeAvisos(t, servicio, categoria)[avisos.PresupuestoAnticipado]; !existe {
 		t.Fatal("el escenario de categoría también dispara presupuesto")
 	}
-	if _, existe := tiposDeAvisos(t, servicio, caida)[avisos.CaidaIngreso]; !existe {
+	if _, existe := tiposDeAvisosDeMes(t, servicio, caida, "2026-06")[avisos.CaidaIngreso]; !existe {
 		t.Fatal("falta la caída de ingreso")
 	}
 	if aviso, existe := tiposDeAvisos(t, servicio, pago)[avisos.PagoNoAlcanza]; !existe ||
 		aviso.Texto != "Tu saldo es $300.000 y los pagos recurrentes que vencen desde 2026-07-17 suman $800.000." {
 		t.Fatalf("aviso de pago = %+v", aviso)
 	}
-	if aviso, existe := tiposDeAvisos(t, servicio, cobro)[avisos.CobroNuevo]; !existe ||
+	if aviso, existe := tiposDeAvisosDeMes(t, servicio, cobro, "2026-06")[avisos.CobroNuevo]; !existe ||
 		aviso.Texto != "Apareció un cobro de $151.000 el 2026-06-20 y ya se repite o está declarado como recurrente." {
 		t.Fatalf("aviso de cobro = %+v", aviso)
 	}
@@ -213,6 +225,12 @@ func TestEmitirAvisosGuardaLasSieteTarjetas(t *testing.T) {
 func TestEmitirAvisosEsIdempotenteYConservaElTexto(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	servicio := NuevoServicio(pool)
+
+	// Calienta la base: la segunda corrida solo debe ver lo que ya emitió esta prueba.
+	if _, err := servicio.EmitirAvisos(t.Context(), ahoraDeAvisos); err != nil {
+		t.Fatalf("corrida de calentamiento: %v", err)
+	}
+
 	usuario := usuarioDeAvisos(t, pool)
 	gastoMensual(t, pool, usuario, 5, 10_000_000, "alimentos_mercado", "MERCADO", "L-MERCADO")
 	sembrarCopia(t, pool, filaDeCopia{usuario: usuario,
@@ -252,13 +270,19 @@ func TestEmitirAvisosRespetaElCupoMensual(t *testing.T) {
 		direccion: "salida", categoria: "alimentos_mercado", contraparte: "MERCADO",
 		llave: "L-MERCADO", nombre: "MERCADO", transaccion: uuid.New()})
 	sembrarAvisosPrevios(t, pool, usuario, 2)
-	insertados, err := servicio.EmitirAvisos(t.Context(), ahoraDeAvisos)
+
+	insertados, recuento, err := servicio.emitirAvisosDeUsuario(t.Context(), usuario, ahoraDeAvisos)
 	if err != nil {
-		t.Fatalf("EmitirAvisos: %v", err)
+		t.Fatalf("emitir los avisos de %q: %v", usuario, err)
 	}
 	if insertados != 1 {
 		t.Fatalf("con dos avisos previos insertados = %d, want 1", insertados)
 	}
+	if recuento.Recortadas != 1 {
+		t.Fatalf("recortadas = %d, want 1: el cupo de julio deja fuera la segunda candidata",
+			recuento.Recortadas)
+	}
+	cerrarElCupoDeAvisos(t, pool, usuario, ahoraDeAvisos)
 }
 
 func TestEmitirAvisosConElCupoAgotadoNoInserta(t *testing.T) {
@@ -271,13 +295,19 @@ func TestEmitirAvisosConElCupoAgotadoNoInserta(t *testing.T) {
 		direccion: "salida", categoria: "alimentos_mercado", contraparte: "MERCADO",
 		llave: "L-MERCADO", nombre: "MERCADO", transaccion: uuid.New()})
 	sembrarAvisosPrevios(t, pool, usuario, 3)
-	insertados, err := servicio.EmitirAvisos(t.Context(), ahoraDeAvisos)
+
+	insertados, recuento, err := servicio.emitirAvisosDeUsuario(t.Context(), usuario, ahoraDeAvisos)
 	if err != nil {
-		t.Fatalf("EmitirAvisos: %v", err)
+		t.Fatalf("emitir los avisos de %q: %v", usuario, err)
 	}
 	if insertados != 0 {
 		t.Fatalf("con el cupo agotado insertados = %d, want 0", insertados)
 	}
+	if recuento.Recortadas != 2 {
+		t.Fatalf("recortadas = %d, want 2: el presupuesto y la categoría caben en el cupo agotado",
+			recuento.Recortadas)
+	}
+	cerrarElCupoDeAvisos(t, pool, usuario, ahoraDeAvisos)
 }
 
 func sembrarAvisosPrevios(t *testing.T, pool *pgxpool.Pool, usuario string, cantidad int) {

@@ -20,6 +20,10 @@ type ConfiguracionDeRecurrencia struct {
 	CiclosParaCancelar                                      int
 }
 
+// CupoMensualPorDefecto es el tope de avisos por usuario y mes del punto 250. Es solo el valor por
+// defecto de la configuración: el cupo se lee siempre de Configuracion.
+const CupoMensualPorDefecto = 3
+
 // Configuracion reúne los índices de las reglas. Los decimales son exactos.
 type Configuracion struct {
 	MesesMinimos           int
@@ -72,7 +76,7 @@ func ConfiguracionPorDefecto() Configuracion {
 		ZUmbral:                Rat("3.5"),
 		TolMontoCobro:          Rat("0.15"),
 		ProrrateoAcumulado:     false,
-		TopeAvisosMes:          3,
+		TopeAvisosMes:          CupoMensualPorDefecto,
 		TiposAsientoGasto:      []string{"liquidacion_confirmada"},
 		TiposAsientoIngreso:    []string{"deposito"},
 		DescripcionesNoIngreso: []string{"Saldo inicial"},
@@ -93,6 +97,12 @@ func ConfiguracionPorDefecto() Configuracion {
 			CiclosParaCancelar:    2,
 		},
 	}
+}
+
+// CupoMensualDeAvisos es el tope de avisos por usuario y mes que aplican el emisor y el resumen. Sale
+// de la configuración para que los dos informen la misma cifra.
+func (c Configuracion) CupoMensualDeAvisos() int {
+	return c.TopeAvisosMes
 }
 
 // Validar comprueba lo que la referencia valida y junta todos los problemas en un solo error.

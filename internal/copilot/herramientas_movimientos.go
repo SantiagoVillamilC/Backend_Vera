@@ -31,7 +31,7 @@ func nombresDelPeriodo(ctx context.Context, lector LectorNombresContrapartes, re
 	if len(unicas) == 0 {
 		return map[string]string{}, nil
 	}
-	if lector == nil {
+	if lectorAusente(lector) {
 		return nil, ErrHerramientaNoDisponible
 	}
 	return lector.NombresDeContrapartes(ctx, unicas)
@@ -47,7 +47,7 @@ func errorPeriodo(err error) error {
 // ConsultaMovimientosIA muestra un asiento por fila y mantiene sus componentes sin duplicar el retenido.
 func ConsultaMovimientosIA(lector LectorPeriodoIA, nombres LectorNombresContrapartes) ManejadorHerramienta {
 	return func(ctx context.Context, id identidad.Identidad, a ArgumentosHerramienta) (DatosHerramienta, error) {
-		if lector == nil {
+		if lectorAusente(lector) {
 			return nil, ErrHerramientaNoDisponible
 		}
 		p, err := lector.MovimientosEnRango(ctx, id.UsuarioID, a.Desde, a.Hasta, nucleo.MotivoMovimiento(a.Tipo), a.Limite)
@@ -83,7 +83,7 @@ func ConsultaMovimientosIA(lector LectorPeriodoIA, nombres LectorNombresContrapa
 // ResumenMovimientosIA proyecta totales completos y grupos calculados antes de enmascarar sus etiquetas.
 func ResumenMovimientosIA(lector LectorPeriodoIA, nombres LectorNombresContrapartes) ManejadorHerramienta {
 	return func(ctx context.Context, id identidad.Identidad, a ArgumentosHerramienta) (DatosHerramienta, error) {
-		if lector == nil {
+		if lectorAusente(lector) {
 			return nil, ErrHerramientaNoDisponible
 		}
 		r, err := lector.ResumirMovimientos(ctx, id.UsuarioID, a.Desde, a.Hasta, a.AgruparPor)

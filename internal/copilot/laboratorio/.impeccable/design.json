@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T04:27:09.137Z",
+  "title": "Design System: Vera · Laboratorio de voz",
+  "extensions": {
+    "colorMeta": {
+      "fondo": {
+        "role": "neutral",
+        "displayName": "Perla fría",
+        "tonalRamp": [
+          "oklch(0.15 0.0086 247.91)",
+          "oklch(0.26 0.0086 247.91)",
+          "oklch(0.38 0.0086 247.91)",
+          "oklch(0.49 0.0086 247.91)",
+          "oklch(0.61 0.0086 247.91)",
+          "oklch(0.72 0.0086 247.91)",
+          "oklch(0.84 0.0086 247.91)",
+          "oklch(0.95 0.0086 247.91)"
+        ]
+      },
+      "superficie": {
+        "role": "neutral",
+        "displayName": "Blanco",
+        "tonalRamp": [
+          "oklch(0.15 0.0000 89.88)",
+          "oklch(0.26 0.0000 89.88)",
+          "oklch(0.38 0.0000 89.88)",
+          "oklch(0.49 0.0000 89.88)",
+          "oklch(0.61 0.0000 89.88)",
+          "oklch(0.72 0.0000 89.88)",
+          "oklch(0.84 0.0000 89.88)",
+          "oklch(0.95 0.0000 89.88)"
+        ]
+      },
+      "elevado": {
+        "role": "neutral",
+        "displayName": "Niebla",
+        "tonalRamp": [
+          "oklch(0.15 0.0059 239.82)",
+          "oklch(0.26 0.0059 239.82)",
+          "oklch(0.38 0.0059 239.82)",
+          "oklch(0.49 0.0059 239.82)",
+          "oklch(0.61 0.0059 239.82)",
+          "oklch(0.72 0.0059 239.82)",
+          "oklch(0.84 0.0059 239.82)",
+          "oklch(0.95 0.0059 239.82)"
+        ]
+      },
+      "borde": {
+        "role": "neutral",
+        "displayName": "Borde frío",
+        "tonalRamp": [
+          "oklch(0.15 0.0156 248.00)",
+          "oklch(0.26 0.0156 248.00)",
+          "oklch(0.38 0.0156 248.00)",
+          "oklch(0.49 0.0156 248.00)",
+          "oklch(0.61 0.0156 248.00)",
+          "oklch(0.72 0.0156 248.00)",
+          "oklch(0.84 0.0156 248.00)",
+          "oklch(0.95 0.0156 248.00)"
+        ]
+      },
+      "texto": {
+        "role": "neutral",
+        "displayName": "Tinta",
+        "tonalRamp": [
+          "oklch(0.15 0.0285 249.05)",
+          "oklch(0.26 0.0285 249.05)",
+          "oklch(0.38 0.0285 249.05)",
+          "oklch(0.49 0.0285 249.05)",
+          "oklch(0.61 0.0285 249.05)",
+          "oklch(0.72 0.0285 249.05)",
+          "oklch(0.84 0.0285 249.05)",
+          "oklch(0.95 0.0285 249.05)"
+        ]
+      },
+      "secundario": {
+        "role": "neutral",
+        "displayName": "Texto secundario",
+        "tonalRamp": [
+          "oklch(0.15 0.0327 243.63)",
+          "oklch(0.26 0.0327 243.63)",
+          "oklch(0.38 0.0327 243.63)",
+          "oklch(0.49 0.0327 243.63)",
+          "oklch(0.61 0.0327 243.63)",
+          "oklch(0.72 0.0327 243.63)",
+          "oklch(0.84 0.0327 243.63)",
+          "oklch(0.95 0.0327 243.63)"
+        ]
+      },
+      "terciario": {
+        "role": "neutral",
+        "displayName": "Texto de tiempos",
+        "tonalRamp": [
+          "oklch(0.15 0.0345 242.45)",
+          "oklch(0.26 0.0345 242.45)",
+          "oklch(0.38 0.0345 242.45)",
+          "oklch(0.49 0.0345 242.45)",
+          "oklch(0.61 0.0345 242.45)",
+          "oklch(0.72 0.0345 242.45)",
+          "oklch(0.84 0.0345 242.45)",
+          "oklch(0.95 0.0345 242.45)"
+        ]
+      },
+      "azul": {
+        "role": "primary",
+        "displayName": "Cielo",
+        "tonalRamp": [
+          "oklch(0.15 0.1361 249.94)",
+          "oklch(0.26 0.1361 249.94)",
+          "oklch(0.38 0.1361 249.94)",
+          "oklch(0.49 0.1361 249.94)",
+          "oklch(0.61 0.1361 249.94)",
+          "oklch(0.72 0.1361 249.94)",
+          "oklch(0.84 0.1361 249.94)",
+          "oklch(0.95 0.1361 249.94)"
+        ]
+      },
+      "azul-texto": {
+        "role": "primary",
+        "displayName": "Cielo legible",
+        "tonalRamp": [
+          "oklch(0.15 0.1290 248.80)",
+          "oklch(0.26 0.1290 248.80)",
+          "oklch(0.38 0.1290 248.80)",
+          "oklch(0.49 0.1290 248.80)",
+          "oklch(0.61 0.1290 248.80)",
+          "oklch(0.72 0.1290 248.80)",
+          "oklch(0.84 0.1290 248.80)",
+          "oklch(0.95 0.1290 248.80)"
+        ]
+      },
+      "azul-suave": {
+        "role": "primary",
+        "displayName": "Cielo suave",
+        "tonalRamp": [
+          "oklch(0.15 0.0176 239.99)",
+          "oklch(0.26 0.0176 239.99)",
+          "oklch(0.38 0.0176 239.99)",
+          "oklch(0.49 0.0176 239.99)",
+          "oklch(0.61 0.0176 239.99)",
+          "oklch(0.72 0.0176 239.99)",
+          "oklch(0.84 0.0176 239.99)",
+          "oklch(0.95 0.0176 239.99)"
+        ]
+      },
+      "agua": {
+        "role": "secondary",
+        "displayName": "Agua",
+        "tonalRamp": [
+          "oklch(0.15 0.0884 180.54)",
+          "oklch(0.26 0.0884 180.54)",
+          "oklch(0.38 0.0884 180.54)",
+          "oklch(0.49 0.0884 180.54)",
+          "oklch(0.61 0.0884 180.54)",
+          "oklch(0.72 0.0884 180.54)",
+          "oklch(0.84 0.0884 180.54)",
+          "oklch(0.95 0.0884 180.54)"
+        ]
+      },
+      "agua-suave": {
+        "role": "secondary",
+        "displayName": "Agua suave",
+        "tonalRamp": [
+          "oklch(0.15 0.0237 183.74)",
+          "oklch(0.26 0.0237 183.74)",
+          "oklch(0.38 0.0237 183.74)",
+          "oklch(0.49 0.0237 183.74)",
+          "oklch(0.61 0.0237 183.74)",
+          "oklch(0.72 0.0237 183.74)",
+          "oklch(0.84 0.0237 183.74)",
+          "oklch(0.95 0.0237 183.74)"
+        ]
+      },
+      "error": {
+        "role": "error",
+        "displayName": "Vino de error",
+        "tonalRamp": [
+          "oklch(0.15 0.1470 9.04)",
+          "oklch(0.26 0.1470 9.04)",
+          "oklch(0.38 0.1470 9.04)",
+          "oklch(0.49 0.1470 9.04)",
+          "oklch(0.61 0.1470 9.04)",
+          "oklch(0.72 0.1470 9.04)",
+          "oklch(0.84 0.1470 9.04)",
+          "oklch(0.95 0.1470 9.04)"
+        ]
+      },
+      "error-suave": {
+        "role": "error",
+        "displayName": "Rosa de error",
+        "tonalRamp": [
+          "oklch(0.15 0.0188 5.29)",
+          "oklch(0.26 0.0188 5.29)",
+          "oklch(0.38 0.0188 5.29)",
+          "oklch(0.49 0.0188 5.29)",
+          "oklch(0.61 0.0188 5.29)",
+          "oklch(0.72 0.0188 5.29)",
+          "oklch(0.84 0.0188 5.29)",
+          "oklch(0.95 0.0188 5.29)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Marca",
+        "purpose": "Playfair Display para vera y el nombre del asistente en el título."
+      },
+      "code": {
+        "displayName": "Traza y tiempos",
+        "purpose": "JetBrains Mono; JSON y tiempos conservan 12 px en móvil."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel",
+        "value": "0 16px 38px rgba(40,70,100,.055),0 2px 6px rgba(40,70,100,.025)",
+        "purpose": "Separación ambiental de conversación y traza."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "background .18s,border-color .18s,box-shadow .18s",
+        "purpose": "Estados de controles; desactivar con prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1050px"
+      },
+      {
+        "name": "stack",
+        "value": "820px"
+      },
+      {
+        "name": "narrow-mobile",
+        "value": "480px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Enviar",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal de la pregunta.",
+      "html": "<button class=\"ds-primary\">Enviar</button>",
+      "css": ".ds-primary{font-family:\"Plus Jakarta Sans\",\"Segoe UI\",sans-serif;background:var(--texto,#16222e);color:var(--superficie,#fff);border:1px solid var(--texto,#16222e);border-radius:13px;min-height:44px;padding:11px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:background .18s,border-color .18s,box-shadow .18s}.ds-primary:hover:not(:disabled){background:#294151;border-color:#294151;box-shadow:0 5px 10px rgba(22,34,46,.1)}.ds-primary:disabled{opacity:.48;cursor:not-allowed}.ds-primary:focus-visible,.ds-secondary:focus-visible,.ds-question:focus-visible,.ds-example:focus-visible,.ds-brand:focus-visible{outline:3px solid var(--azul,#2b7bc4);outline-offset:4px}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+    },
+    {
+      "name": "Acción secundaria",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Nueva conversación o escucha explícita.",
+      "html": "<button class=\"ds-secondary\">Nueva conversación</button>",
+      "css": ".ds-secondary{font-family:\"Plus Jakarta Sans\",\"Segoe UI\",sans-serif;background:rgba(255,255,255,.8);color:var(--texto,#16222e);border:1px solid var(--borde,#dce5ee);border-radius:13px;min-height:44px;padding:11px 17px;font-size:13px;font-weight:600;cursor:pointer;transition:background .18s,border-color .18s}.ds-secondary:hover:not(:disabled){background:#f0f6fa;border-color:#a6bfd2}.ds-secondary:disabled{opacity:.48;cursor:not-allowed}.ds-primary:focus-visible,.ds-secondary:focus-visible,.ds-question:focus-visible,.ds-example:focus-visible,.ds-brand:focus-visible{outline:3px solid var(--azul,#2b7bc4);outline-offset:4px}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none}}"
+    },
+    {
+      "name": "Tu pregunta",
+      "kind": "input",
+      "refersTo": "input-question",
+      "description": "Campo etiquetado, hasta 2000 caracteres.",
+      "html": "<label class=\"ds-label\" for=\"ds-question\">Tu pregunta</label><textarea class=\"ds-question\" id=\"ds-question\" rows=\"2\" maxlength=\"2000\" placeholder=\"Por ejemplo: ¿cuánto puedo enviar?\"></textarea>",
+      "css": ".ds-label{font-family:\"Plus Jakarta Sans\",\"Segoe UI\",sans-serif;display:block;font-size:11px;font-weight:600;color:var(--secundario,#4f6170);margin-bottom:8px}.ds-question{font-family:\"Plus Jakarta Sans\",\"Segoe UI\",sans-serif;display:block;width:calc(100% - 30px);min-height:69px;max-height:180px;padding:13px 14px;font-size:12px;line-height:1.65;color:var(--texto,#16222e);background:var(--superficie,#fff);border:1px solid #b5c9d8;border-radius:13px;resize:vertical;caret-color:var(--azul,#2b7bc4)}.ds-question::placeholder{color:#5b7182}.ds-question:focus{border-color:var(--azul,#2b7bc4)}.ds-question:disabled{opacity:.48}.ds-primary:focus-visible,.ds-secondary:focus-visible,.ds-question:focus-visible,.ds-example:focus-visible,.ds-brand:focus-visible{outline:3px solid var(--azul,#2b7bc4);outline-offset:4px}@media(max-width:480px){.ds-question{font-size:16px;min-height:80px}}"
+    },
+    {
+      "name": "Pregunta de ejemplo",
+      "kind": "chip",
+      "refersTo": "chip-example",
+      "description": "Sugerencia accionable de la bienvenida.",
+      "html": "<button class=\"ds-example\">¿Cuánto tengo disponible?<svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" aria-hidden=\"true\"><path d=\"m9 5 7 7-7 7\"/></svg></button>",
+      "css": ".ds-example{font-family:\"Plus Jakarta Sans\",\"Segoe UI\",sans-serif;display:inline-flex;align-items:center;gap:13px;min-height:38px;border:1px solid #d1e5f3;border-radius:100px;background:var(--azul-suave,#e6f2fb);color:var(--azul-texto,#1f6fb2);font-size:11px;font-weight:600;padding:9px 14px;cursor:pointer;transition:background .18s,border-color .18s}.ds-example:hover:not(:disabled){background:#d8ebf9;border-color:#aecfe8}.ds-example:disabled{opacity:.48;cursor:not-allowed}.ds-primary:focus-visible,.ds-secondary:focus-visible,.ds-question:focus-visible,.ds-example:focus-visible,.ds-brand:focus-visible{outline:3px solid var(--azul,#2b7bc4);outline-offset:4px}@media(prefers-reduced-motion:reduce){.ds-example{transition:none}}"
+    },
+    {
+      "name": "Panel con orbe de bienvenida",
+      "kind": "card",
+      "refersTo": "conversation-panel",
+      "description": "Superficie principal y firma de Landing: dos tarjetas blancas, punto índigo.",
+      "html": "<section class=\"ds-panel\"><h2 class=\"ds-panel-title\">Tu conversación</h2><div class=\"ds-welcome\"><div class=\"ds-orb\" aria-hidden=\"true\"><i></i><i></i></div><h3>¿En qué te ayudo hoy?</h3><p>Consulta un saldo, revisa movimientos o prepara una propuesta de prueba.</p></div></section>",
+      "css": ".ds-panel{font-family:\"Plus Jakarta Sans\",\"Segoe UI\",sans-serif;background:var(--superficie,#fff);color:var(--texto,#16222e);border:1px solid var(--borde,#dce5ee);border-radius:24px;overflow:hidden;box-shadow:var(--sombra,0 16px 38px rgba(40,70,100,.055),0 2px 6px rgba(40,70,100,.025))}.ds-panel-title{margin:0;padding:20px 26px;border-bottom:1px solid #e8eef3;font-size:14px;font-weight:700}.ds-welcome{text-align:center;padding:34px 24px}.ds-welcome h3{font-size:22px;font-weight:600;line-height:1.35;letter-spacing:-.035em;margin:0 0 10px}.ds-welcome p{font-size:12px;line-height:1.65;color:var(--secundario,#4f6170);max-width:35ch;margin:auto}.ds-orb{position:relative;width:78px;height:78px;border-radius:50%;margin:0 auto 20px;background:radial-gradient(circle at 29% 21%,#effffb 0%,#a8eee2 13%,#4fa6de 51%,#4a57c9 91%);box-shadow:inset -6px -9px 14px rgba(58,68,168,.2),inset 5px 6px 12px rgba(255,255,255,.6),0 10px 22px rgba(74,87,201,.12)}.ds-orb::before{content:\"\";position:absolute;inset:-7px;border:1px solid #e2f0f2;border-radius:50%}.ds-orb i{position:absolute;left:50%;top:54%;width:42%;height:28%;margin:-14% 0 0 -21%;border-radius:18%}.ds-orb i:first-child{background:rgba(255,255,255,.45);transform:rotate(-24deg) translateX(-6%)}.ds-orb i:last-child{background:#fff;transform:rotate(8deg) translateX(6%);box-shadow:0 4px 9px rgba(30,30,120,.2)}.ds-orb i:last-child::after{content:\"\";position:absolute;left:22%;top:22%;width:22%;aspect-ratio:1;border-radius:50%;background:#4a57c9}@media(max-width:480px){.ds-panel{border-radius:20px}}"
+    },
+    {
+      "name": "Navegación de marca",
+      "kind": "nav",
+      "description": "Enlace de inicio con abanico de tres tarjetas y logotipo serif.",
+      "html": "<nav aria-label=\"Inicio\"><a class=\"ds-brand\" href=\"/\" aria-label=\"Vera, laboratorio\"><span class=\"ds-fan\" aria-hidden=\"true\"><i></i><i></i><i></i></span><span class=\"ds-wordmark\">vera</span></a></nav>",
+      "css": ".ds-brand{display:inline-flex;align-items:center;gap:12px;text-decoration:none;color:var(--texto,#16222e)}.ds-wordmark{font:700 35px/1 \"Playfair Display\",Georgia,serif;letter-spacing:-.02em}.ds-fan{position:relative;display:block;width:42px;height:37px;margin-right:2px}.ds-fan i{position:absolute;left:5px;top:8px;width:29px;height:21px;border-radius:6px;transform-origin:50% 60%;box-shadow:0 3px 6px rgba(22,34,46,.07)}.ds-fan i:nth-child(1){background:#16222e;transform:translateX(-3px) rotate(-34deg)}.ds-fan i:nth-child(2){background:linear-gradient(135deg,#4fa6de,#2b7bc4);transform:rotate(-12deg)}.ds-fan i:nth-child(3){background:linear-gradient(135deg,#d2f4ec,#6cc7b8);transform:translateX(4px) rotate(10deg)}.ds-fan i:nth-child(3)::after{content:\"\";position:absolute;left:10px;top:5px;width:6px;height:6px;border-radius:50%;background:#fff}.ds-primary:focus-visible,.ds-secondary:focus-visible,.ds-question:focus-visible,.ds-example:focus-visible,.ds-brand:focus-visible{outline:3px solid var(--azul,#2b7bc4);outline-offset:4px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Claridad de conversación",
+    "overview": "El laboratorio comparte la identidad clara de Mockups y Landing: perla frío, blanco, tinta profunda y acentos cielo y agua. La conversación recibe el mayor peso; una segunda superficie explica las funciones del último turno. El carácter es cercano y sereno, con información técnica legible.\n\nReferencias visuales: [Landing](../../../../../Landing/index.html), [Landing extendida](../../../../../Landing/vera-landing.html) y Mockups en modo claro: «Vera - Rediseño-Acceso y bienvenida.pdf», «Vera - Rediseño-Tu dinero.pdf» y «Vera - Rediseño-Mover dinero y hablar con Vera.pdf», en `../../../../../Mockups/`.\n\nLa verdad implementada está en `web/index.html`, `web/estilos.css` y `web/app.js`. Los datos financieros y las propuestas son ficticios. Una herramienta validada o una recuperación del backend no prueban que el modelo haya completado la consulta.",
+    "keyCharacteristics": [
+      "Superficies claras, bordes finos y sombras ambientales suaves.",
+      "Marca serif y abanico de tarjetas; lectura sans y trazas monoespaciadas.",
+      "Conversación principal, procedencia y recuperación visibles."
+    ],
+    "rules": [
+      {
+        "name": "The Estado explícito Rule",
+        "body": "Acompañar todo color de éxito, espera, grabación o error con texto que explique lo que ocurre.",
+        "section": "colors"
+      },
+      {
+        "name": "The Traza legible Rule",
+        "body": "Ajustar las líneas largas del JSON y mantener su tamaño; reducir el ancho disponible nunca justifica encoger la información técnica.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "**Do** mantener visibles modo, datos ficticios, procedencia de voz, consumo, espera y recuperación.",
+      "**Do** conservar texto, micrófono, voz, cancelación y reintentos al extender el diseño.",
+      "**Do** conservar fuentes locales, ambas firmas de marca y JSON/tiempos legibles en móvil.",
+      "**Do** mantener claves de proveedores en el servidor; el token de acceso de sesión no es una clave del proveedor."
+    ],
+    "donts": [
+      "**Don't** prometer respuesta del modelo garantizada ni presentar recuperación del backend como éxito del modelo.",
+      "**Don't** presentar propuestas como transferencias ejecutadas, demo como transcripción real ni tope local como saldo de cuenta.",
+      "**Don't** afirmar pruebas con API real, micrófono físico o lector de pantalla a partir de capturas o demo.",
+      "**Don't** convertir audio o historial en archivos persistentes: se mantienen en memoria; en modo real el audio de transcripción se envía al proveedor."
+    ]
+  }
+}

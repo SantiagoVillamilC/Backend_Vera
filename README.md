@@ -95,7 +95,8 @@ avisos una vez, arranca la API con `METRICAS_ACTIVO=true` y `AVISOS_ACTIVO=true`
 
 El sembrador solo acepta loopback, el puerto 55437 y bases cuyo nombre empiece por
 `vera_semilla_`, así que el script no puede escribir en una base real. Los avisos se encienden
-solo en esta base desechable: en un despliegue real `AVISOS_ACTIVO` sigue apagado hasta que
+solo en esta base desechable y en `demo`, la única superficie donde el motor corre
+(`docs/operacion-demo.md`): en `produccion` `AVISOS_ACTIVO` sigue apagado hasta que
 haya un piloto con personas. Se puede ajustar el tamaño con `USUARIOS`, `MESES`, `EXTRA` y
 `LOTES`, el puerto con `PUERTO_PG`, `PUERTO_REDIS` y `PUERTO_API`, y dejar el stack corriendo
 con `DEJAR=si`.

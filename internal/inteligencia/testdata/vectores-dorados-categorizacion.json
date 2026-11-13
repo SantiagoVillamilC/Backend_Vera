@@ -21,7 +21,6 @@
       "id": "memoria-por-llave",
       "nota": "La memoria privada decide en el primer escalón por la llave del comercio.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -51,7 +50,6 @@
       "id": "memoria-por-nombre",
       "nota": "Sin corrección por llave, la memoria del comercio se consulta por el nombre normalizado.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -81,7 +79,6 @@
       "id": "llave-gana-a-nombre",
       "nota": "Con dos correcciones, la llave manda sobre el nombre normalizado.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -112,7 +109,6 @@
       "id": "persona-no-hereda-por-nombre",
       "nota": "Una persona sólo consulta la llave. El nombre enmascarado no es identidad y una corrección no se hereda.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -146,7 +142,6 @@
       "id": "qr-de-persona-tampoco-usa-nombre",
       "nota": "Un QR de persona se trata como llave, sin catálogo, sin MCC y sin léxico.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {
           "llave-persona": "salud"
         },
@@ -182,7 +177,6 @@
       "id": "interna-gana-a-mcc",
       "nota": "La contraparte interna decide antes que el MCC.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -214,7 +208,6 @@
       "id": "mcc-resuelve",
       "nota": "Un MCC de la tabla resuelve cuando la contraparte interna no decidió.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -246,7 +239,6 @@
       "id": "mcc-con-espacios-se-normaliza",
       "nota": "El MCC se recorta antes de validarlo.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -277,7 +269,6 @@
       "id": "mcc-generico-no-resuelve",
       "nota": "Un MCC genérico no decide y con los escalones 1 a 5 el movimiento queda sin categoría.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -308,7 +299,6 @@
       "id": "mcc-invalido-no-resuelve",
       "nota": "Un MCC de tres dígitos no es válido y no resuelve.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -340,7 +330,6 @@
       "id": "catalogo-por-llave",
       "nota": "El catálogo curado por llave decide en el escalón 4.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {
           "llave-comercio": "compras"
         },
@@ -374,7 +363,6 @@
       "id": "catalogo-por-nombre",
       "nota": "Sin coincidencia por llave, el catálogo por nombre normalizado decide.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {
           "COMERCIO-UNO": "compras"
@@ -408,7 +396,6 @@
       "id": "lexico-una-categoria",
       "nota": "El léxico decide cuando todas las palabras que reconoce apuntan a una sola categoría.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [
@@ -444,7 +431,6 @@
       "id": "lexico-dos-categorias-no-decide",
       "nota": "Con dos categorías distintas el léxico no decide y el movimiento queda sin categoría.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [
@@ -481,7 +467,6 @@
       "id": "valor-fuera-del-catalogo-se-ignora",
       "nota": "Una corrección con una categoría inventada no se aplica.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -511,7 +496,6 @@
       "id": "interna-fuera-del-catalogo-se-ignora",
       "nota": "Una categoría interna inventada no se aplica.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -539,7 +523,6 @@
       "id": "primer-corte-apaga-mcc",
       "nota": "Con el conjunto del primer corte, el MCC no decide aunque resuelva en la tabla.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -567,44 +550,9 @@
       "id": "primer-corte-apaga-catalogo",
       "nota": "Con el conjunto del primer corte, el catálogo por llave no decide.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {
           "llave-comercio": "compras"
         },
-        "catalogo_nombres": {},
-        "lexico": [],
-        "memoria": {}
-      }
-    },
-    {
-      "entrada": {
-        "canal": "qr",
-        "categoria_interna": null,
-        "llave": "llave-comercio",
-        "mcc": "",
-        "nombre": "Comercio Uno",
-        "tipo_destino": "comercio"
-      },
-      "escalones": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ],
-      "esperado": {
-        "categoria": "compras",
-        "escalon": 6,
-        "pendiente_llm": false
-      },
-      "id": "llm-cache-acierta",
-      "nota": "Con todos los escalones, la caché del LLM decide en el escalón 6 sin llamar al modelo.",
-      "recursos": {
-        "cache_llm": {
-          "COMERCIO-UNO|llave-comercio": "compras"
-        },
-        "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
         "memoria": {}
@@ -635,7 +583,6 @@
       "id": "llm-pendiente",
       "nota": "Sin caché, el escalón 6 marca el movimiento como pendiente y no inventa categoría.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -667,7 +614,6 @@
       "id": "nombre-vacio-no-llama-al-llm",
       "nota": "Sin nombre, el escalón 6 no se intenta y el movimiento queda sin categoría.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {},
         "lexico": [],
@@ -699,7 +645,6 @@
       "id": "llave-sin-qr-no-usa-catalogo-de-nombres",
       "nota": "En el canal llave no se consulta el catálogo por nombre ni el MCC.",
       "recursos": {
-        "cache_llm": {},
         "catalogo_llaves": {},
         "catalogo_nombres": {
           "COMERCIO-UNO": "compras"

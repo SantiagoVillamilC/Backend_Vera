@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const huellaVectoresCategorizacion = "b990677d96311676f86257f3606d114b2eac67d4fe1234ac8b0425f68b15a70d"
+const huellaVectoresCategorizacion = "0bfe7ec3fc899e8306f0a5fcff84f20cccb5bbbc6c2e7bc196d50142d4889d45"
 
 type documentoDeVectores struct {
 	Catalogo []string     `json:"catalogo"`
@@ -31,7 +31,6 @@ type casoVector struct {
 		CatalogoLlaves  map[string]string `json:"catalogo_llaves"`
 		CatalogoNombres map[string]string `json:"catalogo_nombres"`
 		Lexico          [][2]string       `json:"lexico"`
-		CacheLLM        map[string]string `json:"cache_llm"`
 	} `json:"recursos"`
 	Escalones []int `json:"escalones"`
 	Esperado  struct {
@@ -61,8 +60,8 @@ func cargarVectores(t *testing.T) documentoDeVectores {
 
 func TestVectoresDeCategorizacionSeReproducen(t *testing.T) {
 	documento := cargarVectores(t)
-	if len(documento.Casos) != 22 {
-		t.Fatalf("casos = %d, want 22", len(documento.Casos))
+	if len(documento.Casos) != 21 {
+		t.Fatalf("casos = %d, want 21", len(documento.Casos))
 	}
 	for _, caso := range documento.Casos {
 		t.Run(caso.ID, func(t *testing.T) {
@@ -126,7 +125,6 @@ func recursosDelCaso(caso casoVector) Recursos {
 		CatalogoLlaves:  categoriasDelMapa(caso.Recursos.CatalogoLlaves),
 		CatalogoNombres: categoriasDelMapa(caso.Recursos.CatalogoNombres),
 		Lexico:          lexico,
-		CacheLLM:        categoriasDelMapa(caso.Recursos.CacheLLM),
 	}
 }
 

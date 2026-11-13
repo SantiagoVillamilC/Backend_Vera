@@ -280,6 +280,45 @@ asegurar_archivo_con_secreto() {
   registrar_cambio
 }
 
+# Lee DESTINO de aprovisionar.env sin hacer source del archivo completo:
+# aprovisionar.sh ya lo carga cuando corre, esto es para los scripts que se
+# ejecutan por separado (verificar-banderas.sh). Sin la variable no imprime
+# nada.
+destino_de_aprovisionar() {
+  local archivo="$1"
+
+  [[ -f "$archivo" ]] || return 0
+  sed -n 's/^[[:space:]]*DESTINO=//p' "$archivo" | tail -n 1 | tr -d "\"'"
+}
+
+# Imprime la matriz de banderas resuelta para un destino, una línea
+# "VARIABLE=valor" por fila (ver banderas.tsv y docs/configuracion-entornos.md).
+# Omite comentarios, cabecera y las filas que describen un escalón sin bandera.
+banderas_del_destino() {
+  local archivo="$1"
+  local destino="$2"
+  local columna
+
+  case "${destino}" in
+    local) columna=2 ;;
+    demo) columna=3 ;;
+    produccion) columna=4 ;;
+    *) error_fatal "DESTINO debe ser local, demo o produccion, no \"${destino}\"." ;;
+  esac
+
+  if [[ ! -f "${archivo}" ]]; then
+    error_fatal "No existe la matriz de banderas ${archivo}."
+  fi
+
+  awk -F '\t' -v columna="${columna}" '
+    /^[[:space:]]*#/ { next }
+    $1 == "variable" { next }
+    NF < 5 { next }
+    $1 !~ /^[A-Z][A-Z0-9_]*$/ { next }
+    { printf "%s=%s\n", $1, $columna }
+  ' "${archivo}"
+}
+
 # Genera 32 bytes en hexadecimal (64 caracteres [0-9a-f]) para un pepper: a
 # diferencia de generar_secreto (alfanumérico), esto es lo que
 # pepperRequerido (cmd/api/config_auth.go) exige decodificar con

@@ -1,0 +1,72 @@
+name: Verificar modelos
+
+# Los pesos no viven en el repositorio: este job comprueba que modelos/lock.json siga siendo un
+# inventario válido, que no se separe del manifiesto que usa el build de la voz y que el verificador
+# no se rompa. La verificación de bytes completos de los pesos corre donde estén los discos que los
+# tienen, con
+#   go run ./cmd/verificar-modelos -lock modelos/lock.json -raiz RUTA
+# porque bajar varios GB de modelos en cada PR no es viable ni necesario. Aquí solo se corre
+# -solo-lock, que no abre ningún archivo, y las pruebas unitarias, que ejercitan la comparación de
+# bytes sobre un directorio temporal y el cruce con infra/voz-local/descargar.py.
+
+on:
+  pull_request:
+    paths:
+      - modelos/lock.json
+      - cmd/verificar-modelos/**
+      - infra/voz-local/descargar.py
+      - .github/workflows/verificar-modelos.yml
+  push:
+    paths:
+      - modelos/lock.json
+      - cmd/verificar-modelos/**
+      - infra/voz-local/descargar.py
+      - .github/workflows/verificar-modelos.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verificar-modelos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    name: Estructura del lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Si el lockfile desaparece, el propio verificador falla al leerlo. El paso previo deja
+      # el motivo explícito en el resumen en vez de un error de apertura de archivo.
+      - name: Exigir el lockfile
+        run: |
+          if [ ! -f modelos/lock.json ]; then
+            echo "::error::Falta modelos/lock.json, sin él ningún despliegue puede fijar sus pesos."
+            exit 1
+          fi
+
+      # pipefail es obligatorio: sin él la tubería devuelve el estado de tee y un lockfile inválido
+      # pasaría por verde. Los fallos del verificador van por stderr, así que se juntan con 2>&1
+      # para que queden en el resumen y no solo en el log del paso.
+      - name: Validar la estructura del lockfile
+        run: |
+          set -o pipefail
+          if go run ./cmd/verificar-modelos -solo-lock -lock modelos/lock.json 2>&1 | tee "$RUNNER_TEMP/lock.txt"; then
+            cat "$RUNNER_TEMP/lock.txt" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::El lockfile no pasó la validación de estructura."
+            cat "$RUNNER_TEMP/lock.txt" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Prueba unitaria del verificador
+        run: go test -count=1 ./cmd/verificar-modelos/

@@ -12,11 +12,13 @@ import (
 
 // Servicio expone el catálogo y el cursor del lote de enriquecimiento.
 type Servicio struct {
-	pool         abridorDeTransacciones
-	clasificador *Modelo
-	avisosCfg    avisos.Configuracion
-	metricas     Metricas
-	lexico       *Lexico
+	pool            abridorDeTransacciones
+	clasificador    *Modelo
+	avisosCfg       avisos.Configuracion
+	metricas        Metricas
+	lexico          *Lexico
+	catalogoNombres map[string]Categoria
+	catalogoLlaves  map[string]Categoria
 }
 
 // OpcionServicio ajusta el servicio al construirlo.
@@ -25,6 +27,14 @@ type OpcionServicio func(*Servicio)
 // ConClasificador enciende el escalón 6 con el modelo cargado.
 func ConClasificador(modelo *Modelo) OpcionServicio {
 	return func(s *Servicio) { s.clasificador = modelo }
+}
+
+// ConCatalogo enciende el escalón 4 sobre los mapas que CargarCatalogo llena.
+func ConCatalogo(nombres, llaves map[string]Categoria) OpcionServicio {
+	return func(s *Servicio) {
+		s.catalogoNombres = nombres
+		s.catalogoLlaves = llaves
+	}
 }
 
 // ConMetricas inyecta el registro de métricas del contexto. Sin él no se mide nada.
@@ -68,6 +78,42 @@ func (s *Servicio) Categorias(ctx context.Context) ([]EntradaCatalogo, error) {
 		})
 	}
 	return categorias, nil
+}
+
+// CargarCatalogo lee la tabla curada y llena los mapas que recibió ConCatalogo. Vacía los dos mapas
+// antes de llenarlos, así una segunda llamada no deja filas viejas. Tampoco deja el escalón
+// encendido si la tabla está vacía: un catálogo sin filas decide lo mismo que no tenerlo. No vuelve
+// a filtrar por categoría: la tabla solo admite las visibles, porque la base lo exige.
+func (s *Servicio) CargarCatalogo(ctx context.Context) error {
+	filas, err := enTransaccion(ctx, s.pool,
+		func(ctx context.Context, _ transaccionDeInteligencia,
+			q *repositorio.Queries) ([]repositorio.ListarCatalogoMarcaRow, error) {
+			return q.ListarCatalogoMarca(ctx)
+		})
+	if err != nil {
+		return fmt.Errorf("inteligencia: listar el catálogo curado: %w", err)
+	}
+	if s.catalogoNombres == nil {
+		s.catalogoNombres = make(map[string]Categoria, len(filas))
+	}
+	if s.catalogoLlaves == nil {
+		s.catalogoLlaves = make(map[string]Categoria, len(filas))
+	}
+	clear(s.catalogoNombres)
+	clear(s.catalogoLlaves)
+	for _, fila := range filas {
+		categoria := Categoria(fila.Categoria)
+		s.catalogoNombres[fila.NombreNormalizado] = categoria
+		if fila.Llave.Valid && fila.Llave.String != "" {
+			s.catalogoLlaves[fila.Llave.String] = categoria
+		}
+	}
+	return nil
+}
+
+// catalogo arma los mapas que la cascada consulta en el escalón 4.
+func (s *Servicio) catalogo() CatalogoCurado {
+	return CatalogoCurado{Nombres: s.catalogoNombres, Llaves: s.catalogoLlaves}
 }
 
 // EnriquecerAsientos procesa un lote y devuelve cuántos asientos miró, para el worker de River.

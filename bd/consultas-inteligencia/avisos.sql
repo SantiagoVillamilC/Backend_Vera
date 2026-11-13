@@ -65,26 +65,31 @@ SELECT tipo, clave, periodo
    AND periodo >= sqlc.arg('desde')::date
    AND periodo < sqlc.arg('hasta')::date;
 
+-- Único criterio de conteo: el periodo, que es el mes al que pertenece el hecho que disparó el aviso,
+-- no la fecha en que se entregó la tarjeta. Un aviso puede entregarse en un mes y pertenecer a otro.
+-- Las dos consultas de abajo usan ese periodo y excluyen los descartados, así que descartar libera
+-- cupo, y el resumen, la bandeja y el emisor informan la misma cifra para el mismo mes.
 -- name: AvisosVigentesDelMes :many
-SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
    AND descartado_en IS NULL
-   AND creado_en >= sqlc.arg('desde')::timestamptz
-   AND creado_en < sqlc.arg('hasta')::timestamptz
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date
  ORDER BY prioridad, severidad_centavos DESC, clave, id;
 
--- name: ContarAvisosEmitidosEnElMes :one
-SELECT count(*)::bigint AS emitidos
+-- name: ContarAvisosDelMes :one
+SELECT count(*)::bigint AS avisos_emitidos
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
-   AND creado_en >= sqlc.arg('desde')::timestamptz
-   AND creado_en < sqlc.arg('hasta')::timestamptz;
+   AND descartado_en IS NULL
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date;
 
 -- name: EmitirAviso :one
 INSERT INTO inteligencia.aviso (
-    id, usuario_id, tipo, clave, periodo, severidad_centavos, prioridad,
-    texto, texto_verificado, transaccion_id, creado_en
+    id, usuario_id, tipo, clave, periodo, severidad_centavos, monto_centavos,
+    referencia_centavos, prioridad, texto, texto_verificado, transaccion_id, creado_en
 ) VALUES (
     sqlc.arg('id')::uuid,
     sqlc.arg('usuario_id')::text,
@@ -92,6 +97,8 @@ INSERT INTO inteligencia.aviso (
     sqlc.arg('clave')::text,
     sqlc.arg('periodo')::date,
     sqlc.arg('severidad_centavos')::bigint,
+    sqlc.arg('monto_centavos')::bigint,
+    sqlc.narg('referencia_centavos')::bigint,
     sqlc.arg('prioridad')::smallint,
     sqlc.arg('texto')::text,
     sqlc.arg('texto_verificado')::boolean,
@@ -121,4 +128,55 @@ SELECT DISTINCT usuario_id
   FROM inteligencia.movimiento_enriquecido
  WHERE usuario_id > sqlc.arg('despues_de')::text
  ORDER BY usuario_id
+ LIMIT sqlc.arg('limite')::int;
+
+-- name: AvisoPorID :one
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE id = sqlc.arg('id')::uuid
+   AND usuario_id = sqlc.arg('usuario_id')::text;
+
+-- Las dos consultas paginadas filtran por el rango del mes, igual que AvisosVigentesDelMes: el periodo
+-- de pago_no_alcanza y cobro_nuevo es la fecha del pago, no el día 1, y una igualdad con el día 1
+-- los ocultaría. caida_ingreso guarda el mes evaluado (el anterior) y se lista en ese mes.
+-- name: AvisosVigentesPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE usuario_id = sqlc.arg('usuario_id')::text
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date
+   AND descartado_en IS NULL
+   AND (sqlc.narg('prioridad')::smallint IS NULL
+        OR prioridad > sqlc.narg('prioridad')::smallint
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos < sqlc.narg('severidad')::bigint)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave > sqlc.narg('clave')::text)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave = sqlc.narg('clave')::text
+            AND id > sqlc.narg('id')::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
+ LIMIT sqlc.arg('limite')::int;
+
+-- name: AvisosDescartadosPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE usuario_id = sqlc.arg('usuario_id')::text
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date
+   AND descartado_en IS NOT NULL
+   AND (sqlc.narg('prioridad')::smallint IS NULL
+        OR prioridad > sqlc.narg('prioridad')::smallint
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos < sqlc.narg('severidad')::bigint)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave > sqlc.narg('clave')::text)
+        OR (prioridad = sqlc.narg('prioridad')::smallint
+            AND severidad_centavos = sqlc.narg('severidad')::bigint
+            AND clave = sqlc.narg('clave')::text
+            AND id > sqlc.narg('id')::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
  LIMIT sqlc.arg('limite')::int;

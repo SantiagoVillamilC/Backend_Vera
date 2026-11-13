@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -91,6 +92,11 @@ func TestFlujoHTTPEntregaAntesDelFinYComparteCache(t *testing.T) {
 	close(continuar)
 	if err := d.Decode(&e); err != nil || e.Data.Tipo != "fin" || e.Data.Estado.Usadas != 3 {
 		t.Fatal("no completó la voz", err)
+	}
+	// El cliente ve "fin" antes de que el handler suelte s.mu. Se espera al EOF
+	// del cuerpo (el servidor ya salió de api) para no recibir un 409 Busy.
+	if err := d.Decode(&e); !errors.Is(err, io.EOF) {
+		t.Fatal("la respuesta no terminó tras el fin", err)
 	}
 	r2 := peticion()
 	defer func() { _ = r2.Body.Close() }()

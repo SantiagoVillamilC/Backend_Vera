@@ -1,5 +1,5 @@
 {
-  "version": "vera-casos-v1.1",
+  "version": "vera-casos-v1.2",
   "fecha_referencia": "2026-10-19T10:00:00-05:00",
   "casos": [
     {
@@ -239,6 +239,47 @@
         },
         {
           "texto": "El gravamen calculado es 200.00 COP."
+        }
+      ]
+    },
+    {
+      "id": "consumo_por_categoria_mes",
+      "categoria": "consulta",
+      "entrada": "¿En qué se me fue la plata este mes?",
+      "llamadas_esperadas": [
+        {
+          "nombre": "resumir_consumo_por_categoria",
+          "argumentos": {},
+          "codigo": "OK"
+        }
+      ],
+      "restricciones": {
+        "contiene": [
+          "Alimentos y mercado: 50000.00 COP.",
+          "Transporte: 20000.00 COP."
+        ],
+        "prohibidos": [
+          "+573001234567",
+          "Laura Rodríguez",
+          "contraseña",
+          "dinero enviado"
+        ],
+        "error": "",
+        "accion": false,
+        "limitado": false
+      },
+      "guion": [
+        {
+          "llamadas": [
+            {
+              "nombre": "resumir_consumo_por_categoria",
+              "argumentos": {},
+              "codigo": "OK"
+            }
+          ]
+        },
+        {
+          "texto": "Este mes lo que más gastaste fue Alimentos y mercado: 50000.00 COP. Luego Transporte: 20000.00 COP."
         }
       ]
     },

@@ -56,7 +56,7 @@ func TestEnriquecerConClasificadorEscribeOrigenTFIDF(t *testing.T) {
 	sembrarCuentaDeUsuario(t, pool, usuario)
 	base := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	comercio := "Tienda Sintética"
-	ancla := sembrarAsiento(t, pool, "pago_qr", nil, comercio, base, []lineaDePrueba{
+	ancla := sembrarAsiento(t, pool, "pago_qr", nil, comercio, "", base, []lineaDePrueba{
 		{"pasivo:usuario:" + usuario + ":disponible", -4500},
 		{"pasivo:liquidacion_pendiente:riel", 4500},
 	})
@@ -90,7 +90,7 @@ func TestEnriquecerSinClasificadorNoEscribeTFIDF(t *testing.T) {
 	sembrarCuentaDeUsuario(t, pool, usuario)
 	base := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	comercio := "Tienda Sintética"
-	ancla := sembrarAsiento(t, pool, "pago_qr", nil, comercio, base, []lineaDePrueba{
+	ancla := sembrarAsiento(t, pool, "pago_qr", nil, comercio, "", base, []lineaDePrueba{
 		{"pasivo:usuario:" + usuario + ":disponible", -3200},
 		{"pasivo:liquidacion_pendiente:riel", 3200},
 	})
@@ -117,7 +117,7 @@ func TestEnriquecerConMemoriaYClasificadorGanaLaMemoria(t *testing.T) {
 	sembrarCuentaDeUsuario(t, pool, usuario)
 	base := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	comercio := "Tienda Sintética"
-	ancla := sembrarAsiento(t, pool, "pago_qr", nil, comercio, base, []lineaDePrueba{
+	ancla := sembrarAsiento(t, pool, "pago_qr", nil, comercio, "", base, []lineaDePrueba{
 		{"pasivo:usuario:" + usuario + ":disponible", -7800},
 		{"pasivo:liquidacion_pendiente:riel", 7800},
 	})

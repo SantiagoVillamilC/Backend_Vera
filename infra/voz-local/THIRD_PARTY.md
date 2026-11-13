@@ -10,12 +10,9 @@
 - Dependencias directas y transitivas fijadas en `requirements.txt`; no se cambian
   dependencias del backend Go. Pesos descargados durante el build, fuera de Git.
 
-SHA256 publicados en los assets de la release y comprobados por `descargar.py`:
-
-| Archivo | SHA256 |
-| --- | --- |
-| kokoro-v1.0.int8.onnx | ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c |
-| voices-v1.0.bin | bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d |
+SHA256 y tamaño de los dos assets están en `modelos/lock.json` y en el manifiesto
+`descargar.py`, que los comprueba durante el build. Una prueba de `cmd/verificar-modelos`
+cruza ambas fuentes y falla si divergen, así que no se repiten aquí.
 
 El contenedor carga los modelos al inicio y calienta una frase antes de abrir el
 laboratorio. El sintetizador escucha sólo en loopback interno, exige token

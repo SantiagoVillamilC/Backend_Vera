@@ -17,7 +17,7 @@ type LectorTransferenciaIA interface {
 // ConsultaTransferenciaIA proyecta una transferencia propia a su vista mínima.
 func ConsultaTransferenciaIA(lector LectorTransferenciaIA) ManejadorHerramienta {
 	return func(ctx context.Context, id identidad.Identidad, args ArgumentosHerramienta) (DatosHerramienta, error) {
-		if lector == nil {
+		if lectorAusente(lector) {
 			return nil, ErrHerramientaNoDisponible
 		}
 		transferenciaID, err := uuid.Parse(args.TransferenciaID)

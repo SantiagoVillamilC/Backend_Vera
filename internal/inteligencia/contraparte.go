@@ -33,6 +33,7 @@ type Apunte struct {
 	OcurridoEn         time.Time
 	Tipo               string
 	Descripcion        string
+	MCC                string
 	CuentaID           string
 	Monto              int64
 	Moneda             string
@@ -55,6 +56,7 @@ type Contraparte struct {
 	Tipo             TipoDestino
 	Llave            string
 	MID              string
+	MCC              string
 	Nombre           string
 	CategoriaInterna Categoria
 }
@@ -175,7 +177,7 @@ func ResolverContraparte(apuntes []Apunte, usuarioID string, nombres map[string]
 	}
 	for cuenta := range cuentas {
 		if strings.HasPrefix(cuenta, prefijoCustodia) {
-			return Contraparte{Texto: textoBancoCustodio, Resuelta: true, Tipo: DestinoComercio, Nombre: textoBancoCustodio}
+			return Contraparte{Texto: textoBancoCustodio, Resuelta: true, Tipo: DestinoComercio, Nombre: textoBancoCustodio, MCC: mccDelGrupo(apuntes)}
 		}
 	}
 	for cuenta := range cuentas {
@@ -184,7 +186,7 @@ func ResolverContraparte(apuntes []Apunte, usuarioID string, nombres map[string]
 			if texto == "" {
 				texto = textoComercioExterno
 			}
-			return Contraparte{Texto: texto, Resuelta: false, Tipo: DestinoComercio, Nombre: texto}
+			return Contraparte{Texto: texto, Resuelta: false, Tipo: DestinoComercio, Nombre: texto, MCC: mccDelGrupo(apuntes)}
 		}
 	}
 
@@ -192,7 +194,7 @@ func ResolverContraparte(apuntes []Apunte, usuarioID string, nombres map[string]
 	if texto == "" {
 		texto = textoMovimiento
 	}
-	return Contraparte{Texto: texto, Resuelta: false, Tipo: DestinoComercio, Nombre: texto}
+	return Contraparte{Texto: texto, Resuelta: false, Tipo: DestinoComercio, Nombre: texto, MCC: mccDelGrupo(apuntes)}
 }
 
 // TextoDeComercio es la etiqueta del comercio externo cuando el pago no trae su nombre.
@@ -210,6 +212,15 @@ func descripcionDelGrupo(apuntes []Apunte) string {
 	for _, apunte := range apuntes {
 		if texto := strings.TrimSpace(apunte.Descripcion); texto != "" {
 			return texto
+		}
+	}
+	return ""
+}
+
+func mccDelGrupo(apuntes []Apunte) string {
+	for _, apunte := range apuntes {
+		if codigo := strings.TrimSpace(apunte.MCC); codigo != "" {
+			return codigo
 		}
 	}
 	return ""

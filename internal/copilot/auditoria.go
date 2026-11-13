@@ -86,6 +86,8 @@ func argumentosParaAuditoria(a ArgumentosHerramienta, campos map[string]any) jso
 			seguros[nombre] = a.Limite
 		case "agrupar_por":
 			seguros[nombre] = a.AgruparPor
+		case "mes":
+			seguros[nombre] = a.Mes
 		case "celular":
 			seguros[nombre] = celularParaModelo(a.Celular)
 		case "nombre":

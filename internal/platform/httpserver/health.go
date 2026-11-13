@@ -13,12 +13,17 @@ import (
 // HealthResource expone los dos probes del servicio. Es el único recurso que guarda el
 // pool crudo, porque necesita Ping y nunca corre una consulta de negocio.
 type HealthResource struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	modelos DependenciasDeModelos
 }
 
 // NewHealthResource construye el recurso de salud sobre el pool compartido.
-func NewHealthResource(pool *pgxpool.Pool) HealthResource {
-	return HealthResource{pool: pool}
+func NewHealthResource(pool *pgxpool.Pool, opciones ...OpcionDeSalud) HealthResource {
+	r := HealthResource{pool: pool}
+	for _, o := range opciones {
+		o(&r)
+	}
+	return r
 }
 
 // Live responde que el proceso está vivo sin tocar ninguna dependencia, para que un

@@ -4,6 +4,8 @@
 # Variables de entorno locales con secretos. .env.example sí se versiona como plantilla.
 .env*
 !.env.example
+# Plantillas de banderas por destino (CF-A0-02): no llevan secretos.
+!.env.*.example
 
 # Lanzadores personales de pruebas: conservar sólo en cada máquina.
 *.cmd
@@ -15,3 +17,10 @@ simulador-riel.db*
 
 # Salidas de la prueba de carga: access firmados y resúmenes de k6, nunca se versionan.
 out/
+__pycache__/
+DEMO-ESCENARIO-STATE.json
+DEMO-ESCENARIO-STATE.json.tmp
+/verificar-modelos
+
+# Estado local del despliegue de la pila de modelos (digests vigentes, respaldos e historial).
+infra/modelos/estado/

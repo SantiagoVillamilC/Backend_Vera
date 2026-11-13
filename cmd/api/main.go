@@ -15,6 +15,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/auth"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/vozlocal"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/custodiosim"
@@ -60,6 +61,15 @@ func run() error {
 		return fmt.Errorf("proveedor IA: %w", err)
 	}
 
+	var sintetizador copilot.SintetizadorVoz
+	tokenVoz := os.Getenv("VERA_VOZ_TOKEN")
+	if tokenVoz != "" {
+		voz, err := vozlocal.Nueva(envOr("VERA_VOZ_URL", "http://127.0.0.1:8766"), tokenVoz)
+		if err != nil {
+			return fmt.Errorf("configuración de voz local inválida: %w", err)
+		}
+		sintetizador = vozlocal.NuevaCache(voz)
+	}
 	pool, err := database.NewPool(ctx, cfg.AppDatabaseURL)
 	if err != nil {
 		return fmt.Errorf("pool: %w", err)
@@ -81,6 +91,7 @@ func run() error {
 		directorio = directoriosim.NuevoDirectorio(cfg.DirectorioSimuladorURL, nil)
 	}
 	resolutorDestino := auth.NuevoResolutorDestino(pool, cfg.Auth.EnfriamientoCambioNumero)
+	frenoAvisos := nuevoFrenoDeEmisiones(false, nil, nil)
 	servicio := nucleo.NewServicio(
 		pool,
 		lectorKYC(pool),
@@ -90,6 +101,9 @@ func run() error {
 		nucleo.ConResolutorDestino(resolutorDestino),
 		nucleo.ConDirectorio(directorio),
 		nucleo.ConLectorExtractoRiel(lectorRiel),
+		nucleo.ConAvisoTrasAsiento(func(ctx context.Context, usuarioID string, hora time.Time) {
+			frenoAvisos.disparar(ctx, usuarioID, hora)
+		}),
 		nucleo.ConPoliticaReintentoOutbox(nucleo.PoliticaReintentoOutbox{
 			Base:   cfg.OutboxBackoffBase,
 			Factor: cfg.OutboxBackoffFactor,
@@ -119,7 +133,18 @@ func run() error {
 		metricasInteligencia.ClasificadorActivo(modeloClasificador != nil)
 		opcionesInteligencia = append(opcionesInteligencia, inteligencia.ConMetricas(metricasInteligencia))
 	}
+	// El catálogo curado enciende el escalón 4. Si la tabla no se puede leer, la API arranca sin él:
+	// perder la categoría de un movimiento es mejor que no atender.
+	catalogoNombres := make(map[string]inteligencia.Categoria)
+	catalogoLlaves := make(map[string]inteligencia.Categoria)
+	opcionesInteligencia = append(opcionesInteligencia,
+		inteligencia.ConCatalogo(catalogoNombres, catalogoLlaves),
+		inteligencia.ConCupoDeAvisos(cfg.AvisosCupo))
 	servicioInteligencia := inteligencia.NuevoServicio(pool, opcionesInteligencia...)
+	frenoAvisos = nuevoFrenoDeEmisiones(cfg.AvisosActivo, servicioInteligencia, nil)
+	if err := servicioInteligencia.CargarCatalogo(ctx); err != nil {
+		slog.Error("catálogo curado no disponible, la cascada sigue sin el escalón 4", "error", err)
+	}
 	handlerInteligencia := inteligencia.NuevoHandler(servicioInteligencia,
 		inteligencia.ConMetricasDeLaCorreccion(metricasDeCorreccion(metricasInteligencia)))
 
@@ -148,13 +173,14 @@ func run() error {
 		return fmt.Errorf("preparación IA: %w", err)
 	}
 	catalogoIA, err := copilot.NuevoCatalogo(map[string]copilot.ManejadorHerramienta{
-		"preparar_transferencia":  preparadorIA.Manejar,
-		"buscar_destinatario":     copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, limiteDestinatarios, referenciasDestinatario),
-		"consultar_saldo":         copilot.ConsultaSaldoIA(servicio),
-		"consultar_limites":       copilot.ConsultaLimitesIA(servicio),
-		"listar_movimientos":      copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
-		"resumir_movimientos":     copilot.ResumenMovimientosIA(servicio, resolutorDestino),
-		"consultar_transferencia": copilot.ConsultaTransferenciaIA(servicio),
+		"preparar_transferencia":        preparadorIA.Manejar,
+		"buscar_destinatario":           copilot.ConsultaDestinatarioIA(servicio, resolutorDestino, limiteDestinatarios, referenciasDestinatario),
+		"consultar_saldo":               copilot.ConsultaSaldoIA(servicio),
+		"consultar_limites":             copilot.ConsultaLimitesIA(servicio),
+		"listar_movimientos":            copilot.ConsultaMovimientosIA(servicio, resolutorDestino),
+		"resumir_movimientos":           copilot.ResumenMovimientosIA(servicio, resolutorDestino),
+		"consultar_transferencia":       copilot.ConsultaTransferenciaIA(servicio),
+		"resumir_consumo_por_categoria": copilot.ResumenConsumoIA(servicioInteligencia),
 	}, slog.Default(), copilot.ConAuditoriaLlamadas(copilot.NuevaAuditoriaPostgres(pool)))
 	if err != nil {
 		return fmt.Errorf("catálogo IA: %w", err)
@@ -173,7 +199,7 @@ func run() error {
 	if modeloIA == "" {
 		modeloIA = "simulado"
 	}
-	orquestadorIA, err := copilot.NuevoOrquestador(proveedorIA, catalogoIA, copilot.NuevaMemoriaCicloPostgres(pool), controlIA, modeloIA, slog.Default())
+	orquestadorIA, err := copilot.NuevoOrquestador(proveedorIA, catalogoIA, copilot.NuevaMemoriaCicloPostgres(pool), controlIA, modeloIA, slog.Default(), copilot.ConPlazo(cfg.Vera.PlazoOrquestador))
 	if err != nil {
 		return fmt.Errorf("orquestador IA: %w", err)
 	}
@@ -308,10 +334,11 @@ func run() error {
 	if err := riverClient.Start(context.Background()); err != nil {
 		return fmt.Errorf("river start: %w", err)
 	}
+	lanzarAvisosAlArrancar(context.Background(), cfg.AvisosActivo, servicioInteligencia)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA, Historial: historialIA}, cfg.PSEURL),
+		Handler:           httpserver.NewRouterConVera(pool, servicio, tokenEstatico(cfg.CustodioToken), deps, httpserver.DependenciasVera{Modelos: httpserver.DependenciasDeModelos{Voz: os.Getenv("VERA_VOZ_URL"), STT: os.Getenv("VERA_STT_URL"), Ollama: os.Getenv("VERA_OLLAMA_URL")}, Sintetizador: sintetizador, Proveedor: proveedorIA, Catalogo: catalogoIA, Consentimiento: controlIA, Uso: usoIA, Orquestador: orquestadorIA, Texto: textoIA, Voz: vozIA, Acciones: accionesIA, Historial: historialIA}, cfg.PSEURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		// Debe superar authedTimeout (60s) del router o el socket corta antes del 504.

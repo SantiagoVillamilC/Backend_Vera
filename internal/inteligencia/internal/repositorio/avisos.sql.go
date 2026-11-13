@@ -12,6 +12,54 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const avisoPorID = `-- name: AvisoPorID :one
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE id = $1::uuid
+   AND usuario_id = $2::text
+`
+
+type AvisoPorIDParams struct {
+	ID        pgtype.UUID `json:"id"`
+	UsuarioID string      `json:"usuario_id"`
+}
+
+type AvisoPorIDRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Tipo               string             `json:"tipo"`
+	Clave              string             `json:"clave"`
+	Periodo            pgtype.Date        `json:"periodo"`
+	Prioridad          int16              `json:"prioridad"`
+	SeveridadCentavos  int64              `json:"severidad_centavos"`
+	MontoCentavos      int64              `json:"monto_centavos"`
+	ReferenciaCentavos pgtype.Int8        `json:"referencia_centavos"`
+	Texto              string             `json:"texto"`
+	TransaccionID      pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+}
+
+func (q *Queries) AvisoPorID(ctx context.Context, arg AvisoPorIDParams) (AvisoPorIDRow, error) {
+	row := q.db.QueryRow(ctx, avisoPorID, arg.ID, arg.UsuarioID)
+	var i AvisoPorIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Tipo,
+		&i.Clave,
+		&i.Periodo,
+		&i.Prioridad,
+		&i.SeveridadCentavos,
+		&i.MontoCentavos,
+		&i.ReferenciaCentavos,
+		&i.Texto,
+		&i.TransaccionID,
+		&i.CreadoEn,
+	)
+	if err != nil {
+		err = fmt.Errorf("query AvisoPorID: %w", err)
+	}
+	return i, err
+}
+
 const avisoPorIdentidad = `-- name: AvisoPorIdentidad :one
 SELECT id, creado_en
   FROM inteligencia.aviso
@@ -88,34 +136,128 @@ func (q *Queries) AvisosDelUsuarioEnVentana(ctx context.Context, arg AvisosDelUs
 	return items, nil
 }
 
+const avisosDescartadosPorPagina = `-- name: AvisosDescartadosPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
+  FROM inteligencia.aviso
+ WHERE usuario_id = $1::text
+   AND periodo >= $2::date
+   AND periodo < $3::date
+   AND descartado_en IS NOT NULL
+   AND ($4::smallint IS NULL
+        OR prioridad > $4::smallint
+        OR (prioridad = $4::smallint
+            AND severidad_centavos < $5::bigint)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave > $6::text)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave = $6::text
+            AND id > $7::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
+ LIMIT $8::int
+`
+
+type AvisosDescartadosPorPaginaParams struct {
+	UsuarioID string      `json:"usuario_id"`
+	Desde     pgtype.Date `json:"desde"`
+	Hasta     pgtype.Date `json:"hasta"`
+	Prioridad pgtype.Int2 `json:"prioridad"`
+	Severidad pgtype.Int8 `json:"severidad"`
+	Clave     pgtype.Text `json:"clave"`
+	ID        pgtype.UUID `json:"id"`
+	Limite    int32       `json:"limite"`
+}
+
+type AvisosDescartadosPorPaginaRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Tipo               string             `json:"tipo"`
+	Clave              string             `json:"clave"`
+	Periodo            pgtype.Date        `json:"periodo"`
+	Prioridad          int16              `json:"prioridad"`
+	SeveridadCentavos  int64              `json:"severidad_centavos"`
+	MontoCentavos      int64              `json:"monto_centavos"`
+	ReferenciaCentavos pgtype.Int8        `json:"referencia_centavos"`
+	Texto              string             `json:"texto"`
+	TransaccionID      pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+}
+
+func (q *Queries) AvisosDescartadosPorPagina(ctx context.Context, arg AvisosDescartadosPorPaginaParams) ([]AvisosDescartadosPorPaginaRow, error) {
+	rows, err := q.db.Query(ctx, avisosDescartadosPorPagina,
+		arg.UsuarioID,
+		arg.Desde,
+		arg.Hasta,
+		arg.Prioridad,
+		arg.Severidad,
+		arg.Clave,
+		arg.ID,
+		arg.Limite,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query AvisosDescartadosPorPagina: %w", err)
+	}
+	defer rows.Close()
+	items := []AvisosDescartadosPorPaginaRow{}
+	for rows.Next() {
+		var i AvisosDescartadosPorPaginaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tipo,
+			&i.Clave,
+			&i.Periodo,
+			&i.Prioridad,
+			&i.SeveridadCentavos,
+			&i.MontoCentavos,
+			&i.ReferenciaCentavos,
+			&i.Texto,
+			&i.TransaccionID,
+			&i.CreadoEn,
+		); err != nil {
+			return nil, fmt.Errorf("query AvisosDescartadosPorPagina: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query AvisosDescartadosPorPagina: %w", err)
+	}
+	return items, nil
+}
+
 const avisosVigentesDelMes = `-- name: AvisosVigentesDelMes :many
-SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, texto, transaccion_id, creado_en
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = $1::text
    AND descartado_en IS NULL
-   AND creado_en >= $2::timestamptz
-   AND creado_en < $3::timestamptz
+   AND periodo >= $2::date
+   AND periodo < $3::date
  ORDER BY prioridad, severidad_centavos DESC, clave, id
 `
 
 type AvisosVigentesDelMesParams struct {
-	UsuarioID string             `json:"usuario_id"`
-	Desde     pgtype.Timestamptz `json:"desde"`
-	Hasta     pgtype.Timestamptz `json:"hasta"`
+	UsuarioID string      `json:"usuario_id"`
+	Desde     pgtype.Date `json:"desde"`
+	Hasta     pgtype.Date `json:"hasta"`
 }
 
 type AvisosVigentesDelMesRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	Tipo              string             `json:"tipo"`
-	Clave             string             `json:"clave"`
-	Periodo           pgtype.Date        `json:"periodo"`
-	Prioridad         int16              `json:"prioridad"`
-	SeveridadCentavos int64              `json:"severidad_centavos"`
-	Texto             string             `json:"texto"`
-	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
-	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
+	ID                 pgtype.UUID        `json:"id"`
+	Tipo               string             `json:"tipo"`
+	Clave              string             `json:"clave"`
+	Periodo            pgtype.Date        `json:"periodo"`
+	Prioridad          int16              `json:"prioridad"`
+	SeveridadCentavos  int64              `json:"severidad_centavos"`
+	MontoCentavos      int64              `json:"monto_centavos"`
+	ReferenciaCentavos pgtype.Int8        `json:"referencia_centavos"`
+	Texto              string             `json:"texto"`
+	TransaccionID      pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
 }
 
+// Único criterio de conteo: el periodo, que es el mes al que pertenece el hecho que disparó el aviso,
+// no la fecha en que se entregó la tarjeta. Un aviso puede entregarse en un mes y pertenecer a otro.
+// Las dos consultas de abajo usan ese periodo y excluyen los descartados, así que descartar libera
+// cupo, y el resumen, la bandeja y el emisor informan la misma cifra para el mismo mes.
 func (q *Queries) AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDelMesParams) ([]AvisosVigentesDelMesRow, error) {
 	rows, err := q.db.Query(ctx, avisosVigentesDelMes, arg.UsuarioID, arg.Desde, arg.Hasta)
 	if err != nil {
@@ -132,6 +274,8 @@ func (q *Queries) AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDe
 			&i.Periodo,
 			&i.Prioridad,
 			&i.SeveridadCentavos,
+			&i.MontoCentavos,
+			&i.ReferenciaCentavos,
 			&i.Texto,
 			&i.TransaccionID,
 			&i.CreadoEn,
@@ -146,28 +290,120 @@ func (q *Queries) AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDe
 	return items, nil
 }
 
-const contarAvisosEmitidosEnElMes = `-- name: ContarAvisosEmitidosEnElMes :one
-SELECT count(*)::bigint AS emitidos
+const avisosVigentesPorPagina = `-- name: AvisosVigentesPorPagina :many
+SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = $1::text
-   AND creado_en >= $2::timestamptz
-   AND creado_en < $3::timestamptz
+   AND periodo >= $2::date
+   AND periodo < $3::date
+   AND descartado_en IS NULL
+   AND ($4::smallint IS NULL
+        OR prioridad > $4::smallint
+        OR (prioridad = $4::smallint
+            AND severidad_centavos < $5::bigint)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave > $6::text)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave = $6::text
+            AND id > $7::uuid))
+ ORDER BY prioridad, severidad_centavos DESC, clave, id
+ LIMIT $8::int
 `
 
-type ContarAvisosEmitidosEnElMesParams struct {
-	UsuarioID string             `json:"usuario_id"`
-	Desde     pgtype.Timestamptz `json:"desde"`
-	Hasta     pgtype.Timestamptz `json:"hasta"`
+type AvisosVigentesPorPaginaParams struct {
+	UsuarioID string      `json:"usuario_id"`
+	Desde     pgtype.Date `json:"desde"`
+	Hasta     pgtype.Date `json:"hasta"`
+	Prioridad pgtype.Int2 `json:"prioridad"`
+	Severidad pgtype.Int8 `json:"severidad"`
+	Clave     pgtype.Text `json:"clave"`
+	ID        pgtype.UUID `json:"id"`
+	Limite    int32       `json:"limite"`
 }
 
-func (q *Queries) ContarAvisosEmitidosEnElMes(ctx context.Context, arg ContarAvisosEmitidosEnElMesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, contarAvisosEmitidosEnElMes, arg.UsuarioID, arg.Desde, arg.Hasta)
-	var emitidos int64
-	err := row.Scan(&emitidos)
+type AvisosVigentesPorPaginaRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Tipo               string             `json:"tipo"`
+	Clave              string             `json:"clave"`
+	Periodo            pgtype.Date        `json:"periodo"`
+	Prioridad          int16              `json:"prioridad"`
+	SeveridadCentavos  int64              `json:"severidad_centavos"`
+	MontoCentavos      int64              `json:"monto_centavos"`
+	ReferenciaCentavos pgtype.Int8        `json:"referencia_centavos"`
+	Texto              string             `json:"texto"`
+	TransaccionID      pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
+}
+
+// Las dos consultas paginadas filtran por el rango del mes, igual que AvisosVigentesDelMes: el periodo
+// de pago_no_alcanza y cobro_nuevo es la fecha del pago, no el día 1, y una igualdad con el día 1
+// los ocultaría. caida_ingreso guarda el mes evaluado (el anterior) y se lista en ese mes.
+func (q *Queries) AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error) {
+	rows, err := q.db.Query(ctx, avisosVigentesPorPagina,
+		arg.UsuarioID,
+		arg.Desde,
+		arg.Hasta,
+		arg.Prioridad,
+		arg.Severidad,
+		arg.Clave,
+		arg.ID,
+		arg.Limite,
+	)
 	if err != nil {
-		err = fmt.Errorf("query ContarAvisosEmitidosEnElMes: %w", err)
+		return nil, fmt.Errorf("query AvisosVigentesPorPagina: %w", err)
 	}
-	return emitidos, err
+	defer rows.Close()
+	items := []AvisosVigentesPorPaginaRow{}
+	for rows.Next() {
+		var i AvisosVigentesPorPaginaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tipo,
+			&i.Clave,
+			&i.Periodo,
+			&i.Prioridad,
+			&i.SeveridadCentavos,
+			&i.MontoCentavos,
+			&i.ReferenciaCentavos,
+			&i.Texto,
+			&i.TransaccionID,
+			&i.CreadoEn,
+		); err != nil {
+			return nil, fmt.Errorf("query AvisosVigentesPorPagina: %w", err)
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query AvisosVigentesPorPagina: %w", err)
+	}
+	return items, nil
+}
+
+const contarAvisosDelMes = `-- name: ContarAvisosDelMes :one
+SELECT count(*)::bigint AS avisos_emitidos
+  FROM inteligencia.aviso
+ WHERE usuario_id = $1::text
+   AND descartado_en IS NULL
+   AND periodo >= $2::date
+   AND periodo < $3::date
+`
+
+type ContarAvisosDelMesParams struct {
+	UsuarioID string      `json:"usuario_id"`
+	Desde     pgtype.Date `json:"desde"`
+	Hasta     pgtype.Date `json:"hasta"`
+}
+
+func (q *Queries) ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, contarAvisosDelMes, arg.UsuarioID, arg.Desde, arg.Hasta)
+	var avisos_emitidos int64
+	err := row.Scan(&avisos_emitidos)
+	if err != nil {
+		err = fmt.Errorf("query ContarAvisosDelMes: %w", err)
+	}
+	return avisos_emitidos, err
 }
 
 const descartarAviso = `-- name: DescartarAviso :one
@@ -201,8 +437,8 @@ func (q *Queries) DescartarAviso(ctx context.Context, arg DescartarAvisoParams) 
 
 const emitirAviso = `-- name: EmitirAviso :one
 INSERT INTO inteligencia.aviso (
-    id, usuario_id, tipo, clave, periodo, severidad_centavos, prioridad,
-    texto, texto_verificado, transaccion_id, creado_en
+    id, usuario_id, tipo, clave, periodo, severidad_centavos, monto_centavos,
+    referencia_centavos, prioridad, texto, texto_verificado, transaccion_id, creado_en
 ) VALUES (
     $1::uuid,
     $2::text,
@@ -210,28 +446,32 @@ INSERT INTO inteligencia.aviso (
     $4::text,
     $5::date,
     $6::bigint,
-    $7::smallint,
-    $8::text,
-    $9::boolean,
-    $10::uuid,
-    $11::timestamptz
+    $7::bigint,
+    $8::bigint,
+    $9::smallint,
+    $10::text,
+    $11::boolean,
+    $12::uuid,
+    $13::timestamptz
 )
 ON CONFLICT ON CONSTRAINT aviso_dedupe_unico DO NOTHING
 RETURNING id
 `
 
 type EmitirAvisoParams struct {
-	ID                pgtype.UUID        `json:"id"`
-	UsuarioID         string             `json:"usuario_id"`
-	Tipo              string             `json:"tipo"`
-	Clave             string             `json:"clave"`
-	Periodo           pgtype.Date        `json:"periodo"`
-	SeveridadCentavos int64              `json:"severidad_centavos"`
-	Prioridad         int16              `json:"prioridad"`
-	Texto             string             `json:"texto"`
-	TextoVerificado   bool               `json:"texto_verificado"`
-	TransaccionID     pgtype.UUID        `json:"transaccion_id"`
-	CreadoEn          pgtype.Timestamptz `json:"creado_en"`
+	ID                 pgtype.UUID        `json:"id"`
+	UsuarioID          string             `json:"usuario_id"`
+	Tipo               string             `json:"tipo"`
+	Clave              string             `json:"clave"`
+	Periodo            pgtype.Date        `json:"periodo"`
+	SeveridadCentavos  int64              `json:"severidad_centavos"`
+	MontoCentavos      int64              `json:"monto_centavos"`
+	ReferenciaCentavos pgtype.Int8        `json:"referencia_centavos"`
+	Prioridad          int16              `json:"prioridad"`
+	Texto              string             `json:"texto"`
+	TextoVerificado    bool               `json:"texto_verificado"`
+	TransaccionID      pgtype.UUID        `json:"transaccion_id"`
+	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
 }
 
 func (q *Queries) EmitirAviso(ctx context.Context, arg EmitirAvisoParams) (pgtype.UUID, error) {
@@ -242,6 +482,8 @@ func (q *Queries) EmitirAviso(ctx context.Context, arg EmitirAvisoParams) (pgtyp
 		arg.Clave,
 		arg.Periodo,
 		arg.SeveridadCentavos,
+		arg.MontoCentavos,
+		arg.ReferenciaCentavos,
 		arg.Prioridad,
 		arg.Texto,
 		arg.TextoVerificado,

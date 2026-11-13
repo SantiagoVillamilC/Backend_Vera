@@ -64,6 +64,34 @@ func TestRespaldoNoUsaLecturasDeUnTurnoAnteriorNiTextoBloqueado(t *testing.T) {
 	}
 }
 
+func TestRespaldoDeConsumoUsaLosMontosDelBackend(t *testing.T) {
+	historial := func(datos string) []copilot.TurnoIA {
+		return []copilot.TurnoIA{{Rol: "herramienta", Partes: []copilot.ParteIA{{Resultado: &copilot.ResultadoIA{Nombre: "resumir_consumo_por_categoria", Datos: json.RawMessage(datos)}}}}}
+	}
+	texto := respuestaDeLecturas(historial(`{"datos":{"mes":"2026-09","alcance":"billetera","moneda":"COP","evaluable":true,"meses_completos":4,"meses_requeridos":3,"total":{"centavos":"7000000","pesos":"70000.00 COP"},"categorias":[{"categoria":"alimentos_mercado","nombre":"Alimentos y mercado","total":{"centavos":"5000000","pesos":"50000.00 COP"},"mediana":{"centavos":"4000000","pesos":"40000.00 COP"}},{"categoria":"transporte","nombre":"Transporte","total":{"centavos":"2000000","pesos":"20000.00 COP"},"mediana":null}],"hay_mas":false}}`))
+	for _, esperado := range []string{"Gasto de 2026-09 por categoría", "Alimentos y mercado 50000.00 COP", "Transporte 20000.00 COP", "Total calculado por el backend: 70000.00 COP"} {
+		if !strings.Contains(texto, esperado) {
+			t.Fatalf("falta %q en: %s", esperado, texto)
+		}
+	}
+	for _, prohibido := range []string{"40000.00", "null", "mediana"} {
+		if strings.Contains(texto, prohibido) {
+			t.Fatalf("presentó %q como gasto: %s", prohibido, texto)
+		}
+	}
+	for nombre, caso := range map[string]string{
+		"sin mes":            `{"datos":{"mes":"","total":{"centavos":"7000000","pesos":"70000.00 COP"},"categorias":[]}}`,
+		"sin total":          `{"datos":{"mes":"2026-09","categorias":[]}}`,
+		"categoria inválida": `{"datos":{"mes":"2026-09","total":{"centavos":"7000000","pesos":"70000.00 COP"},"categorias":[{"nombre":"Transporte","total":{}}]}}`,
+	} {
+		t.Run(nombre, func(t *testing.T) {
+			if texto := respuestaDeLecturas(historial(caso)); texto != "" {
+				t.Fatalf("respaldó datos incompletos: %s", texto)
+			}
+		})
+	}
+}
+
 func TestContinuidadNoOcultaCuotaCredencialesNiCancelacion(t *testing.T) {
 	for nombre, fallo := range map[string]error{"cuota": copilot.ErrLimiteIA, "clave": copilot.ErrCredencialesIA, "cancelacion": context.Canceled, "presupuesto": ErrCuotaEvaluacion} {
 		t.Run(nombre, func(t *testing.T) {

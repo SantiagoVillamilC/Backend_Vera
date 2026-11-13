@@ -10,7 +10,7 @@ roles ni instrucciones suministrados por el cliente o por argumentos de funcione
 1. Verifica consentimiento y adquiere una exclusión temporal de la conversación.
 2. Carga el contexto existente de los últimos 20 turnos de usuario.
 3. Construye las instrucciones versionadas con fecha y hora de Colombia y envía el
-   historial y las siete declaraciones del catálogo al proveedor protegido por cuotas.
+   historial y las ocho declaraciones del catálogo al proveedor protegido por cuotas.
 4. Si llegan funciones, las ejecuta únicamente mediante `Catalogo.Ejecutar`, conserva
    sus IDs y firmas opacas y añade los resultados con rol `herramienta`.
 5. Repite hasta obtener texto final o alcanzar un tope. Guarda cada intercambio completo
@@ -47,10 +47,16 @@ de Redis. Los errores del proveedor sin metadata se rigen por la política de re
 
 ## Instrucciones y evaluación
 
-El texto está en `internal/copilot/instrucciones.go`, versión `vera-2026-10-18-v1`.
+El texto está en `internal/copilot/instrucciones.go`, versión `vera-2026-10-21-v9`.
 Incluye tono, alcance, prohibiciones, uso de datos reales, texto plano, protección de
-instrucciones y confirmación explícita en la aplicación. La fecha dinámica no cambia
-la versión del texto estático. Cualquier edición del texto exige cambiar la versión.
+instrucciones y confirmación explícita en la aplicación. Desde la v9 el texto pide usar
+`resumir_consumo_por_categoria` para «¿en qué se me fue la plata?», presentar las
+categorías con sus montos ya calculados, tratar `sin_categoria` como movimientos sin
+clasificar y mencionar la mediana sólo si viene con valor y `evaluable` es verdadero.
+Para el mes actual la instrucción exige omitir `mes`, de modo que el caso
+`consumo_por_categoria_mes` espera argumentos vacíos y no un mes fijado por el guion.
+La fecha dinámica no cambia la versión del texto estático. Cualquier edición del texto
+exige cambiar la versión.
 
 Los mensajes y resultados jamás se concatenan a las instrucciones del sistema. Las
 pruebas deterministas verifican esa separación y los controles del backend. Verificar

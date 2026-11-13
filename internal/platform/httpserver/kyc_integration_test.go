@@ -99,6 +99,7 @@ func TestKYCRealEmpresaNoOpera(t *testing.T) {
 // El usuario de prueba del sandbox sigue respondiendo por HTTP gracias al lector real.
 func TestKYCRealUsuarioDePruebaRespondePorHTTP(t *testing.T) {
 	pool := abrirPoolDeIntegracion(t)
+	auth.SembrarParteDePrueba(t, pool)
 	servicio := nucleo.NewServicio(pool, kyc.NuevoLectorNivelKYC(pool), nil, nil, nil)
 	r := NewRouter(pool, servicio, custodioDePrueba, DependenciasAuth{
 		Identidad: auth.UsuarioDePrueba{},

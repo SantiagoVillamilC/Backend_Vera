@@ -1,10 +1,10 @@
 # Atajos del backend. Los binarios viven en out/bin, que está en .gitignore.
 BIN := out/bin
-COMANDOS := api migrate enriquecer avisos semilla-inteligencia evaluar-clasificador rollback-m8
+COMANDOS := api migrate enriquecer avisos semilla-inteligencia evaluar-clasificador rollback-m8 cargar-catalogo
 
-.PHONY: build verificar imagen demo limpiar
+.PHONY: build verificar imagen demo limpiar verificar-banderas
 
-# Compila los siete comandos con CGO apagado, igual que la imagen de Docker.
+# Compila todos los comandos con CGO apagado, igual que la imagen de Docker.
 build:
 	@mkdir -p $(BIN)
 	@for comando in $(COMANDOS); do \
@@ -26,6 +26,11 @@ imagen:
 # Levanta todo sobre una base desechable y comprueba la API de punta a punta. El script compila.
 demo:
 	./infra/local/demostrar.sh
+
+# Compara las banderas del contenedor de la API contra la columna de su destino
+# en infra/servidor/banderas.tsv (ver docs/configuracion-entornos.md).
+verificar-banderas:
+	./infra/servidor/verificar-banderas.sh
 
 # Borra los binarios y los contenedores de la demostración.
 limpiar:

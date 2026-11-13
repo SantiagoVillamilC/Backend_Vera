@@ -13,13 +13,27 @@ import (
 type Querier interface {
 	AnclasPendientes(ctx context.Context, arg AnclasPendientesParams) ([]int64, error)
 	AvanzarCursor(ctx context.Context, ultimoEntryID int64) error
+	AvisoPorID(ctx context.Context, arg AvisoPorIDParams) (AvisoPorIDRow, error)
 	AvisoPorIdentidad(ctx context.Context, arg AvisoPorIdentidadParams) (AvisoPorIdentidadRow, error)
 	AvisosDelUsuarioEnVentana(ctx context.Context, arg AvisosDelUsuarioEnVentanaParams) ([]AvisosDelUsuarioEnVentanaRow, error)
+	AvisosDescartadosPorPagina(ctx context.Context, arg AvisosDescartadosPorPaginaParams) ([]AvisosDescartadosPorPaginaRow, error)
+	// Único criterio de conteo: el periodo, que es el mes al que pertenece el hecho que disparó el aviso,
+	// no la fecha en que se entregó la tarjeta. Un aviso puede entregarse en un mes y pertenecer a otro.
+	// Las dos consultas de abajo usan ese periodo y excluyen los descartados, así que descartar libera
+	// cupo, y el resumen, la bandeja y el emisor informan la misma cifra para el mismo mes.
 	AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDelMesParams) ([]AvisosVigentesDelMesRow, error)
+	// Las dos consultas paginadas filtran por el rango del mes, igual que AvisosVigentesDelMes: el periodo
+	// de pago_no_alcanza y cobro_nuevo es la fecha del pago, no el día 1, y una igualdad con el día 1
+	// los ocultaría. caida_ingreso guarda el mes evaluado (el anterior) y se lista en ese mes.
+	AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error)
+	BorrarCatalogoMarcaFueraDe(ctx context.Context, arg BorrarCatalogoMarcaFueraDeParams) (int64, error)
 	BorrarCopia(ctx context.Context) error
 	BorrarMovimientoEnriquecido(ctx context.Context, arg BorrarMovimientoEnriquecidoParams) error
+	BuscarCatalogoPorLlave(ctx context.Context, llave string) (CatalogoMarca, error)
+	BuscarCatalogoPorNombre(ctx context.Context, nombreNormalizado string) (CatalogoMarca, error)
 	ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error)
-	ContarAvisosEmitidosEnElMes(ctx context.Context, arg ContarAvisosEmitidosEnElMesParams) (int64, error)
+	ContarVotosPorCategoria(ctx context.Context, arg ContarVotosPorCategoriaParams) ([]ContarVotosPorCategoriaRow, error)
+	ConteoPorOrigenYMes(ctx context.Context) ([]ConteoPorOrigenYMesRow, error)
 	DescartarAviso(ctx context.Context, arg DescartarAvisoParams) (DescartarAvisoRow, error)
 	EmitirAviso(ctx context.Context, arg EmitirAvisoParams) (pgtype.UUID, error)
 	ExportarCopia(ctx context.Context) ([]ExportarCopiaRow, error)
@@ -38,16 +52,22 @@ type Querier interface {
 	LeerCursor(ctx context.Context) (LeerCursorRow, error)
 	LineasDeAsientos(ctx context.Context, asientos []int64) ([]LineasDeAsientosRow, error)
 	LineasDeTransferencias(ctx context.Context, transferencias []pgtype.UUID) ([]LineasDeTransferenciasRow, error)
+	ListarCatalogoMarca(ctx context.Context) ([]ListarCatalogoMarcaRow, error)
 	ListarCategorias(ctx context.Context) ([]Categoria, error)
+	ListarCodigosDeCategoria(ctx context.Context) ([]string, error)
 	ListarMemoriaDeUsuario(ctx context.Context, usuarioID string) ([]ListarMemoriaDeUsuarioRow, error)
+	ListarPromociones(ctx context.Context) ([]InteligenciaPromocionDestino, error)
 	PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimientosParams) ([]PaginaDeMovimientosRow, error)
 	PagosDelUsuarioParaSeries(ctx context.Context, arg PagosDelUsuarioParaSeriesParams) ([]PagosDelUsuarioParaSeriesRow, error)
 	PrimerMovimientoDelUsuario(ctx context.Context, usuarioID string) (pgtype.Timestamptz, error)
+	PromoverDestino(ctx context.Context, arg PromoverDestinoParams) error
 	RecalcularCategoriaPorDestino(ctx context.Context, arg RecalcularCategoriaPorDestinoParams) ([]pgtype.UUID, error)
+	RegistrarVoto(ctx context.Context, arg RegistrarVotoParams) error
 	ReiniciarCursor(ctx context.Context) error
 	RenombrarContrapartePorDestino(ctx context.Context, arg RenombrarContrapartePorDestinoParams) ([]pgtype.UUID, error)
 	SaldoDelUsuarioHasta(ctx context.Context, arg SaldoDelUsuarioHastaParams) (int64, error)
 	TotalesPorCategoriaYMes(ctx context.Context, arg TotalesPorCategoriaYMesParams) ([]TotalesPorCategoriaYMesRow, error)
+	UpsertCatalogoMarca(ctx context.Context, arg UpsertCatalogoMarcaParams) (bool, error)
 	UsuariosConHistorial(ctx context.Context, arg UsuariosConHistorialParams) ([]string, error)
 }
 
