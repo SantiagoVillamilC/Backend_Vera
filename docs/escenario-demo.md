@@ -15,12 +15,11 @@ bash infra/local/sembrar-escenario-demo.sh
 bash infra/local/sembrar-escenario-demo.sh
 ```
 
-El cupo de la demo es 5 y los dos guiones lo fijan por entorno. No es lo que hace aparecer
-el aviso de presupuesto: los cuatro hechos caen en dos períodos de dos, octubre agrupa
-`caida_ingreso` y `cobro_nuevo` y noviembre agrupa `pago_no_alcanza` y
-`presupuesto_anticipado`, así que con el cupo de producto 3 los cuatro entrarían igual. Se
-fija 5 para dejar holgura y no depender del recorte por prioridad. El comando lee
-`AVISOS_CUPO` igual que la API.
+El cupo de la demo es 5 y los dos guiones lo fijan por entorno. Los cinco hechos caen en dos
+períodos: octubre agrupa `caida_ingreso` y `cobro_nuevo`, y noviembre agrupa `pago_no_alcanza`,
+`presupuesto_anticipado` y `categoria_sobre_media`. Con el cupo de producto 3 noviembre se
+recorta por prioridad y se pierden avisos, así que la demo necesita 5 para enseñar las cinco
+familias. El comando lee `AVISOS_CUPO` igual que la API.
 
 La fecha es un reloj **simulado**, siempre el día 19, para evaluar el pago de ENEL del
 día 20. Si se omite, se usa el 19 del mes actual en Bogotá. No equivale a la fecha real
@@ -33,7 +32,7 @@ Usa el propietario de la base desechable, porque el reinicio necesita eliminar d
 
 ## Datos y reglas
 
-Se escriben 52 asientos balanceados (104 apuntes) para un único usuario. Los importes
+Se escriben 56 asientos balanceados (112 apuntes) para un único usuario. Los importes
 se convierten de pesos a centavos enteros; se conserva el signo del ledger: el abono
 a la cuenta pasiva del usuario es negativo.
 
@@ -46,22 +45,25 @@ a la cuenta pasiva del usuario es negativo.
 - Ingreso histórico de $200.000 y de $138.000 en el mes anterior y el actual, más el
   reembolso de $100.000 en el mes actual. La caída es del 31 %: la regla usa desigualdad
   estricta, así que exactamente 30 % no dispara.
-- Saldo inicial de $4.000 y saldo final de $9.700 antes del pago de ENEL.
+- Saldo inicial de $4.000 y saldo final de $7.100 antes del pago de ENEL.
 - Compra de tecnología por $120.000 el día 7 del mes actual. Con ella el gasto
-  acumulado del mes en curso queda en $195.900, por encima de la mediana de los meses
+  acumulado del mes en curso queda en $198.500, por encima de la mediana de los meses
   completos, que es $189.900, y `presupuesto_anticipado` dispara con el multiplicador
   1.0. El reembolso mantiene el saldo positivo y por debajo de los $139.900 de ENEL e
   INTERNET HOGAR, así que `pago_no_alcanza` sigue disparando.
+- Cuatro entradas pequeñas el mismo mes, para encender los escalones que faltaban al censo:
+  una compra QR de $500 con MCC 5411 (`mcc`), una marca de $600 registrada en
+  `inteligencia.catalogo_marca` (`catalogo`), una corrección de $700 en la memoria privada
+  del usuario (`memoria`) y un pago de $800 con $80 de GMF contra `pasivo:gmf_por_pagar`
+  (`contraparte_interna`).
 
 Se reutilizan el enriquecimiento, el léxico v2 y los detectores de producción.
-No se insertan avisos prefabricados ni se modifica la cascada. El conteo de orígenes
-actual es `lexico` (escalón 5) y `sin_categoria`. El criterio de CF-A2-03 de al menos
-cinco escalones distintos por origen **no se cumple** con este escenario, y la causa no es
-la cascada: el lote ya escribe los siete orígenes (CF-A1-03, `d114d0c`). Lo que falta son
-las entradas del escenario que los disparan: un MCC en el QR, una marca del catálogo, una
-corrección en memoria privada y una contraparte interna. Mientras no se agreguen, la
-tarjeta queda en `parcial` por este criterio y el censo de siete orígenes se sostiene con
-la prueba de integración de A1-03, no con la demo.
+No se insertan avisos prefabricados ni se modifica la cascada. El censo por origen sale
+con seis escalones distintos: `catalogo=1`, `contraparte_interna=1`, `lexico=39`, `mcc=1`,
+`memoria=1` y `sin_categoria=13`. Las cuatro entradas nuevas de la sección anterior son las
+que encienden los escalones que faltaban; el séptimo (`tfidf`) se sostiene con la prueba de
+integración de A1-03 (`d114d0c`) porque el escenario no enciende el clasificador. El
+criterio de CF-A2-03 de al menos cinco orígenes **se cumple** y la tarjeta queda completada.
 
 ## Idempotencia y reinicio
 
@@ -92,13 +94,13 @@ Cada corrida imprime JSON y escribe `DEMO-ESCENARIO-STATE.json` (o la ruta `ESTA
 Contiene usuario, fecha, IDs, conteos por categoría/origen/tipo de aviso y series maduras
 recurrentes. Conserva el JSON de las dos corridas para pegarlo en la tarjeta.
 
-Resultados esperados con cupo 5: 52 movimientos, 7 series maduras y cuatro avisos:
-`caida_ingreso=1`, `cobro_nuevo=1`, `pago_no_alcanza=1`, `presupuesto_anticipado=1`.
-Categorías: alimentos 6, transporte 6, restaurantes 6, salud 6, entretenimiento 6,
-compras 1, comisiones 8 y sin categoría 13. Los 8 ingresos son clasificados por el léxico
-existente como comisiones; no se cambia esa regla desde la siembra. La compra queda en
-`compras` y no mueve el aviso de categoría, porque esa categoría no tiene meses
-completos con gasto.
+Resultados esperados con cupo 5: 56 movimientos, 7 series maduras y cinco avisos:
+`caida_ingreso=1`, `categoria_sobre_media=1`, `cobro_nuevo=1`, `pago_no_alcanza=1`,
+`presupuesto_anticipado=1`. Categorías: alimentos 7, transporte 6, restaurantes 6, salud 6,
+entretenimiento 7, compras 2, comisiones 9 y sin categoría 13. Los 8 ingresos son clasificados
+por el léxico existente como comisiones; no se cambia esa regla desde la siembra. Las cuatro
+entradas nuevas reparten una categoría cada una y la de entretenimiento empuja la categoría
+sobre la media, que es el quinto aviso.
 
 Prueba reproducible contra una base local de demo ya migrada:
 

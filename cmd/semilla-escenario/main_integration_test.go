@@ -79,11 +79,11 @@ func TestEscenarioDosCorridasYReinicio(t *testing.T) {
 	t.Setenv("DEMO_USUARIO", usuario)
 	t.Setenv("REINICIAR", "si")
 	tercero := leer()
-	if !reflect.DeepEqual(primero.Categorias, tercero.Categorias) || !reflect.DeepEqual(primero.Avisos, tercero.Avisos) || primero.Series != tercero.Series {
+	if !reflect.DeepEqual(primero.Categorias, tercero.Categorias) || !reflect.DeepEqual(primero.Avisos, tercero.Avisos) || !reflect.DeepEqual(primero.Origenes, tercero.Origenes) || primero.Series != tercero.Series {
 		t.Fatal("reinicio cambia los conteos")
 	}
 	if !cumpleAceptacion(tercero) {
-		t.Fatalf("aceptación incompleta: avisos=%v series=%d categorías=%v asientos=%d", tercero.Avisos, tercero.Series, tercero.Categorias, len(tercero.Asientos))
+		t.Fatalf("aceptación incompleta: avisos=%v series=%d categorías=%v orígenes=%v asientos=%d", tercero.Avisos, tercero.Series, tercero.Categorias, tercero.Origenes, len(tercero.Asientos))
 	}
 	if huella() != antes {
 		t.Fatal("el reinicio modificó datos de otro usuario")
