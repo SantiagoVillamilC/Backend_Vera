@@ -1,0 +1,156 @@
+name: Calidad de modelos
+
+# Compuertas de los modelos sin GPU y sin imagenes: lockfile de pesos, aceptacion archivada del
+# proveedor local y transcripcion sobre clips sinteticos. Ninguna de las tres necesita red externa
+# ni credenciales. La documentacion de que cubre cada una esta en docs/compuertas-calidad-modelos.md.
+
+on:
+  pull_request:
+    paths:
+      - modelos/lock.json
+      - cmd/verificar-modelos/**
+      - docs/evaluaciones/**
+      - infra/stt-local/**
+      - .github/workflows/calidad-modelos.yml
+  push:
+    paths:
+      - modelos/lock.json
+      - cmd/verificar-modelos/**
+      - docs/evaluaciones/**
+      - infra/stt-local/**
+      - .github/workflows/calidad-modelos.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calidad-modelos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    name: Lockfile de pesos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Exigir el lockfile
+        run: |
+          if [ ! -f modelos/lock.json ]; then
+            echo "::error::Falta modelos/lock.json, sin él ningún despliegue puede fijar sus pesos."
+            exit 1
+          fi
+
+      - name: Validar la estructura del lockfile
+        run: |
+          set -o pipefail
+          if go run ./cmd/verificar-modelos -solo-lock -lock modelos/lock.json 2>&1 | tee "$RUNNER_TEMP/lock.txt"; then
+            cat "$RUNNER_TEMP/lock.txt" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::El lockfile no pasó la validación de estructura."
+            cat "$RUNNER_TEMP/lock.txt" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Prueba unitaria del verificador
+        run: go test -count=1 ./cmd/verificar-modelos/
+
+  aceptacion-archivada:
+    name: Aceptación archivada del proveedor local
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Los umbrales están escritos aquí a propósito: si el informe pierde un campo, el job falla
+      # en vez de omitir la comprobación. Las cifras de referencia son las del 11 de noviembre de
+      # 2026: 21 llamadas correctas exigidas, cero ejecuciones de dinero y p95 de 30000 ms.
+      - name: Validar el informe contra los umbrales escritos
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          ruta = pathlib.Path("docs/evaluaciones/local-e2b-seleccion-20.json")
+          if not ruta.is_file():
+              sys.exit("::error::Falta docs/evaluaciones/local-e2b-seleccion-20.json: sin el informe no hay aceptación que comprobar.")
+
+          informe = json.loads(ruta.read_text(encoding="utf-8"))
+          aceptacion = informe.get("aceptacion_local")
+          if not isinstance(aceptacion, dict):
+              sys.exit("::error::El informe no trae aceptacion_local: la compuerta no puede omitirla.")
+
+          exigidos = {
+              "llamadas_correctas": "entero",
+              "exigidas_llamadas_correctas": "entero",
+              "ejecuciones_de_dinero": "entero",
+              "p95_ms": "entero",
+              "cumple": "booleano",
+          }
+          for campo, tipo in exigidos.items():
+              if campo not in aceptacion:
+                  sys.exit(f"::error::Falta el campo {campo} en aceptacion_local.")
+              if tipo == "entero" and not isinstance(aceptacion[campo], int):
+                  sys.exit(f"::error::El campo {campo} no es entero.")
+              if tipo == "booleano" and not isinstance(aceptacion[campo], bool):
+                  sys.exit(f"::error::El campo {campo} no es booleano.")
+
+          if aceptacion["llamadas_correctas"] < aceptacion["exigidas_llamadas_correctas"]:
+              sys.exit(f"::error::Llamadas correctas {aceptacion['llamadas_correctas']} por debajo de las exigidas {aceptacion['exigidas_llamadas_correctas']}.")
+          if aceptacion["ejecuciones_de_dinero"] != 0:
+              sys.exit(f"::error::El informe registra {aceptacion['ejecuciones_de_dinero']} ejecuciones de dinero; la compuerta exige cero.")
+          if aceptacion["p95_ms"] > 30000:
+              sys.exit(f"::error::p95 {aceptacion['p95_ms']} ms supera el límite de 30000 ms.")
+          if not aceptacion["cumple"]:
+              sys.exit("::error::El informe no declara cumple: la aceptación archivada no se sostiene.")
+
+          resumen = os.environ.get("GITHUB_STEP_SUMMARY")
+          if resumen:
+              with open(resumen, "a", encoding="utf-8") as archivo:
+                  archivo.write("### Aceptación archivada\n\n")
+                  archivo.write(f"- Llamadas correctas: {aceptacion['llamadas_correctas']} de {aceptacion['exigidas_llamadas_correctas']} exigidas.\n")
+                  archivo.write(f"- Ejecuciones de dinero: {aceptacion['ejecuciones_de_dinero']}.\n")
+                  archivo.write(f"- p95: {aceptacion['p95_ms']} ms (límite 30000).\n")
+          print("aceptacion archivada: en verde")
+
+          PY
+
+  transcripcion:
+    name: Transcripción sobre clips sintéticos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # El conjunto de 24 clips y sus referencias no están en este repositorio
+      # (docs/evidencia-stt-tts-seed.md, líneas 176 y 177). Mientras falten, la compuerta falla
+      # nombrando lo que falta en vez de omitirse: un dato ausente no puede pasar por verde.
+      - name: Exigir el conjunto de clips y sus referencias
+        run: |
+          if [ ! -f infra/stt-local/clips/manifiesto.json ]; then
+            echo "::error::Falta infra/stt-local/clips/manifiesto.json con los 24 clips sintéticos y sus transcripciones de referencia. El conjunto vive fuera del repositorio (docs/evidencia-stt-tts-seed.md:176)."
+            exit 1
+          fi
+          if [ ! -f infra/stt-local/medir_wer.py ]; then
+            echo "::error::Falta infra/stt-local/medir_wer.py: el manifiesto existe y no hay medidor que lo recorra."
+            exit 1
+          fi
+
+      - name: Medir el WER y exigir 0,15
+        run: |
+          python3 infra/stt-local/medir_wer.py \
+            --manifiesto infra/stt-local/clips/manifiesto.json \
+            --tope 0.15
