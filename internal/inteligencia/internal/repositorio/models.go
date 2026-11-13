@@ -54,6 +54,23 @@ type CursorEnriquecimiento struct {
 	ActualizadoEn pgtype.Timestamptz `json:"actualizado_en"`
 }
 
+type InteligenciaPromocionDestino struct {
+	TipoDestino string             `json:"tipo_destino"`
+	Nivel       string             `json:"nivel"`
+	Valor       string             `json:"valor"`
+	Categoria   string             `json:"categoria"`
+	PromovidoEn pgtype.Timestamptz `json:"promovido_en"`
+}
+
+type InteligenciaVotoDestino struct {
+	TipoDestino string             `json:"tipo_destino"`
+	Nivel       string             `json:"nivel"`
+	Valor       string             `json:"valor"`
+	UsuarioID   string             `json:"usuario_id"`
+	Categoria   string             `json:"categoria"`
+	CreadoEn    pgtype.Timestamptz `json:"creado_en"`
+}
+
 type MemoriaCorreccion struct {
 	UsuarioID     string             `json:"usuario_id"`
 	TipoDestino   string             `json:"tipo_destino"`

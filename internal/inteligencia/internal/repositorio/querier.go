@@ -29,6 +29,7 @@ type Querier interface {
 	BuscarCatalogoPorLlave(ctx context.Context, llave string) (CatalogoMarca, error)
 	BuscarCatalogoPorNombre(ctx context.Context, nombreNormalizado string) (CatalogoMarca, error)
 	ContarAvisosDelMes(ctx context.Context, arg ContarAvisosDelMesParams) (int64, error)
+	ContarVotosPorCategoria(ctx context.Context, arg ContarVotosPorCategoriaParams) ([]ContarVotosPorCategoriaRow, error)
 	ConteoPorOrigenYMes(ctx context.Context) ([]ConteoPorOrigenYMesRow, error)
 	DescartarAviso(ctx context.Context, arg DescartarAvisoParams) (DescartarAvisoRow, error)
 	EmitirAviso(ctx context.Context, arg EmitirAvisoParams) (pgtype.UUID, error)
@@ -52,10 +53,13 @@ type Querier interface {
 	ListarCategorias(ctx context.Context) ([]Categoria, error)
 	ListarCodigosDeCategoria(ctx context.Context) ([]string, error)
 	ListarMemoriaDeUsuario(ctx context.Context, usuarioID string) ([]ListarMemoriaDeUsuarioRow, error)
+	ListarPromociones(ctx context.Context) ([]InteligenciaPromocionDestino, error)
 	PaginaDeMovimientos(ctx context.Context, arg PaginaDeMovimientosParams) ([]PaginaDeMovimientosRow, error)
 	PagosDelUsuarioParaSeries(ctx context.Context, arg PagosDelUsuarioParaSeriesParams) ([]PagosDelUsuarioParaSeriesRow, error)
 	PrimerMovimientoDelUsuario(ctx context.Context, usuarioID string) (pgtype.Timestamptz, error)
+	PromoverDestino(ctx context.Context, arg PromoverDestinoParams) error
 	RecalcularCategoriaPorDestino(ctx context.Context, arg RecalcularCategoriaPorDestinoParams) ([]pgtype.UUID, error)
+	RegistrarVoto(ctx context.Context, arg RegistrarVotoParams) error
 	ReiniciarCursor(ctx context.Context) error
 	RenombrarContrapartePorDestino(ctx context.Context, arg RenombrarContrapartePorDestinoParams) ([]pgtype.UUID, error)
 	SaldoDelUsuarioHasta(ctx context.Context, arg SaldoDelUsuarioHastaParams) (int64, error)

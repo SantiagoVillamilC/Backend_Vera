@@ -85,6 +85,7 @@ sql:
       - bd/migraciones/0031_categoria_visible_del_catalogo.sql
       - bd/migraciones/0032_add_escalon_a_la_copia.sql
       - bd/migraciones/0033_add_montos_al_aviso.sql
+      - bd/migraciones/0035_create_voto_y_promocion.sql
     queries: bd/consultas-inteligencia
     gen:
       go:

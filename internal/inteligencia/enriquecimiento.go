@@ -444,6 +444,25 @@ func memoriaDeUsuario(ctx context.Context, q *repositorio.Queries, usuarioID str
 			Valor:       fila.Valor,
 		}] = correccion
 	}
+	// La promoción por K es conocimiento compartido del destino: se suma a la memoria del usuario
+	// solo donde no haya una corrección privada, que manda. Las filas nuevas heredan la categoría;
+	// las ya enriquecidas no se recalculan.
+	promociones, err := q.ListarPromociones(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inteligencia: leer las promociones de destino: %w", err)
+	}
+	for _, fila := range promociones {
+		clave := ClaveCorreccion{
+			Usuario:     usuarioID,
+			TipoDestino: TipoDestino(fila.TipoDestino),
+			Nivel:       fila.Nivel,
+			Valor:       fila.Valor,
+		}
+		if _, privada := memoria[clave]; privada {
+			continue
+		}
+		memoria[clave] = Correccion{Categoria: Categoria(fila.Categoria)}
+	}
 	return memoria, nil
 }
 
