@@ -5,7 +5,7 @@ cifras tal como salen del modelo. El WER se calcula por palabras con distancia d
 Levenshtein sobre los totales (ediciones / palabras de referencia), no como promedio
 de tasas por clip.
 
-Uso: python medir_wer.py --manifiesto clips/manifiesto.json [--tope 0.15]
+Uso: python medir_wer.py --manifiesto clips/manifiesto.json [--tope 0.10]
 Sale con 1 cuando el WER supera el tope, para que la compuerta de CI falle.
 """
 
@@ -55,7 +55,7 @@ def ediciones(referencia: list[str], hipotesis: list[str]) -> int:
 def main() -> int:
     p = argparse.ArgumentParser(description="WER del STT local sobre un manifiesto de clips.")
     p.add_argument("--manifiesto", type=Path, required=True)
-    p.add_argument("--tope", type=float, default=0.15)
+    p.add_argument("--tope", type=float, default=0.10)
     args = p.parse_args()
 
     if not args.manifiesto.is_file():

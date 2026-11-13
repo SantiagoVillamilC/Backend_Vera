@@ -9,7 +9,7 @@ medición con comando escrito, como pide el resto del cierre.
 | --- | --- | --- | --- |
 | Lockfile de pesos | `lockfile` | `modelos/lock.json` es un inventario válido y el verificador no se rompe | Go |
 | Aceptación archivada | `aceptacion-archivada` | El informe del proveedor local sigue cumpliendo sus umbrales | Python |
-| Transcripción | `transcripcion` | El WER sobre los clips sintéticos no supera 0,15 | Los clips, sus referencias y el medidor |
+| Transcripción | `transcripcion` | El WER sobre los clips sintéticos no supera 0,10 | Los clips, sus referencias y el medidor |
 | Bytes de los pesos | fuera de CI | Los pesos en disco coinciden con las huellas del lockfile | Los discos con varios GB |
 
 ## 1. Lockfile de pesos
@@ -55,12 +55,12 @@ El job por eso exige primero `infra/stt-local/clips/manifiesto.json` con los cli
 transcripciones de referencia, y después `infra/stt-local/medir_wer.py`. Mientras falten, **el job
 queda en rojo nombrando lo que falta**. Es deliberado: un dato ausente no se omite, se reporta, igual
 que en la aceptación archivada. Cuando los clips y el medidor se commiteen, el job corre
-`medir_wer.py --manifiesto ... --tope 0.15` y falla por encima de 0,15.
+`medir_wer.py --manifiesto ... --tope 0.10` y falla por encima de 0,10.
 
 Reproducción local, cuando existan los assets:
 
 ```bash
-python3 infra/stt-local/medir_wer.py --manifiesto infra/stt-local/clips/manifiesto.json --tope 0.15
+python3 infra/stt-local/medir_wer.py --manifiesto infra/stt-local/clips/manifiesto.json --tope 0.10
 ```
 
 Hoy el comando no existe y por eso no se cita ningún WER medido aquí. El 0,0808 es del repositorio de
@@ -73,7 +73,7 @@ Antes de medir, y no después:
 - El clasificador solo se enciende en producción si la precisión de lo mostrado alcanza 0,90. La
   medición de `docs/medicion-tfidf-v3.md` da 0,875 con el artefacto v3, así que la compuerta no se
   cumple y la bandera queda apagada.
-- La transcripción no supera un WER de 0,15.
+- La transcripción no supera un WER de 0,10.
 - La aceptación del proveedor local exige cero ejecuciones de dinero y p95 por debajo de 30000 ms.
 
 Ninguno de esos tres números se recalibra para que pase: el informe de T-03 deja la cifra real y la

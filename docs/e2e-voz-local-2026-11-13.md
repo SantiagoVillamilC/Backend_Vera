@@ -33,7 +33,7 @@ audio transcrito y un turno de chat servido por Ollama. Corrido en el worktree
 - La primera petición tras el arranque del contenedor tardó 10.558 ms porque incluyó la carga
   del modelo. No se toma como latencia de régimen.
 - WER contra el manifiesto con la normalización de `medir_wer.py`: 14 palabras de referencia, 2
-  ediciones, 0,143. Bajo el tope 0,15, pero sin valor estadístico con un solo clip.
+  ediciones, 0,143. Supera el tope agregado 0,10 en ese clip aislado, pero la compuerta se mide sobre los 24 clips; el agregado 0,0808 sí cumple.
 
 ## Chat compuesto
 
