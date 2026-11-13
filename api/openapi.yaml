@@ -1035,7 +1035,9 @@ paths:
       description: >
         Descartar no borra el aviso: sale de la bandeja y deja de ocupar cupo en su periodo, pero
         sigue siendo el mismo aviso para la deduplicacion, asi que el emisor no lo vuelve a emitir.
-        El descarte es idempotente y solo afecta a los avisos del usuario autenticado.
+        El descarte es idempotente y solo afecta a los avisos del usuario autenticado. Si el aviso se
+        creo despues del instante del descarte (por ejemplo con una fecha simulada en el futuro), la
+        respuesta es 409 con el codigo DescarteAnteriorAlAlta y el aviso no cambia.
       tags: [inteligencia]
       parameters:
         - name: id
@@ -1058,6 +1060,8 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
         "429":
           $ref: "#/components/responses/Error"
@@ -1378,13 +1382,7 @@ paths:
       operationId: sintetizarVera
       tags: [vera]
       summary: Sintetiza texto con Kokoro local.
-      description: Requiere sesión, consentimiento y token de voz. Cuota de voz por usuario. Caché SHA-256 de cinco minutos. Máximo 8192 bytes y 87 segundos de audio. Si el servicio falla devuelve 200 JSON con voz_local=true; la app conserva el mensaje y usa su voz local.
-      parameters:
-        - in: header
-          name: X-Vera-Token
-          required: true
-          schema:
-            type: string
+      description: Requiere sesión, consentimiento de IA y cuota de voz por usuario. No recibe ningún token de voz, ya que ese secreto solo lo usa el backend para hablar con Kokoro. Caché SHA-256 de cinco minutos. Máximo 400 caracteres de texto, que caben con margen en el plazo de 25 segundos del backend. Si el servicio falla, o si el backend no tiene la voz local configurada, devuelve 200 JSON con voz_local=true y cabecera X-Vera-Audio no-disponible. La app conserva el mensaje y usa su voz local.
       requestBody:
         required: true
         content:
@@ -1418,9 +1416,11 @@ paths:
                   meta:
                     nullable: true
         '401':
-          description: Sesión o token inválido.
+          description: Sesión ausente o inválida.
         '403':
           description: Falta consentimiento.
+        '413':
+          description: El cuerpo supera 1 MiB.
         '422':
           description: Texto inválido.
         '429':
@@ -2158,9 +2158,9 @@ components:
         texto:
           type: string
           minLength: 1
-          maxLength: 8192
+          maxLength: 400
           x-oapi-codegen-extra-tags:
-            validate: required,max=8192
+            validate: required,max=400
     SintesisDegradada:
       type: object
       required: [audio_disponible, voz_local]
@@ -3551,6 +3551,16 @@ components:
             Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila
             aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
 
+    InteligenciaAvisoAccionCodigo:
+      type: string
+      description: >
+        Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado.
+        Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza
+        lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro,
+        presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria.
+        Un cliente debe tolerar un valor que no conozca.
+      enum: [revisar_pagos, revisar_ingreso, revisar_cobro, revisar_presupuesto, revisar_categoria]
+
     InteligenciaAviso:
       type: object
       description: >
@@ -3598,6 +3608,9 @@ components:
           type: string
         accion:
           type: string
+          description: Etiqueta visible de la accion. Es texto de la app y puede cambiar de redaccion, no sirve para decidir el destino.
+        accion_codigo:
+          $ref: "#/components/schemas/InteligenciaAvisoAccionCodigo"
         transaccion_id:
           type: string
           format: uuid

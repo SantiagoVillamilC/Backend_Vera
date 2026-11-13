@@ -166,17 +166,17 @@ type consultasDeResumenFalsas struct {
 	hasta     pgtype.Date
 }
 
-func (c *consultasDeResumenFalsas) PrimerMovimientoDelUsuario(ctx context.Context,
-	usuarioID string) (pgtype.Timestamptz, error) {
+func (c *consultasDeResumenFalsas) PrimerMovimientoDelUsuario(_ context.Context,
+	_ string) (pgtype.Timestamptz, error) {
 	return pgtype.Timestamptz{}, nil
 }
 
-func (c *consultasDeResumenFalsas) TotalesPorCategoriaYMes(ctx context.Context,
-	arg repositorio.TotalesPorCategoriaYMesParams) ([]repositorio.TotalesPorCategoriaYMesRow, error) {
+func (c *consultasDeResumenFalsas) TotalesPorCategoriaYMes(_ context.Context,
+	_ repositorio.TotalesPorCategoriaYMesParams) ([]repositorio.TotalesPorCategoriaYMesRow, error) {
 	return nil, nil
 }
 
-func (c *consultasDeResumenFalsas) ContarAvisosDelMes(ctx context.Context,
+func (c *consultasDeResumenFalsas) ContarAvisosDelMes(_ context.Context,
 	arg repositorio.ContarAvisosDelMesParams) (int64, error) {
 	c.consultas++
 	c.desde = arg.Desde

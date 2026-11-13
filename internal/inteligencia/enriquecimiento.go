@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -542,6 +543,9 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 	descripcion := efecto.Descripcion
 	if descripcion == "" {
 		descripcion = g.descripcion
+	}
+	if decision.Escalon < 0 || decision.Escalon > math.MaxInt16 {
+		return fmt.Errorf("inteligencia: escalón %d fuera de rango para el movimiento %s", decision.Escalon, transaccionID)
 	}
 	parametros := repositorio.InsertarMovimientoEnriquecidoParams{
 		UsuarioID:                    efecto.UsuarioID,

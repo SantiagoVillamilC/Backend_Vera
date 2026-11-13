@@ -62,5 +62,24 @@ class Contrato(unittest.TestCase):
             self.assertEqual(estado, 422)
             self.assertNotIn(b"privado", cuerpo)
 
+    def test_bytes_que_no_son_audio_dan_422_sin_inferencia(self):
+        # Criterio "un WAV roto rompe el job": el decodificador rechaza lo que no es RIFF/WAVE
+        # y el servidor responde 422 sin llamar al modelo ni filtrar el detalle del error.
+        def decodificar(audio, sampling_rate):
+            if audio.read(4) != b"RIFF":
+                raise ValueError("detalle interno del decodificador")
+            return [0]
+
+        llamadas = []
+        with patch("faster_whisper.audio.decode_audio", side_effect=decodificar), \
+                patch.object(Modelo, "transcribe", side_effect=lambda *a, **k: llamadas.append(1)):
+            for basura in (b"esto no es audio", b"\x00" * 64, b"RIF"):
+                with self.subTest(bytes=basura[:8]):
+                    estado, cuerpo = self.pedir(basura)
+                    self.assertEqual(estado, 422)
+                    self.assertNotIn(b"decodificador", cuerpo)
+        self.assertEqual(llamadas, [])
+
+
 if __name__ == "__main__":
     unittest.main()

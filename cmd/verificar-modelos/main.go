@@ -128,7 +128,7 @@ func ejecutar(rutaLock string, sobreescritas map[string]string, soloLock bool, s
 	}
 
 	if soloLock {
-		fmt.Fprintf(salida, "Lockfile válido: %d artefactos, %d con huella y %d por pin, "+
+		_, _ = fmt.Fprintf(salida, "Lockfile válido: %d artefactos, %d con huella y %d por pin, "+
 			"%d raíces. No se revisaron archivos por -solo-lock.\n", len(bloqueo.Artefactos),
 			conHuella(bloqueo), len(bloqueo.Artefactos)-conHuella(bloqueo), len(bloqueo.Raices))
 		return nil, nil
@@ -141,7 +141,7 @@ func ejecutar(rutaLock string, sobreescritas map[string]string, soloLock bool, s
 	usadas := make(map[string]bool, len(raices))
 	for _, artefacto := range bloqueo.Artefactos {
 		if artefacto.Sha256 == "" {
-			fmt.Fprintf(salida, "%s: fijado por pin (%s), sin archivo que comparar.\n",
+			_, _ = fmt.Fprintf(salida, "%s: fijado por pin (%s), sin archivo que comparar.\n",
 				artefacto.Nombre, artefacto.Pin)
 			porPin++
 			continue
@@ -161,7 +161,7 @@ func ejecutar(rutaLock string, sobreescritas map[string]string, soloLock bool, s
 		return fallos, nil
 	}
 
-	fmt.Fprintf(salida, "Verificados %d artefactos contra %s y %d por pin.\n", verificados,
+	_, _ = fmt.Fprintf(salida, "Verificados %d artefactos contra %s y %d por pin.\n", verificados,
 		strings.Join(nombresOrdenados(usadas), ", "), porPin)
 	return nil, nil
 }
@@ -169,7 +169,7 @@ func ejecutar(rutaLock string, sobreescritas map[string]string, soloLock bool, s
 // leerBloqueo abre el lockfile y rechaza campos que el formato no conoce, para que una errata
 // en una clave no pase inadvertida.
 func leerBloqueo(ruta string) (Bloqueo, error) {
-	crudo, err := os.ReadFile(ruta)
+	crudo, err := os.ReadFile(filepath.Clean(ruta))
 	if err != nil {
 		return Bloqueo{}, fmt.Errorf("leer el lockfile: %w", err)
 	}
@@ -401,11 +401,11 @@ func verificarArchivo(raiz string, artefacto Artefacto) []string {
 
 // huellaDelArchivo calcula el sha256 leyendo por bloques, porque los pesos pasan de varios GB.
 func huellaDelArchivo(ruta string) (string, error) {
-	archivo, err := os.Open(ruta)
+	archivo, err := os.Open(filepath.Clean(ruta))
 	if err != nil {
 		return "", err
 	}
-	defer archivo.Close()
+	defer func() { _ = archivo.Close() }()
 
 	huella := sha256.New()
 	if _, err := io.Copy(huella, archivo); err != nil {

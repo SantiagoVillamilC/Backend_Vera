@@ -461,6 +461,11 @@ func (h *Handler) DescartarAvisoInteligencia(w http.ResponseWriter, r *http.Requ
 		responderAvisoNoEncontrado(w)
 		return
 	}
+	if errors.Is(err, ErrDescarteAnteriorAlAlta) {
+		api.WriteError(w, http.StatusConflict, "DescarteAnteriorAlAlta",
+			"The notice cannot be dismissed before its creation time.", nil)
+		return
+	}
 	if err != nil {
 		api.WriteAPIError(w, r, err)
 		return
@@ -485,6 +490,10 @@ func respuestaDeAviso(aviso AvisoEmitido) api.InteligenciaAviso {
 		Porque:            aviso.Porque,
 		Accion:            aviso.Accion,
 		CreadoEn:          aviso.CreadoEn,
+	}
+	if aviso.AccionCodigo != "" {
+		codigo := api.InteligenciaAvisoAccionCodigo(aviso.AccionCodigo)
+		respuesta.AccionCodigo = &codigo
 	}
 	if aviso.ReferenciaCentavos != nil {
 		referencia := strconv.FormatInt(*aviso.ReferenciaCentavos, 10)

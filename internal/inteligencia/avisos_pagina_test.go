@@ -1,6 +1,7 @@
 package inteligencia
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -64,5 +65,21 @@ func TestPaginaAvisosParametros(t *testing.T) {
 	NuevoHandler(&servicioDeLecturaFalso{}).ListarAvisosInteligencia(w, peticionConIdentidad(t, "/"), api.ListarAvisosInteligenciaParams{Estado: &estado})
 	if w.Code != 400 {
 		t.Fatal(w.Code)
+	}
+}
+
+// Un descarte anterior al alta es un conflicto con el estado del aviso, no un fallo del servidor.
+func TestDescartarAvisoConAltaFuturaResponde409(t *testing.T) {
+	envuelto := fmt.Errorf("inteligencia: descartar: %w", ErrDescarteAnteriorAlAlta)
+	h := NuevoHandler(&servicioDeLecturaFalso{avisoErr: envuelto})
+	w := httptest.NewRecorder()
+	h.DescartarAvisoInteligencia(w, peticionConIdentidad(t, "/"), uuid.NewString())
+	if w.Code != 409 {
+		t.Fatalf("status = %d, want 409: %s", w.Code, w.Body)
+	}
+	for _, trozo := range []string{`"success":false`, `"code":"DescarteAnteriorAlAlta"`, `"data":null`} {
+		if !strings.Contains(w.Body.String(), trozo) {
+			t.Fatalf("falta %s en %s", trozo, w.Body)
+		}
 	}
 }

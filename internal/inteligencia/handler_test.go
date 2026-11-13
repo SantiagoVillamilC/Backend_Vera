@@ -881,7 +881,7 @@ func TestDescartarAvisoRespondeElSobre(t *testing.T) {
 	}
 }
 
-func (f *servicioDeLecturaFalso) Aviso(_ context.Context, usuario string, id uuid.UUID) (AvisoEmitido, error) {
+func (f *servicioDeLecturaFalso) Aviso(_ context.Context, usuario string, _ uuid.UUID) (AvisoEmitido, error) {
 	f.usuario = usuario
 	if len(f.avisos) > 0 {
 		return f.avisos[0], f.avisoErr

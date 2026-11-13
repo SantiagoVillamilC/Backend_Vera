@@ -43,7 +43,7 @@ func Recoverer(next http.Handler) http.Handler {
 			if p, ok := rvr.(panicWithStack); ok {
 				value, stack = p.value, p.stack
 			}
-			if value == http.ErrAbortHandler {
+			if err, ok := value.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 				panic(value)
 			}
 			slog.ErrorContext(r.Context(), "panic recovered", "err", value, "stack", string(stack))

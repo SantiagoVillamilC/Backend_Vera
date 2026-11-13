@@ -105,8 +105,16 @@ sobre la media, que es el quinto aviso.
 Prueba reproducible contra una base local de demo ya migrada:
 
 ```bash
-go test -race -tags=integration ./cmd/semilla-escenario
+SEMILLA_DATABASE_URL='postgres://<usuario>:<clave>@127.0.0.1:55437/vera_semilla_<nombre>?sslmode=disable' \
+  go test -race -tags=integration ./cmd/semilla-escenario
 ```
+
+La prueba lee `SEMILLA_DATABASE_URL` y no `DATABASE_URL`, porque esta última la comparten las demás
+pruebas de integración y apunta a la base principal, que el guard rechaza a propósito. Sin la
+variable la prueba hace `t.Skip`. En CI (`.github/workflows/ci.yml`, job `integration`) el mismo
+servicio Postgres publica además el puerto 55437, el paso `Create and migrate scenario seed database`
+crea y migra `vera_semilla_ci` por ese puerto y el paso de skips inesperados falla el job si la
+variable falta y la prueba se omite.
 
 La prueba comprueba dos corridas idénticas, reinicio con los mismos conteos y cursor
 global intacto. Fija `AVISOS_CUPO=5` por sí misma, exige `presupuesto_anticipado=1` y

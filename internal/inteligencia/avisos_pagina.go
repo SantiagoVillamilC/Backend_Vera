@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -95,7 +96,8 @@ func (s *Servicio) Aviso(ctx context.Context, usuario string, id uuid.UUID) (Avi
 }
 
 // AvisosDelUsuarioPaginados usa una fila extra y un orden estable, sin OFFSET. El periodo es el
-// criterio del cupo y del resumen, así que la bandeja y el conteo coinciden para el mismo mes.
+// criterio del cupo y del resumen y se filtra por el rango del mes, así que la bandeja y el conteo
+// coinciden para el mismo mes.
 func (s *Servicio) AvisosDelUsuarioPaginados(ctx context.Context, usuario string, periodo time.Time, estado EstadoDeAvisos, c *CursorDeAviso, limite int) (PaginaDeAvisos, error) {
 	pagina := PaginaDeAvisos{Avisos: make([]AvisoEmitido, 0)}
 	if estado != EstadoVigentes && estado != EstadoDescartados {
@@ -104,15 +106,21 @@ func (s *Servicio) AvisosDelUsuarioPaginados(ctx context.Context, usuario string
 	if limite < 1 || limite > 50 {
 		return pagina, ErrCursorInvalido
 	}
-	periodo = inicioDelMesDe(periodo, 0)
+	desde := inicioDelMesDe(periodo, 0)
+	hasta := desde.AddDate(0, 1, 0)
 	p := repositorio.AvisosVigentesPorPaginaParams{
 		UsuarioID: usuario,
-		Periodo:   pgtype.Date{Time: periodo, Valid: true},
+		Desde:     pgtype.Date{Time: fechaCivil(desde), Valid: true},
+		Hasta:     pgtype.Date{Time: fechaCivil(hasta), Valid: true},
 		Limite:    int32(limite + 1),
 	}
 	if c != nil {
 		if _, e := DecodificarCursorDeAviso(CodificarCursorDeAviso(*c)); e != nil {
 			return pagina, e
+		}
+		// La ida y vuelta de arriba ya exige 1..32767, la guarda deja el rango a la vista del linter.
+		if c.Prioridad < 1 || c.Prioridad > math.MaxInt16 {
+			return pagina, ErrCursorInvalido
 		}
 		p.Prioridad = pgtype.Int2{Int16: int16(c.Prioridad), Valid: true}
 		p.Severidad = pgtype.Int8{Int64: c.SeveridadCentavos, Valid: true}
