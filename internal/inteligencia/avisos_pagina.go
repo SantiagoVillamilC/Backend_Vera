@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -116,6 +117,10 @@ func (s *Servicio) AvisosDelUsuarioPaginados(ctx context.Context, usuario string
 	if c != nil {
 		if _, e := DecodificarCursorDeAviso(CodificarCursorDeAviso(*c)); e != nil {
 			return pagina, e
+		}
+		// La ida y vuelta de arriba ya exige 1..32767, la guarda deja el rango a la vista del linter.
+		if c.Prioridad < 1 || c.Prioridad > math.MaxInt16 {
+			return pagina, ErrCursorInvalido
 		}
 		p.Prioridad = pgtype.Int2{Int16: int16(c.Prioridad), Valid: true}
 		p.Severidad = pgtype.Int8{Int64: c.SeveridadCentavos, Valid: true}

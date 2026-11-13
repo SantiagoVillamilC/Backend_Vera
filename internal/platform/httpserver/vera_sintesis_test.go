@@ -153,7 +153,7 @@ func TestSintesisTopeDeTexto(t *testing.T) {
 				return []byte("WAV-prueba"), nil
 			})
 			uso := &usoVeraPrueba{}
-			r := httptest.NewRequest("POST", "/v1/vera/sintetizar", strings.NewReader(`{"texto":"`+tc.texto+`"}`))
+			r := httptest.NewRequestWithContext(t.Context(), "POST", "/v1/vera/sintetizar", strings.NewReader(`{"texto":"`+tc.texto+`"}`))
 			w := httptest.NewRecorder()
 			routerSintesis(false, v, true, uso).ServeHTTP(w, r)
 			if w.Code != tc.status {

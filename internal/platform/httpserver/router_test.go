@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -214,7 +215,7 @@ func TestAuthenticatedRouteSeesTestUserID(t *testing.T) {
 		}, nil)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/quien-soy", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/quien-soy", nil)
 	req.Header.Set(auth.CabeceraUsuarioDePrueba, "1")
 	rec := httptest.NewRecorder()
 
@@ -243,12 +244,34 @@ func TestPanicRecoveredInsideEnvelope(t *testing.T) {
 	handler := Recoverer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("boom")
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
 
 	assertErrorEnvelope(t, rec, http.StatusInternalServerError, "InternalError")
+}
+
+func TestRecovererRepropagaErrAbortHandler(t *testing.T) {
+	for nombre, valor := range map[string]any{
+		"centinela": http.ErrAbortHandler,
+		"envuelto":  fmt.Errorf("corte: %w", http.ErrAbortHandler),
+	} {
+		t.Run(nombre, func(t *testing.T) {
+			handler := Recoverer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				panic(valor)
+			}))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
+			rec := httptest.NewRecorder()
+
+			defer func() {
+				if recuperado := recover(); recuperado == nil {
+					t.Fatalf("el panic debía re-propagarse, status = %d", rec.Code)
+				}
+			}()
+			handler.ServeHTTP(rec, req)
+		})
+	}
 }
 
 func TestTimeoutReturnsEnvelope(t *testing.T) {
@@ -258,7 +281,7 @@ func TestTimeoutReturnsEnvelope(t *testing.T) {
 	handler := Timeout(20 * time.Millisecond)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		<-release
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)

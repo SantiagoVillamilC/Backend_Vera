@@ -86,9 +86,7 @@ func ConRelojOrquestador(ahora func() time.Time) OpcionOrquestador {
 	return func(o *Orquestador) { o.ahora = ahora }
 }
 
-// ConPlazo fija el corte del ciclo completo. El valor vive en la configuración, no en el
-// constructor: tiene que alcanzar al menos dos intentos del proveedor local para que el reintento
-// corra de verdad.
+// traducirCorte convierte el vencimiento del plazo del ciclo en ErrTimeoutIA y deja pasar el resto.
 func traducirCorte(err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return ErrTimeoutIA
@@ -96,6 +94,9 @@ func traducirCorte(err error) error {
 	return err
 }
 
+// ConPlazo fija el corte del ciclo completo. El valor vive en la configuración, no en el
+// constructor: tiene que alcanzar al menos dos intentos del proveedor local para que el reintento
+// corra de verdad.
 func ConPlazo(plazo time.Duration) OpcionOrquestador {
 	return func(o *Orquestador) {
 		if plazo > 0 {

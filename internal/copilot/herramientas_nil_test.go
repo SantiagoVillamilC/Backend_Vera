@@ -57,24 +57,24 @@ func (*transferenciaNula) ConsultarTransferencia(context.Context, string, uuid.U
 
 // Lectores que devuelven error: la herramienta tiene que propagarlo o mapearlo, nunca devolver ok vacío.
 
-var fallaDeLaBase = errors.New("la base no responde")
+var errFallaDeLaBase = errors.New("la base no responde")
 
 type saldoConFalla struct{}
 
 func (*saldoConFalla) Saldo(context.Context, string) (nucleo.Centavos, error) {
-	return 0, fallaDeLaBase
+	return 0, errFallaDeLaBase
 }
 
 type limitesConFalla struct{}
 
 func (*limitesConFalla) DesgloseLimites(context.Context, string, time.Time) (nucleo.DesgloseLimites, error) {
-	return nucleo.DesgloseLimites{}, fallaDeLaBase
+	return nucleo.DesgloseLimites{}, errFallaDeLaBase
 }
 
 type consumoConFalla struct{}
 
 func (*consumoConFalla) Resumen(context.Context, string, string, time.Time) (inteligencia.ResumenDelMes, error) {
-	return inteligencia.ResumenDelMes{}, fallaDeLaBase
+	return inteligencia.ResumenDelMes{}, errFallaDeLaBase
 }
 
 type transferenciaSinRegistro struct{}
@@ -122,9 +122,9 @@ func TestHerramientasPropaganElErrorTipadoDelLector(t *testing.T) {
 		args     ArgumentosHerramienta
 		esperado error
 	}{
-		{"saldo", ConsultaSaldoIA(&saldoConFalla{}), ArgumentosHerramienta{}, fallaDeLaBase},
-		{"limites", ConsultaLimitesIA(&limitesConFalla{}), ArgumentosHerramienta{}, fallaDeLaBase},
-		{"consumo", ResumenConsumoIA(&consumoConFalla{}), ArgumentosHerramienta{}, fallaDeLaBase},
+		{"saldo", ConsultaSaldoIA(&saldoConFalla{}), ArgumentosHerramienta{}, errFallaDeLaBase},
+		{"limites", ConsultaLimitesIA(&limitesConFalla{}), ArgumentosHerramienta{}, errFallaDeLaBase},
+		{"consumo", ResumenConsumoIA(&consumoConFalla{}), ArgumentosHerramienta{}, errFallaDeLaBase},
 		{"transferencia no encontrada", ConsultaTransferenciaIA(&transferenciaSinRegistro{}), ArgumentosHerramienta{TransferenciaID: uuid.NewString()}, ErrHerramientaNoEncontrado},
 	}
 
