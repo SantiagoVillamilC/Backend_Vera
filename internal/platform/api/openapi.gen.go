@@ -2844,7 +2844,7 @@ type SintesisDegradada struct {
 
 // SintetizarVeraRequest defines model for SintetizarVeraRequest.
 type SintetizarVeraRequest struct {
-	Texto string `json:"texto" validate:"required,max=8192"`
+	Texto string `json:"texto" validate:"required,max=400"`
 }
 
 // Tokens defines model for Tokens.
@@ -3015,11 +3015,6 @@ type EnviarMensajeVeraParams struct {
 type EnviarMensajeVozVeraParams struct {
 	// IdempotencyKey UUID único por envío de voz; reutilizarlo sólo con el mismo audio y conversación.
 	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
-}
-
-// SintetizarVeraParams defines parameters for SintetizarVera.
-type SintetizarVeraParams struct {
-	XVeraToken string `json:"X-Vera-Token"`
 }
 
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
@@ -3354,7 +3349,7 @@ type ServerInterface interface {
 	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams)
 	// SintetizarVera Sintetiza texto con Kokoro local.
 	// (POST /v1/vera/sintetizar)
-	SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams)
+	SintetizarVera(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -3591,7 +3586,7 @@ func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Reque
 
 // SintetizarVera Sintetiza texto con Kokoro local.
 // (POST /v1/vera/sintetizar)
-func (_ Unimplemented) SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams) {
+func (_ Unimplemented) SintetizarVera(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4553,39 +4548,8 @@ func (siw *ServerInterfaceWrapper) EnviarMensajeVozVera(w http.ResponseWriter, r
 // SintetizarVera operation middleware
 func (siw *ServerInterfaceWrapper) SintetizarVera(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SintetizarVeraParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-Vera-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Vera-Token")]; found {
-		var XVeraToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Vera-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Vera-Token", valueList[0], &XVeraToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Vera-Token", Err: err})
-			return
-		}
-
-		params.XVeraToken = XVeraToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-Vera-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Vera-Token", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SintetizarVera(w, r, params)
+		siw.Handler.SintetizarVera(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

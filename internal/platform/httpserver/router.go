@@ -56,7 +56,6 @@ type LimitadorUsoVera interface {
 type DependenciasVera struct {
 	Modelos        DependenciasDeModelos
 	Sintetizador   copilot.SintetizadorVoz
-	TokenVoz       string
 	Proveedor      copilot.ProveedorIA
 	Catalogo       *copilot.Catalogo
 	Consentimiento *copilot.ControlConsentimiento
