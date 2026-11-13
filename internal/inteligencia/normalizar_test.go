@@ -152,7 +152,7 @@ func TestClaveDeCatalogoEsPrefijoDelNombreNormalizado(t *testing.T) {
 	}
 	azar := rand.New(rand.NewSource(1))
 	alfabeto := []rune("AB _-.&'ÉÑ1")
-	for i := 0; i < 5000; i++ {
+	for range 5000 {
 		runas := make([]rune, azar.Intn(60))
 		for j := range runas {
 			runas[j] = alfabeto[azar.Intn(len(alfabeto))]

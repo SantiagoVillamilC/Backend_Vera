@@ -22,7 +22,7 @@ Este documento dice qué recibe hecho, qué le queda, con qué se acepta y qué 
   20 de 20 turnos como respaldo.
 
 **Decisión de contrato ya tomada (no hay que discutirla):**
-- `POST /v1/vera/sintetizar` con `{"texto": "..."}` y `X-Vera-Token` → `audio/wav` en el cuerpo.
+- `POST /v1/vera/sintetizar` con `{"texto": "..."}` y la sesión del usuario → `audio/wav` en el cuerpo. No lleva `X-Vera-Token`.
 - Límites: texto acotado, tope de duración, caché por hash del texto y cuota por usuario.
 - Si el sintetizador no responde: el mensaje se entrega igual, sin audio y marcado; la app usa su voz
   local. Nunca se rompe el turno.
@@ -107,7 +107,7 @@ Todo lo de esta tabla existe en el repositorio a la fecha del documento. Las rut
 | A3-03 | Cableado de referencia como respaldo | `internal/copilot/laboratorio/voz_respaldo.go` | Funciona |
 | A3-03 | Documento del laboratorio de voz | `docs/asistente-laboratorio-voz.md` | Vigente |
 | A3-03 | Evidencia de uso real (20/20 turnos) | `docs/evaluaciones/voz-natural-con-respaldo.json` | Medido 21-10 |
-| A3-03 | Contrato decidido | `POST /v1/vera/sintetizar` con `{"texto"}` y `X-Vera-Token` → `audio/wav` | Decidido |
+| A3-03 | Contrato decidido | `POST /v1/vera/sintetizar` con `{"texto"}` y sesión → `audio/wav` | Decidido |
 | A3-02 | Servicio de transcripción (borrador) | `infra/stt-local/servidor.py` | Compila; sin ejecutar |
 | A3-02 | Empaquetado del servicio | `infra/stt-local/{Dockerfile,requirements.txt}` | Listo para probar |
 | A3-02 | Cliente de humo | `infra/stt-local/probar.py` | Compila |

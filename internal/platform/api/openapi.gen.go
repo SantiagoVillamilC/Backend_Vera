@@ -804,6 +804,33 @@ func (e InteligenciaAvisoTipo) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaAvisoAccionCodigo.
+const (
+	RevisarCategoria   InteligenciaAvisoAccionCodigo = "revisar_categoria"
+	RevisarCobro       InteligenciaAvisoAccionCodigo = "revisar_cobro"
+	RevisarIngreso     InteligenciaAvisoAccionCodigo = "revisar_ingreso"
+	RevisarPagos       InteligenciaAvisoAccionCodigo = "revisar_pagos"
+	RevisarPresupuesto InteligenciaAvisoAccionCodigo = "revisar_presupuesto"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoAccionCodigo enum.
+func (e InteligenciaAvisoAccionCodigo) Valid() bool {
+	switch e {
+	case RevisarCategoria:
+		return true
+	case RevisarCobro:
+		return true
+	case RevisarIngreso:
+		return true
+	case RevisarPagos:
+		return true
+	case RevisarPresupuesto:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InteligenciaAvisoDescarteResponseSuccess.
 const (
 	InteligenciaAvisoDescarteResponseSuccessTrue InteligenciaAvisoDescarteResponseSuccess = true
@@ -2172,7 +2199,11 @@ type FieldError struct {
 
 // InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no tiene linea base.
 type InteligenciaAviso struct {
+	// Accion Etiqueta visible de la accion. Es texto de la app y puede cambiar de redaccion, no sirve para decidir el destino.
 	Accion string `json:"accion"`
+
+	// AccionCodigo Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado. Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro, presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria. Un cliente debe tolerar un valor que no conozca.
+	AccionCodigo *InteligenciaAvisoAccionCodigo `json:"accion_codigo,omitempty"`
 
 	// Clave Identidad estable del aviso dentro de su tipo y periodo.
 	Clave         string             `json:"clave"`
@@ -2194,6 +2225,9 @@ type InteligenciaAviso struct {
 
 // InteligenciaAvisoTipo defines model for InteligenciaAviso.Tipo.
 type InteligenciaAvisoTipo string
+
+// InteligenciaAvisoAccionCodigo Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado. Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro, presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria. Un cliente debe tolerar un valor que no conozca.
+type InteligenciaAvisoAccionCodigo string
 
 // InteligenciaAvisoDescarte defines model for InteligenciaAvisoDescarte.
 type InteligenciaAvisoDescarte struct {
@@ -2810,7 +2844,7 @@ type SintesisDegradada struct {
 
 // SintetizarVeraRequest defines model for SintetizarVeraRequest.
 type SintetizarVeraRequest struct {
-	Texto string `json:"texto" validate:"required,max=8192"`
+	Texto string `json:"texto" validate:"required,max=400"`
 }
 
 // Tokens defines model for Tokens.
@@ -2981,11 +3015,6 @@ type EnviarMensajeVeraParams struct {
 type EnviarMensajeVozVeraParams struct {
 	// IdempotencyKey UUID único por envío de voz; reutilizarlo sólo con el mismo audio y conversación.
 	IdempotencyKey *openapi_types.UUID `json:"Idempotency-Key,omitempty"`
-}
-
-// SintetizarVeraParams defines parameters for SintetizarVera.
-type SintetizarVeraParams struct {
-	XVeraToken string `json:"X-Vera-Token"`
 }
 
 // CreateCompanyJSONRequestBody defines body for CreateCompany for application/json ContentType.
@@ -3320,7 +3349,7 @@ type ServerInterface interface {
 	EnviarMensajeVozVera(w http.ResponseWriter, r *http.Request, params EnviarMensajeVozVeraParams)
 	// SintetizarVera Sintetiza texto con Kokoro local.
 	// (POST /v1/vera/sintetizar)
-	SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams)
+	SintetizarVera(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -3557,7 +3586,7 @@ func (_ Unimplemented) EnviarMensajeVozVera(w http.ResponseWriter, r *http.Reque
 
 // SintetizarVera Sintetiza texto con Kokoro local.
 // (POST /v1/vera/sintetizar)
-func (_ Unimplemented) SintetizarVera(w http.ResponseWriter, r *http.Request, params SintetizarVeraParams) {
+func (_ Unimplemented) SintetizarVera(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4519,39 +4548,8 @@ func (siw *ServerInterfaceWrapper) EnviarMensajeVozVera(w http.ResponseWriter, r
 // SintetizarVera operation middleware
 func (siw *ServerInterfaceWrapper) SintetizarVera(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SintetizarVeraParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-Vera-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Vera-Token")]; found {
-		var XVeraToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Vera-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Vera-Token", valueList[0], &XVeraToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Vera-Token", Err: err})
-			return
-		}
-
-		params.XVeraToken = XVeraToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-Vera-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Vera-Token", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SintetizarVera(w, r, params)
+		siw.Handler.SintetizarVera(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

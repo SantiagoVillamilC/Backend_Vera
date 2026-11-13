@@ -24,8 +24,8 @@ corridas; lo que no se midió se dice expresamente en cada sección y en «Limit
 ## 1. Kokoro en el chat (CF-A3-03)
 
 ### Qué se entregó
-`POST /v1/vera/sintetizar` con `{"texto": "..."}` y `X-Vera-Token` → `audio/wav` con voz `ef_dora`.
-Valida token, consentimiento del usuario y cuota de voz; texto de 1 a 8192 bytes; caché acotada
+`POST /v1/vera/sintetizar` con `{"texto": "..."}` y la sesión del usuario → `audio/wav` con voz `ef_dora`.
+Valida consentimiento del usuario y cuota de voz. El texto va de 1 a 400 caracteres (el tope era de 8192 bytes cuando se hizo esta prueba, la cuenta del cambio está en `docs/stt-tts-operacion.md`). Caché acotada
 por texto (`vozlocal.NuevaCache`); si el sintetizador no responde, devuelve **200 sin audio** con
 `{"audio_disponible": false, "voz_local": true}` y la cabecera `X-Vera-Audio: no-disponible`.
 Se activa en `cmd/api/main.go` solo si existe `VERA_VOZ_TOKEN` (URL opcional en `VERA_VOZ_URL`,
@@ -178,7 +178,7 @@ solo migrada porque `ProcesarEscenario` no avanza el cursor global, no hace falt
 3. **Kokoro por HTTP completo:** el modelo real se probó a través del adaptador y la caché; el
    endpoint completo con base de datos se cubre con pruebas que usan un sintetizador simulado.
    En un despliegue hace falta el servicio de voz corriendo y `VERA_VOZ_TOKEN` definido (sin él
-   el endpoint responde 401). La app debe llamar al endpoint y reconocer la respuesta sin audio.
+   el endpoint responde 200 degradado, sin audio). La app debe llamar al endpoint y reconocer la respuesta sin audio.
 4. **Seis orígenes de categoría:** hoy solo salen `lexico` y `sin_categoria`. La cascada ya escribe
    los siete orígenes (CF-A1-03, `d114d0c`); lo que falta son las entradas del escenario que los
    disparan: MCC en el QR, marca del catálogo, corrección en memoria privada y contraparte interna.

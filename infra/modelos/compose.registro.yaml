@@ -1,0 +1,26 @@
+# Override de registro: usa las imágenes publicadas por cd-modelos.yml, fijadas por digest, en lugar de
+# construirlas. Lo usa infra/modelos/deploy-modelos.sh encima del compose base:
+#
+#   docker compose -f infra/modelos/compose.yaml -f infra/modelos/compose.registro.yaml \
+#     --env-file <estado>/modelos.env pull
+#   docker compose -f infra/modelos/compose.yaml -f infra/modelos/compose.registro.yaml \
+#     --env-file <estado>/modelos.env up -d --no-build
+#
+# Las tres variables las escribe deploy-modelos.sh desde infra/modelos/imagenes.json, con la forma
+# registro/imagen@sha256:<64 hex>. Sin ellas la validación del compose falla a propósito. No se
+# combina con compose.cuda.yaml: la variante CUDA de vera-voz no se publica.
+#
+# `build: !reset null` quita el build del compose base (requiere Compose 2.24 o posterior). Así un pull
+# fallido se ve como fallo y `up` nunca construye en lugar de descargar.
+services:
+  vera-llm:
+    image: ${IMAGEN_VERA_LLM:?falta IMAGEN_VERA_LLM, la escribe deploy-modelos.sh desde imagenes.json}
+    build: !reset null
+
+  vera-voz:
+    image: ${IMAGEN_VERA_VOZ:?falta IMAGEN_VERA_VOZ, la escribe deploy-modelos.sh desde imagenes.json}
+    build: !reset null
+
+  vera-kokoro:
+    image: ${IMAGEN_VERA_KOKORO:?falta IMAGEN_VERA_KOKORO, la escribe deploy-modelos.sh desde imagenes.json}
+    build: !reset null

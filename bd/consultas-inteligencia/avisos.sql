@@ -136,11 +136,15 @@ SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, 
  WHERE id = sqlc.arg('id')::uuid
    AND usuario_id = sqlc.arg('usuario_id')::text;
 
+-- Las dos consultas paginadas filtran por el rango del mes, igual que AvisosVigentesDelMes: el periodo
+-- de pago_no_alcanza y cobro_nuevo es la fecha del pago, no el día 1, y una igualdad con el día 1
+-- los ocultaría. caida_ingreso guarda el mes evaluado (el anterior) y se lista en ese mes.
 -- name: AvisosVigentesPorPagina :many
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
-   AND periodo = sqlc.arg('periodo')::date
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date
    AND descartado_en IS NULL
    AND (sqlc.narg('prioridad')::smallint IS NULL
         OR prioridad > sqlc.narg('prioridad')::smallint
@@ -160,7 +164,8 @@ SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, 
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = sqlc.arg('usuario_id')::text
-   AND periodo = sqlc.arg('periodo')::date
+   AND periodo >= sqlc.arg('desde')::date
+   AND periodo < sqlc.arg('hasta')::date
    AND descartado_en IS NOT NULL
    AND (sqlc.narg('prioridad')::smallint IS NULL
         OR prioridad > sqlc.narg('prioridad')::smallint

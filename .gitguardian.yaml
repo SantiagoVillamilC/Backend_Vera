@@ -1,0 +1,9 @@
+version: 2
+secret:
+  # Valores de prueba legibles, no credenciales. Existen para cumplir el minimo de 32 caracteres
+  # que valida la configuracion del proveedor de transcripcion.
+  ignored-matches:
+    - name: Token de prueba de la transcripcion local
+      match: token-de-prueba-con-32-caracteres
+    - name: Token de prueba del cliente de transcripcion
+      match: secreto-stt-que-no-se-imprime

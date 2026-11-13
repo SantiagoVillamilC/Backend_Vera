@@ -10,12 +10,23 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ErrAvisoNoEncontrado reporta un aviso inexistente o de otro usuario. Los dos casos son el mismo
 // para no filtrar existencia.
 var ErrAvisoNoEncontrado = errors.New("inteligencia: aviso no encontrado")
+
+// ErrDescarteAnteriorAlAlta reporta un descarte cuyo instante es anterior al alta del aviso. Pasa
+// cuando creado_en es posterior al reloj (una semilla con fecha simulada, por ejemplo) y lo impide el
+// CHECK aviso_descarte_no_anterior_al_alta. Es un conflicto con el estado del aviso, no un fallo.
+var ErrDescarteAnteriorAlAlta = errors.New("inteligencia: el descarte es anterior al alta del aviso")
+
+const (
+	codigoCheckViolation          = "23514"
+	restriccionDescarteAnteriorAl = "aviso_descarte_no_anterior_al_alta"
+)
 
 // EtiquetasGenericas son las contrapartes que no identifican un destino recurrente. Salen de la
 // misma lista que usa la corrección para rechazar un destino genérico.
@@ -37,6 +48,7 @@ type AvisoEmitido struct {
 	Texto              string
 	Porque             string
 	Accion             string
+	AccionCodigo       string
 	Periodo            time.Time
 	SeveridadCentavos  int64
 	MontoCentavos      int64
@@ -366,6 +378,10 @@ func (s *Servicio) DescartarAviso(ctx context.Context, usuarioID string, avisoID
 	if errors.Is(err, pgx.ErrNoRows) {
 		return DescarteDeAviso{}, ErrAvisoNoEncontrado
 	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == codigoCheckViolation && pgErr.ConstraintName == restriccionDescarteAnteriorAl {
+		return DescarteDeAviso{}, fmt.Errorf("inteligencia: descartar el aviso %s de %q: %w", avisoID, usuarioID, ErrDescarteAnteriorAlAlta)
+	}
 	if err != nil {
 		return DescarteDeAviso{}, fmt.Errorf("inteligencia: descartar el aviso %s de %q: %w", avisoID, usuarioID, err)
 	}
@@ -415,6 +431,7 @@ func avisoDeFila(fila filaDeAviso) AvisoEmitido {
 		Texto:             fila.Texto,
 		Porque:            avisos.PorqueDe(tipo),
 		Accion:            avisos.AccionDe(tipo),
+		AccionCodigo:      avisos.AccionCodigoDe(tipo),
 		Periodo:           fila.Periodo.Time,
 		SeveridadCentavos: fila.SeveridadCentavos,
 		MontoCentavos:     fila.MontoCentavos,
