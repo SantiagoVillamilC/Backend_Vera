@@ -219,6 +219,9 @@ func (d *detectorDiferencias) adoptarElExtracto(transferencia repositorio.Transf
 	if err != nil {
 		return err
 	}
+	if !desenlace.compensar && d.ventana.confirmadas != nil {
+		*d.ventana.confirmadas = append(*d.ventana.confirmadas, transferencia.UsuarioID)
+	}
 	return d.registrarResuelto(TipoDescuadreEstadoDistinto, id, pgtype.Text{}, transferencia.Monto, pgtype.Int8{Int64: operacion.Monto.Int64(), Valid: true}, resolucionMandaExtracto)
 }
 

@@ -67,6 +67,14 @@ func ConCupoDeAvisos(cupo int) OpcionServicio {
 	}
 }
 
+// EmitirAvisosDelUsuario evalúa a un solo usuario y guarda los avisos que disparan. Es la misma
+// emisión de la corrida completa, con el candado, la deduplicación por clave y período y el cupo,
+// para dispararla cuando se asienta un gasto sin esperar el lote.
+func (s *Servicio) EmitirAvisosDelUsuario(ctx context.Context, usuarioID string, ahora time.Time) (int, error) {
+	insertados, _, err := s.emitirAvisosDeUsuario(ctx, usuarioID, ahora)
+	return insertados, err
+}
+
 // EmitirAvisos evalúa a todos los usuarios con historial y guarda los avisos que disparan.
 func (s *Servicio) EmitirAvisos(ctx context.Context, ahora time.Time) (int, error) {
 	inicio := time.Now()

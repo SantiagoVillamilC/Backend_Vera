@@ -176,6 +176,7 @@ type Servicio struct {
 	rastreador                RastreadorErrores
 	politicaReintento         PoliticaReintentoOutbox
 	presupuestoIndeterminadas time.Duration
+	avisoTrasAsiento          func(ctx context.Context, usuarioID string, hora time.Time)
 }
 
 // OpcionServicio ajusta el Servicio en su construcción.
@@ -199,6 +200,13 @@ func ConResolutorDestino(resolutor ResolutorDestino) OpcionServicio {
 // ConDirectorio fija el directorio de llaves de Bre-B; sin él, ResolverLlave falla cerrado.
 func ConDirectorio(directorio DirectorioLlaves) OpcionServicio {
 	return func(s *Servicio) { s.directorio = directorio }
+}
+
+// ConAvisoTrasAsiento avisa después del commit de una liquidación confirmada. El núcleo no importa
+// inteligencia: quien arma el proceso inyecta la emisión de avisos, y sin ella la confirmación sigue
+// igual. El callback no devuelve error y una falla suya nunca rompe el cierre.
+func ConAvisoTrasAsiento(aviso func(ctx context.Context, usuarioID string, hora time.Time)) OpcionServicio {
+	return func(s *Servicio) { s.avisoTrasAsiento = aviso }
 }
 
 // NewServicio arma el Servicio; el Querier se construye por transacción adentro.

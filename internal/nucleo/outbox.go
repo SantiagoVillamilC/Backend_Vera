@@ -348,7 +348,13 @@ func (s *Servicio) cerrarConfirmada(ctx context.Context, reclamada despachoRecla
 	asentar := func(ctx context.Context, q *repositorio.Queries) error {
 		return escribirAsientoDeConfirmacion(ctx, q, reclamada.transferencia, respuesta)
 	}
-	return s.cerrarDespacho(ctx, reclamada, transiciones, asentar)
+	aplicado, err := s.cerrarDespacho(ctx, reclamada, transiciones, asentar)
+	if err != nil || !aplicado {
+		return err
+	}
+	// Después del commit: el aviso lee el ledger ya confirmado y nunca puede romper el cierre.
+	s.avisarTrasAsiento(ctx, reclamada.transferencia.UsuarioID)
+	return nil
 }
 
 // cerrarCompensada escribe el asiento 4b y lleva la transferencia a compensada conservando el motivo (Criterio 15).
@@ -360,31 +366,35 @@ func (s *Servicio) cerrarCompensada(ctx context.Context, reclamada despachoRecla
 	asentar := func(ctx context.Context, q *repositorio.Queries) error {
 		return escribirAsientoDeCompensacion(ctx, q, reclamada.transferencia, respuesta.Motivo, respuesta.OcurridoEn)
 	}
-	return s.cerrarDespacho(ctx, reclamada, transiciones, asentar)
+	_, err := s.cerrarDespacho(ctx, reclamada, transiciones, asentar)
+	return err
 }
 
 // cerrarIndeterminada no escribe asiento y deja la transferencia sin desenlace conocido (Criterio 16).
 func (s *Servicio) cerrarIndeterminada(ctx context.Context, reclamada despachoReclamado) error {
 	transiciones := []transicionCierre{{esperado: EstadoTransferenciaDespachada, nuevo: EstadoTransferenciaIndeterminada}}
-	return s.cerrarDespacho(ctx, reclamada, transiciones, nil)
+	_, err := s.cerrarDespacho(ctx, reclamada, transiciones, nil)
+	return err
 }
 
-// cerrarDespacho aplica las transiciones y el asiento del desenlace en una transacción, y marca la fila entregada.
-func (s *Servicio) cerrarDespacho(ctx context.Context, reclamada despachoReclamado, transiciones []transicionCierre, asentar func(context.Context, *repositorio.Queries) error) error {
+// cerrarDespacho aplica las transiciones y el asiento del desenlace en una transacción, y marca la fila entregada. Devuelve si este cierre ganó la transición.
+func (s *Servicio) cerrarDespacho(ctx context.Context, reclamada despachoReclamado, transiciones []transicionCierre, asentar func(context.Context, *repositorio.Queries) error) (bool, error) {
+	aplicado := false
 	_, err := enTransaccion(ctx, s.pool,
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
-			aplicado, err := aplicarCierre(ctx, q, reclamada.transferencia.ID, transiciones)
+			aplicadoEnTx, err := aplicarCierre(ctx, q, reclamada.transferencia.ID, transiciones)
 			if err != nil {
 				return struct{}{}, err
 			}
-			if aplicado && asentar != nil {
+			if aplicadoEnTx && asentar != nil {
 				if err := asentar(ctx, q); err != nil {
 					return struct{}{}, err
 				}
 			}
+			aplicado = aplicadoEnTx
 			return struct{}{}, marcarOutboxDespachado(ctx, q, reclamada.outbox.ID)
 		})
-	return err
+	return aplicado, err
 }
 
 // aplicarCierre mueve la transferencia por sus transiciones; sin la primera fila otro cierre ya ganó (Criterio 17).

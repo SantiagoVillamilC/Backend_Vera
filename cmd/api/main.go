@@ -91,6 +91,7 @@ func run() error {
 		directorio = directoriosim.NuevoDirectorio(cfg.DirectorioSimuladorURL, nil)
 	}
 	resolutorDestino := auth.NuevoResolutorDestino(pool, cfg.Auth.EnfriamientoCambioNumero)
+	frenoAvisos := nuevoFrenoDeEmisiones(false, nil, nil)
 	servicio := nucleo.NewServicio(
 		pool,
 		lectorKYC(pool),
@@ -100,6 +101,9 @@ func run() error {
 		nucleo.ConResolutorDestino(resolutorDestino),
 		nucleo.ConDirectorio(directorio),
 		nucleo.ConLectorExtractoRiel(lectorRiel),
+		nucleo.ConAvisoTrasAsiento(func(ctx context.Context, usuarioID string, hora time.Time) {
+			frenoAvisos.disparar(ctx, usuarioID, hora)
+		}),
 		nucleo.ConPoliticaReintentoOutbox(nucleo.PoliticaReintentoOutbox{
 			Base:   cfg.OutboxBackoffBase,
 			Factor: cfg.OutboxBackoffFactor,
@@ -137,6 +141,7 @@ func run() error {
 		inteligencia.ConCatalogo(catalogoNombres, catalogoLlaves),
 		inteligencia.ConCupoDeAvisos(cfg.AvisosCupo))
 	servicioInteligencia := inteligencia.NuevoServicio(pool, opcionesInteligencia...)
+	frenoAvisos = nuevoFrenoDeEmisiones(cfg.AvisosActivo, servicioInteligencia, nil)
 	if err := servicioInteligencia.CargarCatalogo(ctx); err != nil {
 		slog.Error("catálogo curado no disponible, la cascada sigue sin el escalón 4", "error", err)
 	}
