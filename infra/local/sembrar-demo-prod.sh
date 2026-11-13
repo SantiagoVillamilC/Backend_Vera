@@ -31,6 +31,8 @@ DEMO_CELULAR="${DEMO_CELULAR:-+573001234567}"
 DEMO_CONTRASENA="${DEMO_CONTRASENA:-Vera-Demo-2026}"
 DEMO_NOMBRE="${DEMO_NOMBRE:-Camila Rodriguez}"
 ESTADO="${ESTADO:-$RAIZ/../DEMO-PROD-STATE.json}"
+# Mismo cupo de demo que fija sembrar-escenario-demo.sh, para que la cuenta quede comparable.
+AVISOS_CUPO="${AVISOS_CUPO:-5}"
 
 paso() { printf '\n==> %s\n' "$1"; }
 info() { printf '    %s\n' "$1"; }
@@ -46,7 +48,7 @@ command -v go >/dev/null || error "falta go"
 command -v make >/dev/null || error "falta make"
 command -v python3 >/dev/null || error "falta python3"
 
-export DATABASE_URL APP_DATABASE_URL
+export DATABASE_URL APP_DATABASE_URL AVISOS_CUPO
 
 paso "Compilando los binarios"
 make --no-print-directory build

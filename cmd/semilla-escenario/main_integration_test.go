@@ -26,6 +26,7 @@ func TestEscenarioDosCorridasYReinicio(t *testing.T) {
 	t.Setenv("DEMO_FECHA", "2026-11-19")
 	t.Setenv("ESTADO", ruta)
 	t.Setenv("REINICIAR", "no")
+	t.Setenv("AVISOS_CUPO", "5")
 	leer := func() estado {
 		t.Helper()
 		if e := run(); e != nil {
@@ -41,19 +42,27 @@ func TestEscenarioDosCorridasYReinicio(t *testing.T) {
 		}
 		return st
 	}
-	primero := leer()
-	segundo := leer()
-	if !reflect.DeepEqual(primero, segundo) {
-		t.Fatal("segunda corrida cambia el estado")
-	}
 	pool, e := pgxpool.New(t.Context(), os.Getenv("DATABASE_URL"))
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer pool.Close()
-	var cursor int64
-	if e = pool.QueryRow(t.Context(), "SELECT ultimo_entry_id FROM inteligencia.cursor_enriquecimiento WHERE id=1").Scan(&cursor); e != nil || cursor != 0 {
-		t.Fatalf("cursor global cambió: %d %v", cursor, e)
+	leerCursor := func() int64 {
+		t.Helper()
+		var cursor int64
+		if e := pool.QueryRow(t.Context(), "SELECT ultimo_entry_id FROM inteligencia.cursor_enriquecimiento WHERE id=1").Scan(&cursor); e != nil {
+			t.Fatalf("no pude leer el cursor global: %v", e)
+		}
+		return cursor
+	}
+	inicial := leerCursor()
+	primero := leer()
+	segundo := leer()
+	if !reflect.DeepEqual(primero, segundo) {
+		t.Fatal("segunda corrida cambia el estado")
+	}
+	if despues := leerCursor(); despues != inicial {
+		t.Fatalf("cursor global cambió: %d, era %d", despues, inicial)
 	}
 	otro := uuid.NewString()
 	t.Setenv("DEMO_USUARIO", otro)
@@ -73,8 +82,8 @@ func TestEscenarioDosCorridasYReinicio(t *testing.T) {
 	if !reflect.DeepEqual(primero.Categorias, tercero.Categorias) || !reflect.DeepEqual(primero.Avisos, tercero.Avisos) || primero.Series != tercero.Series {
 		t.Fatal("reinicio cambia los conteos")
 	}
-	if len(tercero.Avisos) != 3 || tercero.Series < 2 {
-		t.Fatal("aceptación incompleta")
+	if !cumpleAceptacion(tercero) {
+		t.Fatalf("aceptación incompleta: avisos=%v series=%d categorías=%v asientos=%d", tercero.Avisos, tercero.Series, tercero.Categorias, len(tercero.Asientos))
 	}
 	if huella() != antes {
 		t.Fatal("el reinicio modificó datos de otro usuario")
