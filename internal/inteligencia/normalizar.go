@@ -12,7 +12,14 @@ import (
 // referencia Python.
 const LargoMaximoNombre = 40
 
+// LargoClaveDeCatalogo es el tope de puntos de código con el que el evaluador corta el nombre antes
+// de normalizarlo, igual que `nombre_qr` de la referencia Python. Las claves del catálogo curado
+// miden eso o menos.
+const LargoClaveDeCatalogo = 25
+
 var separadoresDeNombre = regexp.MustCompile(`[\s\p{Z}_\-]+`)
+
+var espaciosDeNombre = regexp.MustCompile(`[\s\p{Z}]+`)
 
 // NormalizarNombre replica `analisis/pagos.py:73` y su `_un_paso`, iterado hasta el punto fijo.
 func NormalizarNombre(nombre string) string {
@@ -24,6 +31,28 @@ func NormalizarNombre(nombre string) string {
 		}
 		actual = siguiente
 	}
+}
+
+// ClaveDeCatalogo arma la clave con la que se busca en el catálogo curado: el nombre cortado a
+// LargoClaveDeCatalogo puntos de código y después normalizado, en el mismo orden que
+// `clave_de_catalogo` del evaluador. Cortar antes de normalizar es lo que hace que un nombre largo
+// encuentre la fila que el evaluador también encuentra.
+func ClaveDeCatalogo(nombre string) string {
+	return NormalizarNombre(recorteDeQR(nombre))
+}
+
+// recorteDeQR replica `nombre_qr` de la referencia Python: mayúsculas, sin tildes salvo la Ñ,
+// espacios colapsados y cortado a LargoClaveDeCatalogo puntos de código.
+func recorteDeQR(nombre string) string {
+	texto := norm.NFC.String(nombre)
+	texto = strings.ToUpper(texto)
+	texto = quitarTildesSalvoEnie(texto)
+	texto = espaciosDeNombre.ReplaceAllString(texto, " ")
+	runas := []rune(strings.TrimSpace(texto))
+	if len(runas) > LargoClaveDeCatalogo {
+		runas = runas[:LargoClaveDeCatalogo]
+	}
+	return strings.TrimSpace(string(runas))
 }
 
 func unPasoDeNombre(nombre string) string {

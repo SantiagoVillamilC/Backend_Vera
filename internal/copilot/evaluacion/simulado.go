@@ -82,7 +82,7 @@ type proveedorObservado struct {
 func (p *proveedorObservado) Generar(ctx context.Context, s copilot.SolicitudIA) (copilot.RespuestaIA, error) {
 	p.vueltas++
 	fecha := p.fecha.In(time.FixedZone("America/Bogota", -5*60*60)).Format(time.RFC3339)
-	if !strings.Contains(s.Instrucciones, fecha) || !strings.Contains(s.Instrucciones, copilot.VersionInstruccionesVera) || len(s.Funciones) != 7 {
+	if !strings.Contains(s.Instrucciones, fecha) || !strings.Contains(s.Instrucciones, copilot.VersionInstruccionesVera) || len(s.Funciones) != 8 {
 		p.contextoCorrecto = false
 	}
 	r, err := p.interno.Generar(ctx, s)

@@ -895,6 +895,31 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/inteligencia/series:
+    get:
+      operationId: listarSeriesInteligencia
+      summary: Series recurrentes del usuario con estado, cadencia y proximo pago esperado.
+      description: >
+        Devuelve las series que el motor de recurrencia ya calcula para el usuario autenticado.
+        Es de solo lectura y no expone identidad de terceros: la identidad es la llave o el
+        nombre normalizado del destino del propio usuario. Los montos van como cadena de centavos.
+      tags: [inteligencia]
+      responses:
+        "200":
+          description: Series recurrentes del usuario autenticado, ordenadas por identidad.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaSeriesResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
   /v1/inteligencia/movimientos/{transaccion_id}/correcciones:
     post:
       operationId: corregirMovimientoInteligencia
@@ -943,15 +968,29 @@ paths:
     get:
       operationId: listarAvisosInteligencia
       summary: Tarjetas de aviso vigentes del mes pedido, sin descartar, ordenadas por prioridad y severidad.
+      description: >
+        La bandeja y el cupo del mes usan el mismo criterio: el periodo del aviso, que es el mes al
+        que pertenece el hecho que lo disparo, no la fecha en la que se entrego la tarjeta. Un aviso
+        puede entregarse un mes y pertenecer a otro, y en ese caso cuenta y aparece en el mes al que
+        pertenece. Por eso esta bandeja y el numero de avisos del resumen coinciden para el mismo mes.
+        Un aviso descartado sale de la bandeja y deja de ocupar cupo, porque descartar libera cupo: la
+        bandeja y el conteo excluyen los descartados. Paginación de 20 avisos por defecto, límite 1 a
+        50. La continuación se devuelve en X-Vera-Siguiente-Cursor. Las llamadas antiguas con solo mes
+        conservan su ventana mensual sin paginación. Combinar mes con limite, cursor o estado devuelve
+        400.
       tags: [inteligencia]
       parameters:
+        - {name: limite, in: query, required: false, schema: {type: integer, x-go-type: string}}
+        - {name: cursor, in: query, required: false, schema: {type: string}}
+        - {name: estado, in: query, required: false, schema: {type: string, enum: [vigentes, descartados], x-go-type: string}}
         - name: mes
           in: query
           required: false
           description: >
-            Mes calendario en America/Bogota con formato YYYY-MM. Filtra por la fecha de creacion del
-            aviso. Por defecto el mes en curso. Se tipa x-go-type string para que un valor invalido
-            llegue al handler y salga como ValidationError.
+            Mes calendario del periodo del aviso, con formato YYYY-MM. Filtra por el mes al que
+            pertenece el hecho que disparo el aviso, el mismo criterio con el que se cuenta el cupo y
+            se informa en el resumen. Por defecto el mes en curso. Se tipa x-go-type string para que
+            un valor invalido llegue al handler y salga como ValidationError.
           schema:
             type: string
             pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
@@ -974,10 +1013,31 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/inteligencia/avisos/{id}:
+    get:
+      operationId: detalleAvisoInteligencia
+      summary: Devuelve una tarjeta de aviso propia por su identificador.
+      tags: [inteligencia]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Tarjeta de aviso, content: { application/json: { schema: { $ref: "#/components/schemas/InteligenciaAvisoDetalleResponse" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+
   /v1/inteligencia/avisos/{id}/descartar:
     post:
       operationId: descartarAvisoInteligencia
       summary: Marca un aviso propio como descartado. Repetir la llamada devuelve el mismo instante.
+      description: >
+        Descartar no borra el aviso: sale de la bandeja y deja de ocupar cupo en su periodo, pero
+        sigue siendo el mismo aviso para la deduplicacion, asi que el emisor no lo vuelve a emitir.
+        El descarte es idempotente y solo afecta a los avisos del usuario autenticado. Si el aviso se
+        creo despues del instante del descarte (por ejemplo con una fecha simulada en el futuro), la
+        respuesta es 409 con el codigo DescarteAnteriorAlAlta y el aviso no cambia.
       tags: [inteligencia]
       parameters:
         - name: id
@@ -1000,6 +1060,33 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
+  /v1/inteligencia/categorias:
+    get:
+      operationId: listarCategoriasInteligencia
+      summary: Catalogo de categorias que el usuario puede asignar a un movimiento, en el orden firmado.
+      description: >
+        Devuelve las 14 categorias visibles del catalogo cerrado. sin_categoria no aparece porque no
+        es una categoria que se elija: marca los movimientos que ningun escalon decidio. El orden es
+        el del catalogo y no cambia entre llamadas.
+      tags: [inteligencia]
+      responses:
+        "200":
+          description: Catalogo visible completo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaCategoriasResponse"
+        "401":
           $ref: "#/components/responses/Error"
         "429":
           $ref: "#/components/responses/Error"
@@ -1290,6 +1377,56 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/vera/sintetizar:
+    post:
+      operationId: sintetizarVera
+      tags: [vera]
+      summary: Sintetiza texto con Kokoro local.
+      description: Requiere sesión, consentimiento de IA y cuota de voz por usuario. No recibe ningún token de voz, ya que ese secreto solo lo usa el backend para hablar con Kokoro. Caché SHA-256 de cinco minutos. Máximo 400 caracteres de texto, que caben con margen en el plazo de 25 segundos del backend. Si el servicio falla, o si el backend no tiene la voz local configurada, devuelve 200 JSON con voz_local=true y cabecera X-Vera-Audio no-disponible. La app conserva el mensaje y usa su voz local.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SintetizarVeraRequest'
+      responses:
+        '200':
+          description: WAV PCM16 mono 24 kHz o degradación explícita sin audio.
+          headers:
+            X-Vera-Audio:
+              schema:
+                type: string
+              description: no-disponible cuando debe usarse la voz local de la app.
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+                required: [success, data, error, meta]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/SintesisDegradada'
+                  error:
+                    nullable: true
+                  meta:
+                    nullable: true
+        '401':
+          description: Sesión ausente o inválida.
+        '403':
+          description: Falta consentimiento.
+        '413':
+          description: El cuerpo supera 1 MiB.
+        '422':
+          description: Texto inválido.
+        '429':
+          description: Cuota del usuario agotada.
+        '503':
+          description: No se pudo verificar consentimiento o cuota.
   /v1/vera/mensajes:
     post:
       operationId: enviarMensajeVera
@@ -2013,6 +2150,25 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    SintetizarVeraRequest:
+      type: object
+      additionalProperties: false
+      required: [texto]
+      properties:
+        texto:
+          type: string
+          minLength: 1
+          maxLength: 400
+          x-oapi-codegen-extra-tags:
+            validate: required,max=400
+    SintesisDegradada:
+      type: object
+      required: [audio_disponible, voz_local]
+      properties:
+        audio_disponible:
+          type: boolean
+        voz_local:
+          type: boolean
     APIError:
       type: object
       required: [code, message]
@@ -3092,7 +3248,7 @@ components:
       type: object
       required:
         [transaccion_id, ocurrido_en, moneda, direccion, monto_centavos, contraparte,
-         contraparte_resuelta, descripcion, categoria, categoria_nombre, origen_categoria]
+         contraparte_resuelta, descripcion, categoria, categoria_nombre, origen_categoria, escalon]
       properties:
         transaccion_id:
           type: string
@@ -3123,10 +3279,86 @@ components:
         categoria_nombre:
           type: string
         origen_categoria:
+          $ref: "#/components/schemas/OrigenEnriquecido"
+        escalon:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: >
+            Escalon de la cascada que decidio la fila, de 1 a 7. Se persiste porque sin_categoria
+            no distingue la abstencion del escalon 6 de un pago que nunca llego al clasificador.
+
+    OrigenEnriquecido:
+      type: string
+      description: >
+        Origen que quedo escrito en la fila de la copia enriquecida. Es el conjunto cerrado del
+        CHECK de la migracion 0032 y coincide con inteligencia.OrigenesEscribibles.
+      enum:
+        [memoria, contraparte_interna, mcc, catalogo, lexico, tfidf, sin_categoria]
+
+    Categoria:
+      type: string
+      description: >
+        Los 15 codigos del catalogo cerrado, en el orden firmado en el punto 349 bis. sin_categoria
+        existe para que la clave foranea de la copia no admita nulo y no se ofrece al usuario.
+      enum:
+        [salario, transferencia_recibida, reembolso, otros_ingresos, alimentos_mercado,
+         restaurantes_domicilios, transporte, vivienda_servicios, salud, educacion,
+         entretenimiento, compras, comisiones_costos_financieros, otros_gastos, sin_categoria]
+      x-enum-varnames:
+        [CategoriaSalario, CategoriaTransferenciaRecibida, CategoriaReembolso,
+         CategoriaOtrosIngresos, CategoriaAlimentosMercado, CategoriaRestaurantes,
+         CategoriaTransporte, CategoriaViviendaServicios, CategoriaSalud, CategoriaEducacion,
+         CategoriaEntretenimiento, CategoriaCompras, CategoriaComisiones, CategoriaOtrosGastos,
+         CategoriaSinCategoria]
+
+    CategoriaOfrecida:
+      type: string
+      description: >
+        Las 14 categorias que se ofrecen al usuario para corregir un movimiento, en el mismo orden.
+        Es Categoria sin sin_categoria.
+      enum:
+        [salario, transferencia_recibida, reembolso, otros_ingresos, alimentos_mercado,
+         restaurantes_domicilios, transporte, vivienda_servicios, salud, educacion,
+         entretenimiento, compras, comisiones_costos_financieros, otros_gastos]
+      x-enum-varnames:
+        [OfrecidaSalario, OfrecidaTransferenciaRecibida, OfrecidaReembolso, OfrecidaOtrosIngresos,
+         OfrecidaAlimentosMercado, OfrecidaRestaurantes, OfrecidaTransporte,
+         OfrecidaViviendaServicios, OfrecidaSalud, OfrecidaEducacion, OfrecidaEntretenimiento,
+         OfrecidaCompras, OfrecidaComisiones, OfrecidaOtrosGastos]
+
+    InteligenciaCategoria:
+      type: object
+      required: [codigo, nombre, grupo, orden]
+      properties:
+        codigo:
+          $ref: "#/components/schemas/CategoriaOfrecida"
+        nombre:
           type: string
-          enum:
-            [memoria, contraparte_interna, mcc, catalogo, lexico, tfidf, llm, sin_categoria,
-             manual]
+        grupo:
+          type: string
+          enum: [ingreso, gasto]
+        orden:
+          type: integer
+          minimum: 1
+
+    InteligenciaCategoriasResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaCategoria"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
 
     MetaCursor:
       type: object
@@ -3211,8 +3443,12 @@ components:
           pattern: "^-?[0-9]+$"
         cupo_avisos:
           type: integer
+          description: Tope mensual de avisos que aplica el emisor, tomado de su configuracion.
         avisos_emitidos:
           type: integer
+          description: >
+            Avisos vigentes del mes, contados por el periodo del aviso. Los descartados no cuentan,
+            porque descartar libera cupo.
         categorias:
           type: array
           items:
@@ -3232,6 +3468,57 @@ components:
           nullable: true
         meta:
           type: object
+          nullable: true
+
+    InteligenciaSeriesResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaSerie"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    InteligenciaSerie:
+      type: object
+      required: [tipo_identidad, identidad, estado, cadencia, cadencia_dias, ultimo_pago]
+      properties:
+        tipo_identidad:
+          type: string
+          description: llave o nombre normalizado de la contraparte del propio usuario.
+        identidad:
+          type: string
+        estado:
+          type: string
+          description: emergente, madura, dormida o cancelada.
+        cadencia:
+          type: string
+          description: semanal, quincenal_14, mensual, bimestral o semestral.
+        cadencia_dias:
+          type: integer
+        ultimo_pago:
+          type: string
+          format: date-time
+        proximo_fecha:
+          type: string
+          format: date-time
+          nullable: true
+          description: Centro de la banda del proximo pago esperado, ausente cuando la serie no lo tiene.
+        proximo_monto_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+          nullable: true
+        categoria:
+          type: string
           nullable: true
 
     InteligenciaCorreccionRequest:
@@ -3264,13 +3551,25 @@ components:
             Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila
             aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
 
+    InteligenciaAvisoAccionCodigo:
+      type: string
+      description: >
+        Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado.
+        Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza
+        lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro,
+        presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria.
+        Un cliente debe tolerar un valor que no conozca.
+      enum: [revisar_pagos, revisar_ingreso, revisar_cobro, revisar_presupuesto, revisar_categoria]
+
     InteligenciaAviso:
       type: object
       description: >
         Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no
-        sean sus montos ni fechas que no sean la suya.
+        sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto
+        afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no
+        tiene linea base.
       required:
-        [id, tipo, clave, periodo, severidad_centavos, prioridad, titulo, texto, porque, accion, transaccion_id, creado_en]
+        [id, tipo, clave, periodo, severidad_centavos, monto_centavos, prioridad, titulo, texto, porque, accion, transaccion_id, creado_en]
       properties:
         id:
           type: string
@@ -3290,6 +3589,13 @@ components:
         severidad_centavos:
           type: string
           pattern: "^[0-9]+$"
+        monto_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+        referencia_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+          nullable: true
         prioridad:
           type: integer
           minimum: 1
@@ -3302,6 +3608,9 @@ components:
           type: string
         accion:
           type: string
+          description: Etiqueta visible de la accion. Es texto de la app y puede cambiar de redaccion, no sirve para decidir el destino.
+        accion_codigo:
+          $ref: "#/components/schemas/InteligenciaAvisoAccionCodigo"
         transaccion_id:
           type: string
           format: uuid
@@ -3338,6 +3647,22 @@ components:
         descartado_en:
           type: string
           format: date-time
+
+    InteligenciaAvisoDetalleResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/InteligenciaAviso"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
 
     InteligenciaAvisoDescarteResponse:
       type: object

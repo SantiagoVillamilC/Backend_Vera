@@ -1,7 +1,7 @@
 -- name: InsertarAsiento :one
-INSERT INTO nucleo.journal_entry (tipo, transferencia_id, deposito_id, ocurrido_en, descripcion)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id;
+INSERT INTO nucleo.journal_entry (tipo, transferencia_id, deposito_id, ocurrido_en, descripcion, mcc)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, tipo, transferencia_id, ocurrido_en, registrado_en, descripcion, deposito_id, mcc;
 
 -- name: InsertarLinea :one
 INSERT INTO nucleo.posting (entry_id, cuenta_id, monto, moneda)

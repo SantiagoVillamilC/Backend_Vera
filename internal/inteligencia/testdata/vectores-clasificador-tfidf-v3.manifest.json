@@ -1,7 +1,7 @@
 {
-  "archivo": "vectores-clasificador-tfidf.json",
-  "artefacto_sha256": "fe69c5efda1f885cb9bd0de0fcd835d7cf098c976f9eb868fddf29d79e864253",
-  "sha256_archivo": "6a948bb0d0fb2de7a328538fa0510af380fca0bb452085ee19080209b6ad001b",
+  "archivo": "vectores-clasificador-tfidf-v3.json",
+  "artefacto_sha256": "7aa998a833ec111de76c6d3c56a8f0780903b2c1927f839d9c41c211d9e0bbea",
+  "sha256_archivo": "d754fea0f946704141979faffd6b739284b3fe63260346603e3552ed2ca93c88",
   "sha256_por_caso": {
     "abstencion": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
     "artefacto-alux": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
@@ -15,7 +15,7 @@
     "fuerte-con-lexico-en-contra": "9b951de6e9300df87a36600325e976d62830a46fcc1565b452c4199f29357267",
     "mcc-cambia": "4f8399a43d91849d10ba40a77947c54cd88ffce00996246390111ba6805102c9",
     "mcc-no-cambia": "9b951de6e9300df87a36600325e976d62830a46fcc1565b452c4199f29357267",
-    "nombre-vacio": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
+    "nombre-vacio": "4efdf2be3416aa28c4e011d675f23a37d7b8a294ee3d112b29961f17549619b0",
     "solo-genericos": "b2757977c4d566f1ba56252fbfe4fa96493c55d99346abfd3247734dfd566fc1",
     "tildes-y-minusculas": "9b951de6e9300df87a36600325e976d62830a46fcc1565b452c4199f29357267"
   },

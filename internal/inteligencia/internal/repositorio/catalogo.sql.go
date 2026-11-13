@@ -40,3 +40,30 @@ func (q *Queries) ListarCategorias(ctx context.Context) ([]Categoria, error) {
 	}
 	return items, nil
 }
+
+const listarCodigosDeCategoria = `-- name: ListarCodigosDeCategoria :many
+SELECT codigo
+  FROM inteligencia.categoria
+ WHERE inteligencia.categoria_es_visible(codigo)
+ ORDER BY codigo
+`
+
+func (q *Queries) ListarCodigosDeCategoria(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listarCodigosDeCategoria)
+	if err != nil {
+		return nil, fmt.Errorf("query ListarCodigosDeCategoria: %w", err)
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var codigo string
+		if err := rows.Scan(&codigo); err != nil {
+			return nil, fmt.Errorf("query ListarCodigosDeCategoria: %w", err)
+		}
+		items = append(items, codigo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query ListarCodigosDeCategoria: %w", err)
+	}
+	return items, nil
+}

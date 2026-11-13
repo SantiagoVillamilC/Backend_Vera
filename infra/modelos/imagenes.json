@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "registro": "ghcr.io/santiagovillamilc/backend_vera",
+  "comentario": "Digests declarados de las imágenes de la pila de modelos. Los emite el workflow cd-modelos.yml (salida digests y resumen de la corrida). Mientras un digest sea null, deploy-modelos.sh se niega a desplegar. Se promueve por PR como cualquier cambio.",
+  "imagenes": {
+    "vera-llm": { "digest": null },
+    "vera-voz": { "digest": null },
+    "vera-kokoro": { "digest": null }
+  }
+}

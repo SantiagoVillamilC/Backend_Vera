@@ -98,8 +98,11 @@ jobs:
           POSTGRES_DB: vera
           # Base efímera del runner sin contraseña literal en el repositorio.
           POSTGRES_HOST_AUTH_METHOD: trust
+        # Mismo servidor publicado en dos puertos. El 5432 es la base principal y el 55437 es el
+        # único que acepta el guard de cmd/semilla-escenario, que escribe y con REINICIAR=si borra.
         ports:
           - 5432:5432
+          - 55437:5432
         options: >-
           --health-cmd "pg_isready -U owner -d vera"
           --health-interval 5s
@@ -135,6 +138,7 @@ jobs:
             echo "API_PW=$API_PW"
             echo "DATABASE_URL=postgres://owner:$OWNER_PW@127.0.0.1:5432/vera?sslmode=disable"
             echo "APP_DATABASE_URL=postgres://rol_api:$API_PW@127.0.0.1:5432/vera?sslmode=disable"
+            echo "SEMILLA_DATABASE_URL=postgres://owner:$OWNER_PW@127.0.0.1:55437/vera_semilla_ci?sslmode=disable"
             echo "REDIS_URL=redis://127.0.0.1:6379"
             echo "SIMULADOR_CUSTODIA_URL=http://127.0.0.1:8099"
           } >> "$GITHUB_ENV"
@@ -145,6 +149,20 @@ jobs:
           psql "postgres://owner@127.0.0.1:5432/vera?sslmode=disable" -v ON_ERROR_STOP=1 \
             -c "ALTER ROLE owner WITH PASSWORD '$OWNER_PW'" \
             -c "ALTER ROLE rol_api WITH PASSWORD '$API_PW'"
+
+      # Base propia para cmd/semilla-escenario. El guard de esa prueba exige 127.0.0.1:55437 y una base
+      # vera_semilla_*, así que no puede usar la base principal. Los roles son del clúster y las
+      # migraciones los reutilizan, por eso aquí solo se crea la base y se migra por el puerto 55437.
+      - name: Create and migrate scenario seed database
+        run: |
+          psql "postgres://owner@127.0.0.1:5432/vera?sslmode=disable" -v ON_ERROR_STOP=1 \
+            -c "CREATE DATABASE vera_semilla_ci"
+          DATABASE_URL="$SEMILLA_DATABASE_URL" go run ./cmd/migrate up
+
+      # El catálogo curado del escalón 4 vive en bd/datos/catalogo-v3 y ninguna migración lo inserta,
+      # así que la base recién migrada lo carga aquí, igual que en el despliegue.
+      - name: Load curated catalog
+        run: go run ./cmd/cargar-catalogo -aplicar
 
       - name: Start custodian simulator
         run: |
@@ -161,6 +179,9 @@ jobs:
 
       # -p 1 porque los paquetes comparten la misma base y varias pruebas escriben
       # tablas globales (ledger, outbox, UVT), así que en paralelo se pisarían.
+      # TestEscenarioDosCorridasYReinicio (cmd/semilla-escenario) lee SEMILLA_DATABASE_URL, no
+      # DATABASE_URL, y corre contra vera_semilla_ci. Sin esa variable la prueba hace t.Skip y el
+      # paso de skips inesperados falla el job, así que el skip no queda oculto.
       - name: Integration tests
         run: |
           set -o pipefail

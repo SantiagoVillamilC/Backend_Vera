@@ -42,6 +42,40 @@ ARCHIVO_DATABASE_URL="${DIRECTORIO_API}/database-url.env"
 # (cmd/api/config.go), lo firma el custodio simulado como bearer estático.
 ARCHIVO_CUSTODIO_TOKEN="${DIRECTORIO_API}/custodio-token.env"
 
+# Banderas por entorno (CF-A0-02): la matriz vive junto a este paso y la columna
+# se elige con DESTINO, declarado en aprovisionar.env. Ver
+# docs/configuracion-entornos.md.
+ARCHIVO_BANDERAS="${DIRECTORIO_SCRIPT}/banderas.tsv"
+ARCHIVO_ENV_APROVISIONAR="${DIRECTORIO_SCRIPT}/aprovisionar.env"
+# Sin destino no se elige columna: asumir "local" en una VM que comparte el
+# comando SSH de staging y main encendería los escalones 5 y 6 sin que nadie lo
+# declare, cuando hasta hoy esa API corría con ambos apagados por defecto
+# (cmd/api/config.go). Se aborta y el operador declara el destino.
+if [[ -z "${DESTINO:-}" ]]; then
+  error_fatal "Falta DESTINO en ${ARCHIVO_ENV_APROVISIONAR}. Declara DESTINO=local, demo o produccion: este paso no elige columna de banderas sin destino (ver docs/configuracion-entornos.md)."
+fi
+case "${DESTINO}" in
+  local | demo | produccion) ;;
+  *)
+    error_fatal "DESTINO debe ser local, demo o produccion, no \"${DESTINO}\"."
+    ;;
+esac
+
+# Bloque YAML con las banderas del destino, listo para el "environment:" del
+# compose. Cada valor va entre comillas: una celda vacía (VERA_MODELO) se emite
+# como la variable definida y vacía, no como nulo. Para os.Getenv es lo mismo
+# que no encontrarla, así que la aplicación aplica su valor por defecto.
+banderas_entorno=""
+while IFS= read -r linea_bandera; do
+  [[ -n "${linea_bandera}" ]] || continue
+  banderas_entorno+=$'\n'"      ${linea_bandera%%=*}: \"${linea_bandera#*=}\""
+done <<< "$(banderas_del_destino "${ARCHIVO_BANDERAS}" "${DESTINO}")"
+
+if [[ -z "${banderas_entorno}" ]]; then
+  error_fatal "${ARCHIVO_BANDERAS} no devolvió ninguna bandera para DESTINO=${DESTINO}."
+fi
+info "Banderas del destino ${DESTINO} tomadas de ${ARCHIVO_BANDERAS}."
+
 asegurar_archivo_con_secreto "${ARCHIVO_JWT_SECRET}" "JWT_SECRET"
 asegurar_archivo_con_secreto_hex "${ARCHIVO_CONTADORES_PEPPER}" "CONTADORES_PEPPER"
 asegurar_archivo_con_secreto_hex "${ARCHIVO_OTP_PEPPER}" "OTP_PEPPER"
@@ -68,7 +102,7 @@ chmod 600 "${ARCHIVO_DATABASE_URL}"
 # escapada para que la resuelva docker compose desde .env en cada despliegue,
 # no este script una sola vez. Los cinco archivos generados arriba entran por
 # env_file (secretos, 600); todo lo que sigue en "environment:" es config
-# fija, no sensible.
+# fija, no sensible, incluidas las banderas del destino (banderas.tsv).
 contenido_compose_api="$(cat <<EOF
 # infra/servidor/compose.api.yaml, generado por 60-api.sh, no
 # versionado como archivo estático aparte.
@@ -122,7 +156,7 @@ services:
       OTP_CANAL: simulador
       OTP_SIMULADOR_CODIGO_FIJO: "123456"
       KYC_PROVEEDOR: simulador
-      KYC_SIMULADOR_RESULTADO: verificado
+      KYC_SIMULADOR_RESULTADO: verificado${banderas_entorno}
     networks:
       - centinela
     depends_on:

@@ -135,6 +135,7 @@ func TestArgumentosAuditoriaListaCerrada(t *testing.T) {
 		{"preparar_transferencia", `{"destinatario_ref":"token-referencia-privada","monto_pesos":"1234"}`},
 		{"consultar_transferencia", `{"transferencia_id":"11111111-1111-4111-8111-111111111111"}`},
 		{"listar_movimientos", `{"desde":"2026-10-01","hasta":"2026-10-18","tipo":"envio","limite":5}`},
+		{"resumir_consumo_por_categoria", `{"mes":"2026-09"}`},
 	} {
 		f := c.funciones[caso.nombre]
 		a, campos, err := validarArgumentos(caso.nombre, f.esquema, []byte(caso.args))
@@ -154,6 +155,14 @@ func TestArgumentosAuditoriaListaCerrada(t *testing.T) {
 		if len(v) != len(campos) {
 			t.Fatal("perdió presencia de argumentos")
 		}
+	}
+	f := c.funciones["resumir_consumo_por_categoria"]
+	a, campos, err := validarArgumentos("resumir_consumo_por_categoria", f.esquema, []byte(`{"mes":"2026-09"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saneados := argumentosParaAuditoria(a, campos); string(saneados) != `{"mes":"2026-09"}` {
+		t.Fatalf("mes saneado inesperado: %s", saneados)
 	}
 }
 

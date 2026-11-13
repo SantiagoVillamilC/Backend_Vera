@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/platform/identidad"
 	"github.com/google/uuid"
 )
@@ -22,7 +23,7 @@ var (
 // La validación, normalización y serialización las hace el catálogo de producción.
 func herramientasSimuladas(c Caso, fecha time.Time, m *memoriaEscenario) map[string]copilot.ManejadorHerramienta {
 	manejadores := make(map[string]copilot.ManejadorHerramienta)
-	for _, nombre := range []string{"consultar_saldo", "consultar_limites", "listar_movimientos", "resumir_movimientos", "buscar_destinatario", "consultar_transferencia", "preparar_transferencia"} {
+	for _, nombre := range []string{"consultar_saldo", "consultar_limites", "listar_movimientos", "resumir_movimientos", "resumir_consumo_por_categoria", "buscar_destinatario", "consultar_transferencia", "preparar_transferencia"} {
 		if slices.Contains(c.OmitirHerramientas, nombre) {
 			continue
 		}
@@ -51,6 +52,20 @@ func herramientasSimuladas(c Caso, fecha time.Time, m *memoriaEscenario) map[str
 					grupos = []copilot.GrupoHerramienta{{Nombre: "Laura Rodríguez", Entradas: 20000000, Salidas: 5000000, Neto: 15000000, Cantidad: 2}}
 				}
 				return copilot.ResumenHerramienta{Entradas: 20000000, Salidas: 5000000, Neto: 15000000, Cantidad: 2, Grupos: grupos}, nil
+			case "resumir_consumo_por_categoria":
+				mes := a.Mes
+				if mes == "" {
+					mes = fecha.In(time.FixedZone("America/Bogota", -5*60*60)).Format("2006-01")
+				}
+				mediana := nucleo.Centavos(4000000)
+				return copilot.ConsumoHerramienta{
+					Mes: mes, Alcance: "billetera", Moneda: "COP", Evaluable: true,
+					MesesCompletos: 4, MesesRequeridos: 3, Total: 7000000,
+					Categorias: []copilot.CategoriaConsumoHerramienta{
+						{Codigo: "alimentos_mercado", Nombre: "Alimentos y mercado", Total: 5000000, Mediana: &mediana},
+						{Codigo: "transporte", Nombre: "Transporte", Total: 2000000},
+					},
+				}, nil
 			case "buscar_destinatario":
 				nombreMostrado := "Laura Rodríguez"
 				if c.Perfil == "nombre_inyectado" {

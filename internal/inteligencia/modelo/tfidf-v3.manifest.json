@@ -1,7 +1,7 @@
 {
-  "archivo": "tfidf-v2.json",
-  "artefacto_version": "tfidf-2",
-  "bytes": 1227387,
+  "archivo": "tfidf-v3.json",
+  "artefacto_version": "tfidf-3",
+  "bytes": 737436,
   "catalogo_firmado": [
     "alimentos_mercado",
     "comisiones_costos_financieros",
@@ -20,24 +20,22 @@
   ],
   "categorias": [
     "alimentos_mercado",
-    "comisiones_costos_financieros",
     "compras",
     "entretenimiento",
     "otros_gastos",
     "restaurantes_domicilios",
     "salud",
-    "transporte",
-    "vivienda_servicios"
+    "transporte"
   ],
   "categorias_prohibidas": [
     "comisiones_costos_financieros"
   ],
   "conteos": {
-    "centroides": 9,
-    "idf": 11813,
+    "centroides": 7,
+    "idf": 7632,
     "lexico": 0,
-    "nombres_entrenados": 11862,
-    "nombres_leidos": 11862,
+    "nombres_entrenados": 5728,
+    "nombres_leidos": 5728,
     "poda_por_centroide": 0
   },
   "filtro": {
@@ -56,9 +54,9 @@
     "excluidas": []
   },
   "fuente": {
-    "catalogo": "catalogo/v2/catalogo_v2.csv",
-    "sha256_catalogo": "d801cb9e9d5239f1f02579d5c5db252e71efd4bbfbdb1229992c020c83262c94",
-    "version_catalogo": "v1"
+    "catalogo": "catalogo/v3/catalogo_v3.csv",
+    "sha256_catalogo": "f58eb87ebd08ddac733d7ff91098a6e413ab48911e1eb310a827795a93348ccb",
+    "version_catalogo": "v2"
   },
   "generado_por": "generar_artefacto_tfidf.py",
   "lexico_descartado": {
@@ -103,7 +101,7 @@
     "ZAPATERIA": "compras"
   },
   "nota": "Sin marca de tiempo: la misma fuente produce los mismos bytes.",
-  "sha256_artefacto": "fe69c5efda1f885cb9bd0de0fcd835d7cf098c976f9eb868fddf29d79e864253",
+  "sha256_artefacto": "7aa998a833ec111de76c6d3c56a8f0780903b2c1927f839d9c41c211d9e0bbea",
   "sin_lexico": true,
   "umbrales": {
     "coseno": "0.16",

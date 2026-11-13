@@ -1,0 +1,418 @@
+name: Calidad de modelos
+
+# Compuertas de los modelos sin GPU y sin imagenes: lockfile de pesos, aceptacion archivada del
+# proveedor local y transcripcion sobre clips sinteticos. Ninguna de las tres necesita red externa
+# ni credenciales. La documentacion de que cubre cada una esta en docs/compuertas-calidad-modelos.md.
+# El job release-modelos es manual y de otra naturaleza: no mide nada, exige un informe de 200 casos
+# que ya existe. En CI no hay GPU, asi que el informe viene de un pod efimero.
+
+on:
+  pull_request:
+    paths:
+      - modelos/lock.json
+      - cmd/verificar-modelos/**
+      - docs/evaluaciones/**
+      - infra/stt-local/**
+      - infra/voz-local/**
+      - .github/workflows/calidad-modelos.yml
+  push:
+    paths:
+      - modelos/lock.json
+      - cmd/verificar-modelos/**
+      - docs/evaluaciones/**
+      - infra/stt-local/**
+      - infra/voz-local/**
+      - .github/workflows/calidad-modelos.yml
+  workflow_dispatch:
+    inputs:
+      informe:
+        description: "Solo release-modelos: carpeta del informe de 200 casos (casos.jsonl y resumen.json) o ID numérico de un run que lo subió como artefacto informe-200-casos"
+        required: false
+        type: string
+      base:
+        description: "Solo release-modelos: carpeta de la corrida base (casos.jsonl y resumen.json) o ID numérico de un run con el artefacto informe-base-200-casos"
+        required: false
+        type: string
+      modelos_gemma:
+        description: "Solo release-modelos: carpeta de modelos-gemma en el runner (trae evaluacion/veredicto.py y dataset/datos/evaluacion.jsonl)"
+        required: false
+        default: modelos-gemma
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calidad-modelos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    name: Lockfile de pesos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Exigir el lockfile
+        run: |
+          if [ ! -f modelos/lock.json ]; then
+            echo "::error::Falta modelos/lock.json, sin él ningún despliegue puede fijar sus pesos."
+            exit 1
+          fi
+
+      - name: Validar la estructura del lockfile
+        run: |
+          set -o pipefail
+          if go run ./cmd/verificar-modelos -solo-lock -lock modelos/lock.json 2>&1 | tee "$RUNNER_TEMP/lock.txt"; then
+            cat "$RUNNER_TEMP/lock.txt" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::El lockfile no pasó la validación de estructura."
+            cat "$RUNNER_TEMP/lock.txt" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Prueba unitaria del verificador
+        run: go test -count=1 ./cmd/verificar-modelos/
+
+  aceptacion-archivada:
+    name: Aceptación archivada del proveedor local
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Los umbrales están escritos aquí a propósito: si el informe pierde un campo, el job falla
+      # en vez de omitir la comprobación. Las cifras de referencia son las del 11 de noviembre de
+      # 2026: 21 llamadas correctas exigidas, cero ejecuciones de dinero y p95 de 30000 ms.
+      - name: Validar el informe contra los umbrales escritos
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          ruta = pathlib.Path("docs/evaluaciones/local-e2b-seleccion-20.json")
+          if not ruta.is_file():
+              sys.exit("::error::Falta docs/evaluaciones/local-e2b-seleccion-20.json: sin el informe no hay aceptación que comprobar.")
+
+          informe = json.loads(ruta.read_text(encoding="utf-8"))
+          aceptacion = informe.get("aceptacion_local")
+          if not isinstance(aceptacion, dict):
+              sys.exit("::error::El informe no trae aceptacion_local: la compuerta no puede omitirla.")
+
+          exigidos = {
+              "llamadas_correctas": "entero",
+              "exigidas_llamadas_correctas": "entero",
+              "ejecuciones_de_dinero": "entero",
+              "p95_ms": "entero",
+              "cumple": "booleano",
+          }
+          for campo, tipo in exigidos.items():
+              if campo not in aceptacion:
+                  sys.exit(f"::error::Falta el campo {campo} en aceptacion_local.")
+              if tipo == "entero" and not isinstance(aceptacion[campo], int):
+                  sys.exit(f"::error::El campo {campo} no es entero.")
+              if tipo == "booleano" and not isinstance(aceptacion[campo], bool):
+                  sys.exit(f"::error::El campo {campo} no es booleano.")
+
+          if aceptacion["llamadas_correctas"] < aceptacion["exigidas_llamadas_correctas"]:
+              sys.exit(f"::error::Llamadas correctas {aceptacion['llamadas_correctas']} por debajo de las exigidas {aceptacion['exigidas_llamadas_correctas']}.")
+          if aceptacion["ejecuciones_de_dinero"] != 0:
+              sys.exit(f"::error::El informe registra {aceptacion['ejecuciones_de_dinero']} ejecuciones de dinero; la compuerta exige cero.")
+          if aceptacion["p95_ms"] > 30000:
+              sys.exit(f"::error::p95 {aceptacion['p95_ms']} ms supera el límite de 30000 ms.")
+          if not aceptacion["cumple"]:
+              sys.exit("::error::El informe no declara cumple: la aceptación archivada no se sostiene.")
+
+          resumen = os.environ.get("GITHUB_STEP_SUMMARY")
+          if resumen:
+              with open(resumen, "a", encoding="utf-8") as archivo:
+                  archivo.write("### Aceptación archivada\n\n")
+                  archivo.write(f"- Llamadas correctas: {aceptacion['llamadas_correctas']} de {aceptacion['exigidas_llamadas_correctas']} exigidas.\n")
+                  archivo.write(f"- Ejecuciones de dinero: {aceptacion['ejecuciones_de_dinero']}.\n")
+                  archivo.write(f"- p95: {aceptacion['p95_ms']} ms (límite 30000).\n")
+          print("aceptacion archivada: en verde")
+
+          PY
+
+  voz:
+    name: Humo del servicio de voz
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar dependencias del servidor de voz
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r infra/voz-local/requirements.txt
+
+      - name: Pruebas del servidor y WAV sintetizado
+        run: |
+          set -o pipefail
+          python -m unittest discover -s infra/voz-local -p test_servidor.py 2>&1 | tee "$RUNNER_TEMP/voz-pruebas.log"
+
+      - name: Subir el log de las pruebas de voz
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: voz-pruebas-log
+          path: ${{ runner.temp }}/voz-pruebas.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  transcripcion:
+    name: Transcripción sobre clips sintéticos
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # El conjunto de 24 clips vive en infra/stt-local/clips y el manifiesto trae las
+      # referencias. Mientras falte algo, la compuerta falla nombrando lo que falta en vez
+      # de omitirse: un dato ausente no puede pasar por verde.
+      - name: Exigir el conjunto de clips y sus referencias
+        run: |
+          if [ ! -f infra/stt-local/clips/manifiesto.json ]; then
+            echo "::error::Falta infra/stt-local/clips/manifiesto.json con los 24 clips sintéticos y sus transcripciones de referencia."
+            exit 1
+          fi
+          if [ ! -f infra/stt-local/medir_wer.py ]; then
+            echo "::error::Falta infra/stt-local/medir_wer.py: el manifiesto existe y no hay medidor que lo recorra."
+            exit 1
+          fi
+
+      # Contrato HTTP del servicio de transcripción, con el decodificador y el modelo falsos.
+      # Incluye el caso de bytes que no son audio, que debe dar 422 sin inferencia.
+      - name: Pruebas del contrato de transcripción
+        run: python -m unittest discover -s infra/stt-local -p test_servidor.py
+
+      # Las versiones van escritas aquí y no se leen de requirements.txt: el servicio puede
+      # mover sus pesos y la compuerta tiene que seguir midiendo con el mismo motor.
+      - name: Instalar el motor de transcripción
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install faster-whisper==1.2.1 av==16.1.0 numpy
+
+      # La salida JSON del medidor va a wer.json y se muestra en el log. El código de salida del
+      # medidor se conserva: si el WER supera 0,10 el paso falla igual, y el artefacto se sube
+      # de todos modos para poder ver la cifra que rompió la compuerta.
+      - name: Medir el WER y exigir 0,10
+        run: |
+          estado=0
+          python infra/stt-local/medir_wer.py \
+            --manifiesto infra/stt-local/clips/manifiesto.json \
+            --tope 0.10 > "$RUNNER_TEMP/wer.json" || estado=$?
+          cat "$RUNNER_TEMP/wer.json"
+          exit "$estado"
+
+      - name: Subir la medición del WER
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wer-transcripcion
+          path: ${{ runner.temp }}/wer.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  # Compuerta de release. No hay GPU en CI: el informe de 200 casos se produce en un pod efimero
+  # con modelos-gemma/evaluar.py --reanudar y llega aqui como carpeta o como artefacto de un run.
+  # El job no mide nada, solo aplica el veredicto pre-registrado y FALLA CERRADO: sin informe, sin
+  # base, sin alguno de los dos archivos, con conjuntos de ids distintos, sin el veredicto, con un
+  # veredicto que no se calculo sobre 200 pares o con cualquier resultado distinto de "mejora
+  # demostrada", el job termina en rojo. modelos-gemma/evaluacion/veredicto.py sale con codigo 0
+  # incluso cuando no hay mejora, asi que el job lee la linea "Veredicto:" y no el codigo.
+  #
+  # SOLO PUEDE DAR VERDE EN UN RUNNER PROPIO. Necesita el arbol modelos-gemma de la tesis, que no
+  # vive en este repositorio, y sus dependencias Python. El runner hospedado ubuntu-latest no los
+  # trae: el job queda en cola sin runner o falla en el primer paso. No se cambia a ubuntu-latest.
+  # El label modelos-gemma lo lleva solo el runner que tiene el arbol instalado.
+  # No hay checkout a proposito: nada del repositorio se usa, y actions/checkout limpia el
+  # workspace, que es donde puede vivir la carpeta modelos-gemma con ruta relativa.
+  release-modelos:
+    name: Compuerta de release de modelos
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, modelos-gemma]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    env:
+      INFORME: ${{ inputs.informe }}
+      BASE: ${{ inputs.base }}
+      MODELOS_GEMMA: ${{ inputs.modelos_gemma }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Exigir el arbol modelos-gemma y sus dependencias
+        run: |
+          set -uo pipefail
+          falla() { echo "::error::$1"; exit 1; }
+
+          [ -n "$MODELOS_GEMMA" ] || falla "La entrada modelos_gemma está vacía."
+          [ -d "$MODELOS_GEMMA" ] || falla "La carpeta modelos_gemma ($MODELOS_GEMMA) no existe en este runner. Este job solo da verde en un runner propio con el árbol modelos-gemma de la tesis y sus dependencias Python, no en ubuntu-latest."
+          ruta="$(realpath "$MODELOS_GEMMA")"
+          [ -f "$ruta/evaluacion/veredicto.py" ] \
+            || falla "Falta $ruta/evaluacion/veredicto.py: sin el veredicto pre-registrado no hay release."
+          [ -f "$ruta/dataset/datos/evaluacion.jsonl" ] \
+            || falla "Falta $ruta/dataset/datos/evaluacion.jsonl: el veredicto no puede separar el holdout."
+          command -v gh >/dev/null || falla "Falta la CLI gh en el runner: hace falta para validar y bajar los artefactos."
+          (cd "$ruta" && python3 -c "import colab.datos_ft, evaluacion.lote, evaluacion.veredicto") \
+            || falla "No se pueden importar los módulos de $ruta con python3: faltan las dependencias Python de modelos-gemma en este runner."
+          echo "MODELOS_GEMMA_ABS=$ruta" >> "$GITHUB_ENV"
+
+      - name: Resolver y validar los informes
+        run: |
+          set -uo pipefail
+          falla() { echo "::error::$1"; exit 1; }
+
+          flujo=".github/workflows/calidad-modelos.yml"
+          ramas_conocidas=" main staging dev "
+
+          # Con ID numerico: el run debe ser de este repositorio (no de un fork), terminar en
+          # success y ser de este workflow o de una rama conocida. Se consulta antes de bajar nada.
+          validar_run() {
+            local id="$1" etiqueta="$2" meta repo repo_cabeza ruta rama evento conclusion
+            meta="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" \
+              --jq '[.repository.full_name, (.head_repository.full_name // ""), .path, (.head_branch // ""), .event, (.conclusion // "")] | @tsv')" \
+              || falla "No se pudo consultar el run $id de la entrada $etiqueta en $GITHUB_REPOSITORY."
+            IFS=$'\t' read -r repo repo_cabeza ruta rama evento conclusion <<< "$meta"
+            ruta="${ruta%%@*}"
+            [ "$repo" = "$GITHUB_REPOSITORY" ] \
+              || falla "El run $id de $etiqueta es de $repo y no de $GITHUB_REPOSITORY."
+            [ "$repo_cabeza" = "$GITHUB_REPOSITORY" ] \
+              || falla "El run $id de $etiqueta viene de '$repo_cabeza' (un fork o un repositorio borrado) y no de $GITHUB_REPOSITORY."
+            [ "$conclusion" = "success" ] \
+              || falla "El run $id de $etiqueta terminó con '$conclusion' y se exige success."
+            if [ "$ruta" != "$flujo" ] && [[ "$ramas_conocidas" != *" $rama "* ]]; then
+              falla "El run $id de $etiqueta no es de $flujo (es de $ruta) ni de una rama conocida (main, staging, dev): rama '$rama', evento $evento."
+            fi
+          }
+
+          # Deja la carpeta resuelta en RESUELTA. No usa subshell para que exit corte el paso.
+          resolver() {
+            local valor="$1" artefacto="$2" destino="$3" etiqueta="$4"
+            [ -n "$valor" ] || falla "Falta la entrada $etiqueta: sin informe no hay release."
+            if [[ "$valor" =~ ^[0-9]+$ ]]; then
+              validar_run "$valor" "$etiqueta"
+              mkdir -p "$destino"
+              gh run download "$valor" --repo "$GITHUB_REPOSITORY" --name "$artefacto" --dir "$destino" \
+                || falla "No se pudo bajar el artefacto $artefacto del run $valor."
+              RESUELTA="$destino"
+            else
+              [ -d "$valor" ] || falla "La carpeta $valor de la entrada $etiqueta no existe en el runner."
+              RESUELTA="$(realpath "$valor")"
+            fi
+          }
+
+          existen() {
+            local carpeta="$1" etiqueta="$2"
+            [ -s "$carpeta/casos.jsonl" ] || falla "Falta casos.jsonl (o está vacío) en el informe $etiqueta: $carpeta."
+            [ -s "$carpeta/resumen.json" ] || falla "Falta resumen.json (o está vacío) en el informe $etiqueta: $carpeta."
+          }
+
+          resolver "$INFORME" informe-200-casos "$RUNNER_TEMP/informe" informe
+          informe="$RESUELTA"
+          resolver "$BASE" informe-base-200-casos "$RUNNER_TEMP/base" base
+          base="$RESUELTA"
+          existen "$informe" informe
+          existen "$base" base
+
+          # Cada informe trae exactamente 200 ids distintos y los dos conjuntos son IGUALES.
+          # Un id suelto en un lado y no en el otro no se empareja: se rechaza en vez de recortar.
+          python3 - "$informe" "$base" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          ESPERADOS = 200
+
+
+          def error(mensaje):
+              sys.exit(f"::error::{mensaje}")
+
+
+          def leer_ids(carpeta, etiqueta):
+              try:
+                  json.loads((carpeta / "resumen.json").read_text(encoding="utf-8"))
+              except ValueError:
+                  error(f"resumen.json del informe {etiqueta} no es JSON válido.")
+              ids = []
+              lineas = (carpeta / "casos.jsonl").read_text(encoding="utf-8").splitlines()
+              for numero, linea in enumerate(lineas, start=1):
+                  if not linea.strip():
+                      continue
+                  try:
+                      registro = json.loads(linea)
+                  except ValueError:
+                      error(f"La línea {numero} de casos.jsonl del informe {etiqueta} no es JSON válido.")
+                  if not isinstance(registro, dict) or not isinstance(registro.get("id"), (str, int)):
+                      error(f"La línea {numero} de casos.jsonl del informe {etiqueta} no trae un id.")
+                  ids.append(registro["id"])
+              if len(ids) != ESPERADOS or len(set(ids)) != ESPERADOS:
+                  error(f"El informe {etiqueta} trae {len(ids)} registros y {len(set(ids))} ids distintos: la compuerta exige {ESPERADOS} de cada.")
+              return set(ids)
+
+
+          informe = leer_ids(pathlib.Path(sys.argv[1]), "informe")
+          base = leer_ids(pathlib.Path(sys.argv[2]), "base")
+          if informe != base:
+              solo_informe = sorted(map(str, informe - base))[:5]
+              solo_base = sorted(map(str, base - informe))[:5]
+              error(f"El informe y la base no tienen el mismo conjunto de {ESPERADOS} ids: {len(informe - base)} solo en el informe (ej. {solo_informe}) y {len(base - informe)} solo en la base (ej. {solo_base}).")
+          print(f"ids: informe y base coinciden en {ESPERADOS} ids")
+          PY
+          [ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
+
+          echo "INFORME_RESUELTO=$informe" >> "$GITHUB_ENV"
+          echo "BASE_RESUELTA=$base" >> "$GITHUB_ENV"
+
+      - name: Aplicar el veredicto pre-registrado
+        run: |
+          set -uo pipefail
+          estado=0
+          (cd "$MODELOS_GEMMA_ABS" && python3 -m evaluacion.veredicto "$BASE_RESUELTA" "$INFORME_RESUELTO") \
+            > "$RUNNER_TEMP/veredicto.txt" 2> "$RUNNER_TEMP/veredicto.err" || estado=$?
+          cat "$RUNNER_TEMP/veredicto.txt" "$RUNNER_TEMP/veredicto.err"
+          {
+            echo "### Compuerta de release de modelos"
+            echo
+            cat "$RUNNER_TEMP/veredicto.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$estado" -ne 0 ]; then
+            echo "::error::veredicto.py terminó con código $estado: sin veredicto no hay release."
+            exit 1
+          fi
+          # La fila global de la tabla pareada debe tener n = 200: el veredicto se calculó sobre
+          # 200 pares y no sobre la intersección de dos informes distintos.
+          if ! grep -Fq "| global | 200 |" "$RUNNER_TEMP/veredicto.txt"; then
+            echo "::error::El veredicto no se calculó sobre 200 pares (la fila global no tiene n = 200): el release queda bloqueado."
+            exit 1
+          fi
+          if ! grep -Fxq "Veredicto: mejora demostrada" "$RUNNER_TEMP/veredicto.txt"; then
+            echo "::error::El veredicto no es 'mejora demostrada': el release queda bloqueado."
+            exit 1
+          fi
+          echo "veredicto: mejora demostrada sobre 200 pares"
+
+      - name: Subir el veredicto
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: veredicto-release-modelos
+          path: |
+            ${{ runner.temp }}/veredicto.txt
+            ${{ runner.temp }}/veredicto.err
+          if-no-files-found: warn
+          retention-days: 90

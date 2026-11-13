@@ -107,6 +107,33 @@ func TestPresupuestoConProrrateo(t *testing.T) {
 	}
 }
 
+func TestPresupuestoDisparaConPagoOcasional(t *testing.T) {
+	// Tres meses completos de $300.000 y, en julio, un pago ocasional de $1.800.000 sobre la
+	// cuota habitual de $200.000: el acumulado $2.000.000 supera la mediana $300.000 por R1.
+	var pagos []Pago
+	numero := 0
+	for _, mes := range []Mes{{2026, time.April}, {2026, time.May}, {2026, time.June}} {
+		numero++
+		pagos = append(pagos, pagoDe(mercado, mes.Fecha().AddDate(0, 0, 4), 30_000_000, string(rune('A'+numero)), "alimentos_mercado"))
+	}
+	pagos = append(pagos, pagoDe(mercado, time.Date(2026, 7, 4, 0, 0, 0, 0, Zona), 20_000_000, "Z", "alimentos_mercado"))
+	pagos = append(pagos, pagoDe(nueva, time.Date(2026, 7, 8, 0, 0, 0, 0, Zona), 180_000_000, "Y", "compras"))
+	primero := primeroDePrueba
+	ctx, err := NuevoContexto(Instantaneo{
+		Pagos: pagos, GastoCategoria: gastosPorCategoria(pagos), Primero: &primero, SaldoCentavos: 100_000_000,
+	}, ahoraDePrueba, ConfiguracionPorDefecto())
+	if err != nil {
+		t.Fatalf("contexto: %v", err)
+	}
+	decision, _ := Evaluar(ctx, PresupuestoAnticipado)
+	if !decision.Dispara || decision.Causa != CausaR1 {
+		t.Fatalf("presupuesto = %+v", decision)
+	}
+	if decision.Valor.Cmp(Entero(200_000_000)) != 0 {
+		t.Fatalf("valor = %s, want el acumulado 200000000", decision.Valor.RatString())
+	}
+}
+
 func TestCaidaEnElBordeYGuardiaCv(t *testing.T) {
 	ctx := contextoDe(t, escenarioCaida)
 	decision, _ := Evaluar(ctx, CaidaIngreso)

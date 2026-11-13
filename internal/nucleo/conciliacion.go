@@ -20,6 +20,7 @@ type ventanaConciliacion struct {
 	transferencias   []repositorio.LeerTransferenciasActivasDeVentanaRow
 	extractoRiel     ExtractoRiel
 	extractoCustodio ExtractoCustodio
+	confirmadas      *[]string
 }
 
 // detectorDeVentana es el punto de enganche de la detección por tipo: recibe la ventana y devuelve cuántas diferencias registró.
@@ -159,12 +160,14 @@ func (s *Servicio) conciliarVentana(ctx context.Context, desde, hasta time.Time,
 		detectar = s.detectarDiferenciasDeVentana
 	}
 	diferencias := 0
+	confirmadas := make([]string, 0, 1)
 	_, err := enTransaccion(ctx, s.pool,
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (struct{}, error) {
 			ventana, err := leerVentanaConciliacion(ctx, q, desde, hasta, extractoRiel, extractoCustodio)
 			if err != nil {
 				return struct{}{}, err
 			}
+			ventana.confirmadas = &confirmadas
 			n, err := detectar(ctx, q, ventana)
 			if err != nil {
 				return struct{}{}, err
@@ -174,6 +177,10 @@ func (s *Servicio) conciliarVentana(ctx context.Context, desde, hasta time.Time,
 		})
 	if err != nil {
 		return 0, err
+	}
+	// Después del commit: los avisos leen asientos ya visibles y un callback no puede deshacer la corrida.
+	for _, usuarioID := range confirmadas {
+		s.avisarTrasAsiento(ctx, usuarioID)
 	}
 	return diferencias, nil
 }

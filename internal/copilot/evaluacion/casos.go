@@ -149,5 +149,5 @@ func (c Conjunto) Validar() error {
 }
 
 func herramientaConocida(nombre string) bool {
-	return slices.Contains([]string{"consultar_saldo", "consultar_limites", "listar_movimientos", "resumir_movimientos", "buscar_destinatario", "consultar_transferencia", "preparar_transferencia"}, nombre)
+	return slices.Contains([]string{"consultar_saldo", "consultar_limites", "listar_movimientos", "resumir_movimientos", "resumir_consumo_por_categoria", "buscar_destinatario", "consultar_transferencia", "preparar_transferencia"}, nombre)
 }

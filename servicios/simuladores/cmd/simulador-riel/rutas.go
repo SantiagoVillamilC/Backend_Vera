@@ -94,7 +94,7 @@ func (s *Simulador) Enviar(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 		return
 	}
-	escribirJSON(w, http.StatusOK, respuestaDe(registrada, reintento))
+	escribirJSON(w, http.StatusOK, s.respuestaConComercio(registrada, reintento))
 }
 
 // ConsultarEstado responde lo que el simulador registró para esa transferencia.
@@ -114,7 +114,7 @@ func (s *Simulador) ConsultarEstado(w http.ResponseWriter, r *http.Request) {
 		escribirError(w, http.StatusInternalServerError, "no se pudo leer la operación", nil)
 		return
 	}
-	escribirJSON(w, http.StatusOK, respuestaDe(operacion, false))
+	escribirJSON(w, http.StatusOK, s.respuestaConComercio(operacion, false))
 }
 
 // Extracto responde las operaciones de la ventana [desde, hasta) más el corte del extracto.
@@ -298,6 +298,8 @@ type respuestaHTTP struct {
 	Motivo          string    `json:"motivo,omitempty"`
 	OcurridoEn      time.Time `json:"ocurrido_en"`
 	Reintento       bool      `json:"reintento"`
+	ComercioNombre  string    `json:"comercio_nombre,omitempty"`
+	MCC             string    `json:"mcc,omitempty"`
 }
 
 // respuestaDe lleva una operación registrada a su forma en el cable.
@@ -309,6 +311,16 @@ func respuestaDe(o Operacion, reintento bool) respuestaHTTP {
 		OcurridoEn:      o.OcurridoEn,
 		Reintento:       reintento,
 	}
+}
+
+// respuestaConComercio añade los datos del comercio registrado para la llave de la operación.
+func (s *Simulador) respuestaConComercio(o Operacion, reintento bool) respuestaHTTP {
+	respuesta := respuestaDe(o, reintento)
+	if entrada, ok := s.directorio.PorLlave(o.Llave); ok {
+		respuesta.ComercioNombre = entrada.NombreComercio
+		respuesta.MCC = entrada.MCC
+	}
+	return respuesta
 }
 
 // extractoHTTP es la ventana de operaciones que el simulador entrega para la conciliación.

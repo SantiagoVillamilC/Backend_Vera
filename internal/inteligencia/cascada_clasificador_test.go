@@ -21,21 +21,6 @@ func TestDecidirConClasificadorDevuelveEscalonSeis(t *testing.T) {
 	}
 }
 
-func TestDecidirPrefiereLaCacheAlClasificador(t *testing.T) {
-	modelo := modeloClasificador(t, idfDeTexto("ALFA"), map[string]map[string]string{
-		"compras": centroideConCoseno(t, "ALFA", 0.9),
-		"salud":   {"w:OTRO": "1"},
-	}, nil)
-	recursos := Recursos{
-		CacheLLM:     map[string]Categoria{"ALFA|llave-comercio": CategoriaSalud},
-		Clasificador: modelo,
-	}
-	decision := Decidir(entradaDeComercio("ALFA"), recursos, PrimerCorteConClasificador())
-	if decision.Categoria != CategoriaSalud || decision.Origen != OrigenLLM || decision.Escalon != EscalonClasificador {
-		t.Fatalf("decisión = %+v", decision)
-	}
-}
-
 func TestDecidirSinClasificadorSiguePendiente(t *testing.T) {
 	decision := Decidir(entradaDeComercio("ALFA"), Recursos{}, PrimerCorteConClasificador())
 	if decision.Escalon != EscalonClasificador || !decision.PendienteLLM || decision.Categoria != "" {
@@ -122,8 +107,8 @@ func TestOrigenEsCoherenteConElEscalon(t *testing.T) {
 				}
 				continue
 			}
-			if decision.Origen != OrigenLLM {
-				t.Fatalf("caso %q: origen %q en el escalón 6, want %q", caso.ID, decision.Origen, OrigenLLM)
+			if decision.Origen != OrigenTFIDF {
+				t.Fatalf("caso %q: origen %q en el escalón 6, want %q", caso.ID, decision.Origen, OrigenTFIDF)
 			}
 			continue
 		}

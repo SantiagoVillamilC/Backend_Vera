@@ -1,6 +1,10 @@
 package inteligencia
 
-import "time"
+import (
+	"time"
+
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
+)
 
 // DesenlaceDeLote clasifica el final de una corrida del lote de enriquecimiento.
 type DesenlaceDeLote string
@@ -42,6 +46,14 @@ type ResumenDeAvisos struct {
 	SuprimidosPorCupo    int
 	DuracionesPorUsuario []time.Duration
 	Fallo                bool
+}
+
+// AcumularRecuento suma el resultado de un usuario a la corrida. El recuento llega por usuario y con
+// el tope de su propio período, así que la cifra de suprimidos no mezcla el cupo de un mes con otro.
+func (r *ResumenDeAvisos) AcumularRecuento(insertados int, recuento avisos.Recuento) {
+	r.Emitidos += insertados
+	r.YaEmitidos += recuento.YaEmitidas
+	r.SuprimidosPorCupo += recuento.Recortadas
 }
 
 // Metricas es el puerto de observabilidad del contexto de inteligencia. La implementación concreta

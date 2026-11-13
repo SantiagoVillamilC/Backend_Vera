@@ -64,6 +64,7 @@ type JournalEntry struct {
 	RegistradoEn    pgtype.Timestamptz `json:"registrado_en"`
 	Descripcion     pgtype.Text        `json:"descripcion"`
 	DepositoID      pgtype.UUID        `json:"deposito_id"`
+	Mcc             pgtype.Text        `json:"mcc"`
 }
 
 type Outbox struct {

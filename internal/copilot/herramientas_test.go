@@ -28,7 +28,7 @@ func contextoHerramienta(t *testing.T) context.Context {
 func TestCatalogoCerrado(t *testing.T) {
 	c := catalogoPrueba(t, nil)
 	declaraciones := c.Declaraciones()
-	if len(declaraciones) != 7 {
+	if len(declaraciones) != 8 {
 		t.Fatalf("funciones=%d", len(declaraciones))
 	}
 	for _, f := range declaraciones {

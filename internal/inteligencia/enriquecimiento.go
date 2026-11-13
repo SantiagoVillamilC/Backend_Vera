@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -143,7 +144,7 @@ func (s *Servicio) Enriquecer(ctx context.Context, limite int) (Resultado, error
 						memorias[efecto.UsuarioID] = memoria
 					}
 					contraparte := ResolverContraparte(grupo.apuntes, efecto.UsuarioID, nombres)
-					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, s.clasificador, s.lexico.ParesDeLexico(), &resultado); err != nil {
+					if err := escribirMovimiento(ctx, q, grupo, efecto, transaccionID, contraparte, memoria, s.catalogo(), s.clasificador, s.lexico.ParesDeLexico(), &resultado); err != nil {
 						return Resultado{}, err
 					}
 				}
@@ -218,11 +219,11 @@ func (s *Servicio) Huella(ctx context.Context) (string, error) {
 			transaccion = uuid.UUID(fila.TransaccionID.Bytes).String()
 		}
 		_, _ = fmt.Fprintf(suma,
-			"%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%t\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
+			"%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%t\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n",
 			fila.UsuarioID, transaccion, fila.EntryAncla,
 			fila.OcurridoEn.Time.UTC().Format(time.RFC3339Nano), fila.Moneda, fila.Direccion,
 			fila.MontoCentavos, fila.Contraparte, fila.ContraparteResuelta,
-			fila.Descripcion.String, fila.Categoria, fila.OrigenCategoria,
+			fila.Descripcion.String, fila.Categoria, fila.OrigenCategoria, fila.Escalon,
 			fila.ComercioMid.String, fila.ComercioNombre.String, fila.Mcc.String, fila.VersionModelo,
 			fila.TipoDestino.String, fila.ContraparteLlave.String, fila.ContraparteNombreNormalizado.String)
 	}
@@ -326,6 +327,7 @@ func apunteDeAsiento(fila repositorio.LineasDeAsientosRow) Apunte {
 		OcurridoEn:  fila.OcurridoEn.Time,
 		Tipo:        fila.Tipo,
 		Descripcion: fila.Descripcion.String,
+		MCC:         fila.Mcc.String,
 		CuentaID:    fila.CuentaID,
 		Monto:       fila.Monto,
 		Moneda:      fila.Moneda,
@@ -345,6 +347,7 @@ func apunteDeTransferencia(fila repositorio.LineasDeTransferenciasRow) Apunte {
 		OcurridoEn:         fila.OcurridoEn.Time,
 		Tipo:               fila.Tipo,
 		Descripcion:        fila.Descripcion.String,
+		MCC:                fila.Mcc.String,
 		CuentaID:           fila.CuentaID,
 		Monto:              fila.Monto,
 		Moneda:             fila.Moneda,
@@ -442,6 +445,25 @@ func memoriaDeUsuario(ctx context.Context, q *repositorio.Queries, usuarioID str
 			Valor:       fila.Valor,
 		}] = correccion
 	}
+	// La promoción por K es conocimiento compartido del destino: se suma a la memoria del usuario
+	// solo donde no haya una corrección privada, que manda. Las filas nuevas heredan la categoría;
+	// las ya enriquecidas no se recalculan.
+	promociones, err := q.ListarPromociones(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inteligencia: leer las promociones de destino: %w", err)
+	}
+	for _, fila := range promociones {
+		clave := ClaveCorreccion{
+			Usuario:     usuarioID,
+			TipoDestino: TipoDestino(fila.TipoDestino),
+			Nivel:       fila.Nivel,
+			Valor:       fila.Valor,
+		}
+		if _, privada := memoria[clave]; privada {
+			continue
+		}
+		memoria[clave] = Correccion{Categoria: Categoria(fila.Categoria)}
+	}
 	return memoria, nil
 }
 
@@ -455,8 +477,8 @@ func direccionDeNeto(neto int64) string {
 }
 
 func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, efecto Efecto,
-	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, clasificador *Modelo,
-	lexico []ParLexico, resultado *Resultado) error {
+	transaccionID uuid.UUID, contraparte Contraparte, memoria Memoria, catalogo CatalogoCurado,
+	clasificador *Modelo, lexico []ParLexico, resultado *Resultado) error {
 	monto, valido := Absoluto(efecto.Neto)
 	if !valido {
 		return errors.New("inteligencia: el monto del movimiento no cabe en int64")
@@ -476,19 +498,27 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		MID:    contraparte.MID,
 		Nombre: contraparte.Nombre,
 	}
+	mcc := ""
+	if codigo, valido := NormalizarMCC(contraparte.MCC); valido {
+		mcc = codigo
+	}
 	entrada := Entrada{
 		Canal:            canal,
 		Llave:            contraparte.Llave,
 		Nombre:           contraparte.Nombre,
 		MID:              contraparte.MID,
+		MCC:              mcc,
 		TipoDestino:      contraparte.Tipo,
 		CategoriaInterna: string(contraparte.CategoriaInterna),
 	}
+	escalones := escalonesDelLote(catalogo, clasificador, lexico)
 	decision := Decidir(entrada, Recursos{
-		Memoria:      Proyectar(memoria, efecto.UsuarioID, destino),
-		Lexico:       lexico,
-		Clasificador: clasificador,
-	}, escalonesDelLote(clasificador, lexico))
+		Memoria:         Proyectar(memoria, efecto.UsuarioID, destino),
+		CatalogoNombres: catalogo.Nombres,
+		CatalogoLlaves:  catalogo.Llaves,
+		Lexico:          lexico,
+		Clasificador:    clasificador,
+	}, escalones)
 	categoria := decision.Categoria
 	if categoria == "" {
 		categoria = SinCategoria
@@ -514,6 +544,9 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 	if descripcion == "" {
 		descripcion = g.descripcion
 	}
+	if decision.Escalon < 0 || decision.Escalon > math.MaxInt16 {
+		return fmt.Errorf("inteligencia: escalón %d fuera de rango para el movimiento %s", decision.Escalon, transaccionID)
+	}
 	parametros := repositorio.InsertarMovimientoEnriquecidoParams{
 		UsuarioID:                    efecto.UsuarioID,
 		TransaccionID:                pgtype.UUID{Bytes: transaccionID, Valid: true},
@@ -527,9 +560,10 @@ func escribirMovimiento(ctx context.Context, q *repositorio.Queries, g grupo, ef
 		Descripcion:                  pgtype.Text{String: descripcion, Valid: descripcion != ""},
 		Categoria:                    string(categoria),
 		OrigenCategoria:              origen,
+		Escalon:                      int16(decision.Escalon),
 		ComercioMid:                  pgtype.Text{String: destinoPersistido.MID, Valid: destinoPersistido.MID != ""},
 		ComercioNombre:               pgtype.Text{String: comercioNombre, Valid: comercioNombre != ""},
-		Mcc:                          pgtype.Text{},
+		Mcc:                          pgtype.Text{String: mcc, Valid: mcc != ""},
 		VersionModelo:                versionModelo,
 		TipoDestino:                  pgtype.Text{String: string(destinoPersistido.Tipo), Valid: destinoPersistido.Tipo != ""},
 		ContraparteLlave:             pgtype.Text{String: destinoPersistido.Llave, Valid: destinoPersistido.Llave != ""},
@@ -570,10 +604,15 @@ func intentarBloqueo(ctx context.Context, tx transaccionDeInteligencia) (bool, e
 	return bloqueado, nil
 }
 
-// escalonesDelLote es el punto único donde el lote decide qué escalones entran. El léxico va antes que
-// el clasificador, como manda el contrato, y ninguno de los dos cambia el primer corte por sí solo.
-func escalonesDelLote(clasificador *Modelo, lexico []ParLexico) Escalones {
+// escalonesDelLote es el punto único donde el lote decide qué escalones entran. El catálogo solo
+// entra cuando trae filas, porque sin datos el escalón 4 no puede decidir. El léxico va antes que el
+// clasificador, como manda el contrato, y ninguno de los dos cambia el primer corte por sí solo.
+func escalonesDelLote(catalogo CatalogoCurado, clasificador *Modelo, lexico []ParLexico) Escalones {
 	escalones := PrimerCorte()
+	escalones[EscalonMCC] = struct{}{}
+	if catalogo.HayEntradas() {
+		escalones[EscalonCatalogo] = struct{}{}
+	}
 	if len(lexico) > 0 {
 		escalones[EscalonLexico] = struct{}{}
 	}

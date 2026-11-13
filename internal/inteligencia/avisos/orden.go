@@ -1,6 +1,9 @@
 package avisos
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // Prioridad es el rango del aviso dentro del cupo. D6 firmó que presupuesto_anticipado compite por
 // el mismo cupo de 3. Su rango 4 sale del orden de las tarjetas de la referencia y queda como
@@ -55,6 +58,47 @@ func Tope(tarjetas []Tarjeta, emitidos, tope int) []Tarjeta {
 	return tarjetas[:cupo]
 }
 
+// GrupoDeHechos reúne los hechos de un mismo período con el primer instante de su mes. El período es
+// el mes del hecho, no el mes en que se entrega la tarjeta, así que cada grupo consume el cupo de su
+// propio mes.
+type GrupoDeHechos struct {
+	Inicio time.Time
+	Hechos []Hecho
+}
+
+// AgruparPorPeriodo separa los hechos por el mes al que pertenecen y devuelve los grupos en orden de
+// mes. Un hecho sin período cae en el mes de ahora.
+func AgruparPorPeriodo(hechos []Hecho, ahora time.Time) []GrupoDeHechos {
+	porMes := make(map[Mes]*GrupoDeHechos)
+	var meses []Mes
+	for _, hecho := range hechos {
+		mes := mesDelHecho(hecho, ahora)
+		grupo, existe := porMes[mes]
+		if !existe {
+			grupo = &GrupoDeHechos{Inicio: mes.Fecha()}
+			porMes[mes] = grupo
+			meses = append(meses, mes)
+		}
+		grupo.Hechos = append(grupo.Hechos, hecho)
+	}
+	sort.Slice(meses, func(i, j int) bool { return meses[i].Antes(meses[j]) })
+	grupos := make([]GrupoDeHechos, 0, len(meses))
+	for _, mes := range meses {
+		grupos = append(grupos, *porMes[mes])
+	}
+	return grupos
+}
+
+func mesDelHecho(hecho Hecho, ahora time.Time) Mes {
+	if hecho.Mes != nil {
+		return *hecho.Mes
+	}
+	if hecho.Fecha != nil {
+		return MesDe(*hecho.Fecha)
+	}
+	return MesDe(ahora)
+}
+
 // SeveridadDe es la diferencia en centavos que ordena un aviso dentro de su prioridad. Nunca es
 // negativa, porque la columna de la tabla tiene un CHECK mayor o igual que cero.
 func SeveridadDe(tarjeta Tarjeta) int64 {
@@ -86,6 +130,15 @@ type Recuento struct {
 	Candidatas int
 	Elegidas   int
 	Recortadas int
+}
+
+// Sumar acumula otro recuento sobre este, para juntar los de varios períodos.
+func (r *Recuento) Sumar(otro Recuento) {
+	r.Hechos += otro.Hechos
+	r.YaEmitidas += otro.YaEmitidas
+	r.Candidatas += otro.Candidatas
+	r.Elegidas += otro.Elegidas
+	r.Recortadas += otro.Recortadas
 }
 
 // TarjetasDelDia evalúa los hechos, arma las tarjetas, verifica los textos, descarta las ya emitidas,
