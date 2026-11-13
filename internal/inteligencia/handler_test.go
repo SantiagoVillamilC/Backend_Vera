@@ -42,6 +42,10 @@ type servicioDeLecturaFalso struct {
 	avisosMes     string
 	avisosAhora   time.Time
 	resumenAhora  time.Time
+	series        []SerieConsultable
+	seriesErr     error
+	seriesAhora   time.Time
+	seriesUsuario string
 	avisoDescarte DescarteDeAviso
 	avisoErr      error
 	avisoBorrado  uuid.UUID
@@ -76,6 +80,13 @@ func (f *servicioDeLecturaFalso) Resumen(_ context.Context, usuarioID, mes strin
 	f.mes = mes
 	f.resumenAhora = ahora
 	return f.resumen, f.err
+}
+
+func (f *servicioDeLecturaFalso) SeriesDelUsuario(_ context.Context, usuarioID string,
+	ahora time.Time) ([]SerieConsultable, error) {
+	f.seriesUsuario = usuarioID
+	f.seriesAhora = ahora
+	return f.series, f.seriesErr
 }
 
 func (f *servicioDeLecturaFalso) AvisosDelUsuario(_ context.Context, usuarioID, mes string,

@@ -990,6 +990,21 @@ func (e InteligenciaResumenResponseSuccess) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaSeriesResponseSuccess.
+const (
+	InteligenciaSeriesResponseSuccessTrue InteligenciaSeriesResponseSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaSeriesResponseSuccess enum.
+func (e InteligenciaSeriesResponseSuccess) Valid() bool {
+	switch e {
+	case InteligenciaSeriesResponseSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KycEstadoProducto.
 const (
 	KycEstadoProductoBajoMonto         KycEstadoProducto = "bajo_monto"
@@ -2359,6 +2374,37 @@ type InteligenciaResumenResponse struct {
 // InteligenciaResumenResponseSuccess defines model for InteligenciaResumenResponse.Success.
 type InteligenciaResumenResponseSuccess bool
 
+// InteligenciaSerie defines model for InteligenciaSerie.
+type InteligenciaSerie struct {
+	// Cadencia semanal, quincenal_14, mensual, bimestral o semestral.
+	Cadencia     string  `json:"cadencia"`
+	CadenciaDias int     `json:"cadencia_dias"`
+	Categoria    *string `json:"categoria,omitempty"`
+
+	// Estado emergente, madura, dormida o cancelada.
+	Estado    string `json:"estado"`
+	Identidad string `json:"identidad"`
+
+	// ProximoFecha Centro de la banda del proximo pago esperado, ausente cuando la serie no lo tiene.
+	ProximoFecha         *time.Time `json:"proximo_fecha,omitempty"`
+	ProximoMontoCentavos *string    `json:"proximo_monto_centavos,omitempty"`
+
+	// TipoIdentidad llave o nombre normalizado de la contraparte del propio usuario.
+	TipoIdentidad string    `json:"tipo_identidad"`
+	UltimoPago    time.Time `json:"ultimo_pago"`
+}
+
+// InteligenciaSeriesResponse defines model for InteligenciaSeriesResponse.
+type InteligenciaSeriesResponse struct {
+	Data    []InteligenciaSerie               `json:"data"`
+	Error   *map[string]interface{}           `json:"error"`
+	Meta    *map[string]interface{}           `json:"meta"`
+	Success InteligenciaSeriesResponseSuccess `json:"success"`
+}
+
+// InteligenciaSeriesResponseSuccess defines model for InteligenciaSeriesResponse.Success.
+type InteligenciaSeriesResponseSuccess bool
+
 // KycEstado defines model for KycEstado.
 type KycEstado struct {
 	EstadoKyc string                  `json:"estado_kyc"`
@@ -3221,6 +3267,9 @@ type ServerInterface interface {
 	// ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
 	// (GET /v1/inteligencia/resumen)
 	ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams)
+	// ListarSeriesInteligencia Series recurrentes del usuario con estado, cadencia y proximo pago esperado.
+	// (GET /v1/inteligencia/series)
+	ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request)
 	// KycEstado Consulta el producto, el estado de KYC y los limites.
 	// (GET /v1/kyc/estado)
 	KycEstado(w http.ResponseWriter, r *http.Request)
@@ -3401,6 +3450,12 @@ func (_ Unimplemented) CorregirMovimientoInteligencia(w http.ResponseWriter, r *
 // ResumenInteligencia Gastos del mes por categoria, mediana de los meses completos y si el mes es evaluable.
 // (GET /v1/inteligencia/resumen)
 func (_ Unimplemented) ResumenInteligencia(w http.ResponseWriter, r *http.Request, params ResumenInteligenciaParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListarSeriesInteligencia Series recurrentes del usuario con estado, cadencia y proximo pago esperado.
+// (GET /v1/inteligencia/series)
+func (_ Unimplemented) ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4007,6 +4062,20 @@ func (siw *ServerInterfaceWrapper) ResumenInteligencia(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResumenInteligencia(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarSeriesInteligencia operation middleware
+func (siw *ServerInterfaceWrapper) ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarSeriesInteligencia(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4658,6 +4727,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/inteligencia/resumen", wrapper.ResumenInteligencia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/inteligencia/series", wrapper.ListarSeriesInteligencia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/inteligencia/movimientos/{transaccion_id}/correcciones", wrapper.CorregirMovimientoInteligencia)

@@ -895,6 +895,31 @@ paths:
         "504":
           $ref: "#/components/responses/Error"
 
+  /v1/inteligencia/series:
+    get:
+      operationId: listarSeriesInteligencia
+      summary: Series recurrentes del usuario con estado, cadencia y proximo pago esperado.
+      description: >
+        Devuelve las series que el motor de recurrencia ya calcula para el usuario autenticado.
+        Es de solo lectura y no expone identidad de terceros: la identidad es la llave o el
+        nombre normalizado del destino del propio usuario. Los montos van como cadena de centavos.
+      tags: [inteligencia]
+      responses:
+        "200":
+          description: Series recurrentes del usuario autenticado, ordenadas por identidad.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InteligenciaSeriesResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+
   /v1/inteligencia/movimientos/{transaccion_id}/correcciones:
     post:
       operationId: corregirMovimientoInteligencia
@@ -3443,6 +3468,57 @@ components:
           nullable: true
         meta:
           type: object
+          nullable: true
+
+    InteligenciaSeriesResponse:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InteligenciaSerie"
+        error:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    InteligenciaSerie:
+      type: object
+      required: [tipo_identidad, identidad, estado, cadencia, cadencia_dias, ultimo_pago]
+      properties:
+        tipo_identidad:
+          type: string
+          description: llave o nombre normalizado de la contraparte del propio usuario.
+        identidad:
+          type: string
+        estado:
+          type: string
+          description: emergente, madura, dormida o cancelada.
+        cadencia:
+          type: string
+          description: semanal, quincenal_14, mensual, bimestral o semestral.
+        cadencia_dias:
+          type: integer
+        ultimo_pago:
+          type: string
+          format: date-time
+        proximo_fecha:
+          type: string
+          format: date-time
+          nullable: true
+          description: Centro de la banda del proximo pago esperado, ausente cuando la serie no lo tiene.
+        proximo_monto_centavos:
+          type: string
+          pattern: "^[0-9]+$"
+          nullable: true
+        categoria:
+          type: string
           nullable: true
 
     InteligenciaCorreccionRequest:

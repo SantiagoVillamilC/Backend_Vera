@@ -23,6 +23,7 @@ type ServicioDeLectura interface {
 	Movimientos(ctx context.Context, usuarioID string, ancla *CursorDeMovimiento, limite int) (PaginaDeMovimientos, error)
 	CorregirMovimiento(ctx context.Context, usuarioID string, transaccionID uuid.UUID, solicitud SolicitudDeCorreccion) (CorreccionAplicada, error)
 	Resumen(ctx context.Context, usuarioID, mes string, ahora time.Time) (ResumenDelMes, error)
+	SeriesDelUsuario(ctx context.Context, usuarioID string, ahora time.Time) ([]SerieConsultable, error)
 	AvisosDelUsuario(ctx context.Context, usuarioID, mes string, ahora time.Time) ([]AvisoEmitido, error)
 	DescartarAviso(ctx context.Context, usuarioID string, avisoID uuid.UUID, ahora time.Time) (DescarteDeAviso, error)
 	Categorias(ctx context.Context) ([]EntradaCatalogo, error)
@@ -126,6 +127,43 @@ func (h *Handler) ListarCategoriasInteligencia(w http.ResponseWriter, r *http.Re
 			Grupo:  api.InteligenciaCategoriaGrupo(categoria.Grupo),
 			Orden:  int(categoria.Orden),
 		})
+	}
+	api.WriteData(w, http.StatusOK, respuesta, nil)
+}
+
+// ListarSeriesInteligencia publica las series recurrentes del usuario autenticado.
+func (h *Handler) ListarSeriesInteligencia(w http.ResponseWriter, r *http.Request) {
+	usuarioID, ok := usuarioDeLaPeticion(w, r)
+	if !ok {
+		return
+	}
+	series, err := h.servicio.SeriesDelUsuario(r.Context(), usuarioID, h.reloj())
+	if err != nil {
+		api.WriteAPIError(w, r, err)
+		return
+	}
+	respuesta := make([]api.InteligenciaSerie, 0, len(series))
+	for _, serie := range series {
+		item := api.InteligenciaSerie{
+			TipoIdentidad: serie.IdentidadTipo,
+			Identidad:     serie.IdentidadValor,
+			Estado:        serie.Estado,
+			Cadencia:      serie.Cadencia,
+			CadenciaDias:  serie.CadenciaDias,
+			UltimoPago:    serie.UltimoPago,
+		}
+		if serie.Categoria != "" {
+			categoria := serie.Categoria
+			item.Categoria = &categoria
+		}
+		if serie.ProximoFecha != nil {
+			item.ProximoFecha = serie.ProximoFecha
+		}
+		if serie.ProximoMonto != nil {
+			monto := strconv.FormatInt(*serie.ProximoMonto, 10)
+			item.ProximoMontoCentavos = &monto
+		}
+		respuesta = append(respuesta, item)
 	}
 	api.WriteData(w, http.StatusOK, respuesta, nil)
 }
