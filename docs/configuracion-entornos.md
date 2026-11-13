@@ -157,15 +157,30 @@ make verificar-banderas
 ```
 
 El script compara cada bandera de la columna contra `docker inspect` de `centinela-api` e imprime
-una línea por variable. Antes de comparar mira `.State.Status`: un contenedor detenido o en crash
-loop conserva su `Config.Env` intacto, así que sin ese control el script devolvería 0 sin que haya
-API corriendo. Códigos de salida:
+una línea por variable. También reporta como `DIFF` las variables de la familia de banderas que el
+contenedor todavía trae y la matriz no declara, que es una bandera vieja de un despliegue anterior;
+las variables del sistema (`PATH`, `HOME` y compañía) no son de la familia y no se reportan. Antes
+de comparar mira `.State.Status`: un contenedor detenido o en crash loop conserva su `Config.Env`
+intacto, así que sin ese control el script devolvería 0 sin que haya API corriendo. Códigos de
+salida:
 
 | Código | Significado |
 | --- | --- |
-| 0 | Todas las banderas del contenedor coinciden con la matriz y el contenedor está en `running`. |
-| 2 | Alguna bandera falta o tiene otro valor. Vuelve a correr `pasos/60-api.sh` para recrear el contenedor. |
+| 0 | Todas las banderas del contenedor coinciden con la matriz y no sobran banderas. |
+| 2 | Alguna bandera falta, tiene otro valor o sobra. Vuelve a correr `pasos/60-api.sh` para recrear el contenedor. |
 | 3 | No se pudo verificar: sin destino, sin docker, sin el contenedor o con el contenedor fuera de `running`. |
+
+La comparación también se puede probar en seco, sin docker, inyectando la lista de entorno y
+simulando el estado:
+
+```bash
+ENTORNO_CONTENEDOR="$(printf '%s\n' CLASIFICADOR=tfidf AVISOS_ACTIVO=false)" \
+  ESTADO_CONTENEDOR=running ./infra/servidor/verificar-banderas.sh local
+./infra/servidor/verificar-banderas_test.sh
+```
+
+La prueba cubre los cuatro casos del contrato: coincide (0), falta una (2), sobra una (2) y error (3).
+No se corrió shellcheck (no está instalado en esta VPS): la sintaxis se comprobó con `bash -n`.
 
 Sin docker a mano, dos comprobaciones parciales:
 

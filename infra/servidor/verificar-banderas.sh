@@ -37,9 +37,12 @@ en infra/servidor/banderas.tsv.
 Sin argumento toma DESTINO de una de estas fuentes, en orden: la variable de
 entorno DESTINO, el archivo aprovisionar.env junto a este script.
 
-Devuelve 0 si el contenedor coincide, 2 si alguna bandera difiere o falta, y 3
+Devuelve 0 si el contenedor coincide, 2 si alguna bandera difiere, falta o sobra, y 3
 si no se pudo verificar (sin destino, sin docker, contenedor ausente o
 contenedor que no está en estado "running").
+
+Para probar en seco sin docker, exporta ENTORNO_CONTENEDOR con una lista de
+líneas CLAVE=valor y, si hace falta, ESTADO_CONTENEDOR con el estado a simular.
 EOF
 }
 
@@ -72,26 +75,64 @@ if [[ ! -f "${ARCHIVO_BANDERAS}" ]]; then
   imposible "No existe la matriz de banderas ${ARCHIVO_BANDERAS}."
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  imposible "No hay docker en este sistema: la comparación se hace contra el contenedor ${CONTENEDOR}."
+if [[ -n "${ENTORNO_CONTENEDOR:-}" ]]; then
+  # Modo en seco: la lista inyectada hace de entorno del contenedor y el estado
+  # se simula con ESTADO_CONTENEDOR. Así la prueba no necesita docker.
+  estado_contenedor="${ESTADO_CONTENEDOR:-running}"
+  entorno_contenedor="${ENTORNO_CONTENEDOR}"
+else
+  if ! command -v docker >/dev/null 2>&1; then
+    imposible "No hay docker en este sistema: la comparación se hace contra el contenedor ${CONTENEDOR}."
+  fi
+
+  # Un contenedor detenido o en crash loop conserva .Config.Env intacto, así que
+  # inspeccionarlo sin mirar .State.Status devolvería 0 sin que haya API
+  # corriendo. El contrato del script es 3 cuando no se puede verificar.
+  estado_contenedor="$(docker inspect -f '{{.State.Status}}' "${CONTENEDOR}" 2>&1)" ||
+    imposible "No se pudo inspeccionar el contenedor ${CONTENEDOR}: ${estado_contenedor}"
+
+  # {{println .}} separa cada variable en una línea "CLAVE=valor". Un env_file o
+  # el propio compose pueden haber dejado más variables; solo se miran las de la
+  # matriz.
+  entorno_contenedor="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "${CONTENEDOR}" 2>&1)" ||
+    imposible "No se pudo inspeccionar el contenedor ${CONTENEDOR}: ${entorno_contenedor}"
 fi
 
-# Un contenedor detenido o en crash loop conserva .Config.Env intacto, así que
-# inspeccionarlo sin mirar .State.Status devolvería 0 sin que haya API
-# corriendo. El contrato del script es 3 cuando no se puede verificar.
-estado_contenedor="$(docker inspect -f '{{.State.Status}}' "${CONTENEDOR}" 2>&1)" ||
-  imposible "No se pudo inspeccionar el contenedor ${CONTENEDOR}: ${estado_contenedor}"
 if [[ "${estado_contenedor}" != "running" ]]; then
   imposible "El contenedor ${CONTENEDOR} está en estado \"${estado_contenedor}\", no \"running\": no hay API en marcha a la que comparar las banderas. Arráncalo con infra/servidor/pasos/60-api.sh y vuelve a correr esta verificación."
 fi
 
-# {{println .}} separa cada variable en una línea "CLAVE=valor". Un env_file o
-# el propio compose pueden haber dejado más variables; solo se miran las de la
-# matriz.
-entorno_contenedor="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "${CONTENEDOR}" 2>&1)" ||
-  imposible "No se pudo inspeccionar el contenedor ${CONTENEDOR}: ${entorno_contenedor}"
-
 paso "Banderas del destino ${destino} contra ${CONTENEDOR}"
+
+esperadas="$(banderas_del_destino "${ARCHIVO_BANDERAS}" "${destino}")"
+if [[ -z "${esperadas}" ]]; then
+  imposible "${ARCHIVO_BANDERAS} no tiene banderas para DESTINO=${destino}."
+fi
+nombres_esperados="$(printf '%s\n' "${esperadas}" | cut -d= -f1)"
+
+# Las familias salen de los nombres de la matriz: AVISOS de AVISOS_ACTIVO,
+# VERA de VERA_PROVEEDOR, y los nombres sin guion bajo tal cual. Una variable
+# del contenedor de esas familias que la matriz no declara es una bandera
+# vieja, no una variable del sistema.
+familias=()
+while IFS= read -r nombre; do
+  if [[ "${nombre}" == *_* ]]; then
+    familias+=("${nombre%%_*}")
+  else
+    familias+=("${nombre}")
+  fi
+done <<< "${nombres_esperados}"
+
+pertenece_a_las_familias() {
+  local nombre="$1"
+  local familia
+  for familia in "${familias[@]}"; do
+    if [[ "${nombre}" == "${familia}" || "${nombre}" == "${familia}_"* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 diferencias=0
 revisadas=0
@@ -114,17 +155,30 @@ while IFS= read -r linea; do
     printf '    DIFF %s: falta en el contenedor, la matriz pide "%s"\n' "${variable}" "${esperado}"
   fi
   diferencias=$((diferencias + 1))
-done <<< "$(banderas_del_destino "${ARCHIVO_BANDERAS}" "${destino}")"
+done <<< "${esperadas}"
 
-if [[ "${revisadas}" -eq 0 ]]; then
-  imposible "${ARCHIVO_BANDERAS} no tiene banderas para DESTINO=${destino}."
-fi
+# Una bandera sobrante es la que queda de un despliegue anterior: la matriz no
+# la declara y el contenedor todavía la trae. Las variables del entorno base
+# (PATH, HOME, HOSTNAME y compañía) no son de las familias y no se reportan.
+sobrantes=0
+while IFS= read -r linea; do
+  [[ -n "${linea}" ]] || continue
+  nombre="${linea%%=*}"
+  if printf '%s\n' "${nombres_esperados}" | grep -qxF "${nombre}"; then
+    continue
+  fi
+  if pertenece_a_las_familias "${nombre}"; then
+    printf '    DIFF %s: sobra en el contenedor, la matriz no la declara\n' "${nombre}"
+    sobrantes=$((sobrantes + 1))
+    diferencias=$((diferencias + 1))
+  fi
+done <<< "${entorno_contenedor}"
 
 if [[ "${diferencias}" -ne 0 ]]; then
-  printf '[error] %s de %s banderas no coinciden con DESTINO=%s. Vuelve a correr infra/servidor/pasos/60-api.sh para recrear el contenedor.\n' \
-    "${diferencias}" "${revisadas}" "${destino}" >&2
+  printf '[error] %s de %s banderas no coinciden con DESTINO=%s (%s sobrantes). Vuelve a correr infra/servidor/pasos/60-api.sh para recrear el contenedor.\n' \
+    "${diferencias}" "${revisadas}" "${destino}" "${sobrantes}" >&2
   exit 2
 fi
 
-info "${revisadas} banderas coinciden con DESTINO=${destino}."
+info "${revisadas} banderas coinciden con DESTINO=${destino} y no sobran banderas."
 exit 0
