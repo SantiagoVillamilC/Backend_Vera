@@ -174,7 +174,7 @@ no responde.
 
 **NO PROBADA hasta tener la cuenta.** Es lo que hay que configurar el día que exista, no algo ya hecho.
 
-- Responsable: Christian Rubio. Umbral: el de `docs/costos-pod-demo.md` (4,82 USD al mes, propuesto).
+- Responsable: quien lidera la demo. Umbral: el de `docs/costos-pod-demo.md` (4,82 USD al mes, propuesto).
 - En la cuenta del proveedor, activar la alerta de gasto o saldo que ofrezca y fijarla en el umbral.
   El nombre exacto de la opción y si existe no están verificados.
 - Si la cuenta no ofrece alerta, el respaldo es no cargar más saldo que el umbral y revisar el gasto

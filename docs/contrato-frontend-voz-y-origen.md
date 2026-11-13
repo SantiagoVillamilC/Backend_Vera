@@ -308,7 +308,7 @@ Tras una corrección del usuario la respuesta trae `origen_categoria: memoria` y
 
 ### Lo que la app hace hoy
 
-Se leyó la copia local de la app en `/home/chris/Documents/vera-reconciliacion/Vera` (rama `main`, HEAD `b5ccc3b`).
+Se leyó la app en el repositorio `Vera` (rama `main`, commit `b5ccc3b`).
 **No verificado** que sea la rama que Laura está editando.
 
 | Hallazgo | Fuente |

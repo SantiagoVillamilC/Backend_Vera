@@ -18,12 +18,12 @@ de precios en este repositorio y aquí no se agregó ninguna cifra propia.
 
 | Campo | Valor |
 |-------|-------|
-| Responsable del umbral | Christian Rubio |
+| Responsable del umbral | Quien lidera la demo |
 | Umbral de gasto mensual | **4,82 USD**, el total de dos sesiones de 4 h más el volumen de 30 GB |
-| Qué pasa al superarlo | Se apaga el pod, se revisa el motivo y no se reserva otra sesión sin aprobación de Christian Rubio |
+| Qué pasa al superarlo | Se apaga el pod, se revisa el motivo y no se reserva otra sesión sin aprobación de quien lidera la demo |
 
 El umbral es el total de la recomendación del handoff (dos sesiones de 4 h en una 4090 Secure y un
-volumen de 30 GB en el mismo mes). Queda **propuesto, a la espera de que Christian Rubio lo
+volumen de 30 GB en el mismo mes). Queda **propuesto, a la espera de que quien lidera la demo lo
 ratifique**. Es distinto del umbral de cero que `docs/operacion-demo.md` fija para pruebas con
 proveedor real de IA: la demo con `VERA_PROVEEDOR=simulado` no gasta, y el pod sí.
 
