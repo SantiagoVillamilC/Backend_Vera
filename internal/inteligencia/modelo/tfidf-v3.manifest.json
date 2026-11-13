@@ -1,0 +1,112 @@
+{
+  "archivo": "tfidf-v3.json",
+  "artefacto_version": "tfidf-3",
+  "bytes": 737436,
+  "catalogo_firmado": [
+    "alimentos_mercado",
+    "comisiones_costos_financieros",
+    "compras",
+    "educacion",
+    "entretenimiento",
+    "otros_gastos",
+    "otros_ingresos",
+    "reembolso",
+    "restaurantes_domicilios",
+    "salario",
+    "salud",
+    "transferencia_recibida",
+    "transporte",
+    "vivienda_servicios"
+  ],
+  "categorias": [
+    "alimentos_mercado",
+    "compras",
+    "entretenimiento",
+    "otros_gastos",
+    "restaurantes_domicilios",
+    "salud",
+    "transporte"
+  ],
+  "categorias_prohibidas": [
+    "comisiones_costos_financieros"
+  ],
+  "conteos": {
+    "centroides": 7,
+    "idf": 7632,
+    "lexico": 0,
+    "nombres_entrenados": 5728,
+    "nombres_leidos": 5728,
+    "poda_por_centroide": 0
+  },
+  "filtro": {
+    "categorias": [
+      "alimentos_mercado",
+      "comisiones_costos_financieros",
+      "compras",
+      "educacion",
+      "entretenimiento",
+      "otros_gastos",
+      "restaurantes_domicilios",
+      "salud",
+      "transporte",
+      "vivienda_servicios"
+    ],
+    "excluidas": []
+  },
+  "fuente": {
+    "catalogo": "catalogo/v3/catalogo_v3.csv",
+    "sha256_catalogo": "f58eb87ebd08ddac733d7ff91098a6e413ab48911e1eb310a827795a93348ccb",
+    "version_catalogo": "v2"
+  },
+  "generado_por": "generar_artefacto_tfidf.py",
+  "lexico_descartado": {
+    "ABASTOS": "alimentos_mercado",
+    "ACADEMIA": "educacion",
+    "ARRENDAMIENTO": "vivienda_servicios",
+    "ASADERO": "restaurantes_domicilios",
+    "BOUTIQUE": "compras",
+    "CAFETERIA": "restaurantes_domicilios",
+    "CALZADO": "compras",
+    "CINE": "entretenimiento",
+    "CLINICA": "salud",
+    "COLEGIO": "educacion",
+    "CONSTRUCTORA": "vivienda_servicios",
+    "CONSULTORIO": "salud",
+    "DISCOTECA": "entretenimiento",
+    "DROGUERIA": "salud",
+    "ESCUELA": "educacion",
+    "FARMACIA": "salud",
+    "FLOTA": "transporte",
+    "GASOLINERA": "transporte",
+    "GIMNASIO": "entretenimiento",
+    "HELADERIA": "restaurantes_domicilios",
+    "HOSPITAL": "salud",
+    "INMOBILIARIA": "vivienda_servicios",
+    "INSTITUTO": "educacion",
+    "JOYERIA": "compras",
+    "LABORATORIO": "salud",
+    "LICEO": "educacion",
+    "MERCADO": "alimentos_mercado",
+    "MINIMERCADO": "alimentos_mercado",
+    "ODONTOLOGIA": "salud",
+    "OPTICA": "salud",
+    "PIZZERIA": "restaurantes_domicilios",
+    "PLAZA": "alimentos_mercado",
+    "RESTAURANTE": "restaurantes_domicilios",
+    "SUPERMERCADO": "alimentos_mercado",
+    "TAXI": "transporte",
+    "TEATRO": "entretenimiento",
+    "TRANSPORTE": "transporte",
+    "UNIVERSIDAD": "educacion",
+    "ZAPATERIA": "compras"
+  },
+  "nota": "Sin marca de tiempo: la misma fuente produce los mismos bytes.",
+  "sha256_artefacto": "7aa998a833ec111de76c6d3c56a8f0780903b2c1927f839d9c41c211d9e0bbea",
+  "sin_lexico": true,
+  "umbrales": {
+    "coseno": "0.16",
+    "coseno_fuerte": "0.5",
+    "jw": "0.85"
+  },
+  "version": 1
+}
