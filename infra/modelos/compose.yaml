@@ -1,0 +1,65 @@
+# Imágenes locales del razonador y de la voz (R-04).
+#
+# Dos servicios, dos imágenes, pesos montados desde el volume `pesos` y nunca dentro de la imagen.
+# Los secretos llegan por entorno (Infisical o el archivo del operador), no se hornean.
+#
+# Uso:
+#   WHISPER_TOKEN=... docker compose -f infra/modelos/compose.yaml config
+#   WHISPER_TOKEN=... docker compose -f infra/modelos/compose.yaml up --build
+#
+# La red es loopback: los puertos solo escuchan en 127.0.0.1.
+name: vera-modelos
+
+services:
+  vera-llm:
+    build:
+      context: ../..
+      dockerfile: infra/modelos/vera-llm/Dockerfile
+    image: vera-llm:local
+    restart: unless-stopped
+    environment:
+      OLLAMA_MODELS: /pesos/modelos
+      OLLAMA_HOST: 127.0.0.1:11434
+      OLLAMA_MODELO: ${OLLAMA_MODELO:-gemma-4-e2b-it-q4_k_m}
+    # Red del host para conservar el invariante de loopback: los dos servicios escuchan solo
+    # 127.0.0.1 y no hay puertos publicados en interfaces externas.
+    network_mode: host
+    volumes:
+      - pesos:/pesos
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 12
+
+  vera-voz:
+    build:
+      context: ../..
+      dockerfile: infra/modelos/vera-voz/Dockerfile
+    image: vera-voz:local
+    restart: unless-stopped
+    environment:
+      WHISPER_TOKEN: "${WHISPER_TOKEN:?falta WHISPER_TOKEN, exportalo desde Infisical y no lo hornees}"
+      WHISPER_MODELO: ${WHISPER_MODELO:-small}
+      WHISPER_DIRECCION: 127.0.0.1:8767
+      WHISPER_GPU: ${WHISPER_GPU:-no}
+      HF_HOME: /pesos/huggingface
+    network_mode: host
+    volumes:
+      - pesos:/pesos
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request;r=urllib.request.Request('http://127.0.0.1:8767/healthz',headers={'X-Vera-Token':os.environ['WHISPER_TOKEN']});urllib.request.urlopen(r,timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 18
+
+volumes:
+  pesos:
