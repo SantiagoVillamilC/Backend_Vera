@@ -140,26 +140,28 @@ const avisosDescartadosPorPagina = `-- name: AvisosDescartadosPorPagina :many
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = $1::text
-   AND periodo = $2::date
+   AND periodo >= $2::date
+   AND periodo < $3::date
    AND descartado_en IS NOT NULL
-   AND ($3::smallint IS NULL
-        OR prioridad > $3::smallint
-        OR (prioridad = $3::smallint
-            AND severidad_centavos < $4::bigint)
-        OR (prioridad = $3::smallint
-            AND severidad_centavos = $4::bigint
-            AND clave > $5::text)
-        OR (prioridad = $3::smallint
-            AND severidad_centavos = $4::bigint
-            AND clave = $5::text
-            AND id > $6::uuid))
+   AND ($4::smallint IS NULL
+        OR prioridad > $4::smallint
+        OR (prioridad = $4::smallint
+            AND severidad_centavos < $5::bigint)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave > $6::text)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave = $6::text
+            AND id > $7::uuid))
  ORDER BY prioridad, severidad_centavos DESC, clave, id
- LIMIT $7::int
+ LIMIT $8::int
 `
 
 type AvisosDescartadosPorPaginaParams struct {
 	UsuarioID string      `json:"usuario_id"`
-	Periodo   pgtype.Date `json:"periodo"`
+	Desde     pgtype.Date `json:"desde"`
+	Hasta     pgtype.Date `json:"hasta"`
 	Prioridad pgtype.Int2 `json:"prioridad"`
 	Severidad pgtype.Int8 `json:"severidad"`
 	Clave     pgtype.Text `json:"clave"`
@@ -184,7 +186,8 @@ type AvisosDescartadosPorPaginaRow struct {
 func (q *Queries) AvisosDescartadosPorPagina(ctx context.Context, arg AvisosDescartadosPorPaginaParams) ([]AvisosDescartadosPorPaginaRow, error) {
 	rows, err := q.db.Query(ctx, avisosDescartadosPorPagina,
 		arg.UsuarioID,
-		arg.Periodo,
+		arg.Desde,
+		arg.Hasta,
 		arg.Prioridad,
 		arg.Severidad,
 		arg.Clave,
@@ -291,26 +294,28 @@ const avisosVigentesPorPagina = `-- name: AvisosVigentesPorPagina :many
 SELECT id, tipo, clave, periodo, prioridad, severidad_centavos, monto_centavos, referencia_centavos, texto, transaccion_id, creado_en
   FROM inteligencia.aviso
  WHERE usuario_id = $1::text
-   AND periodo = $2::date
+   AND periodo >= $2::date
+   AND periodo < $3::date
    AND descartado_en IS NULL
-   AND ($3::smallint IS NULL
-        OR prioridad > $3::smallint
-        OR (prioridad = $3::smallint
-            AND severidad_centavos < $4::bigint)
-        OR (prioridad = $3::smallint
-            AND severidad_centavos = $4::bigint
-            AND clave > $5::text)
-        OR (prioridad = $3::smallint
-            AND severidad_centavos = $4::bigint
-            AND clave = $5::text
-            AND id > $6::uuid))
+   AND ($4::smallint IS NULL
+        OR prioridad > $4::smallint
+        OR (prioridad = $4::smallint
+            AND severidad_centavos < $5::bigint)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave > $6::text)
+        OR (prioridad = $4::smallint
+            AND severidad_centavos = $5::bigint
+            AND clave = $6::text
+            AND id > $7::uuid))
  ORDER BY prioridad, severidad_centavos DESC, clave, id
- LIMIT $7::int
+ LIMIT $8::int
 `
 
 type AvisosVigentesPorPaginaParams struct {
 	UsuarioID string      `json:"usuario_id"`
-	Periodo   pgtype.Date `json:"periodo"`
+	Desde     pgtype.Date `json:"desde"`
+	Hasta     pgtype.Date `json:"hasta"`
 	Prioridad pgtype.Int2 `json:"prioridad"`
 	Severidad pgtype.Int8 `json:"severidad"`
 	Clave     pgtype.Text `json:"clave"`
@@ -332,10 +337,14 @@ type AvisosVigentesPorPaginaRow struct {
 	CreadoEn           pgtype.Timestamptz `json:"creado_en"`
 }
 
+// Las dos consultas paginadas filtran por el rango del mes, igual que AvisosVigentesDelMes: el periodo
+// de pago_no_alcanza y cobro_nuevo es la fecha del pago, no el día 1, y una igualdad con el día 1
+// los ocultaría. caida_ingreso guarda el mes evaluado (el anterior) y se lista en ese mes.
 func (q *Queries) AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error) {
 	rows, err := q.db.Query(ctx, avisosVigentesPorPagina,
 		arg.UsuarioID,
-		arg.Periodo,
+		arg.Desde,
+		arg.Hasta,
 		arg.Prioridad,
 		arg.Severidad,
 		arg.Clave,

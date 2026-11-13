@@ -1035,7 +1035,9 @@ paths:
       description: >
         Descartar no borra el aviso: sale de la bandeja y deja de ocupar cupo en su periodo, pero
         sigue siendo el mismo aviso para la deduplicacion, asi que el emisor no lo vuelve a emitir.
-        El descarte es idempotente y solo afecta a los avisos del usuario autenticado.
+        El descarte es idempotente y solo afecta a los avisos del usuario autenticado. Si el aviso se
+        creo despues del instante del descarte (por ejemplo con una fecha simulada en el futuro), la
+        respuesta es 409 con el codigo DescarteAnteriorAlAlta y el aviso no cambia.
       tags: [inteligencia]
       parameters:
         - name: id
@@ -1058,6 +1060,8 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
         "429":
           $ref: "#/components/responses/Error"
@@ -3551,6 +3555,16 @@ components:
             Filas de la copia cuyo contenido cambio en esta llamada, contando una vez cada fila
             aunque hayan cambiado la categoria y el nombre. Un reintento identico devuelve cero.
 
+    InteligenciaAvisoAccionCodigo:
+      type: string
+      description: >
+        Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado.
+        Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza
+        lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro,
+        presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria.
+        Un cliente debe tolerar un valor que no conozca.
+      enum: [revisar_pagos, revisar_ingreso, revisar_cobro, revisar_presupuesto, revisar_categoria]
+
     InteligenciaAviso:
       type: object
       description: >
@@ -3598,6 +3612,9 @@ components:
           type: string
         accion:
           type: string
+          description: Etiqueta visible de la accion. Es texto de la app y puede cambiar de redaccion, no sirve para decidir el destino.
+        accion_codigo:
+          $ref: "#/components/schemas/InteligenciaAvisoAccionCodigo"
         transaccion_id:
           type: string
           format: uuid

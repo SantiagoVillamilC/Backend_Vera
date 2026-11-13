@@ -22,6 +22,9 @@ type Querier interface {
 	// Las dos consultas de abajo usan ese periodo y excluyen los descartados, así que descartar libera
 	// cupo, y el resumen, la bandeja y el emisor informan la misma cifra para el mismo mes.
 	AvisosVigentesDelMes(ctx context.Context, arg AvisosVigentesDelMesParams) ([]AvisosVigentesDelMesRow, error)
+	// Las dos consultas paginadas filtran por el rango del mes, igual que AvisosVigentesDelMes: el periodo
+	// de pago_no_alcanza y cobro_nuevo es la fecha del pago, no el día 1, y una igualdad con el día 1
+	// los ocultaría. caida_ingreso guarda el mes evaluado (el anterior) y se lista en ese mes.
 	AvisosVigentesPorPagina(ctx context.Context, arg AvisosVigentesPorPaginaParams) ([]AvisosVigentesPorPaginaRow, error)
 	BorrarCatalogoMarcaFueraDe(ctx context.Context, arg BorrarCatalogoMarcaFueraDeParams) (int64, error)
 	BorrarCopia(ctx context.Context) error

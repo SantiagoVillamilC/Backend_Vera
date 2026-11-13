@@ -804,6 +804,33 @@ func (e InteligenciaAvisoTipo) Valid() bool {
 	}
 }
 
+// Defines values for InteligenciaAvisoAccionCodigo.
+const (
+	RevisarCategoria   InteligenciaAvisoAccionCodigo = "revisar_categoria"
+	RevisarCobro       InteligenciaAvisoAccionCodigo = "revisar_cobro"
+	RevisarIngreso     InteligenciaAvisoAccionCodigo = "revisar_ingreso"
+	RevisarPagos       InteligenciaAvisoAccionCodigo = "revisar_pagos"
+	RevisarPresupuesto InteligenciaAvisoAccionCodigo = "revisar_presupuesto"
+)
+
+// Valid indicates whether the value is a known member of the InteligenciaAvisoAccionCodigo enum.
+func (e InteligenciaAvisoAccionCodigo) Valid() bool {
+	switch e {
+	case RevisarCategoria:
+		return true
+	case RevisarCobro:
+		return true
+	case RevisarIngreso:
+		return true
+	case RevisarPagos:
+		return true
+	case RevisarPresupuesto:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InteligenciaAvisoDescarteResponseSuccess.
 const (
 	InteligenciaAvisoDescarteResponseSuccessTrue InteligenciaAvisoDescarteResponseSuccess = true
@@ -2172,7 +2199,11 @@ type FieldError struct {
 
 // InteligenciaAviso Una tarjeta de aviso guardada. El texto solo afirma lo calculado y no lleva numeros que no sean sus montos ni fechas que no sean la suya. monto_centavos es la proyeccion que el texto afirma y referencia_centavos la linea base contra la que se compara, nula cuando el tipo no tiene linea base.
 type InteligenciaAviso struct {
+	// Accion Etiqueta visible de la accion. Es texto de la app y puede cambiar de redaccion, no sirve para decidir el destino.
 	Accion string `json:"accion"`
+
+	// AccionCodigo Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado. Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro, presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria. Un cliente debe tolerar un valor que no conozca.
+	AccionCodigo *InteligenciaAvisoAccionCodigo `json:"accion_codigo,omitempty"`
 
 	// Clave Identidad estable del aviso dentro de su tipo y periodo.
 	Clave         string             `json:"clave"`
@@ -2194,6 +2225,9 @@ type InteligenciaAviso struct {
 
 // InteligenciaAvisoTipo defines model for InteligenciaAviso.Tipo.
 type InteligenciaAvisoTipo string
+
+// InteligenciaAvisoAccionCodigo Codigo estable de la accion del aviso, uno por tipo, derivado del tipo al leer y no guardado. Describe el destino en la app y no cambia aunque cambie la etiqueta accion. pago_no_alcanza lleva a revisar_pagos, caida_ingreso a revisar_ingreso, cobro_nuevo a revisar_cobro, presupuesto_anticipado a revisar_presupuesto y categoria_sobre_media a revisar_categoria. Un cliente debe tolerar un valor que no conozca.
+type InteligenciaAvisoAccionCodigo string
 
 // InteligenciaAvisoDescarte defines model for InteligenciaAvisoDescarte.
 type InteligenciaAvisoDescarte struct {
