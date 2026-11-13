@@ -1,0 +1,14 @@
+# Override de GPU para el camino por digest. ESTADO: solo validado con docker compose config, sin
+# ejecutar en un pod con GPU.
+#
+# deploy-modelos.sh lo suma a compose.yaml y compose.registro.yaml cuando VERA_GPU=si. Solo expone la
+# GPU a vera-llm: no cambia imágenes ni toca vera-voz (la variante CUDA de vera-voz no se publica, por
+# eso este override no incluye Dockerfile.cuda ni WHISPER_GPU) y vera-kokoro sigue en CPU.
+# Sin este archivo en la cadena, vera-llm corre en CPU.
+#
+#   VERA_GPU=si WHISPER_TOKEN=... KOKORO_TOKEN=... infra/modelos/deploy-modelos.sh
+#
+# Necesita el runtime NVIDIA y el NVIDIA Container Toolkit en el host.
+services:
+  vera-llm:
+    gpus: all

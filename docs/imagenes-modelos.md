@@ -79,6 +79,11 @@ en vez de arrancar un servicio sin token. El `VERA_VOZ_TOKEN` de la API debe val
 
 ## Publicación a ghcr (no ejecutada)
 
+Ahora existe `.github/workflows/cd-modelos.yml`, que publica las tres imágenes desde CI y emite sus
+digests, y `infra/modelos/deploy-modelos.sh`, que las despliega por digest con vuelta atrás (ver
+`docs/despliegue-digest-rollback.md`, sección «Pila de modelos»). Ninguno de los dos se ha ejecutado
+contra el registro real. Los comandos manuales de abajo quedan como alternativa.
+
 ```bash
 docker tag vera-llm:local ghcr.io/<organizacion>/vera-llm:0.40.10
 docker tag vera-voz:local ghcr.io/<organizacion>/vera-voz:1.2.1

@@ -21,3 +21,6 @@ __pycache__/
 DEMO-ESCENARIO-STATE.json
 DEMO-ESCENARIO-STATE.json.tmp
 /verificar-modelos
+
+# Estado local del despliegue de la pila de modelos (digests vigentes, respaldos e historial).
+infra/modelos/estado/
