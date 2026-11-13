@@ -329,6 +329,7 @@ func run() error {
 	if err := riverClient.Start(context.Background()); err != nil {
 		return fmt.Errorf("river start: %w", err)
 	}
+	lanzarAvisosAlArrancar(context.Background(), cfg.AvisosActivo, servicioInteligencia)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

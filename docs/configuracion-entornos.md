@@ -22,7 +22,7 @@ destino (`local`, `demo`, `produccion`). Lo demás sale de ahí.
 | --- | --- | --- | --- | --- | --- |
 | `CLASIFICADOR` | `tfidf` | `tfidf` | `apagado` | Ciencia de datos | Escalón 6 de la cascada. `tfidf` carga el artefacto embebido. |
 | `LEXICO` | `v2` | `v2` | `apagado` | Ciencia de datos | Escalón 5 de la cascada. `v2` es el único léxico embebido. |
-| `AVISOS_ACTIVO` | `false` | `false` | `false` | Producto | Emisión programada de avisos de consumo. |
+| `AVISOS_ACTIVO` | `false` | `true` | `false` | Producto | Motor de avisos de consumo: el trabajo diario de River y la corrida al arrancar. |
 | `AVISOS_HORA` | `06:00` | `06:00` | `06:00` | Producto | Hora de Colombia, formato `HH:MM` de 24 horas. |
 | `AVISOS_CUPO` | `3` | `5` | `3` | Producto | Tope de avisos por usuario y mes, entero positivo. |
 | `VERA_PROVEEDOR` | `simulado` | `simulado` | `simulado` | Backend IA | Proveedor del asistente. `gemini` exige `GEMINI_API_KEY` y `VERA_MODELO`. |
@@ -74,9 +74,13 @@ mano para que la demo, que emite con `cmd/avisos`, deje caber los cinco avisos: 
 
 Decisiones que la matriz deja escritas, para que no se rediscutan por accidente:
 
-- **`AVISOS_ACTIVO` sigue apagado en los tres destinos.** El repositorio sostiene ese valor hasta
-  que haya un piloto con personas (`README.md`). Encenderlo en `demo` o en `produccion` es una
-  decisión de producto pendiente, no un cambio de infraestructura.
+- **`AVISOS_ACTIVO=true` solo en `demo`.** `demo` es la única superficie donde el motor de avisos
+  corre de punta a punta: emite a las 06:00 de Colombia y una vez al arrancar, y como la bandeja de
+  avisos de la app todavía no existe, el aviso solo se ve por la API. En `local` sigue apagado
+  porque `infra/local/demostrar.sh` enciende el emisor con sus propios valores y
+  `cargas/inteligencia/entorno.sh` lo deja apagado para congelar el corte de medición. En
+  `produccion` sigue apagado hasta que haya un piloto con personas (`README.md`), y encenderlo ahí
+  es una decisión de producto pendiente, no un cambio de infraestructura.
 - **`METRICAS_ACTIVO` sigue apagado en los tres destinos.** `/metrics` exige `METRICAS_TOKEN` de
   32 bytes o más y la API no arranca sin él, así que el compose no enciende la superficie. Las
   corridas de medición sí la encienden con su propio token (`cargas/inteligencia/entorno.sh`,
@@ -84,11 +88,33 @@ Decisiones que la matriz deja escritas, para que no se rediscutan por accidente:
 - **`VERA_PROVEEDOR=simulado` en los tres destinos** porque no hay credencial de Gemini en el
   repositorio. Cambiarlo a `gemini` sin `GEMINI_API_KEY` y `VERA_MODELO` deja la API sin arrancar,
   a propósito.
-- **`local` y `demo` solo difieren en `AVISOS_CUPO`.** `local` y `produccion` llevan `3`, que es
-  el valor de producto, y `demo` lleva `5` para que quepan los cinco avisos. `local` y `demo`
-  coinciden en el resto de la matriz. `produccion` no: además del cupo, apaga `CLASIFICADOR` y
-  `LEXICO`, que en `local` y `demo` van en `tfidf` y `v2`. Cuando deje de ser cierto, se cambia la
-  matriz y no el paso.
+- **`local` y `demo` solo difieren en `AVISOS_CUPO` y `AVISOS_ACTIVO`.** `local` y `produccion`
+  llevan `3`, que es el valor de producto, y `demo` lleva `5` para que quepan los cinco avisos.
+  `produccion` no coincide: además del cupo, apaga `CLASIFICADOR`, `LEXICO` y `AVISOS_ACTIVO`, que
+  en `local` y `demo` van en `tfidf`, `v2` y encendido solo en `demo`. Cuando deje de ser cierto,
+  se cambia la matriz y no el paso.
+
+## Cuándo corre el motor de avisos
+
+Con `AVISOS_ACTIVO=true` la API agenda `AvisosWorker` en River a la hora de `AVISOS_HORA` (06:00
+de Colombia, formato `HH:MM` de 24 horas) y, además, `cmd/api` emite una vez al arrancar, después
+de levantar los jobs (`lanzarAvisosAlArrancar`, `cmd/api/wiring_avisos.go`). La corrida al arrancar
+existe porque una demo o un despliegue que arranca a media mañana no debe esperar hasta las 06:00
+del día siguiente para mostrar sus tarjetas.
+
+Esa corrida no duplica nada: la deduplicación por clave y período de
+`internal/inteligencia/avisos_servicio.go` descarta el aviso que ya está guardado, así que
+repetirla es inocuo y vale reiniciar la API las veces que haga falta. El conteo puede subir entre
+reinicios por el enriquecimiento incremental, que habilita usuarios que antes no entraban, nunca por
+duplicación. La corrida sale en una goroutine que se lanza antes de que el servidor HTTP escuche, así
+que no hay compuerta de preparación y una consulta inmediata puede leer antes de que termine: hay que
+esperar en el log la línea `avisos emitidos al arrancar`. Si el emisor falla o entra en pánico, la API
+lo registra en el log y sigue atendiendo: una corrida perdida no tumba el arranque. Con la bandera
+apagada no se agenda el job ni se lanza la goroutine.
+
+Sin bandeja en la app, el aviso solo se ve por la API: `GET /v1/inteligencia/avisos` devuelve las
+tarjetas del mes pedido, o del mes en curso cuando no recibe `mes`, y `GET /v1/inteligencia/resumen`
+las cuenta.
 
 El banco de medición de M8 (`cargas/inteligencia/entorno.sh`) no es el destino `local`: fija sus
 propios valores para congelar el corte (`ENRIQUECIMIENTO_INTERVAL=24h`, `METRICAS_ACTIVO=true` con
