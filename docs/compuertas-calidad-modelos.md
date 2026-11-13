@@ -79,6 +79,25 @@ Antes de medir, y no después:
 Ninguno de esos tres números se recalibra para que pase: el informe de T-03 deja la cifra real y la
 decisión escrita.
 
+## La bandera del clasificador
+
+La medición de T-03 con el artefacto v3 (huella `7aa998a8…`, 5728 nombres, sin semillas) deja el
+clasificador en 8 filas mostradas y 7 correctas sobre la hoja de prueba de 150 filas: precisión
+0,875, Wilson 0,529 a 0,978, cobertura 0,066. `primer-corte` repite la cifra y `todos` con el catálogo
+v3 queda en 0,833. La compuerta de 0,90 no se alcanza.
+
+| Destino | `CLASIFICADOR` | Por qué |
+| --- | --- | --- |
+| `local` | `tfidf` | `infra/local/demostrar.sh` enriquece con `CLASIFICADOR=tfidf`; apagarlo dejaría el lote de la demo sin el escalón 6. |
+| `demo` | `tfidf` | La demo muestra la cascada completa; el valor queda versionado en `banderas.tsv`. |
+| `produccion` | `apagado` | La medición da 0,875 y la compuerta exige 0,90. Encenderlo afirmaría una precisión que el artefacto v3 no sostiene. |
+
+El valor vive en `infra/servidor/banderas.tsv` y en `.env.produccion.example`, `.env.demo.example`,
+`.env.local.example` y `.env.example`, con la cifra y el motivo escritos al lado. `cmd/api` no parsea
+el artefacto cuando la bandera está apagada, y la prueba `TestLoadConfigClasificadorTFIDF` exige que
+el modo `tfidf` parsee el artefacto embebido sin error, así que la cifra que sostiene la decisión
+también tiene una prueba de que el artefacto carga.
+
 ## Qué corre donde hay GPU y qué se queda fuera
 
 - Con GPU y los pesos en disco: la verificación completa de bytes, Whisper sobre los 24 clips y

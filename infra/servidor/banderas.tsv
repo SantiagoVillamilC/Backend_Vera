@@ -12,7 +12,7 @@
 # defecto. Las filas cuya primera columna no es un nombre de variable de
 # entorno describen un escalón que no se enciende con una bandera.
 variable	local	demo	produccion	nota
-CLASIFICADOR	tfidf	tfidf	apagado	Escalón 6 de la cascada. tfidf carga el artefacto embebido. producción lo deja apagado: no hay corte medido que justifique encenderlo.
+CLASIFICADOR	tfidf	tfidf	apagado	Escalón 6 de la cascada. tfidf carga el artefacto v3 embebido. producción lo deja apagado porque la medición de docs/medicion-tfidf-v3.md da 0,875 de precisión de lo mostrado en la hoja de prueba, por debajo de la compuerta de 0,90 acordada. local y demo lo encienden porque infra/local/demostrar.sh enriquece con CLASIFICADOR=tfidf y la demo necesita la cascada completa.
 LEXICO	v2	v2	apagado	Escalón 5 de la cascada. v2 es el único léxico embebido. Apagado o vacío deja el escalón fuera.
 AVISOS_ACTIVO	false	true	false	Encendido solo en demo, la única superficie donde el motor de avisos corre: la bandeja de avisos de la app todavía no existe, así que el aviso solo se ve por la API (docs/operacion-demo.md). local sigue en false porque infra/local/demostrar.sh enciende el emisor con sus propios valores y cargas/inteligencia/entorno.sh lo mantiene apagado para congelar el corte. produccion sigue en false hasta que haya un piloto con personas (README).
 AVISOS_HORA	06:00	06:00	06:00	Hora de Colombia, formato HH:MM de 24 horas. Solo tiene efecto con AVISOS_ACTIVO=true.
