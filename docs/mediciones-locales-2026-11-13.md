@@ -55,6 +55,13 @@ out/hardware-2026-11-13/stt-venv/bin/python \
 - `.github/workflows/calidad-modelos.yml`: job `transcripcion` con timeout 15 min, instalación de
   `faster-whisper==1.2.1`, `av==16.1.0` y `numpy`, y la medición contra el manifiesto.
 
+## Humo del razonador local
+
+- Comando: `python3 evaluar.py --modelo gemma4-e2b-local --por-familia 1 --think default --etiqueta humo-local-e2b` sobre los 200 casos congelados, 12 casos (uno por familia A-L).
+- Resultado E2B local: **7/12 (58,3 %)**, por debajo del umbral de 9/12. Fallan B, E, F, G y H con `efecto_ok`; cero errores de cliente; mediana 20,5 s.
+- El E2B no pasa la compuerta de razonador en esta máquina. El 4090 debe correr E4B (cabe en 24 GB) para el humo y la demo; el E2B queda como equipo de desarrollo.
+- Resultados crudos: `modelos-gemma/evaluacion/resultados/humo-local-e2b/`.
+
 ## Pendientes
 
 - Los jobs `voz` y `transcripcion` ya corrieron en GitHub Actions (run 43454401867) y salieron
