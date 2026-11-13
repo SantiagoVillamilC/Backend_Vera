@@ -6,7 +6,7 @@ Corridas en `arch-asus` con el worktree `Backend_Vera-local`, rama `feat/local-h
 ## Whisper small
 
 - 24 clips sintéticos, 260 palabras de referencia, 21 ediciones, **WER 0,0808**.
-- Tope de la compuerta: 0,15. Cumple con margen de 0,0692.
+- Tope implementado: 0,15; el card pide 0,10. El WER 0,0808 cumple ambos.
 - Reproduce exactamente la línea base del 27-10-2026: cero diferencias por clip, mismas 6
   ediciones por formato de cifra y mismo WER léxico de 0,0577.
 - CPU int8, `faster-whisper` 1.2.1, `av` 16.1.0, Python 3.12.14.
@@ -57,8 +57,10 @@ out/hardware-2026-11-13/stt-venv/bin/python \
 
 ## Pendientes
 
-- Correr el job `transcripcion` en GitHub Actions. Aquí solo se validó el YAML y la corrida local.
-- Construir `vera-voz:local` y probar el servidor real con un modelo cargado.
-- Cerrar los hallazgos menores de la revisión del proveedor compuesto y probar un audio real
-  contra Ollama.
+- El job `transcripcion` ya corrió en GitHub Actions (run 43448949777) y salió verde; el card
+  CF-A5-04 sigue parcial porque faltan humo de voz, razonador de 12 casos y gate de release, y
+  porque el card pide WER 0,10 frente al 0,15 implementado.
+- `vera-voz:local` se construyó y el E2E real pasó; ver `docs/e2e-voz-local-2026-11-13.md`.
+- Cerrar los hallazgos menores del proveedor compuesto y ajustar el `409` de la corrida combinada
+  (usar `-p 1` o reintento).
 - Publicar imágenes y pesos como OCI en GHCR y cablear el despliegue por digest.
