@@ -130,18 +130,18 @@ jobs:
   transcripcion:
     name: Transcripción sobre clips sintéticos
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # El conjunto de 24 clips y sus referencias no están en este repositorio
-      # (docs/evidencia-stt-tts-seed.md, líneas 176 y 177). Mientras falten, la compuerta falla
-      # nombrando lo que falta en vez de omitirse: un dato ausente no puede pasar por verde.
+      # El conjunto de 24 clips vive en infra/stt-local/clips y el manifiesto trae las
+      # referencias. Mientras falte algo, la compuerta falla nombrando lo que falta en vez
+      # de omitirse: un dato ausente no puede pasar por verde.
       - name: Exigir el conjunto de clips y sus referencias
         run: |
           if [ ! -f infra/stt-local/clips/manifiesto.json ]; then
-            echo "::error::Falta infra/stt-local/clips/manifiesto.json con los 24 clips sintéticos y sus transcripciones de referencia. El conjunto vive fuera del repositorio (docs/evidencia-stt-tts-seed.md:176)."
+            echo "::error::Falta infra/stt-local/clips/manifiesto.json con los 24 clips sintéticos y sus transcripciones de referencia."
             exit 1
           fi
           if [ ! -f infra/stt-local/medir_wer.py ]; then
@@ -149,8 +149,15 @@ jobs:
             exit 1
           fi
 
+      # Las versiones van escritas aquí y no se leen de requirements.txt: el servicio puede
+      # mover sus pesos y la compuerta tiene que seguir midiendo con el mismo motor.
+      - name: Instalar el motor de transcripción
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install faster-whisper==1.2.1 av==16.1.0 numpy
+
       - name: Medir el WER y exigir 0,15
         run: |
-          python3 infra/stt-local/medir_wer.py \
+          python infra/stt-local/medir_wer.py \
             --manifiesto infra/stt-local/clips/manifiesto.json \
             --tope 0.15
