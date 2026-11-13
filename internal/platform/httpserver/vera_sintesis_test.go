@@ -72,7 +72,7 @@ func TestSintesisRouter(t *testing.T) {
 			}
 			uso := &usoVeraPrueba{}
 			router := routerSintesis(tc.sinSesion, v, !tc.sinConsentimiento, uso)
-			r := httptest.NewRequest("POST", "/v1/vera/sintetizar", strings.NewReader(tc.body))
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/vera/sintetizar", strings.NewReader(tc.body))
 			if tc.cabecera != "" {
 				r.Header.Set("X-Vera-Token", tc.cabecera)
 			}
