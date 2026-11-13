@@ -42,7 +42,7 @@ func TestConfigVera(t *testing.T) {
 		{"localSinModelo", map[string]string{"VERA_PROVEEDOR": "local", "VERA_MODELO": "   "}, "VERA_MODELO", 0, "", ""},
 	} {
 		t.Run(caso.nombre, func(t *testing.T) {
-			for _, key := range []string{"VERA_PROVEEDOR", "GEMINI_API_KEY", "VERA_MODELO", "VERA_OLLAMA_URL", "VERA_TIMEOUT_LLAMADA", "VERA_TEMPERATURA", "VERA_PLAZO_ORQUESTADOR", "VERA_TIMEOUT_LLAMADA"} {
+			for _, key := range []string{"VERA_PROVEEDOR", "GEMINI_API_KEY", "VERA_MODELO", "VERA_OLLAMA_URL", "VERA_TIMEOUT_LLAMADA", "VERA_TEMPERATURA", "VERA_PLAZO_ORQUESTADOR", "VERA_TIMEOUT_LLAMADA", "VERA_STT_URL", "VERA_STT_TOKEN", "VERA_STT_TIMEOUT"} {
 				t.Setenv(key, "")
 			}
 			for k, v := range caso.vars {

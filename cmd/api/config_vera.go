@@ -6,30 +6,36 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/compuesto"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/gemini"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/ollama"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/provsim"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/sttlocal"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 )
 
 // ConfigVera selecciona el proveedor sin exponer credenciales en logs.
 type ConfigVera struct {
-	Proveedor     string
-	APIKey        string
-	Modelo        string
-	OllamaURL     string
-	Timeout       time.Duration
+	Proveedor        string
+	APIKey           string
+	Modelo           string
+	OllamaURL        string
+	STTURL           string
+	STTToken         string
+	STTPlazo         time.Duration
+	Timeout          time.Duration
 	PlazoOrquestador time.Duration
-	Temperatura   float32
-	Limites       copilot.LimitesUso
-	Preparacion   copilot.ConfigPreparacion
-	RetencionDias int
+	Temperatura      float32
+	Limites          copilot.LimitesUso
+	Preparacion      copilot.ConfigPreparacion
+	RetencionDias    int
 }
 
 func cargarConfigVera() (ConfigVera, []error) {
@@ -45,6 +51,24 @@ func cargarConfigVera() (ConfigVera, []error) {
 	}
 	if err := urlOrigenOpcional("VERA_OLLAMA_URL", c.OllamaURL); err != nil {
 		errs = append(errs, err)
+	}
+	c.STTURL = strings.TrimSpace(os.Getenv("VERA_STT_URL"))
+	c.STTToken = strings.TrimSpace(os.Getenv("VERA_STT_TOKEN"))
+	if (c.STTURL == "") != (c.STTToken == "") {
+		errs = append(errs, errors.New("VERA_STT_URL y VERA_STT_TOKEN deben definirse juntas"))
+	} else if c.STTURL != "" {
+		if err := urlSTTLocal(c.STTURL); err != nil {
+			errs = append(errs, err)
+		}
+		if len(c.STTToken) < 32 {
+			errs = append(errs, errors.New("VERA_STT_TOKEN debe tener al menos 32 caracteres"))
+		}
+		plazoSTT, errSTT := time.ParseDuration(envOr("VERA_STT_TIMEOUT", "30s"))
+		if errSTT != nil || plazoSTT <= 0 || plazoSTT > 2*time.Minute {
+			errs = append(errs, errors.New("VERA_STT_TIMEOUT debe ser una duración mayor que 0 y hasta 2m"))
+		} else {
+			c.STTPlazo = plazoSTT
+		}
 	}
 	if c.Proveedor == "gemini" {
 		if c.APIKey == "" {
@@ -126,12 +150,36 @@ func cargarLimitesVera() (copilot.LimitesUso, error) {
 	return l, errors.Join(errs...)
 }
 
+// urlSTTLocal exige un origen http de loopback sin ruta ni credenciales incrustadas.
+func urlSTTLocal(valor string) error {
+	u, err := url.Parse(valor)
+	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("VERA_STT_URL debe ser un origen http en 127.0.0.1 sin ruta, recibido %q", valor)
+	}
+	return nil
+}
+
 // LogValue omite la clave y sólo indica su presencia.
 func (c ConfigVera) LogValue() slog.Value {
-	return slog.GroupValue(slog.String("proveedor", c.Proveedor), slog.String("modelo", c.Modelo), slog.String("ollama_url", c.OllamaURL), slog.Bool("gemini_api_key_set", c.APIKey != ""), slog.Duration("timeout", c.Timeout), slog.Float64("temperatura", float64(c.Temperatura)))
+	return slog.GroupValue(slog.String("proveedor", c.Proveedor), slog.String("modelo", c.Modelo), slog.String("ollama_url", c.OllamaURL), slog.Bool("gemini_api_key_set", c.APIKey != ""), slog.String("stt_url", c.STTURL), slog.Bool("stt_token_set", c.STTToken != ""), slog.Duration("stt_timeout", c.STTPlazo), slog.Duration("timeout", c.Timeout), slog.Float64("temperatura", float64(c.Temperatura)))
 }
 
 func nuevoProveedorIA(ctx context.Context, c ConfigVera) (copilot.ProveedorIA, error) {
+	base, err := proveedorBase(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	if c.STTURL == "" && c.STTToken == "" {
+		return base, nil
+	}
+	transcriptor, err := sttlocal.Nuevo(c.STTURL, c.STTToken, c.STTPlazo)
+	if err != nil {
+		return nil, fmt.Errorf("transcriptor local: %w", err)
+	}
+	return compuesto.Nuevo(base, transcriptor)
+}
+
+func proveedorBase(ctx context.Context, c ConfigVera) (copilot.ProveedorIA, error) {
 	switch c.Proveedor {
 	case "simulado":
 		return provsim.Nuevo(), nil
