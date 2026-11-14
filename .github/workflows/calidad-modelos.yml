@@ -165,7 +165,7 @@ jobs:
 
       - name: Subir el log de las pruebas de voz
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: voz-pruebas-log
           path: ${{ runner.temp }}/voz-pruebas.log
@@ -220,7 +220,7 @@ jobs:
 
       - name: Subir la medición del WER
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wer-transcripcion
           path: ${{ runner.temp }}/wer.json
@@ -408,7 +408,7 @@ jobs:
 
       - name: Subir el veredicto
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: veredicto-release-modelos
           path: |
