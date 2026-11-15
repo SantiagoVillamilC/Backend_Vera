@@ -88,7 +88,9 @@ shellcheck en esa VPS porque no está instalado, y la sintaxis se comprobó con 
 | Despliegue | `infra/modelos/deploy-modelos.sh` | Valida, respalda, despliega por digest y vuelve atrás si falla un healthcheck |
 
 Es un script aparte y no una extensión de `deploy-ci.sh` por tres razones. La pila corre en el pod con GPU
-y no en la VM de CI. La llave SSH de CI recibe únicamente un nombre de rama como comando forzado, así que
+y no en la VM de CI (nota del 15 de noviembre de 2026: RunPod no admite Docker ni Compose dentro de un
+pod, así que este despliegue por compose aplica a un host con Docker propio y no a un pod de RunPod,
+ver `docs/pila-modelos-pod.md`). La llave SSH de CI recibe únicamente un nombre de rama como comando forzado, así que
 no puede transportar digests. Y los respaldos de modelos van en su propia carpeta, porque si cayeran en
 `respaldos/` el siguiente `deploy-ci.sh --rollback` tomaría el más reciente, no encontraría `api.env` y
 no restauraría nada.

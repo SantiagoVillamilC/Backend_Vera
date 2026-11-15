@@ -124,19 +124,30 @@ Apagado: `Ctrl+C` en la API y `bash infra/local/levantar-base.sh --limpiar`.
 ## Pod de GPU
 
 Runbook para la sesión de prueba y la presentación con el razonador E4B, Whisper y Kokoro en un pod
-con GPU. La pila y sus variables están en `docs/pila-modelos-pod.md`, los costos y el umbral en
-`docs/costos-pod-demo.md`, y el comando de encendido es `infra/modelos/pod-demo.sh`.
+con GPU. La pila y sus variables están en `docs/pila-modelos-pod.md`, y los costos y el umbral en
+`docs/costos-pod-demo.md`.
 
-**Estado: NO PROBADO.** Hoy no hay pods de RunPod. Lo único comprobado es el script
-con `bash -n`, shellcheck y `infra/modelos/pod-demo_test.sh` (`docker`, `curl` y `nvidia-smi`
-simulados, sin tocar el docker real), y el compose con `docker compose config` (sin
-`build` ni `up`). Todo paso marcado "no probado" se confirma la primera vez que haya pod, y lo que
-falle se anota aquí.
+**Corrección del 15 de noviembre de 2026: en RunPod no hay Docker ni Compose dentro del pod.** RunPod
+no admite Docker ni Compose dentro de un pod (documentación de RunPod, Pods, Limitations), así que
+`infra/modelos/pod-demo.sh` (que usa `docker compose`) **no sirve en un pod de RunPod**. La campaña de
+capacidad del 15 de noviembre de 2026 corrió los tres servicios como procesos nativos: Ollama
+0.40.10, y Whisper y Kokoro con los servidores del PR 83. Los pasos de este runbook que dicen
+"compose" o `pod-demo.sh` solo valen para un host con Docker propio. Hallazgos medidos y operativos
+de esa campaña: sección "Capacidad medida y hallazgos de la campaña del 15 de noviembre de 2026" de
+`docs/pila-modelos-pod.md`.
+
+**Estado: el pod de RunPod se probó solo con procesos nativos en la campaña de medición.** La demo
+con el compose y `pod-demo.sh` sigue **NO PROBADA**. Lo único comprobado de esa vía es el script con
+`bash -n`, shellcheck y `infra/modelos/pod-demo_test.sh` (`docker`, `curl` y `nvidia-smi` simulados,
+sin tocar el docker real), y el compose con `docker compose config` (sin `build` ni `up`). Todo paso
+marcado "no probado" se confirma la primera vez que se use, y lo que falle se anota aquí.
 
 ### El día anterior
 
-1. Revalidar precio y stock de la 4090 Secure. La 4090 suele estar en stock bajo (handoff, sección 10)
-   y la tabla de `docs/costos-pod-demo.md` es de la cotización del 13 de noviembre de 2026.
+1. Revalidar precio y stock de la 4090 Secure. El 15 de noviembre de 2026 estaba a **0,89 USD/h con
+   stock alto** y la Community a 0,34 USD/h sin instancias disponibles (falló dos veces al crear un
+   pod, sin costo). La tabla de `docs/costos-pod-demo.md` usa la cotización del 13 de noviembre de
+   2026 (0,34 USD/h), ya desactualizada.
 2. Reservar o crear el pod 4090 Secure con volumen de 30 GB. Confirmar que el volumen es de **red**
    del proveedor y no el disco local del pod, porque solo así persiste al terminar el pod
    (`docs/pila-modelos-pod.md`). No probado.
@@ -146,12 +157,14 @@ falle se anota aquí.
 4. Tener a mano `WHISPER_TOKEN` y `KOKORO_TOKEN` (mínimo 32 caracteres cada uno, desde Infisical) y
    confirmar que el GGUF de E4B está registrado en Ollama dentro del volumen. El compose no lo registra
    por sí solo: `OLLAMA_MODELO` solo nombra el modelo que se espera. No probado.
-5. Confirmar que el pod permite correr Docker. Un pod suele ser ya un contenedor, así que esto
-   puede no estar disponible, y si no lo está hay que cambiar el enfoque antes de la sesión. No probado.
+5. **Docker no está disponible en un pod de RunPod** (verificado el 15 de noviembre de 2026). El
+   enfoque cambia: instalar y ejecutar Ollama, Whisper y Kokoro como procesos nativos, como hizo la
+   campaña de capacidad. Los pasos de la sección "Encender y precalentar" son para un host con Docker.
 
 ### Encender y precalentar
 
-Con el pod ya creado y el repositorio dentro:
+**Solo para un host con Docker y runtime NVIDIA propio. No sirve dentro de un pod de RunPod.** Con el
+host ya creado y el repositorio dentro:
 
 ```bash
 export WHISPER_TOKEN=... KOKORO_TOKEN=... OLLAMA_MODELO=gemma-4-e4b-it-q4_k_m   # desde Infisical, sin escribirlos en archivos
@@ -162,10 +175,13 @@ El subcomando levanta el compose con el override CUDA, espera en orden `vera-llm
 `vera-kokoro`, manda una petición mínima al razonador para cargar el GGUF en la GPU y muestra la
 salud. Falla con un mensaje claro si falta `WHISPER_TOKEN`, `KOKORO_TOKEN` u `OLLAMA_MODELO`, o si un
 token tiene menos de 32 caracteres. No abre la sesión por sí solo: la sesión empieza cuando el script
-termina en `pila lista`. No probado en un pod: la construcción de la imagen CUDA, la carga del modelo
-en la GPU y el tiempo del primer arranque no están medidos. Lo único medido es la carga en frío de E2B
-en una GPU local de 4 GB, de unos 34 segundos (`docs/mediciones-locales-2026-11-13.md`), que no sirve
-como estimación para E4B en la 4090.
+termina en `pila lista`. No probado por esta vía: la construcción de la imagen CUDA y el arranque
+con compose en GPU. Con procesos nativos en el pod de la campaña del 15 de noviembre de 2026 sí se
+midió E4B en la 4090 [V]: primera carga del modelo de 50,1 s, recargas de 2,0 a 2,5 s con el GGUF en
+caché de página y bootstrap de 98 s en total (informe de la tesis
+`modelos-gemma/resultados-capacidad-2026-11-15.md`, secciones 3.3 y 6). La carga en frío de E2B en una
+GPU local de 4 GB fue de unos 34 segundos (`docs/mediciones-locales-2026-11-13.md`) y no sirve como
+estimación para E4B en la 4090.
 
 Durante la sesión, `bash infra/modelos/pod-demo.sh verificar` repite la comprobación y falla si algo
 no responde.
@@ -174,17 +190,28 @@ no responde.
 
 **NO PROBADA hasta tener la cuenta.** Es lo que hay que configurar el día que exista, no algo ya hecho.
 
-- Responsable: quien lidera la demo. Umbral: el de `docs/costos-pod-demo.md` (4,82 USD al mes, propuesto).
+- Responsable: quien lidera la demo. Umbral: el de `docs/costos-pod-demo.md` (4,82 USD al mes,
+  propuesto, calculado con 0,34 USD/h y desactualizado frente a los 0,89 USD/h Secure del 15 de
+  noviembre de 2026). **No aplica a una campaña de medición**: la del 15 de noviembre usó un tope de
+  5 USD autorizado por Christian y gastó 4,14 USD.
 - En la cuenta del proveedor, activar la alerta de gasto o saldo que ofrezca y fijarla en el umbral.
   El nombre exacto de la opción y si existe no están verificados.
 - Si la cuenta no ofrece alerta, el respaldo es no cargar más saldo que el umbral y revisar el gasto
   a mano al terminar cada sesión. Tampoco está comprobado que la cuenta funcione por saldo.
 - La alerta avisa, no apaga nada. Lo que corta el gasto es terminar el pod.
+- **Lo que funcionó en la campaña del 15 de noviembre de 2026** (dato del encargo): una guardia local
+  con temporizador de systemd más una vigía local, ambas independientes del pod, y el tope de
+  presupuesto fijado al crear el pod. El pod no puede terminarse a sí mismo: la clave que RunPod
+  inyecta en él autentica con 403 en `GET /pods/{id}`, así que la terminación se hace desde fuera.
+- Para traer resultados del pod no usar `runpodctl exec`: está deprecado y pierde la salida de scripts
+  que terminan de inmediato y la de salidas grandes (más de unos 60 KB). Se usó `ssh` y `rsync` con la
+  clave de `~/.runpod/ssh`.
 
 ### Apagar
 
 1. Terminar la sesión y guardar los artefactos que se quieran conservar fuera del pod.
-2. `bash infra/modelos/pod-demo.sh apagar` baja los contenedores y conserva el volumen.
+2. En un host con Docker, `bash infra/modelos/pod-demo.sh apagar` baja los contenedores y conserva el
+   volumen. En un pod de RunPod no hay contenedores que bajar: se detienen los procesos nativos.
 3. En la consola del proveedor, **Terminate** y no Stop: la regla de `docs/pila-modelos-pod.md` es
    terminar el pod entre sesiones para no pagar GPU ociosa. Qué cobra un pod en Stop no se evaluó,
    por eso no se usa.
