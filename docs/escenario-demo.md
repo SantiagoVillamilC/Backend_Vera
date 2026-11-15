@@ -120,3 +120,123 @@ La prueba comprueba dos corridas idénticas, reinicio con los mismos conteos y c
 global intacto. Fija `AVISOS_CUPO=5` por sí misma, exige `presupuesto_anticipado=1` y
 compara el censo exacto de categorías y orígenes con el de esta página, así que otra
 repartición no pasa en verde. Solo debe ejecutarse sobre una base desechable.
+
+## Inyectar y limpiar la demo en producción
+
+Dos guiones dejan o quitan la cuenta de demo en la base `vera_semilla_demo` que usa la API
+desplegada: `infra/local/demo-inyectar.sh` y `infra/local/demo-limpiar.sh`. Ambos exigen el DSN
+del dueño por el túnel y rechazan cualquier otro destino con una expresión estricta
+(`127.0.0.1:55437/vera_semilla_*`). Ninguno imprime el DSN con clave ni la contraseña de la cuenta.
+
+### Túnel y respaldo previo
+
+```bash
+ssh -N -L 55437:127.0.0.1:55437 centinela
+```
+
+Antes de inyectar o limpiar conviene un respaldo de la base. El volcado se genera dentro del
+contenedor y se guarda en el portátil. El rol `-U dueno` y el nombre `postgres-demo` son los que
+usa el despliegue, pero el comando no se probó contra ese contenedor: si la autenticación falla,
+ajusta el rol.
+
+```bash
+ssh centinela 'sudo docker exec postgres-demo pg_dump -U dueno -Fc vera_semilla_demo' \
+  > "respaldo-vera_semilla_demo-$(date +%Y%m%d-%H%M).dump"
+```
+
+### Orden de uso
+
+1. Respaldo y túnel abierto.
+2. Simulación de la limpieza, que solo hace SELECT y muestra qué se borraría con conteos por tabla.
+3. Inyección. Si el usuario tiene asientos fuera del manifiesto, la inyección llama sola a la
+   limpieza con `CONFIRMAR=si`.
+4. Limpieza real solo cuando haya que retirar la cuenta.
+
+```bash
+export DATABASE_URL='postgres://dueno:CLAVE@127.0.0.1:55437/vera_semilla_demo?sslmode=disable'
+
+bash infra/local/demo-limpiar.sh                      # simulación
+API_URL='https://api.ejemplo.test' bash infra/local/demo-inyectar.sh
+CONFIRMAR=si bash infra/local/demo-limpiar.sh         # borra de verdad
+```
+
+La inyección compila los dos comandos, siembra con `REINICIAR=si` si ya hay manifiesto (o sin él si
+no lo hay), espera a que el lote de enriquecimiento de la API pase por los asientos nuevos, vuelve a
+sembrar sin reiniciar y crea la cuenta con `login-demo`. La espera existe porque el lote corre cada
+5 minutos con un cursor global: los asientos nuevos quedan por delante del cursor y, en el siguiente
+ciclo, el lote los reescribe con tfidf y la fila del escalón catálogo pasa a `sin_categoria`. Sembrar
+de nuevo sin reiniciar deja el censo determinista. Es idempotente: dos ejecuciones seguidas dejan el
+mismo resultado.
+
+### Variables
+
+| Variable | Guion | Por defecto |
+|----------|-------|-------------|
+| `DATABASE_URL` | ambos | obligatoria, DSN del dueño por el túnel |
+| `DEMO_USUARIO` | ambos | `11111111-1111-4111-8111-111111111111` |
+| `DEMO_FECHA` | inyectar | día 19 del mes actual en Bogotá (`YYYY-MM-19`) |
+| `DEMO_CELULAR` | inyectar | `+573205550142` |
+| `DEMO_CONTRASENA` | inyectar | `Vera-Demo-2026` |
+| `DEMO_NOMBRE` | inyectar | `Andres Vargas` |
+| `ESPERAR_LOTE` | inyectar | `si`. Con `no` no espera ni siembra por segunda vez |
+| `ESPERA_SEGUNDOS` | inyectar | `720` (12 minutos) |
+| `ESTADO` | inyectar | `out/demo/escenario-<uuid>.json`, un archivo por usuario |
+| `API_URL` | inyectar | vacía. Si está, hace login y consulta saldo, resumen y avisos |
+| `CONFIRMAR` | limpiar | `no`. Sin `si` solo simula |
+
+Si el lote no alcanza los asientos en 12 minutos, la inyección falla con un mensaje que lo explica.
+Eso pasa si la API está apagada o si en esa base no corre un lote. En el segundo caso se vuelve a
+ejecutar con `ESPERAR_LOTE=no`. Con `API_URL` se imprimen el tipo, el período y el `accion_codigo`
+de cada aviso, mes por mes, porque los avisos del escenario caen en dos períodos.
+
+El cupo del escenario es `AVISOS_CUPO=5` y solo afecta a la siembra. La API de producción usa
+cupo 3 y no se toca.
+
+### Qué borra la limpieza
+
+Sin `CONFIRMAR=si` solo imprime los conteos. Con `CONFIRMAR=si` borra en una sola transacción, con
+conteos antes y después:
+
+- `asistente`: `llamada_funcion`, `solicitud_texto`, `mensaje`, `accion_pendiente`, `conversacion`.
+- `inteligencia`: `aviso_entrega`, `aviso`, `movimiento_enriquecido`, `memoria_correccion`,
+  `voto_destino` y la marca `TIENDA-CATALOGO-DEMO` de `catalogo_marca` (origen `escenario`). La marca
+  es global, así que solo se retira si no queda otro usuario en `public.demo_escenario`.
+- `nucleo`: `posting`, `journal_entry`, `transferencia`, `deposito` y las cuentas cuyo titular es el
+  usuario. De los asientos se borran todos los apuntes, incluido el de `pasivo:gmf_por_pagar`.
+- `auth`: `transiciones_credencial`, `codigos_respaldo`, `tokens_restablecimiento`, `desafios`,
+  `sesiones`, `credenciales`, `roles_de_parte`, `empresas`, `kyc_estados`, `personas` y `partes`.
+- `public`: `demo_escenario` y `users`.
+
+Defensas: rechaza a Camila (`8a665137-c89b-5afe-974a-91ad20f974f4`) y a Valentina Rios
+(`8407bb2a-cab9-4d42-a111-3a7b64466571`), rechaza a cualquier usuario que no sea el de demo por
+defecto ni tenga fila en `public.demo_escenario`, y aborta sin escribir si un asiento del usuario
+toca cuentas de otro titular o si hay eventos pendientes suyos en una outbox. Antes de borrar toma
+el candado del escenario y la fila única del cursor, para que un lote en curso termine primero.
+
+### Qué NO cubre
+
+- `auth.eventos_autenticacion` es append-only por trigger, así que sus filas quedan como huérfanas
+  inofensivas (no tiene clave foránea hacia `auth.partes`).
+- `auth.consentimientos` y `auth.kyc_verificaciones` son inmutables y apuntan a la parte. Si el
+  usuario tiene filas ahí, la limpieza conserva `auth.partes` y `auth.personas` y borra el resto.
+- Las dos outbox (`nucleo.outbox` y `auth.outbox`), `nucleo.descuadre`,
+  `inteligencia.promocion_destino` (conocimiento compartido sin autor), los trabajos de `river` y el
+  catálogo que la API mantiene en memoria.
+- Una recarga PSE confirmada toca la custodia compartida. Al borrarla, la siguiente conciliación
+  puede registrar un `descuadre`.
+- Un lote de la API que ya estaba escribiendo cuando empezó la limpieza puede dejar filas de
+  inteligencia del usuario. La limpieza lo avisa al final y basta con repetirla.
+- La contraseña de la cuenta viaja como argumento `-contrasena` de `login-demo`, así que es visible
+  en la lista de procesos del portátil mientras corre. Usa una contraseña de demo, nunca una real.
+- La base no se respalda sola: el respaldo previo es responsabilidad de quien ejecuta.
+
+### Varias cuentas
+
+Vera solo tiene una cuenta por usuario. Para mostrar «varias cuentas» se usan varios usuarios de
+demo, cada uno con su `DEMO_USUARIO`, su `DEMO_CELULAR` y su archivo `ESTADO`. La inyección rechaza
+un celular que ya pertenezca a otro usuario.
+
+```bash
+DEMO_USUARIO=22222222-2222-4222-8222-222222222222 DEMO_CELULAR=+573205550143 \
+  DEMO_NOMBRE='Laura Mejia' bash infra/local/demo-inyectar.sh
+```
