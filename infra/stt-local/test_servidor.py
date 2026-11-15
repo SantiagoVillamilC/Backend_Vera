@@ -207,6 +207,10 @@ class Concurrencia(unittest.TestCase):
         self.assertEqual(primera, [200])
 
 
+# El CI no instala numpy: main() solo lo usa para calentar el modelo, así que basta un doble.
+NUMPY_FALSO = types.SimpleNamespace(zeros=lambda *a, **k: None, float32=None)
+
+
 class Configuracion(unittest.TestCase):
     ENTORNO = {"WHISPER_TOKEN": TOKEN}
 
@@ -232,6 +236,7 @@ class Configuracion(unittest.TestCase):
         servidor_falso = types.SimpleNamespace(serve_forever=lambda: None)
         entorno = dict(self.ENTORNO, WHISPER_CONCURRENCIA="4", WHISPER_ESPERA_MS="2500")
         with patch.dict(os.environ, entorno, clear=True), \
+                patch.dict(sys.modules, {"numpy": NUMPY_FALSO}), \
                 patch.object(servidor, "cargar_modelo", return_value=modelo) as cargar, \
                 patch.object(servidor, "crear_servidor", return_value=servidor_falso) as crear:
             servidor.main()
@@ -242,6 +247,7 @@ class Configuracion(unittest.TestCase):
         modelo = types.SimpleNamespace(transcribe=lambda *a, **k: (iter([]), None))
         servidor_falso = types.SimpleNamespace(serve_forever=lambda: None)
         with patch.dict(os.environ, self.ENTORNO, clear=True), \
+                patch.dict(sys.modules, {"numpy": NUMPY_FALSO}), \
                 patch.object(servidor, "cargar_modelo", return_value=modelo) as cargar, \
                 patch.object(servidor, "crear_servidor", return_value=servidor_falso) as crear:
             servidor.main()
