@@ -11,7 +11,7 @@
   dependencias del backend Go. Pesos descargados durante el build, fuera de Git.
 
 SHA256 y tamaño de los assets (`kokoro-v1.0.int8.onnx` y `voices-v1.0.bin` por defecto, más
-`kokoro-v1.0.onnx` y `kokoro-v1.0.fp16.onnx` con `VERA_VOZ_DESCARGAR_GPU=1`) están en
+`kokoro-v1.0.onnx` con `VERA_VOZ_DESCARGAR_GPU=1` y `kokoro-v1.0.fp16.onnx` con `VERA_VOZ_DESCARGAR_FP16=1`) están en
 `modelos/lock.json` y en el manifiesto `descargar.py`, que los comprueba durante el build. Una
 prueba de `cmd/verificar-modelos` cruza ambas fuentes y falla si divergen, así que no se repiten
 aquí. Los pesos fp32 y fp16 pertenecen a la misma release y licencias que el int8.

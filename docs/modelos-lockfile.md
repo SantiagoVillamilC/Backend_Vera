@@ -157,7 +157,7 @@ la raíz que pases, porque ese es el nombre que carga el contenedor.
 | --- | --- | --- |
 | `gemma-4-e2b-it-q4_k_m`, `gemma-4-e4b-it-q4_k_m` | `gguf` | calculada sobre el GGUF en disco |
 | `kokoro-v1.0-int8-onnx` | `voz` | manifiesto `infra/voz-local/descargar.py`, que además comprueba el tamaño. Coincide con el asset de la release `model-files-v1.1`. Es el archivo que carga el contenedor |
-| `kokoro-v1.0-fp32-onnx`, `kokoro-v1.0-fp16-onnx` | `voz` | mismo manifiesto, sección `ARCHIVOS_GPU`, y coinciden con los assets de la release `model-files-v1.1`. Son opcionales: solo los carga la variante en GPU (`VERA_VOZ_DISPOSITIVO=cuda`) y `descargar.py` los baja únicamente con `VERA_VOZ_DESCARGAR_GPU=1`. La imagen CPU no los lleva |
+| `kokoro-v1.0-fp32-onnx`, `kokoro-v1.0-fp16-onnx` | `voz` | mismo manifiesto, secciones `ARCHIVOS_GPU` (fp32) y `ARCHIVOS_FP16`, y coinciden con los assets de la release `model-files-v1.1`. Son opcionales: solo los carga la variante en GPU (`VERA_VOZ_DISPOSITIVO=cuda`). `descargar.py` baja el fp32 únicamente con `VERA_VOZ_DESCARGAR_GPU=1` y el fp16 únicamente con `VERA_VOZ_DESCARGAR_FP16=1`, un opt-in aparte porque en CUDA produjo audio vacío. La imagen CPU no los lleva |
 | `kokoro-voces-v1.0` | `voz` | mismo manifiesto. El archivo se llama `voices-v1.0.bin`, como en el contenedor |
 | `whisper-small` | ninguna | fijado por `pin` con `faster-whisper==1.2.1` y el modelo `small` |
 
@@ -170,12 +170,14 @@ raíz: tres modelos de Kokoro (`int8`, `fp32` y `fp16`) y el archivo de voces. E
 solo lleva el `int8` y las voces, el `fp32` y el `fp16` salen como ausentes, y esto es un cambio
 respecto de cuando el lockfile solo declaraba dos archivos en la raíz `voz`. Para comprobar una
 raíz así, baja primero los opcionales a esa carpeta con
-`VERA_VOZ_DESCARGAR_GPU=1 VERA_VOZ_MODELOS_DESTINO=<dir> python infra/voz-local/descargar.py`.
+`VERA_VOZ_DESCARGAR_GPU=1 VERA_VOZ_DESCARGAR_FP16=1 VERA_VOZ_MODELOS_DESTINO=<dir> python infra/voz-local/descargar.py`.
+Cada peso se escribe en `<nombre>.parcial` y solo pasa a su nombre final tras verificar tamaño y
+SHA256, y uno ya presente y correcto no se vuelve a bajar.
 
 ## Cruce con el manifiesto de voz
 
-El build de `infra/voz-local` descarga con `descargar.py` los archivos de Kokoro (dos por defecto y
-cuatro con el opt-in de GPU), y ese archivo trae su
+El build de `infra/voz-local` descarga con `descargar.py` los archivos de Kokoro (dos por defecto, tres con
+`VERA_VOZ_DESCARGAR_GPU=1` y cuatro si se suma `VERA_VOZ_DESCARGAR_FP16=1`), y ese archivo trae su
 propia copia de huellas y tamaños. Para que el lockfile y ese manifiesto no se separen, la prueba
 `TestLockfileCoincideConElManifiestoDeVoz` lee `descargar.py` y compara cada archivo con el
 artefacto del lockfile que usa la raíz `voz`. Si una de las dos fuentes cambia sola, la prueba

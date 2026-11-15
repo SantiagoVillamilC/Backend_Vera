@@ -25,7 +25,8 @@
 # venv limpio. CUDA 13.0 exige un driver con soporte de CUDA 13.0 o posterior: se comprueba con
 # "nvidia-smi" (campo CUDA Version).
 #
-# Los pesos fp32 y fp16 se descargan con VERA_VOZ_DESCARGAR_GPU=1 python infra/voz-local/descargar.py.
+# El peso fp32 se descarga con VERA_VOZ_DESCARGAR_GPU=1 python infra/voz-local/descargar.py. El fp16 es
+# un opt-in aparte (VERA_VOZ_DESCARGAR_FP16=1) y en CUDA produjo audio vacío.
 
 kokoro-onnx==0.6.1
 onnxruntime-gpu==1.31.0
