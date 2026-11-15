@@ -1,13 +1,21 @@
 import base64
+import contextlib
 import io
 import json
+import logging
+import os
+import sys
 import threading
+import time
+import types
 import unittest
 import urllib.error
 import urllib.request
 import wave
+from unittest.mock import patch
 
 import numpy as np
+import servidor
 from servidor import crear_servidor, frases, texto_hablado
 
 
@@ -79,6 +87,155 @@ class VozLocalTest(unittest.TestCase):
         self.assertIn(b'"audio"', contenido)
         self.assertNotIn(b'"fin"', contenido)
         self.assertNotIn(b"privado", contenido)
+
+
+class MotorEspera:
+    """Motor falso: cada síntesis avisa que entró y espera a que la prueba la suelte."""
+
+    def __init__(self, esperar):
+        self.esperar = esperar
+
+    def create(self, texto, **opciones):
+        self.esperar()
+        return np.full(240, 0.2, dtype=np.float32), 24000
+
+
+class ConcurrenciaTest(unittest.TestCase):
+    def setUp(self):
+        self.servidores = []
+        self.hilos = []
+
+    def tearDown(self):
+        for hilo in self.hilos:
+            hilo.join(timeout=10)
+        for srv, hilo in self.servidores:
+            srv.shutdown()
+            srv.server_close()
+            hilo.join()
+
+    def iniciar(self, esperar, **opciones):
+        srv = crear_servidor(MotorEspera(esperar), "token-ficticio", ("127.0.0.1", 0), **opciones)
+        hilo = threading.Thread(target=srv.serve_forever, daemon=True)
+        hilo.start()
+        self.servidores.append((srv, hilo))
+        return srv
+
+    def pedir(self, srv):
+        peticion = urllib.request.Request(
+            f"http://127.0.0.1:{srv.server_port}/sintetizar", data=json.dumps({"texto": "hola"}).encode(),
+            headers={"X-Vera-Token": "token-ficticio", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(peticion, timeout=5) as respuesta:
+                return respuesta.status
+        except urllib.error.HTTPError as error:
+            error.close()
+            return error.code
+
+    def pedir_en_hilo(self, srv):
+        resultado = []
+        hilo = threading.Thread(target=lambda: resultado.append(self.pedir(srv)), daemon=True)
+        hilo.start()
+        self.hilos.append(hilo)
+        return hilo, resultado
+
+    def test_por_defecto_la_segunda_solicitud_simultanea_da_409(self):
+        dentro, soltar = threading.Event(), threading.Event()
+        srv = self.iniciar(lambda: (dentro.set(), soltar.wait(5)))
+        hilo, primera = self.pedir_en_hilo(srv)
+        self.assertTrue(dentro.wait(2))
+        inicio = time.monotonic()
+        self.assertEqual(self.pedir(srv), 409)
+        self.assertLess(time.monotonic() - inicio, 0.5, "el 409 por defecto debe ser inmediato")
+        soltar.set()
+        hilo.join(5)
+        self.assertEqual(primera, [200])
+
+    def test_espera_fuera_de_rango_lanza_value_error(self):
+        for espera in (-1, 10001, 0.5, True, "100", None):
+            with self.subTest(espera_ms=espera):
+                with self.assertRaises(ValueError):
+                    crear_servidor(MotorEspera(lambda: None), "token-ficticio", ("127.0.0.1", 0),
+                                   espera_ms=espera)
+
+    def test_los_limites_de_espera_son_validos(self):
+        for espera in (0, 10000):
+            with self.subTest(espera_ms=espera):
+                srv = crear_servidor(MotorEspera(lambda: None), "token-ficticio", ("127.0.0.1", 0),
+                                     espera_ms=espera)
+                srv.server_close()
+
+    def test_con_espera_la_segunda_aguarda_y_da_200(self):
+        dentro, soltar = threading.Event(), threading.Event()
+        srv = self.iniciar(lambda: (dentro.set(), soltar.wait(5)), espera_ms=3000)
+        hilo, primera = self.pedir_en_hilo(srv)
+        self.assertTrue(dentro.wait(2))
+        temporizador = threading.Timer(0.3, soltar.set)
+        temporizador.start()
+        inicio = time.monotonic()
+        self.assertEqual(self.pedir(srv), 200)
+        self.assertGreaterEqual(time.monotonic() - inicio, 0.2)
+        temporizador.join()
+        hilo.join(5)
+        self.assertEqual(primera, [200])
+
+    def test_si_la_espera_vence_antes_de_que_se_libere_da_409(self):
+        dentro, soltar = threading.Event(), threading.Event()
+        srv = self.iniciar(lambda: (dentro.set(), soltar.wait(5)), espera_ms=100)
+        hilo, primera = self.pedir_en_hilo(srv)
+        self.assertTrue(dentro.wait(2))
+        self.assertEqual(self.pedir(srv), 409)
+        soltar.set()
+        hilo.join(5)
+        self.assertEqual(primera, [200])
+
+    def test_dos_instancias_en_puertos_distintos_sintetizan_a_la_vez(self):
+        # El paralelismo de Kokoro son varios procesos: cada instancia conserva su cerrojo propio.
+        barrera = threading.Barrier(2, timeout=3)
+        uno, otro = self.iniciar(barrera.wait), self.iniciar(barrera.wait)
+        self.assertNotEqual(uno.server_port, otro.server_port)
+        (h1, r1), (h2, r2) = self.pedir_en_hilo(uno), self.pedir_en_hilo(otro)
+        h1.join(5)
+        h2.join(5)
+        self.assertEqual((r1, r2), ([200], [200]))
+
+
+class ConfiguracionTest(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(logging.disable, logging.NOTSET)
+
+    def ejecutar_main(self, extra, motor_listo=False):
+        entorno = dict({"VERA_LAB_TOKEN": "t" * 32}, **extra)
+        modulos = {
+            "onnxruntime": types.SimpleNamespace(SessionOptions=types.SimpleNamespace, InferenceSession=lambda *a, **k: object()),
+            "kokoro_onnx": types.SimpleNamespace(Kokoro=types.SimpleNamespace(from_session=lambda *a, **k: types.SimpleNamespace(create=lambda *a, **k: None))),
+        }
+        falso = types.SimpleNamespace(serve_forever=lambda: None)
+        with patch.dict(os.environ, entorno, clear=True), patch.dict(sys.modules, modulos), \
+                patch.object(servidor, "crear_servidor", return_value=falso) as crear, \
+                contextlib.redirect_stdout(io.StringIO()):
+            servidor.main()
+        return crear
+
+    def test_el_puerto_sale_de_vera_voz_puerto(self):
+        crear = self.ejecutar_main({"VERA_VOZ_PUERTO": "9123", "VERA_VOZ_ESPERA_MS": "2500"})
+        self.assertEqual(crear.call_args.args[2], ("127.0.0.1", 9123))
+        self.assertEqual(crear.call_args.kwargs, {"espera_ms": 2500})
+
+    def test_por_defecto_puerto_8766_y_sin_espera(self):
+        crear = self.ejecutar_main({})
+        self.assertEqual(crear.call_args.args[2], ("127.0.0.1", 8766))
+        self.assertEqual(crear.call_args.kwargs, {"espera_ms": 0})
+
+    def test_valores_invalidos_abortan_antes_de_cargar_el_modelo(self):
+        invalidos = [{"VERA_VOZ_PUERTO": v} for v in ("1023", "65536", "0", "-1", "abc", "8766.0", " 8766", "9" * 5000)]
+        invalidos += [{"VERA_VOZ_ESPERA_MS": v} for v in ("10001", "-5", "x", "1e3")]
+        for extra in invalidos:
+            with self.subTest(extra=str(extra)[:60]):
+                with patch.dict(os.environ, dict({"VERA_LAB_TOKEN": "t" * 32}, **extra), clear=True), \
+                        patch.dict(sys.modules, {"onnxruntime": None, "kokoro_onnx": None}):
+                    # Con los módulos en None, importarlos daría ImportError: SystemExit prueba que se validó antes.
+                    with self.assertRaises(SystemExit):
+                        servidor.main()
 
 
 if __name__ == "__main__":

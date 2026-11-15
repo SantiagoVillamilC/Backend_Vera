@@ -147,7 +147,9 @@ jobs:
 
   voz:
     name: Humo del servicio de voz
-    runs-on: ubuntu-latest
+    # ubuntu-latest pasó a 26.04 con Python 3.14 el 15 nov 2026 y kokoro-onnx 0.6.1 no instala allí.
+    # La imagen del servicio usa Python 3.12, y 24.04 trae 3.12.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -174,7 +176,8 @@ jobs:
 
   transcripcion:
     name: Transcripción sobre clips sintéticos
-    runs-on: ubuntu-latest
+    # Mismo motivo que el humo de voz: se fija 24.04 (Python 3.12) en vez de seguir a ubuntu-latest.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout

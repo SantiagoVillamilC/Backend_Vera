@@ -5,6 +5,14 @@
 # la salud. No llama a la API de RunPod ni usa su CLI: crear y terminar el pod es manual, en la
 # consola del proveedor (ver la sección "Pod de GPU" de docs/operacion-demo.md).
 #
+# ADVERTENCIA (verificada el 15 de noviembre de 2026): este script NO sirve dentro de un pod de
+# RunPod. Usa docker compose, y RunPod no admite Docker ni Compose dentro de un pod (documentación
+# de RunPod, Pods, Limitations). La campaña de capacidad del 15 de noviembre de 2026 corrió los tres
+# servicios como procesos nativos: Ollama 0.40.10, y Whisper y Kokoro con los servidores del PR 83.
+# El script se conserva sin cambios de lógica para un host con Docker y runtime NVIDIA propio. Ver la
+# sección "Capacidad medida y hallazgos de la campaña del 15 de noviembre de 2026" de
+# docs/pila-modelos-pod.md.
+#
 # Uso:
 #   WHISPER_TOKEN=... KOKORO_TOKEN=... OLLAMA_MODELO=gemma-4-e4b-it-q4_k_m \
 #     bash infra/modelos/pod-demo.sh encender
@@ -21,8 +29,9 @@
 #
 # ESTADO: no se ha ejecutado en un pod. Validado solo con bash -n, shellcheck y la prueba
 # infra/modelos/pod-demo_test.sh (docker, curl y nvidia-smi simulados, sin tocar el docker real).
-# Queda sin probar que el pod permita correr Docker, que el runtime NVIDIA esté disponible y la
-# carga real del razonador en la GPU. No hace build ni up fuera del subcomando encender.
+# Queda sin probar el runtime NVIDIA con Docker y la carga real del razonador por esta vía. Que un
+# pod de RunPod permita correr Docker ya se descartó (ver la advertencia de arriba). No hace build ni
+# up fuera del subcomando encender.
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

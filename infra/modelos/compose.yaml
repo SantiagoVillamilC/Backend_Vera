@@ -25,6 +25,9 @@ services:
       OLLAMA_MODELS: /pesos/modelos
       OLLAMA_HOST: 127.0.0.1:11434
       OLLAMA_MODELO: ${OLLAMA_MODELO:-gemma-4-e2b-it-q4_k_m}
+      # Paralelismo del razonador. Los valores por defecto igualan los de Ollama v0.40.10.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+      OLLAMA_MAX_QUEUE: ${OLLAMA_MAX_QUEUE:-512}
     # Red del host para conservar el invariante de loopback: los tres servicios escuchan solo
     # 127.0.0.1 y no hay puertos publicados en interfaces externas.
     network_mode: host
@@ -48,6 +51,9 @@ services:
       WHISPER_MODELO: ${WHISPER_MODELO:-small}
       WHISPER_DIRECCION: 127.0.0.1:8767
       WHISPER_GPU: ${WHISPER_GPU:-no}
+      # Paralelismo: con 1 y 0 el comportamiento es el de siempre (409 inmediato si está ocupado).
+      WHISPER_CONCURRENCIA: ${WHISPER_CONCURRENCIA:-1}
+      WHISPER_ESPERA_MS: ${WHISPER_ESPERA_MS:-0}
       HF_HOME: /pesos/huggingface
     network_mode: host
     volumes:
@@ -77,6 +83,9 @@ services:
     restart: unless-stopped
     environment:
       VERA_LAB_TOKEN: "${KOKORO_TOKEN:?falta KOKORO_TOKEN, expórtalo desde Infisical y no lo hornees}"
+      # Espera por el cerrojo antes del 409. VERA_VOZ_PUERTO no se pasa aquí: el healthcheck de
+      # abajo y el de la imagen consultan el 8766 fijo.
+      VERA_VOZ_ESPERA_MS: ${VERA_VOZ_ESPERA_MS:-0}
     network_mode: host
     healthcheck:
       test:
