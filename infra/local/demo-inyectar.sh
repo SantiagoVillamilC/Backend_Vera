@@ -4,7 +4,8 @@
 # portátil con el túnel SSH abierto contra 127.0.0.1:55437 (ssh -N -L 55437:127.0.0.1:55437 centinela).
 #
 # Orden:
-#   1. Valida el DSN y las herramientas (psql, go, jq).
+#   1. Valida el DSN y las herramientas (psql, go, jq). Rechaza a los usuarios protegidos y a una
+#      cuenta que ya existe sin ser de demo (lib-demo.sh), antes de cualquier escritura.
 #   2. Si el usuario tiene asientos fuera del manifiesto (por ejemplo una recarga PSE), llama a
 #      demo-limpiar.sh con CONFIRMAR=si, porque REINICIAR=si aborta con asientos ajenos.
 #   3. Siembra el escenario (REINICIAR=si si ya hay manifiesto).
@@ -47,10 +48,11 @@ paso() { printf '\n==> %s\n' "$1"; }
 info() { printf '    %s\n' "$1"; }
 error() { printf '[error] %s\n' "$1" >&2; exit 1; }
 
-[[ -n "$DATABASE_URL" ]] || error "exporta DATABASE_URL del dueño por el túnel"
-dsn_valido='^postgres(ql)?://[^@/]+@127\.0\.0\.1:55437/vera_semilla_[A-Za-z0-9_]+(\?sslmode=[a-z-]+)?$'
-[[ "$DATABASE_URL" =~ $dsn_valido ]] ||
-  error "DATABASE_URL debe apuntar a 127.0.0.1:55437/vera_semilla_ (túnel SSH) y solo admite sslmode"
+# La lista de usuarios protegidos, la validación del DSN y psql_demo viven en lib-demo.sh.
+# shellcheck source=lib-demo.sh
+source "$RAIZ/infra/local/lib-demo.sh"
+
+preparar_conexion
 for herramienta in psql go jq; do
   command -v "$herramienta" >/dev/null || error "falta $herramienta"
 done
@@ -59,9 +61,13 @@ done
 DEMO_USUARIO="${DEMO_USUARIO,,}"
 [[ "$DEMO_USUARIO" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] ||
   error "DEMO_USUARIO no es un UUID"
+# Antes de cualquier escritura: login-demo hace ON CONFLICT DO UPDATE y pisaría el celular y la
+# contraseña de una cuenta real. El rechazo de protegidos no toca la base.
+rechazar_usuario_protegido
 [[ "$DEMO_FECHA" =~ ^[0-9]{4}-[0-9]{2}-19$ ]] || error "DEMO_FECHA debe ser YYYY-MM-19"
 [[ "$ESPERAR_LOTE" == "si" || "$ESPERAR_LOTE" == "no" ]] || error "ESPERAR_LOTE debe ser si o no"
 [[ "$ESPERA_SEGUNDOS" =~ ^[0-9]+$ ]] || error "ESPERA_SEGUNDOS debe ser un entero"
+exigir_usuario_de_demo_o_nuevo
 ESTADO="${ESTADO:-$RAIZ/out/demo/escenario-$DEMO_USUARIO.json}"
 mkdir -p "$(dirname "$ESTADO")"
 
@@ -70,8 +76,6 @@ celular="${DEMO_CELULAR// /}"
 celular="${celular#+57}"
 [[ "$celular" =~ ^[0-9]{10}$ ]] || error "DEMO_CELULAR debe ser +57 seguido de 10 dígitos o 10 dígitos"
 celular="+57$celular"
-
-psql_demo() { psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -v u="$DEMO_USUARIO" "$@"; }
 
 estado_del_usuario() {
   psql_demo -At -F ' ' <<'SQL'
@@ -82,6 +86,16 @@ SELECT (SELECT count(*) FROM public.demo_escenario WHERE usuario_id = :'u'::uuid
                  (SELECT asientos FROM public.demo_escenario WHERE usuario_id = :'u'::uuid),
                  '{}'::bigint[]))));
 SQL
+}
+
+# Deja en en_manifiesto y ajenos el estado del usuario. Si la consulta falla lo dice con claridad,
+# porque un read sobre una sustitución de procesos fallida no detiene el guion ni explica nada.
+leer_estado_del_usuario() {
+  local estado
+  estado="$(estado_del_usuario)" ||
+    error "no se pudo leer el estado del usuario $DEMO_USUARIO en la base (¿túnel caído, clave incorrecta o migraciones sin aplicar?)"
+  read -r en_manifiesto ajenos <<<"$estado" ||
+    error "la consulta del estado del usuario no devolvió el conteo esperado: '$estado'"
 }
 
 sembrar_escenario() {
@@ -120,14 +134,14 @@ go build -o out/bin/semilla-escenario ./cmd/semilla-escenario
 go build -o out/bin/login-demo ./cmd/login-demo
 
 paso "Revisando el estado actual del usuario $DEMO_USUARIO"
-read -r en_manifiesto ajenos < <(estado_del_usuario)
+leer_estado_del_usuario
 info "manifiesto: $en_manifiesto, asientos fuera del manifiesto: $ajenos"
 if [[ "$ajenos" != "0" ]]; then
   paso "Limpiando: hay asientos fuera del manifiesto (por ejemplo una recarga confirmada)"
   DATABASE_URL="$DATABASE_URL" DEMO_USUARIO="$DEMO_USUARIO" CONFIRMAR=si \
     bash "$RAIZ/infra/local/demo-limpiar.sh"
   # La limpieza borra el manifiesto: se vuelve a leer para elegir REINICIAR.
-  read -r en_manifiesto ajenos < <(estado_del_usuario)
+  leer_estado_del_usuario
   [[ "$ajenos" == "0" ]] || error "tras la limpieza siguen $ajenos asientos fuera del manifiesto"
 fi
 
@@ -195,7 +209,7 @@ if [[ -n "$API_URL" ]]; then
   while IFS= read -r mes; do
     [[ -n "$mes" ]] || continue
     info "avisos de $mes (tipo, periodo, accion_codigo):"
-    lista="$(api_get "/v1/inteligencia/avisos?mes=$mes" | jq -r '.data[] | "\(.tipo)\t\(.periodo)\t\(.accion_codigo // "-")"')"
+    lista="$(api_get "/v1/inteligencia/avisos?mes=$mes" | jq -r '(.data // [])[] | "\(.tipo)\t\(.periodo)\t\(.accion_codigo // "-")"')"
     while IFS= read -r fila; do
       [[ -n "$fila" ]] || continue
       info "  $fila"

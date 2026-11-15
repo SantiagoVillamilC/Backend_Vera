@@ -165,6 +165,11 @@ Dos guiones dejan o quitan la cuenta de demo en la base `vera_semilla_demo` que 
 desplegada: `infra/local/demo-inyectar.sh` y `infra/local/demo-limpiar.sh`. Ambos exigen el DSN
 del dueño por el túnel y rechazan cualquier otro destino con una expresión estricta
 (`127.0.0.1:55437/vera_semilla_*`). Ninguno imprime el DSN con clave ni la contraseña de la cuenta.
+Ambos comparten `infra/local/lib-demo.sh` (lista de usuarios protegidos, validación del DSN y el
+punto único de entrada a `psql`). El DSN se parte en usuario, clave, base y `sslmode`, y `psql` los
+recibe por `PGUSER`, `PGPASSWORD`, `PGDATABASE` y `PGSSLMODE` de su propio proceso, con host y puerto
+fijos (`-h 127.0.0.1 -p 55437`). La clave del DSN no aparece en la lista de procesos. Las
+herramientas Go (`semilla-escenario`, `login-demo`) siguen recibiendo `DATABASE_URL` por entorno.
 
 ### Túnel y respaldo previo
 
@@ -248,8 +253,25 @@ conteos antes y después:
 Defensas: rechaza a Camila (`8a665137-c89b-5afe-974a-91ad20f974f4`) y a Valentina Rios
 (`8407bb2a-cab9-4d42-a111-3a7b64466571`), rechaza a cualquier usuario que no sea el de demo por
 defecto ni tenga fila en `public.demo_escenario`, y aborta sin escribir si un asiento del usuario
-toca cuentas de otro titular o si hay eventos pendientes suyos en una outbox. Antes de borrar toma
-el candado del escenario y la fila única del cursor, para que un lote en curso termine primero.
+toca cuentas de otro titular o si hay eventos pendientes suyos en una outbox. Esa comprobación se
+hace antes y se repite dentro de la transacción, con los candados tomados y las tablas temporales
+creadas: si aparece algo en medio, la transacción entera se deshace.
+
+Candados que toma la transacción de borrado, en este orden y con `pg_advisory_xact_lock`
+(bloqueante, con `lock_timeout` de 60 s):
+
+1. `hashtextextended('escenario:' || <usuario>, 0)`: el mismo de `semilla-escenario`.
+2. `hashtext('inteligencia.enriquecimiento')::bigint`: la llave del lote de enriquecimiento
+   (`intentarBloqueo` en `internal/inteligencia/enriquecimiento.go`) y de las correcciones
+   (`bloquearLaCorreccion` en `correccion.go`).
+3. `hashtext('inteligencia.avisos')::bigint`: la llave de la emisión de avisos
+   (`tomarElCandadoDeAvisos` en `avisos_servicio.go`).
+
+El lote pide la llave 2 con `pg_try_advisory_xact_lock`. Si ya hay un lote en curso, la limpieza
+espera a que termine y borra después de su commit. Mientras la transacción dure, un ciclo nuevo del
+lote recibe `ErrLoteEnCurso` y se salta ese turno. La fila del cursor no sirve de candado: `LeerCursor`
+es un `SELECT` simple y el lote solo toca esa fila al final, en `AvanzarCursor`. La emisión de avisos
+y las correcciones piden su llave de forma bloqueante, así que esperan a la limpieza.
 
 ### Qué NO cubre
 
@@ -262,17 +284,23 @@ el candado del escenario y la fila única del cursor, para que un lote en curso 
   catálogo que la API mantiene en memoria.
 - Una recarga PSE confirmada toca la custodia compartida. Al borrarla, la siguiente conciliación
   puede registrar un `descuadre`.
-- Un lote de la API que ya estaba escribiendo cuando empezó la limpieza puede dejar filas de
-  inteligencia del usuario. La limpieza lo avisa al final y basta con repetirla.
+- Si algún proceso de la API escribe filas de inteligencia del usuario después del commit del
+  borrado, la verificación final termina con código de salida distinto de cero y un mensaje claro.
+  Basta con repetir la limpieza.
 - La contraseña de la cuenta viaja como argumento `-contrasena` de `login-demo`, así que es visible
   en la lista de procesos del portátil mientras corre. Usa una contraseña de demo, nunca una real.
+  La clave del dueño del DSN no tiene ese problema: `psql` la recibe por `PGPASSWORD`, no por
+  argumento. `PGPASSWORD` sí queda en el entorno del proceso de `psql`, que solo lee el mismo usuario.
 - La base no se respalda sola: el respaldo previo es responsabilidad de quien ejecuta.
 
 ### Varias cuentas
 
 Vera solo tiene una cuenta por usuario. Para mostrar «varias cuentas» se usan varios usuarios de
 demo, cada uno con su `DEMO_USUARIO`, su `DEMO_CELULAR` y su archivo `ESTADO`. La inyección rechaza
-un celular que ya pertenezca a otro usuario.
+un celular que ya pertenezca a otro usuario. Antes de escribir, la inyección rechaza a los usuarios
+protegidos y a cualquier usuario que ya exista (en `auth.partes`, `auth.credenciales` o
+`nucleo.cuenta`) sin fila en `public.demo_escenario`, porque `login-demo` sobrescribiría su celular y
+su contraseña. Un usuario nuevo, sin rastro en esas tablas, sí se admite.
 
 ```bash
 DEMO_USUARIO=22222222-2222-4222-8222-222222222222 DEMO_CELULAR=+573205550143 \

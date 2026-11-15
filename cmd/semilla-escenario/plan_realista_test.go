@@ -262,6 +262,9 @@ func TestPlanRealistaTextosDeNoviembre(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	if len(hechos) != 5 {
+		t.Fatalf("hechos de noviembre: %d, quiero 5", len(hechos))
+	}
 	esperados := map[avisos.Tipo]string{
 		avisos.PagoNoAlcanza:         "Tu saldo es $185.100 y los pagos recurrentes que vencen desde 2026-11-20 suman $249.900.",
 		avisos.PresupuestoAnticipado: "En noviembre de 2026 llevas $2.723.500 en gastos. Lo habitual en tus meses completos es $2.239.900.",

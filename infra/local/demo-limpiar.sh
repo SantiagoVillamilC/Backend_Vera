@@ -11,11 +11,16 @@
 #   DEMO_USUARIO=<uuid> CONFIRMAR=si ./infra/local/demo-limpiar.sh
 #
 # Seguridad:
-#   - Rechaza los usuarios protegidos de la lista codificada abajo.
+#   - Rechaza los usuarios protegidos de la lista de lib-demo.sh.
 #   - Rechaza cualquier usuario que no sea el DEMO_USUARIO por defecto y no tenga fila en
 #     public.demo_escenario.
 #   - Aborta, sin escribir, si un asiento del usuario toca cuentas de otro titular o si hay eventos
-#     pendientes del usuario en alguna outbox.
+#     pendientes del usuario en alguna outbox. La comprobación se hace antes y se repite dentro de la
+#     transacción, con los candados tomados, para cubrir lo que aparezca en medio.
+#   - Dentro de la transacción toma los candados 'escenario:<usuario>', 'inteligencia.enriquecimiento'
+#     y 'inteligencia.avisos' (ver el comentario junto al BEGIN).
+# Con la clave del DSN: psql recibe usuario, clave y base por variables de entorno de su propio
+# proceso (lib-demo.sh), nunca como argumento, así que la clave no aparece en la lista de procesos.
 #
 # Lo que NO se borra (ver docs/escenario-demo.md): auth.eventos_autenticacion (append-only por
 # trigger), auth.consentimientos y auth.kyc_verificaciones (inmutables), las dos outbox,
@@ -27,40 +32,23 @@ DATABASE_URL="${DATABASE_URL:-}"
 DEMO_USUARIO="${DEMO_USUARIO:-11111111-1111-4111-8111-111111111111}"
 CONFIRMAR="${CONFIRMAR:-no}"
 
-# Usuarios reales de la demo que jamás se borran. Camila y Valentina Rios.
-PROTEGIDOS=(
-  "8a665137-c89b-5afe-974a-91ad20f974f4"
-  "8407bb2a-cab9-4d42-a111-3a7b64466571"
-)
-USUARIO_POR_DEFECTO="11111111-1111-4111-8111-111111111111"
-
 paso() { printf '\n==> %s\n' "$1"; }
 info() { printf '    %s\n' "$1"; }
 error() { printf '[error] %s\n' "$1" >&2; exit 1; }
 
-[[ -n "$DATABASE_URL" ]] || error "exporta DATABASE_URL del dueño por el túnel"
-dsn_valido='^postgres(ql)?://[^@/]+@127\.0\.0\.1:55437/vera_semilla_[A-Za-z0-9_]+(\?sslmode=[a-z-]+)?$'
-[[ "$DATABASE_URL" =~ $dsn_valido ]] ||
-  error "DATABASE_URL debe apuntar a 127.0.0.1:55437/vera_semilla_ (túnel SSH) y solo admite sslmode"
+# La lista de usuarios protegidos, la validación del DSN y psql_demo viven en lib-demo.sh.
+# shellcheck source=lib-demo.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-demo.sh"
+
+preparar_conexion
 command -v psql >/dev/null || error "falta psql"
 [[ "$CONFIRMAR" == "si" || "$CONFIRMAR" == "no" ]] || error "CONFIRMAR debe ser si o no"
 
 DEMO_USUARIO="${DEMO_USUARIO,,}"
 [[ "$DEMO_USUARIO" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] ||
   error "DEMO_USUARIO no es un UUID"
-for protegido in "${PROTEGIDOS[@]}"; do
-  [[ "$DEMO_USUARIO" != "$protegido" ]] || error "el usuario $protegido está protegido y nunca se borra"
-done
-
-# Un solo punto de entrada a psql: sin ~/.psqlrc, parando en el primer error y con el usuario como
-# variable para que ninguna consulta lo concatene.
-psql_demo() { psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -v u="$DEMO_USUARIO" "$@"; }
-
-if [[ "$DEMO_USUARIO" != "$USUARIO_POR_DEFECTO" ]]; then
-  en_manifiesto="$(psql_demo -At <<<"SELECT count(*) FROM public.demo_escenario WHERE usuario_id = :'u'::uuid;")"
-  [[ "$en_manifiesto" == "1" ]] ||
-    error "el usuario $DEMO_USUARIO no es el de demo por defecto ni tiene fila en public.demo_escenario: no se borra"
-fi
+rechazar_usuario_protegido
+exigir_usuario_de_demo
 
 # Conjuntos de filas del usuario. Cada consulta se usa como CTE en la simulación y como tabla
 # temporal en la transacción de borrado, así que los conteos y el DELETE comparten los mismos
@@ -221,14 +209,22 @@ if [[ -n "$bloqueos" ]]; then
 fi
 
 paso "Borrando en una sola transacción"
-{
+if ! {
   cat <<'SQL'
 BEGIN;
 SET LOCAL lock_timeout = '60s';
--- Mismo candado que usa semilla-escenario y, después, la fila única del cursor del lote: así un
--- lote en curso termina antes de borrar y ninguno nuevo escribe mientras dura la transacción.
+-- Candados, siempre en este orden. Los tres son bloqueantes y se sueltan al terminar la transacción.
+-- 1. 'escenario:<usuario>': el mismo que toma semilla-escenario, así no se siembra y se borra a la vez.
+-- 2. 'inteligencia.enriquecimiento': la llave de internal/inteligencia/enriquecimiento.go (intentarBloqueo)
+--    y de correccion.go. El lote la pide con pg_try_advisory_xact_lock. Si un lote ya la tiene, esta
+--    sentencia espera a que termine (hasta lock_timeout) y borra después de su commit. Mientras la
+--    transacción dure, un ciclo nuevo del lote recibe ErrLoteEnCurso y se salta ese turno. LeerCursor
+--    es un SELECT simple y no sirve de candado: el lote solo toca la fila del cursor al final.
+-- 3. 'inteligencia.avisos': la llave de la emisión de avisos (tomarElCandadoDeAvisos en
+--    avisos_servicio.go), que la pide de forma bloqueante, usuario por usuario.
 SELECT pg_advisory_xact_lock(hashtextextended('escenario:' || :'u', 0));
-SELECT ultimo_entry_id FROM inteligencia.cursor_enriquecimiento WHERE id = 1 FOR UPDATE;
+SELECT pg_advisory_xact_lock(hashtext('inteligencia.enriquecimiento')::bigint);
+SELECT pg_advisory_xact_lock(hashtext('inteligencia.avisos')::bigint);
 SQL
   printf 'CREATE TEMP TABLE cta ON COMMIT DROP AS %s;\n' "$Q_CTA"
   printf 'CREATE TEMP TABLE dep ON COMMIT DROP AS %s;\n' "$Q_DEP"
@@ -237,6 +233,20 @@ SQL
   printf 'CREATE TEMP TABLE con ON COMMIT DROP AS %s;\n' "$Q_CON"
   printf 'CREATE TEMP TABLE cre ON COMMIT DROP AS %s;\n' "$Q_CRE"
   printf 'CREATE TEMP TABLE avi ON COMMIT DROP AS %s;\n' "$Q_AVI"
+  # Los bloqueos se vuelven a evaluar aquí, con los candados tomados y las tablas temporales ya
+  # creadas: lo que apareció entre la comprobación previa y el BEGIN aborta la transacción entera.
+  printf 'CREATE TEMP TABLE bloqueos ON COMMIT DROP AS %s;\n' "$Q_BLOQUEOS"
+  cat <<'SQL'
+DO $$
+DECLARE motivos text;
+BEGIN
+  SELECT string_agg(b.m, ' | ') INTO motivos FROM bloqueos b;
+  IF motivos IS NOT NULL THEN
+    RAISE EXCEPTION 'el borrado no es seguro, no se borro nada: %', motivos;
+  END IF;
+END
+$$;
+SQL
   printf '\\echo Antes:\n%s;\n' "$Q_CONTEOS"
   cat <<'SQL'
 -- asistente: mensaje apunta a accion_pendiente sin cascada, por eso va antes.
@@ -286,14 +296,16 @@ DELETE FROM public.users WHERE id = :'u'::uuid;
 DELETE FROM public.demo_escenario WHERE usuario_id = :'u'::uuid;
 COMMIT;
 SQL
-} | psql_demo -v acc_partes="$ACC_PARTES"
+} | psql_demo -v acc_partes="$ACC_PARTES"; then
+  error "la transacción de borrado falló y se deshizo completa, no se borró nada. Revisa el mensaje de arriba (bloqueo de seguridad o lock_timeout de 60 s esperando a un lote) y vuelve a ejecutar."
+fi
 
 # Verificación con una conexión nueva: lo confirmado de verdad en la base.
 paso "Después del borrado"
 psql_demo -v acc_partes="$ACC_PARTES" <<<"WITH $CTES $Q_CONTEOS;"
 restantes="$(psql_demo -At <<<"SELECT (SELECT count(*) FROM inteligencia.movimiento_enriquecido WHERE usuario_id = :'u') + (SELECT count(*) FROM inteligencia.aviso WHERE usuario_id = :'u');")"
 if [[ "$restantes" != "0" ]]; then
-  info "Quedan $restantes filas de inteligencia: un lote de la API las escribió durante el borrado. Vuelve a ejecutar con CONFIRMAR=si."
+  error "quedan $restantes filas de inteligencia del usuario tras el borrado: un proceso de la API las escribió después del commit del borrado. Vuelve a ejecutar con CONFIRMAR=si."
 fi
 paso "Listo"
 info "No se tocó el cursor global ni los modelos."

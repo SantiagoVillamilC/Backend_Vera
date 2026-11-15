@@ -146,6 +146,7 @@ Categorías (`inteligencia.movimiento_enriquecido`):
 
 Orígenes: `lexico` 39 y `sin_categoria` 13. Series maduras recurrentes: **7**. Asientos
 sembrados: **52**.
+Cifras de la corrida anterior, con los montos previos al escenario realista.
 
 Las 13 filas `sin_categoria` incluyen el comercio desconocido (`ZXQ987654`, la abstención pedida) y
 movimientos que el léxico actual no clasifica (p. ej. pagos de ENEL, INTERNET HOGAR y
@@ -153,6 +154,8 @@ STREAMING); los 8 ingresos los clasifica el léxico existente como comisiones, y
 cambia esa regla.
 
 ### Criterios de aceptación del documento
+Cifras de la corrida anterior, con los montos previos al escenario realista.
+
 | Criterio | Resultado |
 |---|---|
 | Desde base vacía: ≥ 3 avisos vigentes de familias distintas, dos series, cinco categorías y una abstención | Cumple: 4 avisos de 4 familias, 7 series, 5 categorías de gasto y `sin_categoria` ≥ 1. |
