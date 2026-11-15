@@ -132,7 +132,7 @@ go run ./cmd/verificar-modelos -raiz /srv/modelos
 Si nombras una raíz que el lockfile no declara, el verificador falla, así que una errata en el
 nombre no pasa inadvertida.
 
-En este equipo los GGUF están en `../../modelos-gemma/modelos` y pasan. Los dos pesos de voz solo
+En este equipo los GGUF están en `../../modelos-gemma/modelos` y pasan. Los pesos de voz solo
 existen dentro de la imagen, así que una corrida sin banderas los reporta ausentes. Para
 comprobarlos, saca el directorio de la imagen y apunta la raíz ahí:
 
@@ -142,6 +142,10 @@ docker cp voz-temporal:/opt/voz/modelos /tmp/voz
 docker rm voz-temporal
 go run ./cmd/verificar-modelos -raiz voz=/tmp/voz
 ```
+
+La imagen CPU solo lleva el `int8` y las voces, así que esa corrida también reporta ausentes el
+`fp32` y el `fp16`. Antes de verificar, completa la carpeta con los opcionales (ver el párrafo
+sobre la corrida completa más abajo).
 
 La copia local de las voces en `modelos-gemma/modelos/kokoro/voices.bin` coincide byte a byte con
 el asset publicado. Si la usas para verificar, cópiala o enlázala como `voices-v1.0.bin` dentro de
@@ -161,14 +165,16 @@ La copia local del `fp32` de Kokoro en el disco de este equipo sigue fuera como 
 no coincide con el asset publicado del mismo nombre. El inventario usa la huella del asset de la
 release, y quien quiera el `fp32` lo baja con `descargar.py`, que la comprueba.
 
-Una corrida completa de `verificar-modelos` sobre la raíz `voz` exige los cuatro pesos de Kokoro
-más las voces. En la imagen CPU, que solo lleva el `int8` y las voces, el `fp32` y el `fp16` salen
-como ausentes. Para comprobar una raíz así, baja primero los opcionales con
+Una corrida completa de `verificar-modelos` sobre la raíz `voz` exige los cuatro archivos de la
+raíz: tres modelos de Kokoro (`int8`, `fp32` y `fp16`) y el archivo de voces. En la imagen CPU, que
+solo lleva el `int8` y las voces, el `fp32` y el `fp16` salen como ausentes, y esto es un cambio
+respecto de cuando el lockfile solo declaraba dos archivos en la raíz `voz`. Para comprobar una
+raíz así, baja primero los opcionales a esa carpeta con
 `VERA_VOZ_DESCARGAR_GPU=1 VERA_VOZ_MODELOS_DESTINO=<dir> python infra/voz-local/descargar.py`.
 
 ## Cruce con el manifiesto de voz
 
-El build de `infra/voz-local` descarga con `descargar.py` los pesos de Kokoro (dos por defecto y
+El build de `infra/voz-local` descarga con `descargar.py` los archivos de Kokoro (dos por defecto y
 cuatro con el opt-in de GPU), y ese archivo trae su
 propia copia de huellas y tamaños. Para que el lockfile y ese manifiesto no se separen, la prueba
 `TestLockfileCoincideConElManifiestoDeVoz` lee `descargar.py` y compara cada archivo con el
