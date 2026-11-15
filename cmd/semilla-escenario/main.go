@@ -61,42 +61,85 @@ func validarDSN(dsn string) error {
 	return nil
 }
 
+// Montos del escenario en pesos colombianos de 2026. Referencia: el salario mínimo es $1.750.905 más
+// $249.095 de auxilio de transporte (decretos 1469 y 1470 de 2025), es decir $2.000.000 al mes. El
+// usuario de la demo gana algo más y paga arriendo, servicios, internet y mercado como en Bogotá.
+// Los cuatro ingresos históricos son idénticos (MAD cero, regla R1) y el ingreso reducido es el 69 %
+// del histórico: la caída es del 31 % y la regla exige desigualdad estricta frente al 30 %.
+const (
+	saldoInicial        = 50_000
+	ingresoHistorico    = 2_600_000
+	ingresoReducido     = 1_794_000
+	pagoEnel            = 160_000
+	pagoInternet        = 89_900
+	cargoStreaming      = 29_900
+	compraTecnologia    = 700_000
+	reembolsoEquipo     = 100_000
+	comercioDesconocido = 1_000
+	nombreArriendo      = "ARRIENDO INMOBILIARIA DEMO"
+	nombreStreaming     = "STREAMING"
+	tipoLiquidacion     = "liquidacion_confirmada"
+	tipoDepositoDemo    = "deposito"
+	diaGastosDelMes     = 5
+	diaPagoEnel         = 20
+	diaPagoInternet     = 25
+	diaStreamingPrevio  = 28
+)
+
+type gastoMensual struct {
+	nombre string
+	pesos  int64
+}
+
+// gastosDelDia5 se pagan cada mes el día 5, también el del reloj simulado. El arriendo cae fuera de la
+// ventana de pago_no_alcanza del mes siguiente, igual que los demás, y su nombre activa solo la palabra
+// INMOBILIARIA del léxico v2 (vivienda_servicios). El de entretenimiento gana la categoría sobre la
+// media porque su recargo de $700 es el mayor en proporción.
+var gastosDelDia5 = []gastoMensual{
+	{nombreArriendo, 1_100_000},
+	{"SUPERMERCADO DEMO", 450_000},
+	{"TAXI DEMO", 130_000},
+	{"RESTAURANTE DEMO", 180_000},
+	{"FARMACIA DEMO", 70_000},
+	{"CINE DEMO", 60_000},
+}
+
 func plan(ahora time.Time) []movimiento {
 	mes := time.Date(ahora.Year(), ahora.Month(), 1, 12, 0, 0, 0, ahora.Location())
 	var out []movimiento
 	agregar := func(m, d int, n, t string, pesos int64) {
 		out = append(out, movimiento{fecha: mes.AddDate(0, m, d-1), nombre: n, tipo: t, centavos: pesos * 100})
 	}
-	agregar(-5, 1, "Saldo inicial", "deposito", 4000)
-	nombres := []string{"SUPERMERCADO DEMO", "TAXI DEMO", "RESTAURANTE DEMO", "FARMACIA DEMO", "CINE DEMO"}
+	agregar(-5, 1, "Saldo inicial", tipoDepositoDemo, saldoInicial)
 	for m := -5; m <= 0; m++ {
-		ingreso := int64(200000)
+		ingreso := int64(ingresoHistorico)
 		if m >= -1 {
-			ingreso = 138000
+			ingreso = ingresoReducido
 		}
-		agregar(m, 1, "Ingreso demo", "deposito", ingreso)
+		agregar(m, 1, "Ingreso demo", tipoDepositoDemo, ingreso)
 		if m < 0 {
-			agregar(m, 20, "ENEL", "liquidacion_confirmada", -50000)
-			agregar(m, 25, "INTERNET HOGAR", "liquidacion_confirmada", -89900)
+			agregar(m, diaPagoEnel, "ENEL", tipoLiquidacion, -pagoEnel)
+			agregar(m, diaPagoInternet, "INTERNET HOGAR", tipoLiquidacion, -pagoInternet)
 		}
-		for _, n := range nombres {
-			agregar(m, 5, n, "liquidacion_confirmada", -10000)
+		for _, g := range gastosDelDia5 {
+			agregar(m, diaGastosDelMes, g.nombre, tipoLiquidacion, -g.pesos)
 		}
 	}
-	agregar(-1, 28, "STREAMING", "liquidacion_confirmada", -24900)
-	agregar(0, 12, "STREAMING", "liquidacion_confirmada", -24900)
-	agregar(0, 13, "ZXQ987654", "liquidacion_confirmada", -1000)
-	// Compra grande y su reembolso: el gasto del mes supera la mediana de los meses completos y el saldo sigue positivo pero por debajo de los pagos de la ventana.
-	agregar(0, 7, "TECNOLOGIA DEMO", "liquidacion_confirmada", -120000)
-	agregar(0, 10, "Reembolso equipo demo", "deposito", 100000)
+	agregar(-1, diaStreamingPrevio, nombreStreaming, tipoLiquidacion, -cargoStreaming)
+	agregar(0, 12, nombreStreaming, tipoLiquidacion, -cargoStreaming)
+	agregar(0, 13, "ZXQ987654", tipoLiquidacion, -comercioDesconocido)
+	// Compra grande y su reembolso parcial: el gasto del mes supera la mediana de los meses completos y el saldo sigue positivo pero por debajo de los pagos de la ventana.
+	agregar(0, 7, "TECNOLOGIA DEMO", tipoLiquidacion, -compraTecnologia)
+	agregar(0, 10, "Reembolso equipo demo", tipoDepositoDemo, reembolsoEquipo)
 	// Entradas que encienden los escalones que faltaban al censo (CF-A2-03): MCC en el QR, marca
 	// del catálogo, corrección en memoria privada y contraparte interna (GMF). Montos pequeños para
-	// no mover el saldo ni los avisos del escenario.
-	agregar(0, 14, "COMPRA QR DEMO", "liquidacion_confirmada", -500)
+	// no mover el saldo ni los avisos del escenario. Caen en los días 6, 8, 9 y 11, ya pasados para toda
+	// fecha de consulta desde el día 14: la app no debe mostrar movimientos con fecha futura.
+	agregar(0, 6, "COMPRA QR DEMO", tipoLiquidacion, -500)
 	out[len(out)-1].mcc = "5411"
-	agregar(0, 15, "TIENDA CATALOGO DEMO", "liquidacion_confirmada", -600)
-	agregar(0, 16, "TIENDA MEMORIA DEMO", "liquidacion_confirmada", -700)
-	agregar(0, 17, "PAGO CON GMF DEMO", "liquidacion_confirmada", -800)
+	agregar(0, 8, "TIENDA CATALOGO DEMO", tipoLiquidacion, -600)
+	agregar(0, 9, "TIENDA MEMORIA DEMO", tipoLiquidacion, -700)
+	agregar(0, 11, "PAGO CON GMF DEMO", tipoLiquidacion, -800)
 	out[len(out)-1].gmf = 80
 	return out
 }
@@ -134,21 +177,30 @@ var (
 		"salud":                         6,
 		"sin_categoria":                 13,
 		"transporte":                    6,
+		"vivienda_servicios":            6,
 	}
 	origenesDelEscenario = map[string]int{
 		"catalogo":            1,
 		"contraparte_interna": 1,
-		"lexico":              39,
+		"lexico":              45,
 		"mcc":                 1,
 		"memoria":             1,
 		"sin_categoria":       13,
 	}
 )
 
-// cumpleAceptacion exige los cuatro avisos, 52 asientos, 7 series maduras y el censo exacto de
-// categorías y orígenes que declara la evidencia. Otra repartición con las mismas claves no pasa.
+// asientosDelEscenario y seriesDelEscenario son los conteos esperados: 62 asientos (6 meses de
+// ingreso, arriendo y cinco gastos, 5 de ENEL y de INTERNET HOGAR, y los sueltos) y 8 series maduras
+// (ENEL, INTERNET HOGAR, el arriendo y los cinco gastos del día 5).
+const (
+	asientosDelEscenario = 62
+	seriesDelEscenario   = 8
+)
+
+// cumpleAceptacion exige los cinco avisos, el número de asientos y de series maduras y el censo exacto
+// de categorías y orígenes que declara la evidencia. Otra repartición con las mismas claves no pasa.
 func cumpleAceptacion(st estado) bool {
-	return len(st.Asientos) == 56 && st.Series == 7 &&
+	return len(st.Asientos) == asientosDelEscenario && st.Series == seriesDelEscenario &&
 		censoIgual(st.Avisos, avisosDelEscenario) &&
 		censoIgual(st.Categorias, categoriasDelEscenario) &&
 		censoIgual(st.Origenes, origenesDelEscenario)
