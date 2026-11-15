@@ -16,6 +16,9 @@ no se usa en cuda porque sus operadores cuantizados corren en CPU y falsearían 
 CUDA no carga, onnxruntime cae a CPU en silencio, así que el arranque verifica que el primer
 proveedor de la sesión sea CUDAExecutionProvider y, si no, aborta. Los pesos fp32 y fp16 se bajan
 con VERA_VOZ_DESCARGAR_GPU=1 en descargar.py y las librerías de NVIDIA salen de requirements-cuda.txt.
+Advertencia: en una GTX 1650 con onnxruntime-gpu 1.31.0 el modelo fp16 produjo audio vacío en CUDA
+(el mismo archivo en CPU sí produce audio), así que el calentamiento falla con un error de numpy. No
+se verificó en otras GPU.
 """
 import hmac
 import base64
