@@ -254,6 +254,7 @@ ya devuelve también `pago_no_alcanza` y el descarte del bloque C1 responde 409)
 - Semilla: `cmd/semilla-escenario` con `DEMO_FECHA=2026-11-19` y `AVISOS_CUPO=5`
   (`docs/escenario-demo.md`). Resultado de la semilla: 52 asientos, 7 series, cuatro avisos
   (`caida_ingreso`, `cobro_nuevo`, `pago_no_alcanza`, `presupuesto_anticipado`).
+  Cifras de la corrida anterior, con los montos previos al escenario realista.
 - El reloj real era 2026-11-13 y el simulado de la semilla 2026-11-19, por eso `creado_en` aparece en
   el futuro (`2026-11-19T12:00:00-05:00`).
 - La API corrió con `AVISOS_ACTIVO=false` y el cupo por defecto, **3** (`avisos/config.go:25`,
@@ -345,6 +346,7 @@ A3. `GET /v1/inteligencia/resumen` (solo los campos de avisos): `"avisos_emitido
 `"mes": "2026-11"`. Dos avisos contados y la bandeja por defecto mostró uno.
 
 A4. `GET /v1/inteligencia/avisos?mes=2026-10`: mes anterior, sin `referencia_centavos` en `cobro_nuevo`.
+Cifras de la corrida anterior, con los montos previos al escenario realista.
 
 ```json
 {
