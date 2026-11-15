@@ -1,5 +1,12 @@
 # Pila de modelos del pod
 
+> **Aviso (15 de noviembre de 2026): en un pod de RunPod no se puede usar Docker ni Compose.**
+> RunPod no admite Docker ni Compose dentro de un pod (documentación de RunPod, Pods, Limitations).
+> Todo lo que este documento describe con `docker compose` (imágenes, `compose.yaml`,
+> `compose.cuda.yaml`, `infra/modelos/pod-demo.sh`, `infra/modelos/deploy-modelos.sh`) sirve para un
+> host con Docker propio y no para un pod de RunPod. La campaña de capacidad corrió los tres servicios como procesos nativos. Detalle en
+> la última sección.
+
 Tres imágenes y un compose para el pod con GPU: razonador, transcripción y voz neural. Todo escucha
 en loopback y los secretos llegan por entorno.
 
@@ -74,8 +81,9 @@ menos 32 caracteres.
 
 Estado: **sin construir ni ejecutar: solo el compose fue validado con `docker compose config`.**
 
-No se construyó ni se ejecutó en la VPS de trabajo porque no hay runtime NVIDIA. Se construye en el
-pod. Lo que sí se validó aquí es que el compose con el override se interpreta bien con
+No se construyó ni se ejecutó en la VPS de trabajo porque no hay runtime NVIDIA. En un pod de RunPod
+tampoco se puede construir, porque no admite Docker (ver el aviso del inicio): solo aplica a un host
+con Docker y runtime NVIDIA propio. Lo que sí se validó aquí es que el compose con el override se interpreta bien con
 `docker compose config`. El tag `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` existe en el registro,
 pero la imagen no se descargó, así que la instalación de dependencias sobre esa base está sin probar.
 
@@ -94,7 +102,7 @@ pero la imagen no se descargó, así que la instalación de dependencias sobre e
    arranque con volume vacío incluye la descarga del modelo.
 4. `vera-kokoro`: carga ONNX y calienta una frase antes de abrir el puerto. No se midió cuánto tarda.
 
-Comando en el pod:
+Comando en un host con Docker (no sirve dentro de un pod de RunPod, ver el aviso del inicio):
 
 ```bash
 WHISPER_TOKEN=... KOKORO_TOKEN=... OLLAMA_MODELO=gemma-4-e4b-it-q4_k_m \
@@ -137,9 +145,11 @@ aborte al arrancar con un mensaje claro, antes de cargar el modelo.
   procesa: el trabajo se completa y la respuesta se descarta al escribirla (`BrokenPipeError`). Ese
   cómputo ocupa un cupo que otro cliente vivo podría haber usado. Con la espera en 0 el rechazo es
   inmediato y este desperdicio no ocurre antes de adquirir el cupo.
-- Qué paralelismo aguanta cada modelo en el pod y cuánto sube la latencia no está en este
-  documento: lo medido en la tesis está en `modelos-gemma/plan-pruebas-capacidad-2026-11-14.md`
-  (repositorio de la tesis). Estas variables solo exponen la palanca.
+- Qué paralelismo aguanta cada modelo en el pod y cuánto sube la latencia se resume en la sección
+  "Capacidad medida y hallazgos de la campaña del 15 de noviembre de 2026" de este documento. El
+  detalle está en el informe de la tesis `modelos-gemma/resultados-capacidad-2026-11-15.md` (el plan
+  era `modelos-gemma/plan-pruebas-capacidad-2026-11-14.md`, repositorio de la tesis). Estas variables
+  solo exponen la palanca.
 
 ## Terminate entre sesiones
 
@@ -159,3 +169,95 @@ descarga de nuevo con cada build, unos 0,14 GB.
 - No se ejecutó ningún `build` ni `up`.
 - Con las variables de paralelismo: `docker compose config` válido con y sin `compose.cuda.yaml`, y los
   valores se interpolan (por ejemplo `OLLAMA_NUM_PARALLEL=4`). Tampoco se ejecutó `build` ni `up`.
+
+## Capacidad medida y hallazgos de la campaña del 15 de noviembre de 2026
+
+Fuente de verdad: informe de la tesis `modelos-gemma/resultados-capacidad-2026-11-15.md` y sus datos
+en `modelos-gemma/carga/` (repositorio de la tesis). Marcas: **[V]** medido o verificado el 15 de
+noviembre de 2026, **[I]** inferido. Se corrieron 39 de las 45 celdas prerregistradas, **una vez cada
+una**, en un pod RunPod Secure con RTX 4090 de 24 GB. Todas las cifras de capacidad son estimaciones
+de una sola corrida por celda.
+
+### Cómo corrió la pila
+
+- [V] RunPod no admite Docker ni Compose dentro de un pod. La campaña corrió Ollama 0.40.10 con
+  `gemma4-e4b-local` (E4B de 4 bits), Whisper `small` y Kokoro como procesos nativos, estos dos con
+  los servidores del PR 83. Las imágenes y el compose no se probaron en GPU.
+- [V] `infra/modelos/pod-demo.sh` usa `docker compose` y por eso no sirve dentro de un pod de RunPod.
+  Queda con una advertencia en su cabecera y sin cambios de lógica.
+- [V] `nproc` dentro del pod mostró 32 vCPU. VRAM con `OLLAMA_NUM_PARALLEL=8`: 6 737 MiB estables y
+  picos de 7 128 MiB (6,96 GiB, cifra del informe), con Whisper cargado. Con P=1 fueron 4 811 MiB.
+
+### Capacidad de texto
+
+SLO del producto: éxito de turno de al menos 99 % y p95 de turno menor a 30 s. La tasa es la
+**realizada** (turnos medidos sobre la duración de la ventana), no la configurada.
+
+| Configuración | Turnos/s realizados | Respaldo | Usuarios de texto con Z=30 s [I] |
+|---------------|---------------------|----------|----------------------------------|
+| P=8, `B3-final-80` (529 de 529) | 0,59 | **Demostrado** con 95 % de confianza | unos 23 |
+| P=8, `B3-pelegido-x070` (274 de 274) | 0,83 | Cumple puntualmente, sin respaldo estadístico | unos 31 |
+| P=1, `B3-p1-x085` (274 de 274) | 0,28 | Cumple puntualmente, sin respaldo estadístico | unos 10 |
+| P=8 en torno a 1,0 y P=1 en torno a 0,30 | | Falla el SLO | sin capacidad |
+
+- [V] Un stream va a unos 150 tok/s con E4B (el informe da una mediana por stream de 151 a 152 y un
+  agregado de 145 con P=1). Con P=8 y
+  2 a 4 streams en vuelo baja a 57 a 90 tok/s por stream (46 a 50 con 5 a 7 en vuelo). Es diagnóstico y no criterio del SLO.
+- [V] En estimación puntual, P=8 triplica la capacidad de P=1 (0,83 contra 0,28 turnos/s realizados,
+  2,9 veces). Solo hasta 0,59 turnos/s en P=8 está demostrada con 95 % de confianza.
+- [V] P=16 no suma capacidad de turnos (1,10 contra 1,12 turnos/s) y rompe el SLO (97 % de éxito, p95
+  de 36,7 s en `B2-p16-c16`).
+- [V] Los usuarios de la tabla salen de `usuarios = λ x (R + Z)` y Z no tiene datos empíricos [I]. La
+  frontera de P=8 queda entre 0,83 y 1,0 turnos/s realizados, sin celda intermedia.
+- **`OLLAMA_NUM_PARALLEL=8` queda como recomendación condicionada**: faltan las 3 repeticiones
+  prerregistradas, con reinicio de Ollama entre ellas, y la velocidad por stream de P=8 alternó entre
+  dos regímenes sin causa identificada (`B2-p8-c2`). **El valor por defecto actual del compose sigue
+  siendo 1** y esta documentación no lo cambia.
+- No se midió la calidad de las respuestas bajo carga.
+
+### La voz es el cuello de botella
+
+- [V] Whisper y Kokoro no tienen cola: responden 409 si están ocupados. Con 1 Whisper y 1 Kokoro, a 12
+  usuarios (Z=10 s) fallaron 55 % de las cadenas completas (`B4-cadena-z10`), y con 24 y 43 usuarios
+  (Z=30 y 60 s) fallaron 58,5 % y 60,5 %. La etapa que falla es la síntesis (TTS).
+- [V] Kokoro satura en 0,45 solicitudes/s con 1 instancia (1,3 con 4). Whisper satura en unas 12
+  solicitudes/s con 1 instancia, pero sin cola rechazó 42 % de los primeros intentos a 80 % de su
+  capacidad cerrada.
+- [V] El servicio de Kokoro crece unos 0,035 s por carácter (r de 0,99), y se midió solo con textos de
+  56 caracteres de media (19 a 92). Con respuestas reales del modelo la capacidad es peor. Con el LLM
+  saturado, TTS sube 1,7 veces su tiempo de servicio, según una celda incompleta (`B4-tts-con-llm`,
+  56 de 200 solicitudes).
+- **No se recomienda un número de instancias de Kokoro** hasta medirlo con respuestas reales del
+  modelo. Las cifras de Erlang B del informe son una cota superior optimista y sirven solo para
+  comparar configuraciones. La concurrencia interna de Whisper y la espera acotada del
+  PR 83 (`WHISPER_ESPERA_MS`, `VERA_VOZ_ESPERA_MS`) no se midieron, solo la multi-instancia.
+
+### Operativos de RunPod
+
+Estos puntos se observaron durante la campaña. Los que no figuran en el informe de la tesis salen del
+encargo de documentación y se marcan como tales.
+
+- [V] La clave que RunPod inyecta en el pod autentica con 403 en `GET /pods/{id}` (dato del encargo).
+  El pod no puede terminarse a sí mismo con esa clave, así que la terminación se hace desde fuera.
+- [V] `runpodctl exec` está deprecado, pierde la salida de scripts que terminan de inmediato y la de
+  salidas grandes (más de unos 60 KB) (dato del encargo). El informe registra 262 errores de descarga
+  de la vigía local por ese canal (`tamano distinto`, `runpodctl exec no devolvio resultado`). Para
+  traer resultados se usó `ssh` y `rsync` con la clave de `~/.runpod/ssh`.
+- [V] Seguridad de gasto: funcionó una guardia local con temporizador de systemd más una vigía local,
+  ambas independientes del pod, y el tope de presupuesto en la creación del pod (dato del encargo). La
+  descarga automática de la vigía no funcionó (ver el punto anterior). Según el informe, una vigía arrancó a
+  las 06:41 UTC con tope de 4,5 h (`vigia.log`). El informe no confirma que la vigía local actuara en la
+  terminación: su último ciclo registrado fue a las 10:51:44 UTC con `corriendo: true`, y la
+  terminación de las 11:11 UTC es un dato del encargo.
+
+### Precios y costo
+
+Los precios, la oferta y el costo real están en `docs/costos-pod-demo.md`. Resumen: RTX 4090 Secure a
+0,89 USD/h, campaña de 4,65 h por 4,14 USD.
+
+### Lo que no se verificó
+
+- Repeticiones de cualquier celda, y P=2, P=4 y P=16 en carga abierta.
+- Capacidad de TTS con respuestas reales del modelo y con más de 1 instancia en la cadena.
+- La causa de `B2-p8-c2`, del escalado sublineal de la voz y de que la GPU no pase de 76 % de uso.
+- Que el compose y las imágenes funcionen en GPU en un host con Docker (la campaña no los usó).
