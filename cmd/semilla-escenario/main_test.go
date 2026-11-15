@@ -25,7 +25,7 @@ func TestPlanSaldoYPeriodos(t *testing.T) {
 		ahora := time.Date(2026, mes, 19, 12, 0, 0, 0, time.FixedZone("Bogota", -18000))
 		movimientos := plan(ahora)
 		saldo := int64(0)
-		enel, internet, compra := 0, 0, 0
+		enel, internet, compra, arriendo := 0, 0, 0, 0
 		for _, m := range movimientos {
 			if m.fecha.After(ahora) || m.centavos == 0 {
 				t.Fatal("movimiento inválido", m)
@@ -40,9 +40,12 @@ func TestPlanSaldoYPeriodos(t *testing.T) {
 			if m.nombre == "TECNOLOGIA DEMO" {
 				compra++
 			}
+			if m.nombre == nombreArriendo {
+				arriendo++
+			}
 		}
-		if len(movimientos) != 56 || saldo != 710000 || enel < 3 || internet < 3 || compra != 1 {
-			t.Fatalf("mes=%d movimientos=%d saldo=%d ENEL=%d INTERNET=%d compra=%d", mes, len(movimientos), saldo, enel, internet, compra)
+		if len(movimientos) != asientosDelEscenario || saldo != 18510000 || enel < 3 || internet < 3 || compra != 1 || arriendo != 6 {
+			t.Fatalf("mes=%d movimientos=%d saldo=%d ENEL=%d INTERNET=%d compra=%d arriendo=%d", mes, len(movimientos), saldo, enel, internet, compra, arriendo)
 		}
 	}
 }
@@ -67,10 +70,10 @@ func TestCupoDesdeEntorno(t *testing.T) {
 
 func TestCumpleAceptacionExigeCadaFamilia(t *testing.T) {
 	completo := estado{
-		Asientos:   make([]int64, 56),
-		Series:     7,
-		Categorias: map[string]int{"sin_categoria": 13, "comisiones_costos_financieros": 9, "alimentos_mercado": 7, "transporte": 6, "restaurantes_domicilios": 6, "salud": 6, "entretenimiento": 7, "compras": 2},
-		Origenes:   map[string]int{"catalogo": 1, "contraparte_interna": 1, "lexico": 39, "mcc": 1, "memoria": 1, "sin_categoria": 13},
+		Asientos:   make([]int64, 62),
+		Series:     8,
+		Categorias: map[string]int{"sin_categoria": 13, "comisiones_costos_financieros": 9, "alimentos_mercado": 7, "transporte": 6, "restaurantes_domicilios": 6, "salud": 6, "entretenimiento": 7, "compras": 2, "vivienda_servicios": 6},
+		Origenes:   map[string]int{"catalogo": 1, "contraparte_interna": 1, "lexico": 45, "mcc": 1, "memoria": 1, "sin_categoria": 13},
 		Avisos:     map[string]int{"caida_ingreso": 1, "categoria_sobre_media": 1, "cobro_nuevo": 1, "pago_no_alcanza": 1, "presupuesto_anticipado": 1},
 	}
 	if !cumpleAceptacion(completo) {
@@ -89,13 +92,13 @@ func TestCumpleAceptacionExigeCadaFamilia(t *testing.T) {
 		}
 	}
 	sinAsientos := completo
-	sinAsientos.Asientos = completo.Asientos[:55]
+	sinAsientos.Asientos = completo.Asientos[:len(completo.Asientos)-1]
 	sinSeries := completo
-	sinSeries.Series = 6
+	sinSeries.Series = 7
 	otraReparticion := completo
-	otraReparticion.Categorias = map[string]int{"sin_categoria": 14, "comisiones_costos_financieros": 8, "alimentos_mercado": 7, "transporte": 6, "restaurantes_domicilios": 6, "salud": 6, "entretenimiento": 7, "compras": 2}
+	otraReparticion.Categorias = map[string]int{"sin_categoria": 14, "comisiones_costos_financieros": 8, "alimentos_mercado": 7, "transporte": 6, "restaurantes_domicilios": 6, "salud": 6, "entretenimiento": 7, "compras": 2, "vivienda_servicios": 6}
 	otroOrigen := completo
-	otroOrigen.Origenes = map[string]int{"catalogo": 1, "contraparte_interna": 1, "lexico": 38, "mcc": 1, "memoria": 1, "sin_categoria": 14}
+	otroOrigen.Origenes = map[string]int{"catalogo": 1, "contraparte_interna": 1, "lexico": 44, "mcc": 1, "memoria": 1, "sin_categoria": 14}
 	if cumpleAceptacion(sinAsientos) || cumpleAceptacion(sinSeries) || cumpleAceptacion(otraReparticion) || cumpleAceptacion(otroOrigen) {
 		t.Fatal("acepta un escenario con otros conteos")
 	}
