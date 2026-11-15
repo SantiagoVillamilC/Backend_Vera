@@ -133,12 +133,13 @@ func plan(ahora time.Time) []movimiento {
 	agregar(0, 10, "Reembolso equipo demo", tipoDepositoDemo, reembolsoEquipo)
 	// Entradas que encienden los escalones que faltaban al censo (CF-A2-03): MCC en el QR, marca
 	// del catálogo, corrección en memoria privada y contraparte interna (GMF). Montos pequeños para
-	// no mover el saldo ni los avisos del escenario.
-	agregar(0, 14, "COMPRA QR DEMO", tipoLiquidacion, -500)
+	// no mover el saldo ni los avisos del escenario. Caen en los días 6, 8, 9 y 11, ya pasados para toda
+	// fecha de consulta desde el día 14: la app no debe mostrar movimientos con fecha futura.
+	agregar(0, 6, "COMPRA QR DEMO", tipoLiquidacion, -500)
 	out[len(out)-1].mcc = "5411"
-	agregar(0, 15, "TIENDA CATALOGO DEMO", tipoLiquidacion, -600)
-	agregar(0, 16, "TIENDA MEMORIA DEMO", tipoLiquidacion, -700)
-	agregar(0, 17, "PAGO CON GMF DEMO", tipoLiquidacion, -800)
+	agregar(0, 8, "TIENDA CATALOGO DEMO", tipoLiquidacion, -600)
+	agregar(0, 9, "TIENDA MEMORIA DEMO", tipoLiquidacion, -700)
+	agregar(0, 11, "PAGO CON GMF DEMO", tipoLiquidacion, -800)
 	out[len(out)-1].gmf = 80
 	return out
 }

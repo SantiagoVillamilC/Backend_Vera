@@ -66,7 +66,7 @@ demo gana algo más y vive en Bogotá, con arriendo, servicios, internet y merca
   la palabra `INMOBILIARIA` del léxico v2, que lo clasifica como `vivienda_servicios`.
 - El comercio `ZXQ987654` ($1.000) produce una abstención.
 - Saldo final de $185.100 antes del pago de ENEL. Es positivo en cada punto de la historia (tras
-  el primer ingreso, el mínimo es $118.600 el día 7 del mes actual, tras la compra de tecnología) y menor que los
+  el primer ingreso, el mínimo es $116.800 el día 9 del mes actual, tras la compra de tecnología y las entradas pequeñas) y menor que los
   $249.900 de ENEL e INTERNET HOGAR, así que `pago_no_alcanza` dispara.
 - STREAMING son dos cargos de $29.900 dentro de 35 días: el detector exige dos, aunque el borrador
   decía «primera vez».
@@ -75,7 +75,8 @@ demo gana algo más y vive en Bogotá, con arriendo, servicios, internet y merca
   con el multiplicador 1.0. El reembolso de $100.000 mantiene el saldo positivo.
 - Entretenimiento gana la categoría sobre la media: $60.700 frente a $60.000 habituales. Alimentos
   también la supera ($450.500 frente a $450.000), pero el detector elige la de mayor proporción.
-- Cuatro entradas pequeñas el mismo mes, para encender los escalones que faltaban al censo:
+- Cuatro entradas pequeñas el mismo mes (días 6, 8, 9 y 11, ya pasados para cualquier consulta desde el
+  día 14, sin fechas futuras en la app), para encender los escalones que faltaban al censo:
   una compra QR de $500 con MCC 5411 (`mcc`), una marca de $600 registrada en
   `inteligencia.catalogo_marca` (`catalogo`), una corrección de $700 en la memoria privada
   del usuario (`memoria`) y un pago de $800 con $80 de GMF contra `pasivo:gmf_por_pagar`

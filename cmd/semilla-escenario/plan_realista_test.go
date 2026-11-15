@@ -153,12 +153,27 @@ func TestPlanRealista(t *testing.T) {
 	lexico := lexicoDePrueba(t)
 	for mes := time.January; mes <= time.December; mes++ {
 		ctx := contextoDelPlan(t, lexico, ahoraDelMes(mes))
+		verificarSinFechasFuturas(t, ahoraDelMes(mes), mes)
 		verificarPagoNoAlcanza(t, ctx, mes)
 		verificarPresupuesto(t, ctx, mes)
 		verificarCaidaDeIngreso(t, ctx, mes)
 		verificarStreaming(t, ctx, mes)
 		verificarCategoria(t, ctx, mes)
 		verificarSeriesYAvisos(t, ctx, mes)
+	}
+}
+
+// ultimoDiaDelMesEnCurso es el último día con movimientos en el mes en curso. La demo se mira desde
+// el día 14 en adelante, así que ningún movimiento de ese mes puede quedar con fecha futura.
+const ultimoDiaDelMesEnCurso = 13
+
+func verificarSinFechasFuturas(t *testing.T, ahora time.Time, mes time.Month) {
+	t.Helper()
+	for _, m := range plan(ahora) {
+		enCurso := m.fecha.Year() == ahora.Year() && m.fecha.Month() == ahora.Month()
+		if enCurso && m.fecha.Day() > ultimoDiaDelMesEnCurso {
+			t.Fatalf("mes=%d %q cae el día %d del mes en curso, después del día %d", mes, m.nombre, m.fecha.Day(), ultimoDiaDelMesEnCurso)
+		}
 	}
 }
 
