@@ -7,6 +7,15 @@ defecto 0, es decir 409 inmediato como siempre).
 Un proceso sintetiza de a una solicitud a propósito: no se verificó que el fonemizador (espeak)
 sea seguro entre hilos. Para paralelizar se levantan varios procesos, cada uno con su
 VERA_VOZ_PUERTO.
+
+Variante opcional en GPU, apagada por defecto: VERA_VOZ_DISPOSITIVO=cpu|cuda (por defecto cpu).
+Con cpu todo queda como siempre: CPUExecutionProvider, kokoro-v1.0.int8.onnx, 2 hilos intra-op y 1
+inter-op. Con cuda se carga el modelo fp32 (kokoro-v1.0.onnx), o el fp16 (kokoro-v1.0.fp16.onnx) si
+además VERA_VOZ_PRECISION=fp16 (fp32 o fp16, por defecto fp32, y sólo es válida con cuda). El int8
+no se usa en cuda porque sus operadores cuantizados corren en CPU y falsearían una medición. Si
+CUDA no carga, onnxruntime cae a CPU en silencio, así que el arranque verifica que el primer
+proveedor de la sesión sea CUDAExecutionProvider y, si no, aborta. Los pesos fp32 y fp16 se bajan
+con VERA_VOZ_DESCARGAR_GPU=1 en descargar.py y las librerías de NVIDIA salen de requirements-cuda.txt.
 """
 import hmac
 import base64
@@ -165,6 +174,72 @@ def crear_servidor(motor, token, direccion=("127.0.0.1", 8766), espera_ms=0):
     return servidor
 
 
+DIRECTORIO_MODELOS = "/opt/voz/modelos"
+MODELO_CPU = "kokoro-v1.0.int8.onnx"
+MODELOS_CUDA = {"fp32": "kokoro-v1.0.onnx", "fp16": "kokoro-v1.0.fp16.onnx"}
+TEXTO_CALENTAMIENTO = "Hola, soy Vera y estoy lista para ayudarte."
+# En cuda se calienta además con dos longitudes más, para que la medición no pague el primer arranque.
+TEXTOS_CALENTAMIENTO_CUDA = (
+    "Tienes tres movimientos nuevos y un saldo disponible de doscientos mil pesos.",
+    "Hoy gastaste más en restaurantes que el promedio de las últimas semanas, así que puedes revisar "
+    "tus límites mensuales, ajustar el presupuesto de cada categoría y programar un aviso cuando "
+    "te acerques al tope que definiste para el resto del mes.",
+)
+
+
+def opcion_de_entorno(nombre, validos):
+    """Lee una opción de texto exacto del entorno. Vacío o ausente da None, cualquier otro valor se rechaza."""
+    crudo = os.environ.get(nombre, "")
+    if crudo == "":
+        return None
+    if crudo not in validos:
+        raise SystemExit(f"{nombre} debe ser {' o '.join(validos)}")
+    return crudo
+
+
+def dispositivo_de_entorno():
+    """Devuelve (dispositivo, precision). cpu no admite precisión, cuda usa fp32 salvo que se pida fp16."""
+    dispositivo = opcion_de_entorno("VERA_VOZ_DISPOSITIVO", ("cpu", "cuda")) or "cpu"
+    precision = opcion_de_entorno("VERA_VOZ_PRECISION", tuple(MODELOS_CUDA))
+    if dispositivo == "cpu":
+        if os.environ.get("VERA_VOZ_PRECISION", "") != "":
+            raise SystemExit("VERA_VOZ_PRECISION solo aplica con VERA_VOZ_DISPOSITIVO=cuda, en cpu el modelo es int8")
+        return "cpu", None
+    return "cuda", precision or "fp32"
+
+
+def crear_sesion(ort, dispositivo, precision, directorio=DIRECTORIO_MODELOS):
+    """Crea la sesión de ONNX Runtime. Recibe el módulo ort para poder probarla con un falso."""
+    if not (dispositivo == "cpu" and precision is None or dispositivo == "cuda" and precision in MODELOS_CUDA):
+        raise SystemExit("Combinación inválida de dispositivo y precisión de la voz")
+    opciones = ort.SessionOptions()
+    opciones.intra_op_num_threads = 2
+    opciones.inter_op_num_threads = 1
+    if dispositivo == "cpu":
+        return ort.InferenceSession(f"{directorio}/{MODELO_CPU}", sess_options=opciones, providers=["CPUExecutionProvider"])
+    # Las librerías de NVIDIA instaladas por pip no están en la ruta del cargador: se precargan antes.
+    if hasattr(ort, "preload_dlls"):
+        ort.preload_dlls()
+    # cudnn_conv_algo_search: EXHAUSTIVE (por defecto) repite una búsqueda costosa por cada forma de
+    # entrada y aquí la longitud cambia con cada texto. HEURISTIC es la búsqueda ligera.
+    # Fuente: https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#cudnn_conv_algo_search
+    proveedores = [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "HEURISTIC"}), "CPUExecutionProvider"]
+    sesion = ort.InferenceSession(f"{directorio}/{MODELOS_CUDA[precision]}", sess_options=opciones, providers=proveedores)
+    obtenidos = sesion.get_providers()
+    if not obtenidos or obtenidos[0] != "CUDAExecutionProvider":
+        # ORT cae a CPU en silencio si CUDA no carga, y eso invalidaría cualquier medición en GPU.
+        raise SystemExit("CUDAExecutionProvider no cargó (proveedores: " + ", ".join(obtenidos) + "). "
+                         "Revisa el driver y las librerías de requirements-cuda.txt, o usa VERA_VOZ_DISPOSITIVO=cpu")
+    return sesion
+
+
+def calentar(motor_voz, dispositivo):
+    """Calienta ONNX antes de declarar el servicio disponible. En cuda usa tres longitudes de texto."""
+    textos = (TEXTO_CALENTAMIENTO,) + (TEXTOS_CALENTAMIENTO_CUDA if dispositivo == "cuda" else ())
+    for texto in textos:
+        motor_voz.create(texto, voice="ef_dora", lang="es")
+
+
 def main():
     logging.disable(logging.CRITICAL)
     secreto = os.environ.get("VERA_LAB_TOKEN", "")
@@ -172,17 +247,14 @@ def main():
         raise SystemExit("Falta token efímero del laboratorio.")
     puerto = entero_de_entorno("VERA_VOZ_PUERTO", 1024, 65535, 8766)
     espera_ms = entero_de_entorno("VERA_VOZ_ESPERA_MS", 0, 10000, 0)
+    dispositivo, precision = dispositivo_de_entorno()
     # Importes diferidos: validar el entorno no debe cargar ONNX ni Kokoro.
     import onnxruntime as ort
     from kokoro_onnx import Kokoro
 
-    opciones = ort.SessionOptions()
-    opciones.intra_op_num_threads = 2
-    opciones.inter_op_num_threads = 1
-    sesion = ort.InferenceSession("/opt/voz/modelos/kokoro-v1.0.int8.onnx", sess_options=opciones, providers=["CPUExecutionProvider"])
-    motor_voz = Kokoro.from_session(sesion, "/opt/voz/modelos/voices-v1.0.bin")
-    # Calienta ONNX antes de declarar el servicio disponible.
-    motor_voz.create("Hola, soy Vera y estoy lista para ayudarte.", voice="ef_dora", lang="es")
+    sesion = crear_sesion(ort, dispositivo, precision)
+    motor_voz = Kokoro.from_session(sesion, f"{DIRECTORIO_MODELOS}/voices-v1.0.bin")
+    calentar(motor_voz, dispositivo)
     print("Voz neural local lista: Dora · español · sin cuota de Google.", flush=True)
     crear_servidor(motor_voz, secreto, ("127.0.0.1", puerto), espera_ms=espera_ms).serve_forever()
 
