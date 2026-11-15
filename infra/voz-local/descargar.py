@@ -1,5 +1,11 @@
-"""Descarga únicamente los pesos publicados por el mantenedor y verifica SHA256 y tamaño."""
+"""Descarga únicamente los pesos publicados por el mantenedor y verifica SHA256 y tamaño.
+
+Por defecto baja sólo los dos pesos de la imagen CPU (int8 y voces). Con VERA_VOZ_DESCARGAR_GPU=1
+baja además kokoro-v1.0.onnx (fp32) y kokoro-v1.0.fp16.onnx para la variante en GPU de servidor.py.
+VERA_VOZ_MODELOS_DESTINO cambia el directorio de destino (por defecto /opt/voz/modelos).
+"""
 import hashlib
+import os
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -16,9 +22,33 @@ ARCHIVOS = {
         28214398,
     ),
 }
-destino = Path("/opt/voz/modelos")
-destino.mkdir(parents=True, exist_ok=True)
-for nombre, (esperado, tamano) in ARCHIVOS.items():
+# Pesos opcionales para la variante en GPU. Siguen el mismo formato porque la prueba de
+# cmd/verificar-modelos lee todo el archivo y exige que cada uno esté también en modelos/lock.json.
+ARCHIVOS_GPU = {
+    "kokoro-v1.0.onnx": (
+        "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a",
+        325505369,
+    ),
+    "kokoro-v1.0.fp16.onnx": (
+        "f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96",
+        163527961,
+    ),
+}
+
+
+def archivos_a_bajar():
+    """Los pesos de CPU siempre. Los de GPU sólo con VERA_VOZ_DESCARGAR_GPU=1 (vacío y 0 son apagado)."""
+    gpu = os.environ.get("VERA_VOZ_DESCARGAR_GPU", "")
+    if gpu not in ("", "0", "1"):
+        raise SystemExit("VERA_VOZ_DESCARGAR_GPU debe ser 0 o 1")
+    return {**ARCHIVOS, **ARCHIVOS_GPU} if gpu == "1" else dict(ARCHIVOS)
+
+
+def directorio_destino():
+    return Path(os.environ.get("VERA_VOZ_MODELOS_DESTINO", "") or "/opt/voz/modelos")
+
+
+def descargar(nombre, esperado, tamano, destino):
     huella = hashlib.sha256()
     recibidos = 0
     with urlopen(BASE + nombre, timeout=60) as respuesta, (destino / nombre).open("wb") as archivo:
@@ -31,3 +61,15 @@ for nombre, (esperado, tamano) in ARCHIVOS.items():
     if huella.hexdigest() != esperado:
         raise RuntimeError("La huella del modelo no coincide: " + nombre)
     print("Modelo verificado:", nombre, flush=True)
+
+
+def main():
+    archivos = archivos_a_bajar()
+    destino = directorio_destino()
+    destino.mkdir(parents=True, exist_ok=True)
+    for nombre, (esperado, tamano) in archivos.items():
+        descargar(nombre, esperado, tamano, destino)
+
+
+if __name__ == "__main__":
+    main()

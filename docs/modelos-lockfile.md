@@ -153,15 +153,23 @@ la raíz que pases, porque ese es el nombre que carga el contenedor.
 | --- | --- | --- |
 | `gemma-4-e2b-it-q4_k_m`, `gemma-4-e4b-it-q4_k_m` | `gguf` | calculada sobre el GGUF en disco |
 | `kokoro-v1.0-int8-onnx` | `voz` | manifiesto `infra/voz-local/descargar.py`, que además comprueba el tamaño. Coincide con el asset de la release `model-files-v1.1`. Es el archivo que carga el contenedor |
+| `kokoro-v1.0-fp32-onnx`, `kokoro-v1.0-fp16-onnx` | `voz` | mismo manifiesto, sección `ARCHIVOS_GPU`, y coinciden con los assets de la release `model-files-v1.1`. Son opcionales: solo los carga la variante en GPU (`VERA_VOZ_DISPOSITIVO=cuda`) y `descargar.py` los baja únicamente con `VERA_VOZ_DESCARGAR_GPU=1`. La imagen CPU no los lleva |
 | `kokoro-voces-v1.0` | `voz` | mismo manifiesto. El archivo se llama `voices-v1.0.bin`, como en el contenedor |
 | `whisper-small` | ninguna | fijado por `pin` con `faster-whisper==1.2.1` y el modelo `small` |
 
-La copia local del `fp32` de Kokoro queda fuera del inventario: ningún despliegue la carga y su
-huella no coincide con el asset publicado del mismo nombre, así que no sirve como referencia.
+La copia local del `fp32` de Kokoro en el disco de este equipo sigue fuera como referencia: su huella
+no coincide con el asset publicado del mismo nombre. El inventario usa la huella del asset de la
+release, y quien quiera el `fp32` lo baja con `descargar.py`, que la comprueba.
+
+Una corrida completa de `verificar-modelos` sobre la raíz `voz` exige los cuatro pesos de Kokoro
+más las voces. En la imagen CPU, que solo lleva el `int8` y las voces, el `fp32` y el `fp16` salen
+como ausentes. Para comprobar una raíz así, baja primero los opcionales con
+`VERA_VOZ_DESCARGAR_GPU=1 VERA_VOZ_MODELOS_DESTINO=<dir> python infra/voz-local/descargar.py`.
 
 ## Cruce con el manifiesto de voz
 
-El build de `infra/voz-local` descarga los dos pesos de Kokoro con `descargar.py`, que trae su
+El build de `infra/voz-local` descarga con `descargar.py` los pesos de Kokoro (dos por defecto y
+cuatro con el opt-in de GPU), y ese archivo trae su
 propia copia de huellas y tamaños. Para que el lockfile y ese manifiesto no se separen, la prueba
 `TestLockfileCoincideConElManifiestoDeVoz` lee `descargar.py` y compara cada archivo con el
 artefacto del lockfile que usa la raíz `voz`. Si una de las dos fuentes cambia sola, la prueba
