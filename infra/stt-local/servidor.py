@@ -8,11 +8,15 @@ Uso:
     WHISPER_TOKEN=... python servidor.py
 Variables: WHISPER_TOKEN (obligatoria, >=32), WHISPER_MODELO=small,
 WHISPER_DIRECCION=127.0.0.1:8767, WHISPER_GPU=auto|si|no.
+Paralelismo (opcional): WHISPER_CONCURRENCIA=1..16 (solicitudes simultáneas, por defecto 1) y
+WHISPER_ESPERA_MS=0..10000 (cuánto espera una solicitud por un cupo antes de recibir 409, por
+defecto 0, es decir 409 inmediato como siempre).
 """
 import hmac
 import io
 import json
 import os
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -21,22 +25,49 @@ MAX_SEGUNDOS = 60
 TIPOS = {"audio/wav", "audio/x-wav", "audio/m4a", "audio/mp4", "audio/mpeg"}
 
 
-def cargar_modelo(nombre, gpu):
+def entero_de_entorno(nombre, minimo, maximo, defecto):
+    """Lee un entero acotado del entorno. Vacío o ausente da el valor por defecto."""
+    crudo = os.environ.get(nombre, "")
+    if crudo == "":
+        return defecto
+    if len(crudo) > 6 or not re.fullmatch(r"[0-9]+", crudo) or not minimo <= int(crudo) <= maximo:
+        raise SystemExit(f"{nombre} debe ser un entero entre {minimo} y {maximo}")
+    return int(crudo)
+
+
+def cargar_modelo(nombre, gpu, concurrencia=1):
     from faster_whisper import WhisperModel
 
+    # num_workers solo se pasa con concurrencia > 1: con 1 la llamada es la de siempre.
+    extra = {"num_workers": concurrencia} if concurrencia > 1 else {}
     if gpu in ("auto", "si"):
         try:
-            return WhisperModel(nombre, device="cuda", compute_type="float16")
+            return WhisperModel(nombre, device="cuda", compute_type="float16", **extra)
         except Exception:
             if gpu == "si":
                 raise
-    return WhisperModel(nombre, device="cpu", compute_type="int8")
+    return WhisperModel(nombre, device="cpu", compute_type="int8", **extra)
 
 
-def crear_servidor(modelo, token, nombre_modelo, direccion):
+def adquirir(permisos, espera_ms):
+    """Toma un cupo sin esperar (espera_ms=0) o esperando como máximo espera_ms."""
+    if espera_ms == 0:
+        return permisos.acquire(blocking=False)
+    return permisos.acquire(timeout=espera_ms / 1000)
+
+
+def validar_rango(nombre, valor, minimo, maximo):
+    """Exige un entero (no booleano) en [minimo, maximo]. Lanza ValueError si no."""
+    if type(valor) is not int or not minimo <= valor <= maximo:
+        raise ValueError(f"{nombre} debe ser un entero entre {minimo} y {maximo}")
+
+
+def crear_servidor(modelo, token, nombre_modelo, direccion, concurrencia=1, espera_ms=0):
     if direccion[0] != "127.0.0.1" or len(token) < 32:
         raise ValueError("Se requiere loopback y un token de al menos 32 caracteres")
-    cerrojo = threading.Lock()
+    validar_rango("concurrencia", concurrencia, 1, 16)
+    validar_rango("espera_ms", espera_ms, 0, 10000)
+    permisos = threading.BoundedSemaphore(concurrencia)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -91,7 +122,7 @@ def crear_servidor(modelo, token, nombre_modelo, direccion):
             except (ValueError, TimeoutError):
                 self.responder(413 if longitud > MAX_BYTES else 422)
                 return
-            if not cerrojo.acquire(blocking=False):
+            if not adquirir(permisos, espera_ms):
                 self.responder(409)
                 return
             try:
@@ -109,7 +140,7 @@ def crear_servidor(modelo, token, nombre_modelo, direccion):
                 self.responder(422)
                 return
             finally:
-                cerrojo.release()
+                permisos.release()
             cuerpo = json.dumps({"transcripcion": texto, "modelo": nombre_modelo, "idioma": "es"})
             self.responder(200, cuerpo.encode("utf-8"))
 
@@ -120,17 +151,19 @@ def main():
     token = os.environ.get("WHISPER_TOKEN", "")
     if len(token) < 32:
         raise SystemExit("WHISPER_TOKEN debe tener al menos 32 caracteres")
+    concurrencia = entero_de_entorno("WHISPER_CONCURRENCIA", 1, 16, 1)
+    espera_ms = entero_de_entorno("WHISPER_ESPERA_MS", 0, 10000, 0)
     nombre_modelo = os.environ.get("WHISPER_MODELO", "small")
     gpu = os.environ.get("WHISPER_GPU", "auto")
     host, _, puerto = os.environ.get("WHISPER_DIRECCION", "127.0.0.1:8767").rpartition(":")
     if host != "127.0.0.1" or gpu not in ("auto", "si", "no") or nombre_modelo != "small":
         raise SystemExit("Se requiere 127.0.0.1, modelo small y GPU auto|si|no")
-    modelo = cargar_modelo(nombre_modelo, gpu)
+    modelo = cargar_modelo(nombre_modelo, gpu, concurrencia)
     # transcribe devuelve un generador: consumirlo es necesario para calentar.
     import numpy as np
     segmentos, _ = modelo.transcribe(np.zeros(16000, dtype=np.float32), language="es", beam_size=1, vad_filter=True)
     list(segmentos)
-    servidor = crear_servidor(modelo, token, nombre_modelo, (host or "127.0.0.1", int(puerto)))
+    servidor = crear_servidor(modelo, token, nombre_modelo, (host or "127.0.0.1", int(puerto)), concurrencia=concurrencia, espera_ms=espera_ms)
     servidor.serve_forever()
 
 

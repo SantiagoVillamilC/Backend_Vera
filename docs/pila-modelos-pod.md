@@ -104,6 +104,43 @@ WHISPER_TOKEN=... KOKORO_TOKEN=... OLLAMA_MODELO=gemma-4-e4b-it-q4_k_m \
 Compose levanta los tres en paralelo, porque no hay `depends_on`. El orden de arriba es el de
 verificación: confirmar `healthy` en ese orden y no abrir la sesión hasta que los tres lo estén.
 
+## Paralelismo de los servidores
+
+Por defecto cada servicio atiende una solicitud a la vez y responde 409 si está ocupado. Los clientes
+de la API dependen de eso (STT no reintenta, TTS reintenta 4 veces cada 500 ms), así que con los
+valores por defecto nada cambia. Las variables siguientes suben el paralelismo sin tocar el contrato.
+
+| Variable | Servicio | Rango | Por defecto | Efecto |
+|----------|----------|-------|-------------|--------|
+| `OLLAMA_NUM_PARALLEL` | `vera-llm` | entero de Ollama | 1 | Solicitudes simultáneas por modelo cargado |
+| `OLLAMA_MAX_QUEUE` | `vera-llm` | entero de Ollama | 512 | Cola de Ollama antes de rechazar |
+| `WHISPER_CONCURRENCIA` | `vera-voz` | 1 a 16 | 1 | Transcripciones simultáneas. Con más de 1 el modelo se carga con `num_workers` igual a ese valor |
+| `WHISPER_ESPERA_MS` | `vera-voz` | 0 a 10000 | 0 | Cuánto espera una solicitud por un cupo antes del 409. Con 0 el 409 es inmediato |
+| `VERA_VOZ_ESPERA_MS` | `vera-kokoro` | 0 a 10000 | 0 | Igual que la anterior, sobre el cerrojo de Kokoro |
+| `VERA_VOZ_PUERTO` | `vera-kokoro` | 1024 a 65535 | 8766 | Puerto del proceso, siempre en `127.0.0.1` |
+
+Un valor vacío equivale a no definirlo. Un valor fuera de rango o no entero hace que el servidor
+aborte al arrancar con un mensaje claro, antes de cargar el modelo.
+
+- Los valores por defecto de Ollama (1 y 512) se leyeron del log de arranque de `ollama/ollama:0.40.10`.
+- Kokoro no gana concurrencia dentro de un proceso: no se verificó que el fonemizador (espeak) sea
+  seguro entre hilos. Para paralelizar se levantan varios procesos, cada uno con su
+  `VERA_VOZ_PUERTO`, y el cliente reparte entre ellos. `compose.yaml` no pasa `VERA_VOZ_PUERTO` porque
+  el healthcheck de la imagen y el del compose consultan el 8766 fijo. Con otro puerto hay que
+  cambiar ambos.
+- En CPU, `num_workers` mayor que 1 multiplica los hilos de cómputo de Whisper. No se midió el
+  efecto. En GPU tampoco se midió la ganancia real de `num_workers`.
+- `WHISPER_ESPERA_MS` y `VERA_VOZ_ESPERA_MS` mantienen abierta la conexión del cliente mientras
+  esperan. El cliente de STT no reintenta, así que una espera mayor que su propio timeout se pierde.
+- Con una espera mayor que 0, el hilo del servidor puede transcribir o sintetizar para un cliente que
+  ya se desconectó. El servidor no detecta la desconexión mientras espera el cupo ni mientras
+  procesa: el trabajo se completa y la respuesta se descarta al escribirla (`BrokenPipeError`). Ese
+  cómputo ocupa un cupo que otro cliente vivo podría haber usado. Con la espera en 0 el rechazo es
+  inmediato y este desperdicio no ocurre antes de adquirir el cupo.
+- Qué paralelismo aguanta cada modelo en el pod y cuánto sube la latencia no está en este
+  documento: lo medido en la tesis está en `modelos-gemma/plan-pruebas-capacidad-2026-11-14.md`
+  (repositorio de la tesis). Estas variables solo exponen la palanca.
+
 ## Terminate entre sesiones
 
 Entre sesiones el pod se termina (Terminate) para no pagar GPU ociosa. Lo que persiste es el volumen
@@ -120,3 +157,5 @@ descarga de nuevo con cada build, unos 0,14 GB.
 - Igual con `-f infra/modelos/compose.cuda.yaml`: válido, `vera-voz` apunta a `Dockerfile.cuda`.
 - Sin `KOKORO_TOKEN`: falla con el mensaje esperado.
 - No se ejecutó ningún `build` ni `up`.
+- Con las variables de paralelismo: `docker compose config` válido con y sin `compose.cuda.yaml`, y los
+  valores se interpolan (por ejemplo `OLLAMA_NUM_PARALLEL=4`). Tampoco se ejecutó `build` ni `up`.

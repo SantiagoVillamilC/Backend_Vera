@@ -1,4 +1,13 @@
-"""TTS neural local. Sólo loopback, token efímero y audio en memoria."""
+"""TTS neural local. Sólo loopback, token efímero y audio en memoria.
+
+Variables opcionales: VERA_VOZ_PUERTO=1024..65535 (por defecto 8766, siempre en 127.0.0.1) y
+VERA_VOZ_ESPERA_MS=0..10000 (cuánto espera una solicitud por el cerrojo antes de recibir 409, por
+defecto 0, es decir 409 inmediato como siempre).
+
+Un proceso sintetiza de a una solicitud a propósito: no se verificó que el fonemizador (espeak)
+sea seguro entre hilos. Para paralelizar se levantan varios procesos, cada uno con su
+VERA_VOZ_PUERTO.
+"""
 import hmac
 import base64
 import io
@@ -11,8 +20,6 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
-import onnxruntime as ort
-from kokoro_onnx import Kokoro
 
 
 def texto_hablado(texto):
@@ -39,7 +46,31 @@ def frases(texto):
             yield bloque
 
 
-def crear_servidor(motor, token, direccion=("127.0.0.1", 8766)):
+def entero_de_entorno(nombre, minimo, maximo, defecto):
+    """Lee un entero acotado del entorno. Vacío o ausente da el valor por defecto."""
+    crudo = os.environ.get(nombre, "")
+    if crudo == "":
+        return defecto
+    if len(crudo) > 6 or not re.fullmatch(r"[0-9]+", crudo) or not minimo <= int(crudo) <= maximo:
+        raise SystemExit(f"{nombre} debe ser un entero entre {minimo} y {maximo}")
+    return int(crudo)
+
+
+def adquirir(cerrojo, espera_ms):
+    """Toma el cerrojo sin esperar (espera_ms=0) o esperando como máximo espera_ms."""
+    if espera_ms == 0:
+        return cerrojo.acquire(blocking=False)
+    return cerrojo.acquire(timeout=espera_ms / 1000)
+
+
+def validar_rango(nombre, valor, minimo, maximo):
+    """Exige un entero (no booleano) en [minimo, maximo]. Lanza ValueError si no."""
+    if type(valor) is not int or not minimo <= valor <= maximo:
+        raise ValueError(f"{nombre} debe ser un entero entre {minimo} y {maximo}")
+
+
+def crear_servidor(motor, token, direccion=("127.0.0.1", 8766), espera_ms=0):
+    validar_rango("espera_ms", espera_ms, 0, 10000)
     cerrojo = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
@@ -87,7 +118,7 @@ def crear_servidor(motor, token, direccion=("127.0.0.1", 8766)):
             except (ValueError, KeyError, TypeError, TimeoutError):
                 self.responder(422)
                 return
-            if not cerrojo.acquire(blocking=False):
+            if not adquirir(cerrojo, espera_ms):
                 self.responder(409)
                 return
             iniciado = False
@@ -134,11 +165,17 @@ def crear_servidor(motor, token, direccion=("127.0.0.1", 8766)):
     return servidor
 
 
-if __name__ == "__main__":
+def main():
     logging.disable(logging.CRITICAL)
     secreto = os.environ.get("VERA_LAB_TOKEN", "")
     if len(secreto) < 32:
         raise SystemExit("Falta token efímero del laboratorio.")
+    puerto = entero_de_entorno("VERA_VOZ_PUERTO", 1024, 65535, 8766)
+    espera_ms = entero_de_entorno("VERA_VOZ_ESPERA_MS", 0, 10000, 0)
+    # Importes diferidos: validar el entorno no debe cargar ONNX ni Kokoro.
+    import onnxruntime as ort
+    from kokoro_onnx import Kokoro
+
     opciones = ort.SessionOptions()
     opciones.intra_op_num_threads = 2
     opciones.inter_op_num_threads = 1
@@ -147,4 +184,8 @@ if __name__ == "__main__":
     # Calienta ONNX antes de declarar el servicio disponible.
     motor_voz.create("Hola, soy Vera y estoy lista para ayudarte.", voice="ef_dora", lang="es")
     print("Voz neural local lista: Dora · español · sin cuota de Google.", flush=True)
-    crear_servidor(motor_voz, secreto).serve_forever()
+    crear_servidor(motor_voz, secreto, ("127.0.0.1", puerto), espera_ms=espera_ms).serve_forever()
+
+
+if __name__ == "__main__":
+    main()
