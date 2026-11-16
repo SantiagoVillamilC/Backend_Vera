@@ -33,7 +33,7 @@ func (s *Servicio) encender(ctx context.Context) {
 	if errors.Is(err, errSinExistencias) {
 		final = estado.SinExistencias
 	}
-	mensaje := secreto.Recortar(s.d.Redactor.Limpiar(err.Error()), 400)
+	mensaje := secreto.Recortar(s.d.Redactor.Limpiar(err.Error()), 800)
 	s.d.Log.Warn("el encendido fallo", "motivo", mensaje)
 	s.solicitarApagado(final, mensaje)
 }
@@ -147,11 +147,21 @@ func (s *Servicio) preambulo() (string, error) {
 	if s.d.Cfg.RepoSHA != "" {
 		b.WriteString("export REPO_SHA='" + s.d.Cfg.RepoSHA + "'\n")
 	}
+	if s.conVolumen() {
+		b.WriteString("export VERA_VOLUMEN_MONTADO=1\n") // el script puede usar el volumen en /workspace como cache
+	}
 	// Todo el stdio del script va a un archivo: si los servicios quedan en segundo plano no retienen el
 	// canal de ssh y la sesion termina cuando el script sale. Ante un fallo se devuelve el final del log.
 	registro := s.d.Cfg.ScriptRemoto + ".log"
 	b.WriteString("bash " + s.d.Cfg.ScriptRemoto + " >" + registro + " 2>&1 </dev/null || { c=$?; tail -n 20 " + registro + " >&2; exit $c; }\n")
 	return b.String(), nil
+}
+
+// conVolumen dice si el pod en curso se creó con un volumen de red montado.
+func (s *Servicio) conVolumen() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.est.Volumen != ""
 }
 
 func (s *Servicio) arrancarModelos(ctx context.Context, d acceso.Destino) error {

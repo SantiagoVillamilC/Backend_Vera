@@ -86,3 +86,50 @@ func TestRutaKnownHostsPorPod(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestGuardaYCargaElCentroYElVolumen(t *testing.T) {
+	a, err := NuevoAlmacen(filepath.Join(t.TempDir(), "estado"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := Estado{Fase: Listo, PodID: "pod0001", Centro: "US-IL-1", Volumen: "t35aiij709"}
+	if err := a.Guardar(original); err != nil {
+		t.Fatal(err)
+	}
+	cargado, err := a.Cargar()
+	if err != nil || cargado.Centro != "US-IL-1" || cargado.Volumen != "t35aiij709" {
+		t.Fatalf("cargado %+v err=%v", cargado, err)
+	}
+}
+
+func TestUnEstadoAnteriorSinCentroNiVolumenSigueCargando(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "estado")
+	a, err := NuevoAlmacen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viejo := `{"fase":"listo","pod_id":"pod0001","gpu":"NVIDIA RTX A5000","tarifa_usd_h":0.27}`
+	if err := os.WriteFile(filepath.Join(dir, "estado.json"), []byte(viejo), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := a.Cargar()
+	if err != nil || e.PodID != "pod0001" || e.Centro != "" || e.Volumen != "" {
+		t.Fatalf("e=%+v err=%v", e, err)
+	}
+}
+
+func TestNoPersisteUnCentroOUnVolumenInvalidos(t *testing.T) {
+	a, err := NuevoAlmacen(filepath.Join(t.TempDir(), "estado"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for nombre, e := range map[string]Estado{
+		"centro en minusculas": {Fase: Listo, PodID: "pod0001", Centro: "us-il-1"},
+		"centro con espacios":  {Fase: Listo, PodID: "pod0001", Centro: "US IL 1"},
+		"volumen con simbolos": {Fase: Listo, PodID: "pod0001", Volumen: `a"b`},
+	} {
+		if err := a.Guardar(e); !errors.Is(err, ErrEstadoInvalido) {
+			t.Errorf("%s: err=%v", nombre, err)
+		}
+	}
+}

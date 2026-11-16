@@ -56,7 +56,7 @@ pip, las descargas, el arranque de los tres servidores, la VRAM, RunPod y la VM 
       crea/apaga el pod por la API de RunPod, abre el túnel SSH (saliente) y reconcilia
    vera-modelos-guardian.timer   cada 5 min: modelos-control reconcile (pods huérfanos o vencidos)
                                                 |  ssh -L, saliente, hacia IP pública y puerto del pod
- RunPod, pod "vera-modelos" (RTX A5000, Secure, imagen runpod/pytorch Ubuntu 24.04, sin Docker, sin volumen de red)
+ RunPod, pod "vera-modelos" (RTX A5000, Secure, imagen runpod/pytorch Ubuntu 24.04, sin Docker, con volumen de red opcional: ver sección 16)
    arrancar-modelos.sh  ->  Whisper small GPU :8767 (X-Vera-Token), Kokoro fp32 CUDA :8766 (X-Vera-Token),
                             Ollama + gemma4-e4b-local :11434. Todo en 127.0.0.1 del pod.
 ```
@@ -91,7 +91,7 @@ Cómo habla `modelos-control` con el pod y qué hace `arrancar-modelos.sh` con e
    `MODELOS_REPO_SHA` no está vacío) y `bash /tmp/vera-arranque.sh >/tmp/vera-arranque.sh.log 2>&1 </dev/null || { ...; exit $c; }`. Los tokens no
    van en argv. Espera a que el comando **termine** (hasta 25 minutos). Si el script falla, devuelve el final de su log por stderr.
 3. `arrancar-modelos.sh` toma los tokens del entorno (`WHISPER_TOKEN` y `VERA_LAB_TOKEN` o `KOKORO_TOKEN`), los quita de su propio entorno para que no los hereden
-   `pip` ni `curl`, y los guarda en `/workspace/vera-estado/tokens.env` (0600) para `salud-modelos.sh`. `REPO_SHA` equivale a `VERA_CODIGO_SHA`.
+   `pip` ni `curl`, y los guarda en `/workspace/vera-estado/tokens.env` (0600) para `salud-modelos.sh`. Con caché en volumen (sección 16) el estado y los tokens van a `/var/lib/vera-estado`, fuera del volumen. `REPO_SHA` equivale a `VERA_CODIGO_SHA`.
    Los servidores leen `WHISPER_TOKEN` y `VERA_LAB_TOKEN` (no `KOKORO_TOKEN`) [V en `servidor.py`].
 4. Los servicios quedan en segundo plano con `setsid nohup`, stdin nulo y salida a un log, sin heredar el bloqueo (`9>&-`), y el script **sale con 0 solo al
    final**, cuando Whisper, Kokoro y Ollama ya respondieron. No hay `exec sleep infinity`, así que el `ssh` vuelve [V, `modelos-pod_test.sh`].
@@ -101,7 +101,7 @@ Cómo habla `modelos-control` con el pod y qué hace `arrancar-modelos.sh` con e
 Esta alineación quedó fijada por tres pruebas: la de Go que exige las líneas exactas del stdin (`internal/modelos/control/encendido_test.go`), la de bash que
 ejecuta ese stdin literal contra el script (`pod/modelos-pod_test.sh`) y la de `servir` de punta a punta de la sección 7.
 
-Formato de `progreso.jsonl` (en el pod, `/workspace/vera-estado/progreso.jsonl`, una línea por evento, se trunca al empezar cada corrida):
+Formato de `progreso.jsonl` (en el pod, `/workspace/vera-estado/progreso.jsonl`, o `/var/lib/vera-estado/progreso.jsonl` con caché en volumen, una línea por evento, se trunca al empezar cada corrida):
 
 ```json
 {"epoch": 1763251200, "paso": "gguf", "estado": "en_curso", "codigo": 0, "detalle": ""}
@@ -123,6 +123,7 @@ Códigos de salida de `arrancar-modelos.sh` (visibles para M1 como fallo del `ss
 | 13 | Ollama no cabe entero en VRAM | Terminar el pod, probar otra GPU |
 | 14 | El driver del host no ofrece CUDA 13.0 | **Terminar el pod y crear otro** (otro host) |
 | 15 | Kokoro abortó porque `CUDAExecutionProvider` no cargó | Igual que 14 |
+| 16 | El volumen de la caché no tiene espacio para lo que falta (solo con `VERA_VOLUMEN_MONTADO=1`) | No reintentar: agrandar el volumen o vaciar la caché (sección 16) |
 
 Hoy M1 trata cualquier fallo del script como error de arranque: termina el pod y deja el motivo, sin distinguir 14 y 15 [V, `encender` en `encendido.go`]. Reintentar
 en otro host solo con 14 y 15 es una mejora por pedirle.
@@ -444,7 +445,7 @@ El disco del pod (sin volumen de red) se factura solo mientras el pod existe. El
 2. Enciende desde el puerto de control, con el token que está en `/etc/vera-modelos/control.token` (no lo pegues en comandos que queden en el historial: léelo dentro de la VM):
    `sudo -u vera-modelos sh -c 'curl -s -X POST -H "Authorization: Bearer $(cat /etc/vera-modelos/control.token)" http://127.0.0.1:8790/encender'`
    (el token se expande dentro de la VM y aparece en `ps` un instante: aceptable para una prueba, evítalo en uso normal). `GET /estado` con la misma cabecera muestra la fase.
-3. Observa: `sudo journalctl -u vera-modelos-control -f`. En el pod, `tail -n 1 /workspace/vera-estado/progreso.jsonl`. Tiempos esperados: en la campaña de la tesis el bootstrap sin volumen
+3. Observa: `sudo journalctl -u vera-modelos-control -f`. En el pod, `tail -n 1 /workspace/vera-estado/progreso.jsonl` (con caché en volumen, `/var/lib/vera-estado/progreso.jsonl`). Tiempos esperados: en la campaña de la tesis el bootstrap sin volumen
    tardó **98 s en una 4090**, con 43 s de descarga del GGUF, y la primera carga del modelo unos 50 s [V en el diseño aprobado, solo 4090]. Para la A5000 y el aprovisionamiento del pod no
    hay medida [N]: espera de 3 a 8 minutos hasta `listo` [I].
 4. Con `listo`, comprueba el camino completo desde la API: `docker exec centinela-api wget -qO- http://GATEWAY:11434/api/version` (pasa por `modelos-control`, el túnel y el pod). Después prueba un
@@ -513,7 +514,7 @@ dejara la API sin el override, `red-api.sh aplicar` lo restablece y el `wget` de
    solo por root y por el usuario `vera-modelos`.
 6. **Confianza en el primer uso del host SSH del pod.** M1 guarda un `known_hosts` por pod con `accept-new` y trata una huella distinta como error fatal [V]. La primera conexión sigue siendo de
    confianza: un atacante en la ruta en esos segundos podría suplantar al pod. Riesgo aceptado en la demo (decisión 8 del diseño).
-7. **Cada arranque descarga todo** (sin volumen de red): GGUF de unos 5 GB desde Hugging Face, Ollama desde `ollama.com` o GitHub, wheels desde PyPI, pesos de Kokoro desde GitHub. El GGUF y los pesos de
+7. **Sin volumen de red, cada arranque descarga todo** (con volumen, ver sección 16): GGUF de unos 5 GB desde Hugging Face, Ollama desde `ollama.com` o GitHub, wheels desde PyPI, pesos de Kokoro desde GitHub. El GGUF y los pesos de
    Kokoro se verifican con sha256. Los pesos de Whisper los baja `huggingface_hub` con sus propias comprobaciones, **no con un sha256 nuestro**. El tarball del código queda fijado por el commit,
    sin hash propio del archivo. El instalador de Ollama (`install.sh`) se ejecuta como root, igual que en la tesis.
 8. **Python del pod.** La imagen por defecto es Ubuntu 24.04, que trae Python 3.12 (los pines de `requirements*.txt` se verificaron contra wheels cp312) [I]. El script prefiere `python3.12`, luego
@@ -548,7 +549,7 @@ dejara la API sin el override, `red-api.sh aplicar` lo restablece y el `wget` de
 | `internal/copilot/destinolocal/` y los clientes `vozlocal`, `sttlocal` | Aceptan una IPv4 privada exacta autorizada por `VERA_MODELOS_HOST_PERMITIDO` (M4) |
 | `infra/modelos-runpod/pod/arrancar-modelos.sh` | Dentro del pod: prepara y arranca los tres modelos. Idempotente |
 | `infra/modelos-runpod/pod/salud-modelos.sh` | Dentro del pod: sonda los tres servicios con sus tokens |
-| `infra/modelos-runpod/pod/modelos-pod_test.sh` | 40 pruebas de los dos anteriores, sin pod |
+| `infra/modelos-runpod/pod/modelos-pod_test.sh` | 109 pruebas de los dos anteriores, sin pod: incluye la caché en volumen con dobles de python, curl y mountpoint |
 | `infra/modelos-runpod/vm/generar-secretos.sh` | En la VM: usuario, tokens, llave SSH y archivos 0600 |
 | `infra/modelos-runpod/vm/red-api.sh` | En la VM: escribe el gateway en `modelos-control.env` y en el override, y recrea la API (gateway, instalar, aplicar, verificar, desinstalar) |
 | `infra/modelos-runpod/vm/compose.z-modelos.yaml.plantilla` | Override de la API: `VERA_PROVEEDOR=local`, URL de los modelos y `VERA_MODELOS_HOST_PERMITIDO` |
@@ -583,3 +584,86 @@ Una rama por PR, todos contra `dev`, y después `dev` a `staging` y `staging` a 
 | Acceso a la VM por llave de CI con comando forzado | Sin llave nueva de CI: instalación manual por ssh con aprobación | Alcance de este encargo. No se toca `authorized_keys` |
 | `arrancar-pod.sh` en `infra/modelos/runpod/` | `infra/modelos-runpod/pod/arrancar-modelos.sh` | Propiedad de archivos del encargo |
 | Temporizador que repara el puente tras un despliegue | No existe: sin puente no hay nada que reparar. `red-api.sh verificar` cubre el desfase del gateway | Consecuencia de la opción B |
+
+## 16. Caché en volumen de red (segundo arranque rápido)
+
+Hoy un pod nuevo instala todo desde cero y tarda unos 8 minutos (medido: 01:53:00 a 02:00:55 UTC). Con un volumen de red de RunPod (30 GB, mismo centro de datos que el pod) el
+segundo arranque en ese centro reutiliza lo ya instalado. RunPod monta el volumen en `/workspace` en los pods y el volumen sobrevive a la terminación del pod
+[V, https://docs.runpod.io/pods/storage/create-network-volumes]. Un volumen solo existe en su centro de datos y no se sincroniza con otros.
+
+**Contrato con `modelos-control`.** Cuando crea el pod con volumen exporta `VERA_VOLUMEN_MONTADO=1` por el mismo stdin de `bash -s` que `WHISPER_TOKEN`, `KOKORO_TOKEN` y `REPO_SHA`.
+Sin la variable (o con `0`) el script se comporta como siempre. Cualquier otro valor sale con código 2. El script no confía solo en la variable: la caché se activa únicamente si
+`/workspace` es además un punto de montaje propio y escribible (`mountpoint -q`, o `/proc/mounts` si falta). Si la variable es `1` y no hay montaje, avisa por la salida de error y
+en el progreso (`paso: volumen`), ignora el volumen y trabaja como sin él. La línea `volumen` del progreso anota el tipo y el origen del montaje (`findmnt`) para saber qué es
+`/workspace` de verdad en un pod real. Un pod sin volumen de red también monta su disco local en `/workspace`: allí `mountpoint` da verdadero, pero `modelos-control` no exporta la variable.
+
+**Qué vive dónde.**
+
+| Componente | Ruta | Verificación para reutilizarlo |
+|------------|------|--------------------------------|
+| GGUF de Gemma | `/workspace/vera-cache/gguf/` | tamaño y sha256 en cada arranque (como siempre). Un `.parcial` que no verifica se borra y se reintenta una vez desde cero |
+| Almacén de Ollama (`OLLAMA_MODELS`) | `vera-cache/ollama-modelos/` | marca `ollama-modelo` (versión de Ollama, modelo y sha256 del GGUF), escrita tras calentar el modelo y comprobar la VRAM. Sin marca se hace `ollama rm` y se recrea desde el GGUF verificado |
+| Pesos de Whisper (`HF_HOME`, `HF_HUB_CACHE`) | `vera-cache/hf/` | marca `whisper-small` y sha256 de cada blob LFS (el nombre del blob es su sha256). Un `.incomplete` o un blob distinto invalida y rehace solo Whisper |
+| Pesos y voces de Kokoro | `vera-cache/voz-modelos/`, con `/opt/voz/modelos` como enlace | `descargar.py` verifica sha256 y tamaño de los tres archivos en cada arranque y solo baja lo que falla |
+| Entornos virtuales | `vera-cache/venv/stt` y `vera-cache/venv/voz-cuda` | marca con la firma de requisitos, argumentos de pip, versión completa de Python y su ruta real, y sistema operativo, más una prueba de importación (en Kokoro, además, que `CUDAExecutionProvider` cargue y no estorbe `onnxruntime` de CPU) |
+| Caché de pip | `vera-cache/pip/` (`PIP_CACHE_DIR`) | no necesita verificación. Se apaga y se vacía si no hay espacio |
+| Marcas | `vera-cache/marcas/<componente>.completo` | la primera línea es `firma=<sha256>`. Se escriben al final, tras `sync -f`, con `mv` atómico |
+
+Qué NO vive en el volumen: el estado de la corrida (`progreso.jsonl`, logs, pids, candado, **`tokens.env`**) va a `/var/lib/vera-estado` y el código de los servidores a
+`/var/lib/vera/servidores`. Así los tokens no quedan en almacenamiento de red y los pids de un pod muerto no pueden apuntar a un proceso ajeno del pod nuevo. `salud-modelos.sh`
+usa `/var/lib/vera-estado` si ahí existe `tokens.env`. Si se pasa `VERA_ESTADO_DIR`, `VERA_VENV_DIR`, `VERA_GGUF_DIR`, `HF_HOME` u `OLLAMA_MODELS`, esa variable gana.
+
+**Ollama no se cachea.** Se reinstala en cada arranque (unos 18 s según la medición del encargo, **[N]** en el pod real). Copiar su binario y sus librerías CUDA al volumen añade unos 2 GB,
+exige fijar rutas de bibliotecas y verificar otro conjunto de archivos, para ahorrar menos de 20 s. Decisión por simplicidad y seguridad.
+
+**Reutilización segura.** Un venv o un peso se reutiliza solo si su marca existe, su firma coincide y su verificación pasa. Si no, se descarta ese componente entero (nunca los demás)
+y se rehace. Los venv se construyen en su sitio y la marca se escribe al final: un pod que muere a mitad deja un venv sin marca, y la corrida siguiente lo borra con sus restos. Los
+venv se construyen en su ruta definitiva porque guardan rutas absolutas del Python del sistema y no se pueden mover. Un venv sirve solo para el mismo Python (versión completa y ruta
+real) y el mismo sistema: si la plantilla de RunPod cambia, la firma cambia y se rehacen. La imagen de RunPod no es visible desde dentro del pod, así que estos datos son su sustituto.
+Todo borrado dentro del volumen pasa por una función que se niega si la ruta real (resueltos los enlaces) no cuelga de `/workspace/vera-cache`.
+
+**Candados.** El candado de corrida (`arrancar.lock`) es local al pod. Con caché hay un segundo, `vera-cache/.candado`, con espera de `VERA_CANDADO_ESPERA_S` (120 s por defecto) y
+código 5 si sigue tomado. Se distingue la contención de un volumen sin soporte de `flock` (aviso y se sigue con el candado local). Los servicios lanzados no heredan el descriptor.
+
+**Espacio (30 GB).** Antes de instalar se suma lo que falta según las marcas. Si hay menos libre que eso más 1 GiB de margen, primero se apaga y vacía la caché de pip y, si aun así
+no cabe, sale con **código 16** y un mensaje con MiB libres y pendientes. Nunca borra fuera de `vera-cache`. Tamaños (E = estimado, sin medir en un pod real. M = exacto por el lockfile):
+
+| Componente | Tamaño |
+|------------|--------|
+| GGUF | 4,98 GB (M) |
+| Almacén de Ollama (copia del GGUF) | unos 5,1 GB (E) |
+| Whisper small | unos 0,6 GB (E) |
+| Kokoro (int8, voces, fp32) | 0,47 GB (M) |
+| venv stt | unos 3 GB (E) |
+| venv voz-cuda | unos 3,5 GB (E) |
+| caché de pip | unos 3,5 GB (E) |
+| **Total** | **unos 21 GB (E), caben en 30 GB** |
+
+La primera corrida anota los bytes reales de cada venv, Whisper y el almacén de Ollama en la línea `detalle=bytes=` de su marca. Esos valores reemplazan las estimaciones. `statfs` de un
+volumen de red puede informar el espacio del servidor y no la cuota **[N]**: si es así el código 16 no dispara y un disco lleno se ve como fallo genérico con el espacio libre en el detalle.
+
+**Tiempos por fase.** Al final el script imprime una tabla (fase, segundos, origen) y los grupos `instalacion`, `descargas`, `carga` y `servicios`, y escribe la línea `resumen` del progreso
+antes de `listo`. Esperado, todo **[E]** hasta medirlo en un pod real:
+
+| Fase | Primer arranque en un centro | Segundo arranque |
+|------|------------------------------|------------------|
+| instalación (apt, Ollama, venv) | unos 4 min (pip con librerías CUDA) | unos 25 s (Ollama 18 s más pruebas de importación) |
+| descargas (código, GGUF, pesos) | unos 2 min | unos 20 a 40 s (hash del GGUF de 5 GB y de los pesos de Kokoro) |
+| carga del modelo | unos 50 s | unos 50 s |
+| arranque de servicios | unos 60 s | unos 60 s |
+| **Total** | **unos 8 min (igual que hoy)** | **unos 2,5 a 3 min** |
+
+**Cómo comprobar que el segundo arranque fue más rápido.** En el pod: `cat /var/lib/vera-estado/progreso.jsonl` (línea `resumen`) o el log del script
+(`/tmp/vera-arranque.sh.log`). Compara `total=` de la primera y de la segunda corrida: en la segunda los componentes aparecen como `venv-stt=cache`, `whisper-small=cache`,
+`gguf=cache`, `kokoro-pesos=cache` y `ollama-modelo=cache`, y `instalacion` y `descargas` bajan de minutos a segundos. `bash arrancar-modelos.sh --preparar` llena la caché sin
+arrancar servicios. `--seco` con `VERA_VOLUMEN_MONTADO=1` muestra si se usaría la caché.
+
+**Vaciar la caché de forma segura.** Con los servicios detenidos (pod encendido sin corrida en curso), por componente: borrar su marca fuerza a rehacerlo sin tocar el resto, por
+ejemplo `rm /workspace/vera-cache/marcas/venv-stt.completo`. Para vaciar todo: `rm -rf /workspace/vera-cache` y nada más (nunca `/workspace` entero ni el volumen desde fuera de un pod
+mientras otro lo usa). La caché de pip se puede borrar sola: `rm -rf /workspace/vera-cache/pip`. Borrar el volumen entero se hace desde la consola de RunPod.
+
+**Qué no se verificó (hace falta un pod real).** Que `/workspace` figure como punto de montaje y qué `FSTYPE` informa `findmnt` para un volumen de red. Si `flock` funciona en ese
+volumen. Qué espacio informa `statfs`. Los tamaños y tiempos marcados E. Que `HF_HUB_CACHE=$HF_HOME/hub` coincida con lo que usa `faster-whisper` en esa imagen. Que Ollama limpie sus blobs
+`-partial` tras una interrupción. Que `snapshot_download` deje blobs LFS nombrados por su sha256 en la versión de `huggingface_hub` instalada (si no, Whisper se rehace en cada
+arranque, lento pero seguro). Que el pod nuevo conserve la misma versión de Python que el que llenó el volumen. Las pruebas de bash usan dobles de `python`, `curl`, `mountpoint`, `stat`
+y `ollama`: cubren la lógica de decisión, no pip, Hugging Face ni GitHub reales.

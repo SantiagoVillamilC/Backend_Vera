@@ -22,7 +22,20 @@ var (
 	patronImagen = regexp.MustCompile(`^[a-z0-9][a-z0-9._/:@-]{0,199}$`)
 	patronRuta   = regexp.MustCompile(`^/[A-Za-z0-9._/-]{1,200}$`)
 	patronSHA    = regexp.MustCompile(`^[A-Za-z0-9._-]{0,64}$`)
+
+	patronCentro  = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]{0,30}[A-Z0-9]$`)
+	patronVolumen = regexp.MustCompile(`^[A-Za-z0-9]{1,64}$`)
 )
+
+// maxVolumenes acota la lista MODELOS_VOLUMENES: RunPod ofrece pocos centros con la GPU y almacenamiento.
+const maxVolumenes = 8
+
+// Volumen es un volumen de red de RunPod y el centro de datos donde vive. Solo se monta en pods del
+// mismo centro, por eso van siempre juntos.
+type Volumen struct {
+	Centro string
+	ID     string
+}
 
 // Config es la configuración efectiva. Se construye con Cargar y no se modifica después.
 type Config struct {
@@ -31,6 +44,9 @@ type Config struct {
 	GPUs      []string
 	Imagen    string
 	DiscoGB   int
+	// Volumenes es la lista ordenada de volumenes de red (uno por centro de datos) que sirven de cache
+	// de pesos y paquetes. Vacia significa crear el pod sin volumen.
+	Volumenes []Volumen
 
 	TarifaTopeUSDH float64
 	Inactividad    time.Duration
@@ -198,6 +214,49 @@ func (l *lector) gpus(defecto []string) []string {
 	return salida
 }
 
+// volumenes lee MODELOS_VOLUMENES con el formato CENTRO=ID,CENTRO=ID. Los errores dicen la posicion de la
+// entrada y nunca repiten el valor recibido.
+func (l *lector) volumenes() []Volumen {
+	crudo := l.texto("MODELOS_VOLUMENES", "")
+	if crudo == "" {
+		return nil
+	}
+	entradas := strings.Split(crudo, ",")
+	if len(entradas) > maxVolumenes {
+		l.fallo("MODELOS_VOLUMENES", fmt.Sprintf("admite como maximo %d entradas CENTRO=ID", maxVolumenes))
+		return nil
+	}
+	var salida []Volumen
+	centros, ids := map[string]bool{}, map[string]bool{}
+	for i, e := range entradas {
+		v, motivo := analizarVolumen(e)
+		if motivo == "" && (centros[v.Centro] || ids[v.ID]) {
+			motivo = "el centro o el id esta repetido"
+		}
+		if motivo != "" {
+			l.fallo("MODELOS_VOLUMENES", fmt.Sprintf("la entrada %d no es valida: %s", i+1, motivo))
+			return nil
+		}
+		centros[v.Centro], ids[v.ID] = true, true
+		salida = append(salida, v)
+	}
+	return salida
+}
+
+func analizarVolumen(entrada string) (Volumen, string) {
+	centro, id, ok := strings.Cut(strings.TrimSpace(entrada), "=")
+	centro, id = strings.TrimSpace(centro), strings.TrimSpace(id)
+	switch {
+	case !ok:
+		return Volumen{}, "debe tener la forma CENTRO=ID"
+	case !patronCentro.MatchString(centro):
+		return Volumen{}, "el centro solo admite mayusculas, digitos y guiones (por ejemplo US-TX-3)"
+	case !patronVolumen.MatchString(id):
+		return Volumen{}, "el id solo admite letras y digitos, hasta 64"
+	}
+	return Volumen{Centro: centro, ID: id}, ""
+}
+
 func (l *lector) urlRunPod(defecto string) string {
 	valor := l.texto("MODELOS_RUNPOD_URL", defecto)
 	u, err := url.Parse(valor)
@@ -220,6 +279,7 @@ func Cargar(buscar func(string) (string, bool)) (Config, error) {
 		l.fallo("MODELOS_IMAGEN", "referencia de imagen invalida")
 	}
 	c.DiscoGB = l.entero("MODELOS_DISCO_GB", 40, 20, 500)
+	c.Volumenes = l.volumenes()
 	c.TarifaTopeUSDH = l.decimal("MODELOS_TARIFA_TOPE_USD_H", 0.35, 0.01, 5)
 	c.Inactividad = l.duracion("MODELOS_INACTIVIDAD", 10*time.Minute, time.Minute, 24*time.Hour)
 	c.SesionMaxima = l.duracion("MODELOS_SESION_MAXIMA", 4*time.Hour, 10*time.Minute, 24*time.Hour)
@@ -265,8 +325,13 @@ func (l *lector) validarUnicas(c Config) {
 
 // Resumen devuelve la configuración efectiva en JSON, sin leer ni imprimir ningún secreto.
 func (c Config) Resumen() string {
+	volumenes := make([]map[string]string, 0, len(c.Volumenes))
+	for _, v := range c.Volumenes {
+		volumenes = append(volumenes, map[string]string{"centro": v.Centro, "id": v.ID})
+	}
 	datos := map[string]any{
 		"nombre_pod": c.NombrePod, "runpod_url": c.RunPodURL, "gpus": c.GPUs, "imagen": c.Imagen, "disco_gb": c.DiscoGB,
+		"volumenes":         volumenes,
 		"tarifa_tope_usd_h": c.TarifaTopeUSDH, "inactividad": c.Inactividad.String(), "sesion_maxima": c.SesionMaxima.String(),
 		"espera_pod": c.EsperaPod.String(), "espera_ssh": c.EsperaSSH.String(), "espera_arranque": c.EsperaArranque.String(),
 		"espera_modelos": c.EsperaModelos.String(), "vigilancia": c.Vigilancia.String(), "dir_estado": c.DirEstado,

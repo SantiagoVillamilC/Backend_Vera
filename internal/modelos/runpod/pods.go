@@ -3,6 +3,7 @@ package runpod
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -11,6 +12,10 @@ import (
 	"strings"
 	"time"
 )
+
+// RutaVolumen es donde se monta el volumen de red dentro del pod. La API v2 no tiene valor por defecto:
+// el campo path es obligatorio, así que se fija aquí. Es el mismo directorio que usa el script del pod.
+const RutaVolumen = "/workspace"
 
 const (
 	estadoTerminado = "TERMINATED"
@@ -22,6 +27,8 @@ var (
 	patronID      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 	patronHost    = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
 	patronUsuario = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+	patronCentro  = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]{0,30}[A-Z0-9]$`)
+	patronVolumen = regexp.MustCompile(`^[A-Za-z0-9]{1,64}$`)
 	patronCola    = regexp.MustCompile(`^/v2/queued-pods/[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 )
 
@@ -42,6 +49,7 @@ type Pod struct {
 	CostoLegible bool
 	Nube         string
 	GPU          string
+	Centro       string // centro de datos que informa RunPod, vacío si aún no lo asignó
 	CreadoEn     time.Time
 	IniciadoEn   time.Time
 	SSH          *DestinoSSH
@@ -73,7 +81,8 @@ type podJSON struct {
 	GPU    *struct {
 		ID string `json:"id"`
 	} `json:"gpu"`
-	SSH *struct {
+	Centro *string `json:"dataCenterId"`
+	SSH    *struct {
 		Directo *struct {
 			Host    string `json:"host"`
 			Puerto  int    `json:"port"`
@@ -102,6 +111,9 @@ func (j podJSON) aPod() (Pod, error) {
 	p := Pod{ID: j.ID, Nombre: j.Nombre, Estado: j.Estado, Nube: j.Nube, CreadoEn: parsearHora(j.CreadoEn), IniciadoEn: parsearHora(j.IniciadoEn)}
 	if j.GPU != nil {
 		p.GPU = j.GPU.ID
+	}
+	if j.Centro != nil {
+		p.Centro = *j.Centro
 	}
 	if j.Costo != nil && !math.IsNaN(*j.Costo) && !math.IsInf(*j.Costo, 0) {
 		p.Costo, p.CostoLegible = *j.Costo, true
@@ -148,13 +160,16 @@ func (j podJSON) destino() (*DestinoSSH, error) {
 }
 
 // SolicitudPod es lo único que se manda al crear un pod. La nube siempre es SECURE: este cliente
-// no cambia de nube por su cuenta.
+// no cambia de nube por su cuenta. Centro y Volumen van juntos: ambos vacíos crean el pod sin volumen,
+// y con ambos se fija el centro de datos y se monta el volumen de red en RutaVolumen.
 type SolicitudPod struct {
 	Nombre       string
 	Imagen       string
 	GPU          string
 	DiscoGB      int
 	LlavePublica string
+	Centro       string
+	Volumen      string
 }
 
 type gpuCrear struct {
@@ -172,15 +187,46 @@ type cuerpoCrear struct {
 	Puertos  []string          `json:"ports"`
 	Env      map[string]string `json:"env"`
 	StartSSH bool              `json:"startSsh"`
+	Centros  []string          `json:"dataCenterIds,omitempty"`
+	Montajes *montajes         `json:"mounts,omitempty"`
+}
+
+type montajes struct {
+	Red []montajeRed `json:"network"`
+}
+
+type montajeRed struct {
+	VolumenID string `json:"volumeId"`
+	Ruta      string `json:"path"`
 }
 
 func (s SolicitudPod) cuerpo() cuerpoCrear {
-	return cuerpoCrear{Nombre: s.Nombre, Imagen: s.Imagen, GPU: gpuCrear{ID: s.GPU, Count: 1}, Nube: "SECURE",
+	c := cuerpoCrear{Nombre: s.Nombre, Imagen: s.Imagen, GPU: gpuCrear{ID: s.GPU, Count: 1}, Nube: "SECURE",
 		Disco: s.DiscoGB, Puertos: []string{"22/tcp"}, Env: map[string]string{"PUBLIC_KEY": s.LlavePublica}, StartSSH: true}
+	if s.Volumen != "" {
+		c.Centros = []string{s.Centro}
+		c.Montajes = &montajes{Red: []montajeRed{{VolumenID: s.Volumen, Ruta: RutaVolumen}}}
+	}
+	return c
+}
+
+// validarVolumen exige que Centro y Volumen vengan juntos y con forma válida, para no mandar a RunPod
+// un montaje sin centro ni un valor armado a mano que se cuele en el JSON.
+func (s SolicitudPod) validarVolumen() error {
+	if s.Centro == "" && s.Volumen == "" {
+		return nil
+	}
+	if !patronCentro.MatchString(s.Centro) || !patronVolumen.MatchString(s.Volumen) {
+		return errors.New("runpod: el volumen y el centro de datos deben venir juntos y validos")
+	}
+	return nil
 }
 
 // Crear hace POST /v2/pods. Un 202 (pod en cola) nunca se pidió: se cancela y se devuelve ErrEncolado.
 func (c *Cliente) Crear(ctx context.Context, s SolicitudPod) (Pod, error) {
+	if err := s.validarVolumen(); err != nil {
+		return Pod{}, err
+	}
 	r, err := c.hacer(ctx, http.MethodPost, rutaPods, nil, s.cuerpo())
 	if err != nil {
 		return Pod{}, err

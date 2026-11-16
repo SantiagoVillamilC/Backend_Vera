@@ -29,23 +29,35 @@ type RespuestaCrear struct {
 	SinCosto bool
 	Nube     string
 	GPU      string
+	// Detalle es el texto "detail" del error programado. Vacío usa un texto genérico.
+	Detalle string
+	// Centro cambia el dataCenterId que informa la respuesta (por ejemplo, un pod ubicado en otro centro).
+	Centro string
+	// SinCentro informa dataCenterId nulo, como un pod que el planificador aún no ubicó.
+	SinCentro bool
 }
 
 type podFalso struct {
-	id, nombre, estado, nube, gpu string
-	costo                         *float64
-	getsPendientes                int
-	creado                        time.Time
-	env                           map[string]string
+	id, nombre, estado, nube, gpu, centro string
+	costo                                 *float64
+	getsPendientes                        int
+	creado                                time.Time
+	env                                   map[string]string
 }
 
 // RunPod es una API de RunPod v2 falsa. Los campos exportados se ajustan antes de usarla.
 type RunPod struct {
 	*httptest.Server
-	mu              sync.Mutex
-	Clave           string
-	Catalogo        map[string]EntradaCatalogo
-	Crear           []RespuestaCrear
+	mu       sync.Mutex
+	Clave    string
+	Catalogo map[string]EntradaCatalogo
+	Crear    []RespuestaCrear
+	// CrearPorCentro programa la respuesta de POST /v2/pods según el primer dataCenterIds del cuerpo y
+	// tiene prioridad sobre la cola Crear. Una clave presente se aplica en cada intento a ese centro.
+	CrearPorCentro map[string]RespuestaCrear
+	// Volumenes mapea id de volumen de red a su centro. Si no es nil, un montaje con un volumen
+	// desconocido o de otro centro se rechaza con 400, como hace RunPod.
+	Volumenes       map[string]string
 	FallosDelete    int
 	DeleteSinEfecto int
 	GetsHastaRun    int
@@ -192,7 +204,11 @@ func (f *RunPod) catalogo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *RunPod) json(p *podFalso, completo bool) map[string]any {
-	m := map[string]any{"id": p.id, "name": p.nombre, "status": p.estado, "cloud": p.nube,
+	var centro any
+	if p.centro != "" {
+		centro = p.centro
+	}
+	m := map[string]any{"id": p.id, "name": p.nombre, "status": p.estado, "cloud": p.nube, "dataCenterId": centro,
 		"gpu": map[string]any{"id": p.gpu, "count": 1}, "env": p.env, "ssh": map[string]any{"proxy": nil, "direct": nil},
 		"createdAt": p.creado.UTC().Format(time.RFC3339), "startedAt": p.creado.UTC().Format(time.RFC3339)}
 	if p.costo != nil {
@@ -266,11 +282,55 @@ type cuerpoCrear struct {
 		ID    string `json:"id"`
 		Count int    `json:"count"`
 	} `json:"gpu"`
-	Cloud    string            `json:"cloud"`
-	Disk     int               `json:"disk"`
-	Ports    []string          `json:"ports"`
-	Env      map[string]string `json:"env"`
-	StartSSH bool              `json:"startSsh"`
+	Cloud         string            `json:"cloud"`
+	Disk          int               `json:"disk"`
+	Ports         []string          `json:"ports"`
+	Env           map[string]string `json:"env"`
+	StartSSH      bool              `json:"startSsh"`
+	DataCenterIDs []string          `json:"dataCenterIds"`
+	Mounts        *struct {
+		Network []struct {
+			VolumeID string `json:"volumeId"`
+			Path     string `json:"path"`
+		} `json:"network"`
+	} `json:"mounts"`
+}
+
+// validarMontajes aplica las reglas cruzadas de Mounts: path obligatorio, hasta 4 volúmenes y cada uno
+// en el centro del pod. Devuelve el detalle del 400 o vacío.
+func (f *RunPod) validarMontajes(c cuerpoCrear) string {
+	if c.Mounts == nil {
+		return ""
+	}
+	if len(c.Mounts.Network) > 4 {
+		return "at most 4 network volumes"
+	}
+	for _, m := range c.Mounts.Network {
+		centro, conocido := f.Volumenes[m.VolumeID]
+		switch {
+		case m.Path == "":
+			return "mount path must be specified"
+		case f.Volumenes != nil && !conocido:
+			return "network volume not found"
+		case f.Volumenes != nil && (len(c.DataCenterIDs) != 1 || c.DataCenterIDs[0] != centro):
+			return "network volume must be in the pod's data center"
+		}
+	}
+	return ""
+}
+
+func (f *RunPod) respuestaProgramada(c cuerpoCrear) RespuestaCrear {
+	if len(c.DataCenterIDs) > 0 {
+		if r, ok := f.CrearPorCentro[c.DataCenterIDs[0]]; ok {
+			return r
+		}
+	}
+	if len(f.Crear) > 0 {
+		var r RespuestaCrear
+		r, f.Crear = f.Crear[0], f.Crear[1:]
+		return r
+	}
+	return RespuestaCrear{}
 }
 
 func (f *RunPod) crear(w http.ResponseWriter, r *http.Request) {
@@ -287,12 +347,13 @@ func (f *RunPod) crear(w http.ResponseWriter, r *http.Request) {
 		problema(w, 422, "Unprocessable Entity", "$: additional properties not allowed")
 		return
 	}
-	resp := RespuestaCrear{}
-	if len(f.Crear) > 0 {
-		resp, f.Crear = f.Crear[0], f.Crear[1:]
+	if detalle := f.validarMontajes(c); detalle != "" {
+		problema(w, 400, "Bad Request", detalle)
+		return
 	}
+	resp := f.respuestaProgramada(c)
 	if resp.Estado != 0 && resp.Estado != 201 {
-		problema(w, resp.Estado, "Error programado", "creacion rechazada")
+		problema(w, resp.Estado, "Error programado", orDefecto(resp.Detalle, "creacion rechazada"))
 		return
 	}
 	nube, gpu, costo := orDefecto(resp.Nube, c.Cloud), orDefecto(resp.GPU, c.GPU.ID), resp.Costo
@@ -300,8 +361,21 @@ func (f *RunPod) crear(w http.ResponseWriter, r *http.Request) {
 		costo = ptr(0.27)
 	}
 	id := f.nuevoPod(c.Name, "STARTING", nube, gpu, costo, time.Now(), c.Env)
+	f.pods[id].centro = centroInformado(resp, c)
 	w.WriteHeader(201)
 	_ = json.NewEncoder(w).Encode(f.json(f.pods[id], false))
+}
+
+func centroInformado(resp RespuestaCrear, c cuerpoCrear) string {
+	switch {
+	case resp.SinCentro:
+		return ""
+	case resp.Centro != "":
+		return resp.Centro
+	case len(c.DataCenterIDs) > 0:
+		return c.DataCenterIDs[0]
+	}
+	return ""
 }
 
 func orDefecto(valor, defecto string) string {
