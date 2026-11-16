@@ -31,7 +31,7 @@ func (t *Tunel) Cerrar() {
 // AbrirTunel lanza la supervisión. Si el proceso muere se reabre con espera creciente. Una huella
 // distinta detiene la supervisión y se informa por alFatal, sin reintentar.
 func (s *SSH) AbrirTunel(ctx context.Context, d Destino, reenvios []Reenvio, alFatal func(error)) *Tunel {
-	ctx, cancelar := context.WithCancel(ctx)
+	ctx, cancelar := context.WithCancel(ctx) //nolint:gosec // cancelar se guarda en Tunel y lo llama Cerrar
 	t := &Tunel{cancelar: cancelar, hecho: make(chan struct{})}
 	go func() {
 		defer close(t.hecho)

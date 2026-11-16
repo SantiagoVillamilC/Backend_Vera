@@ -25,19 +25,22 @@ func (c *controladorFalso) Encender() (Vista, bool, error) { return c.vista, c.i
 func (c *controladorFalso) Apagar() Vista                  { c.apagadas++; return c.vista }
 func (c *controladorFalso) Vista() Vista                   { return c.vista }
 
-func peticion(t *testing.T, h http.Handler, metodo, ruta, token string) (*http.Response, map[string]any) {
+type respuestaHTTP struct {
+	StatusCode int
+	Header     http.Header
+}
+
+func peticion(t *testing.T, h http.Handler, metodo, ruta, token string) (respuestaHTTP, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(metodo, ruta, strings.NewReader(""))
+	req := httptest.NewRequestWithContext(t.Context(), metodo, ruta, strings.NewReader(""))
 	if token != "" {
 		req.Header.Set("Authorization", token)
 	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	res := rec.Result()
-	datos, _ := io.ReadAll(res.Body)
 	var cuerpo map[string]any
-	_ = json.Unmarshal(datos, &cuerpo)
-	return res, cuerpo
+	_ = json.Unmarshal(rec.Body.Bytes(), &cuerpo)
+	return respuestaHTTP{StatusCode: rec.Code, Header: rec.Header()}, cuerpo
 }
 
 func nuevoManejador(c Controlador) http.Handler {
@@ -62,8 +65,8 @@ func TestControlExigeTokenBearerCorrecto(t *testing.T) {
 }
 
 func TestEstadoDevuelveLosCamposDelSobre(t *testing.T) {
-	min := 7.5
-	h := nuevoManejador(&controladorFalso{vista: Vista{Estado: "listo", GPU: "NVIDIA RTX A5000", TarifaUSDH: 0.27, MinutosEncendido: 12, MinutosHastaApagadoPorInactividad: &min, CostoEstimadoUSD: 0.05}})
+	minutos := 7.5
+	h := nuevoManejador(&controladorFalso{vista: Vista{Estado: "listo", GPU: "NVIDIA RTX A5000", TarifaUSDH: 0.27, MinutosEncendido: 12, MinutosHastaApagadoPorInactividad: &minutos, CostoEstimadoUSD: 0.05}})
 	_, cuerpo := peticion(t, h, http.MethodGet, "/estado", "Bearer "+tokenControl)
 	datos, ok := cuerpo["data"].(map[string]any)
 	if !ok {

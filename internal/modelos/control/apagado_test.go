@@ -72,7 +72,8 @@ func TestElProxyNoCuentaLasSondasSinTokenComoActividad(t *testing.T) {
 	t.Cleanup(p.Close)
 	for range 5 {
 		a.reloj.Avanzar(3 * time.Minute)
-		res, err := http.Get(p.URL + "/") // lo que envia /readyz/modelos de la API, sin token
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, p.URL+"/", nil) // lo que envia /readyz/modelos de la API, sin token
+		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}

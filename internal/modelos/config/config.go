@@ -74,40 +74,40 @@ func (l *lector) texto(clave, defecto string) string {
 	return defecto
 }
 
-func (l *lector) duracion(clave string, defecto, min, max time.Duration) time.Duration {
+func (l *lector) duracion(clave string, defecto, piso, techo time.Duration) time.Duration {
 	crudo := l.texto(clave, "")
 	if crudo == "" {
 		return defecto
 	}
 	d, err := time.ParseDuration(crudo)
-	if err != nil || d < min || d > max {
-		l.fallo(clave, fmt.Sprintf("debe ser una duracion entre %s y %s (por ejemplo 10m)", min, max))
+	if err != nil || d < piso || d > techo {
+		l.fallo(clave, fmt.Sprintf("debe ser una duracion entre %s y %s (por ejemplo 10m)", piso, techo))
 		return defecto
 	}
 	return d
 }
 
-func (l *lector) decimal(clave string, defecto, min, max float64) float64 {
+func (l *lector) decimal(clave string, defecto, piso, techo float64) float64 {
 	crudo := l.texto(clave, "")
 	if crudo == "" {
 		return defecto
 	}
 	v, err := strconv.ParseFloat(crudo, 64)
-	if err != nil || v < min || v > max {
-		l.fallo(clave, fmt.Sprintf("debe ser un numero entre %g y %g", min, max))
+	if err != nil || v < piso || v > techo {
+		l.fallo(clave, fmt.Sprintf("debe ser un numero entre %g y %g", piso, techo))
 		return defecto
 	}
 	return v
 }
 
-func (l *lector) entero(clave string, defecto, min, max int) int {
+func (l *lector) entero(clave string, defecto, piso, techo int) int {
 	crudo := l.texto(clave, "")
 	if crudo == "" {
 		return defecto
 	}
 	v, err := strconv.Atoi(crudo)
-	if err != nil || v < min || v > max {
-		l.fallo(clave, fmt.Sprintf("debe ser un entero entre %d y %d", min, max))
+	if err != nil || v < piso || v > techo {
+		l.fallo(clave, fmt.Sprintf("debe ser un entero entre %d y %d", piso, techo))
 		return defecto
 	}
 	return v
@@ -155,7 +155,7 @@ func (l *lector) urlRunPod(defecto string) string {
 	valor := l.texto("MODELOS_RUNPOD_URL", defecto)
 	u, err := url.Parse(valor)
 	loopback := err == nil && (u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")
-	if err != nil || u.User != nil || (u.Scheme != "https" && !(u.Scheme == "http" && loopback)) {
+	if err != nil || u.User != nil || (u.Scheme != "https" && (u.Scheme != "http" || !loopback)) {
 		l.fallo("MODELOS_RUNPOD_URL", "debe ser https (http solo hacia loopback en pruebas)")
 		return defecto
 	}

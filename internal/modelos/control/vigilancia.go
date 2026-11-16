@@ -115,13 +115,13 @@ func (s *Servicio) mensajeSinPod(previo estado.Estado) string {
 
 // retomar reabre el túnel de un pod que seguía Listo y comprueba los modelos. Si algo falla, lo apaga.
 func (s *Servicio) retomar(ctx context.Context, id string) error {
-	pod, err := s.d.Nube.Obtener(ctx, id)
-	if err != nil || pod.SSH == nil {
+	pod, errPod := s.d.Nube.Obtener(ctx, id)
+	if sinDestino := errPod != nil || pod.SSH == nil; sinDestino {
 		s.solicitarApagado(estado.Apagado, "reconciliacion: no se pudo retomar el pod")
 		return nil
 	}
 	s.abrirTunel(acceso.Destino{PodID: id, Host: pod.SSH.Host, Puerto: pod.SSH.Puerto, Usuario: pod.SSH.Usuario})
-	if err := s.esperarModelos(ctx); err != nil {
+	if respondidos := s.esperarModelos(ctx) == nil; !respondidos {
 		s.solicitarApagado(estado.Apagado, "reconciliacion: los modelos no responden tras reiniciar")
 		return nil
 	}

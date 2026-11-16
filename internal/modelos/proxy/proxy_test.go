@@ -27,12 +27,24 @@ func nuevoProxy(t *testing.T, destino string, disponible func() bool) (*httptest
 
 func siempre() bool { return true }
 
+func solicitar(t *testing.T, metodo, url, tipo string, cuerpo io.Reader) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), metodo, url, cuerpo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tipo != "" {
+		req.Header.Set("Content-Type", tipo)
+	}
+	return http.DefaultClient.Do(req)
+}
+
 func TestApagadoDevuelve503JsonConRetryAfterYNoCuentaActividad(t *testing.T) {
 	llamado := false
 	respaldo := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { llamado = true }))
 	t.Cleanup(respaldo.Close)
 	p, act := nuevoProxy(t, respaldo.URL, func() bool { return false })
-	res, err := http.Post(p.URL+"/api/chat", "application/json", strings.NewReader(`{}`))
+	res, err := solicitar(t, http.MethodPost, p.URL+"/api/chat", "application/json", strings.NewReader("{}"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +67,7 @@ func TestReenviaCuerpoYCabecerasYCuentaActividad(t *testing.T) {
 	}))
 	t.Cleanup(respaldo.Close)
 	p, act := nuevoProxy(t, respaldo.URL, siempre)
-	req, _ := http.NewRequest(http.MethodPost, p.URL+"/transcribir", strings.NewReader("audio"))
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, p.URL+"/transcribir", strings.NewReader("audio"))
 	req.Header.Set("X-Vera-Token", "tok")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -76,7 +88,7 @@ func TestLasSondasDeSaludNoCuentanComoActividad(t *testing.T) {
 	t.Cleanup(respaldo.Close)
 	p, act := nuevoProxy(t, respaldo.URL, siempre)
 	for _, ruta := range []string{"/", "/healthz", "/readyz", "/api/version"} {
-		res, err := http.Get(p.URL + ruta)
+		res, err := solicitar(t, http.MethodGet, p.URL+ruta, "", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -85,7 +97,7 @@ func TestLasSondasDeSaludNoCuentanComoActividad(t *testing.T) {
 	if !act.Ultima().IsZero() {
 		t.Fatal("GET /, /healthz, /readyz y /api/version no deben contar como actividad")
 	}
-	res, err := http.Get(p.URL + "/api/tags")
+	res, err := solicitar(t, http.MethodGet, p.URL+"/api/tags", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +117,7 @@ func TestStreamingSinBufferYPeticionEnVuelo(t *testing.T) {
 	}))
 	t.Cleanup(respaldo.Close)
 	p, act := nuevoProxy(t, respaldo.URL, siempre)
-	res, err := http.Post(p.URL+"/api/chat", "application/json", strings.NewReader(`{}`))
+	res, err := solicitar(t, http.MethodPost, p.URL+"/api/chat", "application/json", strings.NewReader("{}"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +148,7 @@ func TestDestinoCaidoDevuelve503(t *testing.T) {
 	url := respaldo.URL
 	respaldo.Close()
 	p, _ := nuevoProxy(t, url, siempre)
-	res, err := http.Get(p.URL + "/api/tags")
+	res, err := solicitar(t, http.MethodGet, p.URL+"/api/tags", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +168,7 @@ func TestRespuestaLentaDeUnLLMNoSeCorta(t *testing.T) {
 	}))
 	t.Cleanup(respaldo.Close)
 	p, _ := nuevoProxy(t, respaldo.URL, siempre)
-	res, err := http.Post(p.URL+"/api/generate", "application/json", strings.NewReader(`{}`))
+	res, err := solicitar(t, http.MethodPost, p.URL+"/api/generate", "application/json", strings.NewReader("{}"))
 	if err != nil {
 		t.Fatal(err)
 	}

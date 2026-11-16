@@ -77,7 +77,7 @@ func Nuevo(cfg Config) (*Cliente, error) {
 		return nil, errors.New("runpod: URL base invalida")
 	}
 	loopback := base.Hostname() == "127.0.0.1" || base.Hostname() == "localhost" || base.Hostname() == "::1"
-	if base.Scheme != "https" && !(base.Scheme == "http" && loopback) {
+	if base.Scheme != "https" && (base.Scheme != "http" || !loopback) {
 		return nil, errors.New("runpod: la URL base debe ser https")
 	}
 	if strings.TrimSpace(cfg.Clave) == "" {

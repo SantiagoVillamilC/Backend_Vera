@@ -25,7 +25,7 @@ const (
 
 func puertoLibre(t *testing.T) string {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	l, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestServirExponeControlYProxyApagadoYSeCierraConLaSenal(t *testing.T) {
 	var errores bytes.Buffer
 	go func() { terminado <- ejecutar(ctx, []string{"servir"}, lookup(env), io.Discard, &errores) }()
 	estado := func(token string) (int, string) {
-		req, _ := http.NewRequest(http.MethodGet, "http://"+env["MODELOS_PUERTO_CONTROL"]+"/estado", nil)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+env["MODELOS_PUERTO_CONTROL"]+"/estado", nil)
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -165,7 +165,8 @@ func TestServirExponeControlYProxyApagadoYSeCierraConLaSenal(t *testing.T) {
 		t.Fatalf("codigo %d", codigo)
 	}
 	for _, puerto := range []string{env["MODELOS_ESCUCHA_VOZ"], env["MODELOS_ESCUCHA_STT"], env["MODELOS_ESCUCHA_OLLAMA"]} {
-		res, err := http.Post("http://"+puerto+"/api/chat", "application/json", strings.NewReader("{}"))
+		pet, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+puerto+"/api/chat", strings.NewReader("{}"))
+		res, err := http.DefaultClient.Do(pet)
 		if err != nil {
 			t.Fatal(err)
 		}

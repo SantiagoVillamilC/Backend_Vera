@@ -211,7 +211,7 @@ func correr(ctx context.Context, cfg config.Config, svc *control.Servicio, token
 		return 1
 	}
 	srvControl := control.ServidorControl(cfg.Control, control.ManejadorControl(svc, tokenControl, log))
-	lnControl, err := net.Listen("tcp", cfg.Control)
+	lnControl, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Control)
 	if err != nil {
 		cerrarProxies(proxies)
 		log.Error("no se pudo abrir la API de control", "error", err.Error())

@@ -143,7 +143,7 @@ type Servidor struct {
 
 // Escuchar enlaza la dirección de inmediato (para fallar al arrancar si el puerto está ocupado).
 func Escuchar(dir string, h http.Handler) (*Servidor, error) {
-	ln, err := net.Listen("tcp", dir)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", dir)
 	if err != nil {
 		return nil, err
 	}

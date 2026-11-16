@@ -92,7 +92,7 @@ func (s *Servicio) crearEn(ctx context.Context, gpu string) (runpod.Pod, error) 
 		if (esAPI && !api.Reintentable()) || errors.Is(err, runpod.ErrEncolado) || ctx.Err() != nil {
 			return runpod.Pod{}, err
 		}
-		if !(esAPI && api.Estado == 429) {
+		if !esAPI || api.Estado != 429 {
 			if previo, ok := s.buscarCreado(ctx); ok {
 				s.d.Log.Warn(fmt.Sprintf("POD CREADO id=%s", previo.ID), "gpu", gpu, "origen", "hallado tras un fallo ambiguo")
 				return previo, nil

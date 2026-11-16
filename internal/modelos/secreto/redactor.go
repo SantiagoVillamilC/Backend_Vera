@@ -51,10 +51,10 @@ func (r Redactor) Limpiar(texto string) string {
 	}, texto)
 }
 
-// Recortar limita un texto a max runas y agrega puntos suspensivos si cortó algo.
-func Recortar(texto string, max int) string {
-	if utf8.RuneCountInString(texto) <= max {
+// Recortar limita un texto a limite runas y agrega puntos suspensivos si cortó algo.
+func Recortar(texto string, limite int) string {
+	if utf8.RuneCountInString(texto) <= limite {
 		return texto
 	}
-	return string([]rune(texto)[:max]) + "..."
+	return string([]rune(texto)[:limite]) + "..."
 }

@@ -13,10 +13,9 @@ import (
 // (los primeros N intentos de comprobación fallan con Connection refused), "fallo_script" (el
 // arranque remoto sale con 7), "tunel_muere:N" (los primeros N túneles salen enseguida).
 type SSH struct {
-	Dir     string
-	BinSSH  string
-	BinSCP  string
-	archivo string
+	Dir    string
+	BinSSH string
+	BinSCP string
 }
 
 const scriptSSH = `#!/bin/sh
@@ -79,7 +78,7 @@ func (s *SSH) Modo(modo string) {
 }
 
 func (s *SSH) leer(nombre string) string {
-	datos, _ := os.ReadFile(filepath.Join(s.Dir, nombre))
+	datos, _ := os.ReadFile(filepath.Join(s.Dir, nombre)) //nolint:gosec // archivo de prueba dentro de un directorio temporal
 	return string(datos)
 }
 

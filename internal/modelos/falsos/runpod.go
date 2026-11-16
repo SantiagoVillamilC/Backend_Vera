@@ -64,7 +64,7 @@ func NuevoRunPod(t *testing.T, clave string) *RunPod {
 	f := &RunPod{Clave: clave, pods: map[string]*podFalso{}, auth: map[string]int{}, PaginaTam: 1000,
 		Catalogo: map[string]EntradaCatalogo{"NVIDIA RTX A5000": {Secure: true, Disponibilidad: "HIGH", PrecioSecure: 0.27}}}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.servir))
-	t.Cleanup(f.Server.Close)
+	t.Cleanup(f.Close)
 	return f
 }
 
