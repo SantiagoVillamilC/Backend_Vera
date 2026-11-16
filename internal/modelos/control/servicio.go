@@ -59,6 +59,8 @@ type Vista struct {
 	Estado                            string   `json:"estado"`
 	PodID                             string   `json:"pod_id,omitempty"`
 	GPU                               string   `json:"gpu,omitempty"`
+	Centro                            string   `json:"centro,omitempty"`
+	Volumen                           string   `json:"volumen,omitempty"`
 	TarifaUSDH                        float64  `json:"tarifa_usd_h"`
 	MinutosEncendido                  float64  `json:"minutos_encendido"`
 	MinutosHastaApagadoPorInactividad *float64 `json:"minutos_hasta_apagado_por_inactividad"`
@@ -160,7 +162,7 @@ func (s *Servicio) Vista() Vista {
 func minutos(d time.Duration) float64 { return d.Minutes() }
 
 func (s *Servicio) vistaLocked() Vista {
-	v := Vista{Estado: string(s.est.Fase), PodID: s.est.PodID, GPU: s.est.GPU, TarifaUSDH: s.est.TarifaUSDH, Mensaje: s.est.Mensaje}
+	v := Vista{Estado: string(s.est.Fase), PodID: s.est.PodID, GPU: s.est.GPU, Centro: s.est.Centro, Volumen: s.est.Volumen, TarifaUSDH: s.est.TarifaUSDH, Mensaje: s.est.Mensaje}
 	if s.est.PodID == "" || s.est.SesionInicio.IsZero() {
 		return v
 	}

@@ -205,3 +205,102 @@ func TestRechazaDireccionDeProxyIgualAOtraPorOtraIP(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+const volumenesCuatro = "US-IL-1=t35aiij709,US-CA-2=3ztqv80lvj,CA-MTL-1=a96l2w9mbs,EU-SE-1=5fr195v982"
+
+func TestSinVolumenesLaListaQuedaVacia(t *testing.T) {
+	for _, valor := range []string{"", "   "} {
+		c, err := Cargar(entorno(map[string]string{"MODELOS_VOLUMENES": valor}))
+		if err != nil || len(c.Volumenes) != 0 {
+			t.Fatalf("valor %q: volumenes=%v err=%v", valor, c.Volumenes, err)
+		}
+	}
+	c, err := Cargar(entorno(nil))
+	if err != nil || len(c.Volumenes) != 0 {
+		t.Fatalf("sin variable: volumenes=%v err=%v", c.Volumenes, err)
+	}
+}
+
+func TestLosVolumenesConservanElOrdenDeLaLista(t *testing.T) {
+	c, err := Cargar(entorno(map[string]string{"MODELOS_VOLUMENES": " US-IL-1 = t35aiij709 , US-CA-2=3ztqv80lvj,CA-MTL-1=a96l2w9mbs,EU-SE-1=5fr195v982 "}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	esperado := []Volumen{{"US-IL-1", "t35aiij709"}, {"US-CA-2", "3ztqv80lvj"}, {"CA-MTL-1", "a96l2w9mbs"}, {"EU-SE-1", "5fr195v982"}}
+	if len(c.Volumenes) != len(esperado) {
+		t.Fatalf("volumenes %v", c.Volumenes)
+	}
+	for i, v := range esperado {
+		if c.Volumenes[i] != v {
+			t.Errorf("posicion %d: %v, esperaba %v", i, c.Volumenes[i], v)
+		}
+	}
+}
+
+func TestLosVolumenesInvalidosSeRechazanSinRepetirElValor(t *testing.T) {
+	nueve := "A-1=a1,B-1=b1,C-1=c1,D-1=d1,E-1=e1,F-1=f1,G-1=g1,H-1=h1,I-1=i1"
+	casos := map[string]string{
+		"centro en minusculas":     "us-il-1=t35aiij709",
+		"centro con simbolos":      "US_IL_1=t35aiij709",
+		"centro con guion al ini":  "-US-IL=t35aiij709",
+		"sin igual":                "US-IL-1",
+		"id vacio":                 "US-IL-1=",
+		"centro vacio":             "=t35aiij709",
+		"dos iguales":              "US-IL-1=t35aiij709=otro",
+		"id con simbolos":          "US-IL-1=tok;en$SECRETO",
+		"id con guion":             "US-IL-1=t35-aiij709",
+		"entrada vacia":            "US-IL-1=t35aiij709,,US-CA-2=3ztqv80lvj",
+		"coma final":               "US-IL-1=t35aiij709,",
+		"centro repetido":          "US-IL-1=t35aiij709,US-IL-1=3ztqv80lvj",
+		"id repetido":              "US-IL-1=t35aiij709,US-CA-2=t35aiij709",
+		"mas de ocho entradas":     nueve,
+		"id demasiado largo":       "US-IL-1=" + strings.Repeat("a", 65),
+		"centro demasiado largo":   strings.Repeat("A", 33) + "=t35aiij709",
+		"espacio dentro del id":    "US-IL-1=t35 aiij709",
+		"solo una entrada con url": "US-IL-1=https://x.example/SECRETO",
+	}
+	for nombre, valor := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			_, err := Cargar(entorno(map[string]string{"MODELOS_VOLUMENES": valor}))
+			if err == nil || !strings.Contains(err.Error(), "MODELOS_VOLUMENES") {
+				t.Fatalf("debia rechazarse: %v", err)
+			}
+			for _, sensible := range []string{"SECRETO", "t35aiij709", "3ztqv80lvj", "US-IL-1"} {
+				if strings.Contains(err.Error(), sensible) {
+					t.Fatalf("el error repite el valor %q: %v", sensible, err)
+				}
+			}
+		})
+	}
+}
+
+func TestAceptaHastaOchoVolumenes(t *testing.T) {
+	ocho := "A-1=a1,B-1=b1,C-1=c1,D-1=d1,E-1=e1,F-1=f1,G-1=g1,H-1=h1"
+	c, err := Cargar(entorno(map[string]string{"MODELOS_VOLUMENES": ocho}))
+	if err != nil || len(c.Volumenes) != 8 {
+		t.Fatalf("volumenes=%d err=%v", len(c.Volumenes), err)
+	}
+}
+
+func TestElResumenMuestraLosVolumenesEnOrdenYVaciosComoLista(t *testing.T) {
+	c, err := Cargar(entorno(map[string]string{"MODELOS_VOLUMENES": volumenesCuatro}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Volumenes []map[string]string `json:"volumenes"`
+	}
+	if err := json.Unmarshal([]byte(c.Resumen()), &m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Volumenes) != 4 || m.Volumenes[0]["centro"] != "US-IL-1" || m.Volumenes[0]["id"] != "t35aiij709" || m.Volumenes[3]["centro"] != "EU-SE-1" {
+		t.Fatalf("volumenes en el resumen %v", m.Volumenes)
+	}
+	vacio, err := Cargar(entorno(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(vacio.Resumen(), `"volumenes": []`) {
+		t.Fatalf("sin volumenes el resumen debe mostrar una lista vacia: %s", vacio.Resumen())
+	}
+}

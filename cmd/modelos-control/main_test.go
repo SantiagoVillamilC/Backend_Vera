@@ -254,3 +254,47 @@ func TestLosProxysEscuchanEnLaDireccionConfiguradaYElControlSoloEnLoopback(t *te
 		_ = c.Close()
 	}
 }
+
+const volumenesDePrueba = "US-IL-1=t35aiij709,US-CA-2=3ztqv80lvj,CA-MTL-1=a96l2w9mbs,EU-SE-1=5fr195v982"
+
+func TestSecoMuestraLosVolumenesEnOrden(t *testing.T) {
+	var salida, errores bytes.Buffer
+	env := map[string]string{"MODELOS_VOLUMENES": volumenesDePrueba}
+	if codigo := ejecutar(t.Context(), []string{"--seco"}, lookup(env), &salida, &errores); codigo != 0 {
+		t.Fatalf("codigo %d: %s", codigo, errores.String())
+	}
+	var m struct {
+		Volumenes []map[string]string `json:"volumenes"`
+	}
+	if err := json.Unmarshal(salida.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Volumenes) != 4 || m.Volumenes[0]["centro"] != "US-IL-1" || m.Volumenes[3]["id"] != "5fr195v982" {
+		t.Fatalf("volumenes %v", m.Volumenes)
+	}
+}
+
+func TestVolumenesInvalidosSalenCon2SinRepetirElValor(t *testing.T) {
+	var salida, errores bytes.Buffer
+	env := map[string]string{"MODELOS_VOLUMENES": "US-IL-1=tok;SECRETO"}
+	codigo := ejecutar(t.Context(), []string{"--seco"}, lookup(env), &salida, &errores)
+	if codigo != 2 || !strings.Contains(errores.String(), "MODELOS_VOLUMENES") || strings.Contains(errores.String(), "SECRETO") {
+		t.Fatalf("codigo=%d err=%s", codigo, errores.String())
+	}
+}
+
+func TestReconcileConVolumenesConfiguradosNoLlamaALosVolumenes(t *testing.T) {
+	f := falsos.NuevoRunPod(t, claveRunPod)
+	id := f.AnadirPod("vera-modelos", "RUNNING", time.Now())
+	env := entornoCompleto(t, f.URL)
+	env["MODELOS_VOLUMENES"] = volumenesDePrueba
+	var salida, errores bytes.Buffer
+	if codigo := ejecutar(t.Context(), []string{"reconcile"}, lookup(env), &salida, &errores); codigo != 0 || f.Existe(id) {
+		t.Fatalf("codigo=%d err=%s", codigo, errores.String())
+	}
+	for _, l := range f.Llamadas() {
+		if strings.Contains(l, "volumes") {
+			t.Fatalf("reconcile no debe tocar volumenes: %q", l)
+		}
+	}
+}

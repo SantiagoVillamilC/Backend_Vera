@@ -28,7 +28,11 @@ const (
 // ErrEstadoInvalido indica un archivo de estado corrupto o un valor que no se debe persistir.
 var ErrEstadoInvalido = errors.New("estado invalido")
 
-var patronID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
+var (
+	patronID      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
+	patronCentro  = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]{0,30}[A-Z0-9]$`)
+	patronVolumen = regexp.MustCompile(`^[A-Za-z0-9]{1,64}$`)
+)
 
 // IDValido dice si un id de pod es seguro para usarlo en rutas de URL y de archivo.
 func IDValido(id string) bool { return patronID.MatchString(id) }
@@ -38,6 +42,8 @@ type Estado struct {
 	Fase            Fase      `json:"fase"`
 	PodID           string    `json:"pod_id,omitempty"`
 	GPU             string    `json:"gpu,omitempty"`
+	Centro          string    `json:"centro,omitempty"`
+	Volumen         string    `json:"volumen,omitempty"`
 	TarifaUSDH      float64   `json:"tarifa_usd_h,omitempty"`
 	SesionInicio    time.Time `json:"sesion_inicio,omitempty"`
 	UltimaActividad time.Time `json:"ultima_actividad,omitempty"`
@@ -53,6 +59,12 @@ func (e Estado) validar() error {
 	}
 	if e.PodID != "" && !IDValido(e.PodID) {
 		return fmt.Errorf("%w: id de pod", ErrEstadoInvalido)
+	}
+	if e.Centro != "" && !patronCentro.MatchString(e.Centro) {
+		return fmt.Errorf("%w: centro de datos", ErrEstadoInvalido)
+	}
+	if e.Volumen != "" && !patronVolumen.MatchString(e.Volumen) {
+		return fmt.Errorf("%w: id de volumen", ErrEstadoInvalido)
 	}
 	return nil
 }
