@@ -1,0 +1,62 @@
+# infra/modelos-runpod/systemd/vera-modelos-guardian.service
+# Destino en la VM: /etc/systemd/system/vera-modelos-guardian.service (root:root 0644).
+#
+# Lo dispara vera-modelos-guardian.timer cada 5 minutos. "modelos-control reconcile" termina cualquier pod
+# cuyo nombre empiece por VERA_MODELOS_NOMBRE_POD que esté huérfano (no lo conoce el estado), pasado de la
+# sesión máxima o de la inactividad. Es la red de seguridad del gasto: funciona aunque modelos-control serve
+# esté caído. Usa la misma carpeta de estado que serve, así que ambos deben tomar un bloqueo compartido
+# (flock en VERA_MODELOS_DIR_ESTADO) para no pelearse.
+[Unit]
+Description=Vera modelos-control reconcile (termina pods huérfanos o vencidos)
+Documentation=https://github.com/SantiagoVillamilC/Backend_Vera/blob/dev/docs/despliegue-modelos-runpod-vm.md
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/usr/local/bin/modelos-control
+ConditionPathExists=/etc/vera-modelos/modelos-control.env
+
+[Service]
+Type=oneshot
+User=vera-modelos
+Group=vera-modelos
+EnvironmentFile=/etc/vera-modelos/modelos-control.env
+ExecStart=/usr/local/bin/modelos-control reconcile
+TimeoutStartSec=120s
+LimitNOFILE=4096
+
+# Límites de recursos
+MemoryMax=128M
+TasksMax=32
+CPUQuota=50%
+
+StateDirectory=vera-modelos
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/vera-modelos
+ReadWritePaths=/var/lib/vera-modelos
+UMask=0077
+
+# Endurecimiento (el mismo que vera-modelos-control.service)
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

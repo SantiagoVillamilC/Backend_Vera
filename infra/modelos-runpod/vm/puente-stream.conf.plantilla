@@ -1,0 +1,36 @@
+# Generado por puente-modelos.sh instalar a partir de puente-stream.conf.plantilla. No editar a mano.
+#
+# Corre en el contenedor "puente-modelos", que comparte el espacio de red del contenedor de la API
+# (network_mode: service:api). Dentro de ese espacio, 127.0.0.1 es el loopback que ve la API, y los
+# clientes de voz y de transcripción solo aceptan http://127.0.0.1. Cada puerto se reenvía a modelos-control,
+# que escucha en la IP del gateway de la red docker (la VM vista desde el contenedor).
+worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events {
+  worker_connections 256;
+}
+
+stream {
+  # Conexión rápida a modelos-control: si no está, la API recibe el rechazo enseguida en lugar de colgarse.
+  # proxy_timeout es el tiempo de inactividad entre lecturas: cubre una respuesta larga de Ollama.
+  server {
+    listen 127.0.0.1:@PUERTO_OLLAMA@;
+    proxy_pass @ESCUCHA@:@PUERTO_OLLAMA@;
+    proxy_connect_timeout 3s;
+    proxy_timeout 600s;
+  }
+  server {
+    listen 127.0.0.1:@PUERTO_STT@;
+    proxy_pass @ESCUCHA@:@PUERTO_STT@;
+    proxy_connect_timeout 3s;
+    proxy_timeout 120s;
+  }
+  server {
+    listen 127.0.0.1:@PUERTO_VOZ@;
+    proxy_pass @ESCUCHA@:@PUERTO_VOZ@;
+    proxy_connect_timeout 3s;
+    proxy_timeout 120s;
+  }
+}

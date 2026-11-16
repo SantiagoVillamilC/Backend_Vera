@@ -1,0 +1,33 @@
+# infra/modelos-runpod/systemd/vera-modelos-puente.service
+# Destino en la VM: /etc/systemd/system/vera-modelos-puente.service (root:root 0644).
+#
+# Revisa que el contenedor puente siga unido a la API actual y lo recrea si un despliegue del CD recreó
+# centinela-api y lo dejó huérfano. Corre como root porque habla con el socket de docker (equivale a root,
+# por eso el usuario vera-modelos NO está en el grupo docker y este servicio es aparte). Sin la instalación
+# del puente no hace nada. El endurecimiento es moderado a propósito: docker compose necesita su plugin, su
+# configuración y el socket. No se probó en la VM real.
+[Unit]
+Description=Vera puente de modelos (repara el puente si la API se recreó)
+Documentation=https://github.com/SantiagoVillamilC/Backend_Vera/blob/dev/docs/despliegue-modelos-runpod-vm.md
+After=docker.service
+Requires=docker.service
+ConditionPathExists=/opt/vera-modelos/vm/puente-modelos.sh
+
+[Service]
+Type=oneshot
+ExecStart=/opt/vera-modelos/vm/puente-modelos.sh reparar
+TimeoutStartSec=120s
+MemoryMax=256M
+TasksMax=128
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

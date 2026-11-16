@@ -1,0 +1,76 @@
+# infra/modelos-runpod/systemd/vera-modelos-control.service
+# Destino en la VM: /etc/systemd/system/vera-modelos-control.service (root:root 0644).
+#
+# modelos-control crea y apaga el pod de RunPod bajo demanda, abre el túnel SSH hacia él y escucha en la IP
+# del gateway de la red docker "centinela" los puertos de los modelos (el puente de la API los reenvía a
+# 127.0.0.1 dentro del contenedor). El puerto de control escucha solo en loopback de la VM.
+#
+# Secretos: EnvironmentFile con un archivo root:root 0600. systemd lo abre como root antes de bajar
+# privilegios, así que el usuario del servicio no necesita poder leerlo. La llave privada del túnel es del
+# usuario vera-modelos (modo 0600) porque ssh la rechaza si otros pueden leerla.
+# Alternativa más estricta: LoadCredential= para la llave, si modelos-control acepta una ruta de credencial.
+#
+# Egreso: NO se fija IPAddressDeny porque el servicio necesita llegar a la API de RunPod y al puerto SSH del
+# pod, cuya IP cambia en cada pod. Se limita por familia de direcciones y por llamadas al sistema.
+[Unit]
+Description=Vera modelos-control (pod de RunPod bajo demanda con túnel SSH)
+Documentation=https://github.com/SantiagoVillamilC/Backend_Vera/blob/dev/docs/despliegue-modelos-runpod-vm.md
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+ConditionPathExists=/usr/local/bin/modelos-control
+ConditionPathExists=/etc/vera-modelos/modelos-control.env
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=vera-modelos
+Group=vera-modelos
+EnvironmentFile=/etc/vera-modelos/modelos-control.env
+ExecStart=/usr/local/bin/modelos-control serve
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+LimitNOFILE=4096
+
+# Límites de recursos
+MemoryMax=256M
+TasksMax=64
+CPUQuota=50%
+
+# Estado: known_hosts del pod, bloqueo compartido con el guardián y último pod. Lo crea systemd.
+StateDirectory=vera-modelos
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/vera-modelos
+ReadWritePaths=/var/lib/vera-modelos
+UMask=0077
+
+# Endurecimiento
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target
