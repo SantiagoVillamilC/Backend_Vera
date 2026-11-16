@@ -1,0 +1,16 @@
+# infra/modelos-runpod/systemd/vera-modelos-guardian.timer
+# Destino en la VM: /etc/systemd/system/vera-modelos-guardian.timer (root:root 0644).
+# Cada 5 minutos ejecuta vera-modelos-guardian.service. Persistent= solo aplica a OnCalendar, así que el
+# primer disparo tras un arranque lo da OnBootSec.
+[Unit]
+Description=Vera modelos guardian cada 5 minutos
+Documentation=https://github.com/SantiagoVillamilC/Backend_Vera/blob/dev/docs/despliegue-modelos-runpod-vm.md
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=vera-modelos-guardian.service
+
+[Install]
+WantedBy=timers.target

@@ -9,12 +9,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/destinolocal"
 )
 
 // Voz produce WAV con la voz española ef_dora de Kokoro-82M.
@@ -23,10 +23,10 @@ type Voz struct {
 	cliente         *http.Client
 }
 
-// Nueva sólo permite loopback; nunca admite una URL arbitraria del navegador.
+// Nueva sólo permite 127.0.0.1 o una IPv4 privada exacta listada en VERA_MODELOS_HOST_PERMITIDO
+// (ver destinolocal). Nunca admite una URL arbitraria del navegador.
 func Nueva(endpoint, token string) (*Voz, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || len(token) < 32 {
+	if !destinolocal.Aceptable(endpoint) || len(token) < 32 {
 		return nil, copilot.ErrSolicitudIA
 	}
 	return &Voz{endpoint: endpoint, token: token, cliente: &http.Client{Timeout: 25 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}}, nil
