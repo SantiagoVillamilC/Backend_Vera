@@ -12,13 +12,20 @@
 # Variables opcionales (mismos valores por defecto que arrancar-modelos.sh):
 #   VERA_TOKENS_ARCHIVO   archivo 0600 con WHISPER_TOKEN y VERA_LAB_TOKEN
 #   VERA_PUERTO_OLLAMA, VERA_PUERTO_WHISPER, VERA_PUERTO_KOKORO   (11434, 8767, 8766)
-#   VERA_ESTADO_DIR       carpeta de estado (por defecto /workspace/vera-estado)
+#   VERA_ESTADO_DIR       carpeta de estado (por defecto /workspace/vera-estado, o /var/lib/vera-estado si existe ahí tokens.env)
 #
 # No hay un /readyz unificado en el pod a propósito: exigiría un cuarto proceso y un cuarto puerto en el
 # túnel. modelos-control ya sondea los tres puertos por el túnel y puede ejecutar este script por ssh.
 set -euo pipefail
 
-ESTADO_DIR="${VERA_ESTADO_DIR:-/workspace/vera-estado}"
+# Con caché en volumen, arrancar-modelos.sh deja el estado (y los tokens) fuera del volumen, en /var/lib/vera-estado.
+if [[ -n "${VERA_ESTADO_DIR:-}" ]]; then
+  ESTADO_DIR="$VERA_ESTADO_DIR"
+elif [[ -f /var/lib/vera-estado/tokens.env ]]; then
+  ESTADO_DIR="/var/lib/vera-estado"
+else
+  ESTADO_DIR="/workspace/vera-estado"
+fi
 TOKENS_ARCHIVO="${VERA_TOKENS_ARCHIVO:-${ESTADO_DIR}/tokens.env}"
 PUERTO_OLLAMA="${VERA_PUERTO_OLLAMA:-11434}"
 PUERTO_WHISPER="${VERA_PUERTO_WHISPER:-8767}"

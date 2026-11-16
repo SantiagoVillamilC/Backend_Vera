@@ -225,3 +225,87 @@ func TestCrearEncoladoCancelaYFalla(t *testing.T) {
 		t.Fatalf("err=%v borrado=%v", err, borrado)
 	}
 }
+
+func solicitudConVolumen() SolicitudPod {
+	s := solicitud()
+	s.Centro, s.Volumen = "US-IL-1", "t35aiij709"
+	return s
+}
+
+func TestCuerpoConVolumenFijaElCentroYMontaElVolumenDeRedEnWorkspace(t *testing.T) {
+	datos, err := json.Marshal(solicitudConVolumen().cuerpo())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const esperado = `{"name":"vera-modelos","image":"runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404","gpu":{"id":"NVIDIA RTX A5000","count":1},` +
+		`"cloud":"SECURE","disk":40,"ports":["22/tcp"],"env":{"PUBLIC_KEY":"ssh-ed25519 AAAATESTKEY vm"},"startSsh":true,` +
+		`"dataCenterIds":["US-IL-1"],"mounts":{"network":[{"volumeId":"t35aiij709","path":"/workspace"}]}}`
+	if string(datos) != esperado {
+		t.Fatalf("cuerpo\n got: %s\nwant: %s", datos, esperado)
+	}
+}
+
+func TestCrearConVolumenEnviaElCuerpoYDevuelveElCentro(t *testing.T) {
+	c, f := nuevoCliente(t)
+	pod, err := c.Crear(t.Context(), solicitudConVolumen())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pod.Centro != "US-IL-1" {
+		t.Fatalf("centro del pod %q", pod.Centro)
+	}
+	if !strings.Contains(string(f.Cuerpos()[0]), `"mounts":{"network":[{"volumeId":"t35aiij709","path":"/workspace"}]}`) {
+		t.Fatalf("cuerpo enviado %s", f.Cuerpos()[0])
+	}
+}
+
+func TestCrearRechazaSolicitudesDeVolumenIncoherentesSinLlamarALaRed(t *testing.T) {
+	casos := map[string]func(*SolicitudPod){
+		"volumen sin centro":   func(s *SolicitudPod) { s.Centro = "" },
+		"centro sin volumen":   func(s *SolicitudPod) { s.Volumen = "" },
+		"centro invalido":      func(s *SolicitudPod) { s.Centro = "us il 1" },
+		"volumen con simbolos": func(s *SolicitudPod) { s.Volumen = `x","path":"/etc` },
+	}
+	for nombre, ajustar := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			c, f := nuevoCliente(t)
+			s := solicitudConVolumen()
+			ajustar(&s)
+			if _, err := c.Crear(t.Context(), s); err == nil {
+				t.Fatal("debia rechazarse")
+			}
+			if len(f.Llamadas()) != 0 {
+				t.Fatalf("no debia tocar la red: %v", f.Llamadas())
+			}
+		})
+	}
+}
+
+func TestEsCapacidadSoloReconoceLosRechazosPorExistencias(t *testing.T) {
+	casos := []struct {
+		nombre  string
+		estado  int
+		detalle string
+		espera  bool
+	}{
+		{"400 no se pudo ubicar", 400, "could not be placed", true},
+		{"403 sin acceso al grupo", 403, "account cannot access the pool", true},
+		{"500 no instances", 500, "There are no instances currently available", true},
+		{"500 sin instancias en mayusculas", 500, "NO INSTANCES available", true},
+		{"500 generico", 500, "creacion rechazada", false},
+		{"502", 502, "no instances", false},
+		{"422 validacion", 422, "additional properties not allowed", false},
+		{"401", 401, "missing bearer token", false},
+		{"402 saldo", 402, "insufficient balance", false},
+		{"413", 413, "too large", false},
+		{"429", 429, "slow down", false},
+	}
+	for _, c := range casos {
+		t.Run(c.nombre, func(t *testing.T) {
+			e := &ErrorAPI{Estado: c.estado, Detalle: c.detalle}
+			if got := e.EsCapacidad(); got != c.espera {
+				t.Fatalf("EsCapacidad()=%v, esperaba %v", got, c.espera)
+			}
+		})
+	}
+}

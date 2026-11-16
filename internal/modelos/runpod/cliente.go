@@ -55,6 +55,30 @@ func (e *ErrorAPI) Reintentable() bool {
 	return e.Estado == http.StatusTooManyRequests || e.Estado >= 500
 }
 
+// patronesSinCapacidad son fragmentos (en minúsculas) del detalle con que RunPod avisa que no hay
+// máquinas libres cuando responde 500 en vez de 400. Es una lista corta a propósito: un 500 desconocido
+// se sigue tratando como fallo transitorio del servidor.
+var patronesSinCapacidad = []string{"no instances", "no longer any instances", "does not have the resources"}
+
+// EsCapacidad dice si RunPod rechazó la creación por falta de existencias en ese centro y GPU, y no por
+// un error de la petición. La referencia es la tabla de POST /v2/pods en el OpenAPI v2: un 400 (no se pudo
+// ubicar) o un 403 (la cuenta no accede a ese grupo) pasan al siguiente candidato, y un 500 solo cuando su
+// detalle dice que no hay instancias. Un 422, 401, 402, 413, 429 o un 5xx cualquiera NO es capacidad.
+func (e *ErrorAPI) EsCapacidad() bool {
+	switch e.Estado {
+	case http.StatusBadRequest, http.StatusForbidden:
+		return true
+	case http.StatusInternalServerError:
+		texto := strings.ToLower(e.Titulo + " " + e.Detalle)
+		for _, p := range patronesSinCapacidad {
+			if strings.Contains(texto, p) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Config reúne lo necesario para crear el cliente.
 type Config struct {
 	BaseURL string
