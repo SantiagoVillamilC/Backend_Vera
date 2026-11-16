@@ -1,4 +1,4 @@
-// Package sttlocal consume Whisper por loopback sin persistir audio ni transcripciones.
+// Package sttlocal consume Whisper por loopback (o una IP privada autorizada) sin persistir audio ni transcripciones.
 package sttlocal
 
 import (
@@ -9,11 +9,11 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/destinolocal"
 )
 
 // Cliente acota cada transcripción a un plazo y no sigue redirecciones.
@@ -22,10 +22,10 @@ type Cliente struct {
 	http            *http.Client
 }
 
-// Nuevo requiere una dirección HTTP de loopback, token y plazo de hasta dos minutos.
+// Nuevo requiere una dirección HTTP en 127.0.0.1 o en una IPv4 privada exacta listada en
+// VERA_MODELOS_HOST_PERMITIDO (ver destinolocal), token y plazo de hasta dos minutos.
 func Nuevo(endpoint, token string, plazo time.Duration) (*Cliente, error) {
-	u, e := url.Parse(endpoint)
-	if e != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || len(token) < 32 || plazo <= 0 || plazo > 2*time.Minute {
+	if !destinolocal.Aceptable(endpoint) || len(token) < 32 || plazo <= 0 || plazo > 2*time.Minute {
 		return nil, copilot.ErrSolicitudIA
 	}
 	return &Cliente{endpoint, token, &http.Client{Timeout: plazo, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
