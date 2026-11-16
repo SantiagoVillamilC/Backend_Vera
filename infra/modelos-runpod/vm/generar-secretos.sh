@@ -2,20 +2,21 @@
 # infra/modelos-runpod/vm/generar-secretos.sh
 # Crea en la VM, SIN que ningún secreto pase por el chat, por argv ni por el repositorio:
 #   1. el usuario de sistema vera-modelos (sin shell, sin home)
-#   2. /etc/vera-modelos/modelos-control.env  (root:root 0600, a partir de .env.example)
-#   3. /opt/centinela/api/modelos.env         (root:root 0600, solo VERA_STT_TOKEN y VERA_VOZ_TOKEN)
-#   4. la llave SSH del túnel en /etc/vera-modelos/ssh (privada: vera-modelos 0600)
-# Los tres tokens salen de openssl rand -hex 32. La clave de RunPod se lee de la entrada estándar sin eco.
+#   2. /etc/vera-modelos/modelos-control.env  root:root 0600: la clave de RunPod y la configuración
+#   3. /etc/vera-modelos/tokens.env           vera-modelos 0600: VERA_STT_TOKEN y VERA_VOZ_TOKEN (los lee modelos-control)
+#   4. /etc/vera-modelos/control.token        vera-modelos 0600: token del puerto de control (los lee modelos-control)
+#   5. /opt/centinela/api/modelos.env         root:root 0600: los mismos dos tokens, para el contenedor de la API
+#   6. la llave SSH del túnel en /etc/vera-modelos/ssh (privada: vera-modelos 0600)
+# Los tokens salen de openssl rand -hex 32. La clave de RunPod se lee de la entrada estándar sin eco.
+# La clave de RunPod vive SOLO en el archivo de root: nunca entra al contenedor de la API.
 #
 # Uso (como root en la VM, con una terminal real):
-#   sudo bash generar-secretos.sh [--seco] [--rotar] [--clave-runpod] [--sin-usuario]
-#                                 [--escucha IP] [--codigo-sha COMMIT]
+#   sudo bash generar-secretos.sh [--seco] [--rotar] [--clave-runpod] [--sin-usuario] [--codigo-sha COMMIT]
 #   --seco           imprime lo que haría y no cambia nada (no lee la clave)
 #   --rotar          genera tokens nuevos (hay que reiniciar modelos-control y recrear la API después)
 #   --clave-runpod   vuelve a pedir la clave de RunPod aunque el archivo ya exista
 #   --sin-usuario    no crea el usuario ni cambia dueños. Solo para ensayos fuera de la VM
-#   --escucha IP     fija VERA_MODELOS_ESCUCHA (la IP del gateway: puente-modelos.sh gateway)
-#   --codigo-sha C   fija VERA_MODELOS_CODIGO_SHA (commit de Backend_Vera de 40 caracteres)
+#   --codigo-sha C   fija MODELOS_REPO_SHA (commit de Backend_Vera de 40 caracteres)
 #
 # Sin --rotar es idempotente: lo que ya existe no se regenera y nunca se imprime ningún secreto.
 # Variables de ruta para ensayos: VERA_MODELOS_ETC, ARCHIVO_TOKENS_API, PLANTILLA_ENV.
@@ -24,6 +25,8 @@ set -euo pipefail
 DIRECTORIO_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ETC="${VERA_MODELOS_ETC:-/etc/vera-modelos}"
 ARCHIVO_ENV="${ETC}/modelos-control.env"
+ARCHIVO_TOKENS="${ETC}/tokens.env"
+ARCHIVO_CONTROL="${ETC}/control.token"
 DIR_SSH="${ETC}/ssh"
 CLAVE_SSH="${DIR_SSH}/tunel_ed25519"
 ARCHIVO_TOKENS_API="${ARCHIVO_TOKENS_API:-/opt/centinela/api/modelos.env}"
@@ -33,11 +36,12 @@ SECO="no"
 ROTAR="no"
 PEDIR_CLAVE="no"
 SIN_USUARIO="no"
-ESCUCHA=""
 CODIGO_SHA=""
 
-declare -A VALORES=()
-CLAVES_SECRETAS=(RUNPOD_API_KEY VERA_MODELOS_TOKEN_CONTROL VERA_MODELOS_TOKEN_VOZ VERA_MODELOS_TOKEN_STT)
+TOKEN_CONTROL=""
+TOKEN_VOZ=""
+TOKEN_STT=""
+CLAVE_RUNPOD=""
 
 error() { printf 'generar-secretos: %s\n' "$1" >&2; exit "${2:-1}"; }
 info() { printf 'generar-secretos: %s\n' "$1"; }
@@ -49,14 +53,11 @@ leer_argumentos() {
       --rotar) ROTAR="si" ;;
       --clave-runpod) PEDIR_CLAVE="si" ;;
       --sin-usuario) SIN_USUARIO="si" ;;
-      --escucha) shift; ESCUCHA="${1:-}" ;;
       --codigo-sha) shift; CODIGO_SHA="${1:-}" ;;
       *) error "argumento no permitido: $1" 64 ;;
     esac
     shift
   done
-  [[ -z "$ESCUCHA" || "$ESCUCHA" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || error "--escucha debe ser una IPv4" 64
-  [[ "$ESCUCHA" != "0.0.0.0" ]] || error "--escucha no puede ser 0.0.0.0" 64
   [[ -z "$CODIGO_SHA" || "$CODIGO_SHA" =~ ^[0-9a-f]{40}$ ]] || error "--codigo-sha debe ser un commit de 40 caracteres hexadecimales" 64
 }
 
@@ -132,51 +133,61 @@ asegurar_llave_ssh() {
   info "llave SSH creada. Parte pública (no es secreta): $(< "${CLAVE_SSH}.pub")"
 }
 
-# Define el valor de cada secreto: conserva el del archivo existente salvo --rotar.
+# Un token: conserva el valor del archivo existente salvo --rotar.
+decidir_token() { # decidir_token ARCHIVO CLAVE
+  local existente
+  existente="$(leer_valor "$1" "$2" || true)"
+  if [[ -n "$existente" && "$ROTAR" != "si" ]]; then
+    printf '%s' "$existente"
+  elif [[ "$SECO" == "si" ]]; then
+    printf '(se generaría con openssl rand -hex 32)'
+  else
+    token_nuevo
+  fi
+}
+
 decidir_secretos() {
-  local clave existente
-  for clave in VERA_MODELOS_TOKEN_CONTROL VERA_MODELOS_TOKEN_VOZ VERA_MODELOS_TOKEN_STT; do
-    existente="$(leer_valor "$ARCHIVO_ENV" "$clave" || true)"
-    if [[ -n "$existente" && "$ROTAR" != "si" ]]; then
-      VALORES[$clave]="$existente"
-    elif [[ "$SECO" == "si" ]]; then
-      VALORES[$clave]="(se generaría con openssl rand -hex 32)"
-    else
-      VALORES[$clave]="$(token_nuevo)"
-    fi
-  done
+  local existente_control=""
+  TOKEN_VOZ="$(decidir_token "$ARCHIVO_TOKENS" VERA_VOZ_TOKEN)"
+  TOKEN_STT="$(decidir_token "$ARCHIVO_TOKENS" VERA_STT_TOKEN)"
+  if [[ -f "$ARCHIVO_CONTROL" ]]; then existente_control="$(< "$ARCHIVO_CONTROL")"; fi
+  if [[ -n "$existente_control" && "$ROTAR" != "si" ]]; then
+    TOKEN_CONTROL="$existente_control"
+  elif [[ "$SECO" == "si" ]]; then
+    TOKEN_CONTROL="(se generaría con openssl rand -hex 32)"
+  else
+    TOKEN_CONTROL="$(token_nuevo)"
+  fi
 }
 
 decidir_clave_runpod() {
   local existente
   existente="$(leer_valor "$ARCHIVO_ENV" RUNPOD_API_KEY || true)"
   if [[ -n "$existente" && "$existente" != rpa_REEMPLAZAR* && "$PEDIR_CLAVE" != "si" ]]; then
-    VALORES[RUNPOD_API_KEY]="$existente"
+    CLAVE_RUNPOD="$existente"
     return 0
   fi
   if [[ "$SECO" == "si" ]]; then
-    VALORES[RUNPOD_API_KEY]="(se pediría por la entrada estándar, sin eco)"
+    CLAVE_RUNPOD="(se pediría por la entrada estándar, sin eco)"
     return 0
   fi
   # Sin eco en una terminal y sin argv. También acepta un pipe: "... | sudo bash generar-secretos.sh".
   printf 'Pega la clave de la API de RunPod y pulsa Enter (no se muestra): ' >&2
-  IFS= read -rs clave_leida || true
+  IFS= read -rs CLAVE_RUNPOD || true
   printf '\n' >&2
-  [[ "$clave_leida" =~ ^[A-Za-z0-9_-]{16,200}$ ]] || error "la clave de RunPod está vacía o tiene caracteres no permitidos" 65
-  VALORES[RUNPOD_API_KEY]="$clave_leida"
-  clave_leida=""
+  [[ "$CLAVE_RUNPOD" =~ ^[A-Za-z0-9_-]{16,200}$ ]] || error "la clave de RunPod está vacía o tiene caracteres no permitidos" 65
 }
 
-# Reescribe el archivo línea por línea: reemplaza solo las claves con valor decidido.
+# Reescribe el archivo de entorno línea por línea: reemplaza RUNPOD_API_KEY y MODELOS_REPO_SHA, deja lo demás.
 construir_env() {
   local base linea clave salida=""
   if [[ -f "$ARCHIVO_ENV" ]]; then base="$ARCHIVO_ENV"; else base="$PLANTILLA_ENV"; fi
-  [[ -z "$ESCUCHA" ]] || VALORES[VERA_MODELOS_ESCUCHA]="$ESCUCHA"
-  [[ -z "$CODIGO_SHA" ]] || VALORES[VERA_MODELOS_CODIGO_SHA]="$CODIGO_SHA"
   while IFS= read -r linea || [[ -n "$linea" ]]; do
     clave="${linea%%=*}"
-    if [[ "$linea" == *=* && -n "${VALORES[$clave]+x}" ]]; then
-      salida+="${clave}=${VALORES[$clave]}"$'\n'
+    if [[ "$clave" == "RUNPOD_API_KEY" ]]; then
+      salida+="RUNPOD_API_KEY=${CLAVE_RUNPOD}"$'\n'
+    elif [[ "$clave" == "MODELOS_REPO_SHA" && -n "$CODIGO_SHA" ]]; then
+      salida+="MODELOS_REPO_SHA=${CODIGO_SHA}"$'\n'
     else
       salida+="${linea}"$'\n'
     fi
@@ -184,25 +195,29 @@ construir_env() {
   printf '%s' "$salida"
 }
 
-escribir_secreto() { # escribir_secreto DESTINO CONTENIDO
-  local destino="$1" contenido="$2"
+# escribir_secreto DESTINO CONTENIDO [DUENO]: umask 077, mv atómico y modo 0600.
+escribir_secreto() {
+  local destino="$1" contenido="$2" dueno="${3:-}"
   ( umask 077 && printf '%s' "$contenido" > "${destino}.tmp" )
   chmod 0600 "${destino}.tmp"
+  if [[ -n "$dueno" && "$SIN_USUARIO" != "si" ]]; then
+    chown "$dueno" "${destino}.tmp"
+  fi
   mv "${destino}.tmp" "$destino"
 }
 
 escribir_archivos() {
-  local contenido_env contenido_api
-  contenido_env="$(construir_env)"
-  contenido_api="VERA_STT_TOKEN=${VALORES[VERA_MODELOS_TOKEN_STT]}"$'\n'"VERA_VOZ_TOKEN=${VALORES[VERA_MODELOS_TOKEN_VOZ]}"$'\n'
+  local tokens
+  tokens="VERA_STT_TOKEN=${TOKEN_STT}"$'\n'"VERA_VOZ_TOKEN=${TOKEN_VOZ}"$'\n'
   if [[ "$SECO" == "si" ]]; then
-    info "[seco] escribiría ${ARCHIVO_ENV} (root 0600) con ${#CLAVES_SECRETAS[@]} secretos y el resto de la plantilla"
-    info "[seco] escribiría ${ARCHIVO_TOKENS_API} (root 0600) con VERA_STT_TOKEN y VERA_VOZ_TOKEN"
+    info "[seco] escribiría ${ARCHIVO_ENV} (root 0600), ${ARCHIVO_TOKENS} y ${ARCHIVO_CONTROL} (${USUARIO} 0600) y ${ARCHIVO_TOKENS_API} (root 0600)"
     return 0
   fi
-  escribir_secreto "$ARCHIVO_ENV" "$contenido_env"
-  escribir_secreto "$ARCHIVO_TOKENS_API" "$contenido_api"
-  info "escritos ${ARCHIVO_ENV} y ${ARCHIVO_TOKENS_API} (0600). Ningún secreto se imprimió"
+  escribir_secreto "$ARCHIVO_ENV" "$(construir_env)"$'\n'
+  escribir_secreto "$ARCHIVO_TOKENS" "$tokens" "${USUARIO}:${USUARIO}"
+  escribir_secreto "$ARCHIVO_CONTROL" "${TOKEN_CONTROL}"$'\n' "${USUARIO}:${USUARIO}"
+  escribir_secreto "$ARCHIVO_TOKENS_API" "$tokens"
+  info "escritos los cuatro archivos (todos 0600). Ningún secreto se imprimió"
 }
 
 principal() {

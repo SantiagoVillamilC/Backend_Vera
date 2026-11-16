@@ -273,5 +273,45 @@ PATH="${BASE}/bin-falso:${PATH}" NVIDIA_SMI="${BASE}/smi-13" correr "$R" bash "$
 verificar "con los tres sanos el arranque se reutiliza y sale con 0" 0 "$rc"
 contiene "el progreso dice reutilizados" <(ultima_linea "$R") 'reutilizados sin reiniciar'
 
+# ---------- tokens por entorno (el camino real de modelos-control), alias KOKORO_TOKEN y bloqueo ----------
+R2="${BASE}/reuso-entorno"
+mkdir -p "$R2"
+rc=0
+WHISPER_TOKEN="$TOKEN_STT" KOKORO_TOKEN="$TOKEN_VOZ" PATH="${BASE}/bin-falso:${PATH}" NVIDIA_SMI="${BASE}/smi-13" \
+  correr "$R2" bash "$ARRANQUE" || rc=$?
+verificar "tokens por entorno (KOKORO_TOKEN) con los tres sanos sale con 0" 0 "$rc"
+verificar "los tokens del entorno se guardan con modo 600" 600 "$(stat -c %a "${R2}/tokens.env")"
+no_contiene "el progreso no contiene el token de Whisper" "${R2}/progreso.jsonl" "$TOKEN_STT"
+no_contiene "la salida no contiene el token de Kokoro" "${R2}/salida.txt" "$TOKEN_VOZ"
+contiene "el origen de los tokens queda anotado" "${R2}/progreso.jsonl" "origen=entorno"
+
+# Un token del entorno demasiado corto aborta con 2 aunque exista un archivo válido.
+R3="${BASE}/entorno-corto"
+mkdir -p "$R3"
+cp "${S}/tokens.env" "${R3}/tokens.env"
+chmod 600 "${R3}/tokens.env"
+rc=0
+WHISPER_TOKEN="corto" KOKORO_TOKEN="$TOKEN_VOZ" NVIDIA_SMI="${BASE}/smi-13" correr "$R3" bash "$ARRANQUE" || rc=$?
+verificar "token del entorno corto aborta con 2" 2 "$rc"
+
+# Sin nvidia-smi en la corrida completa el código es 14 (terminar el pod), no 1 (reintentar).
+R4="${BASE}/sin-smi-completo"
+mkdir -p "$R4"
+rc=0
+NVIDIA_SMI="${BASE}/no-existe" correr "$R4" bash "$ARRANQUE" || rc=$?
+verificar "sin nvidia-smi en la corrida completa sale con 14" 14 "$rc"
+
+# Bloqueo: con otra corrida en curso sale con 5 y no toca el progreso.
+R5="${BASE}/bloqueo"
+mkdir -p "$R5"
+printf 'progreso de la corrida anterior\n' > "${R5}/progreso.jsonl"
+flock "${R5}/arrancar.lock" sleep 20 &
+PIDS_SERVIDORES+=("$!")
+sleep 0.5
+rc=0
+NVIDIA_SMI="${BASE}/smi-13" correr "$R5" bash "$ARRANQUE" || rc=$?
+verificar "con otra corrida en curso sale con 5" 5 "$rc"
+contiene "el progreso de la corrida en curso queda intacto" "${R5}/progreso.jsonl" "progreso de la corrida anterior"
+
 printf '\n%s pruebas, %s fallas\n' "$PRUEBAS" "$FALLOS"
 [[ "$FALLOS" -eq 0 ]]

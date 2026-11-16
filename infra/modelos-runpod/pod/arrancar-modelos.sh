@@ -20,10 +20,12 @@
 #   bash arrancar-modelos.sh --compuerta  solo comprueba herramientas y la compuerta de CUDA (sin root ni red)
 #
 # Entradas (todas opcionales salvo el archivo de tokens y el origen del código):
-#   VERA_TOKENS_ARCHIVO    archivo 0600 con WHISPER_TOKEN y VERA_LAB_TOKEN (32 caracteres o más).
-#                          Lo entrega modelos-control por ssh con "umask 077" y stdin, nunca en argv.
+#   Tokens (32 caracteres o más), por UNO de estos dos caminos, nunca en argv:
+#     a) entorno: WHISPER_TOKEN y VERA_LAB_TOKEN (o KOKORO_TOKEN), que modelos-control exporta por stdin
+#        de "bash -s". Gana si están. Se guardan en VERA_TOKENS_ARCHIVO (0600) para salud-modelos.sh.
+#     b) VERA_TOKENS_ARCHIVO: archivo 0600 con WHISPER_TOKEN y VERA_LAB_TOKEN, entregado con "umask 077".
 #   VERA_SERVIDORES_DIR    carpeta con stt-local y voz-local (variante GPU de Kokoro). Si falta, se baja de
-#                          GitHub el commit VERA_CODIGO_SHA (40 hex) del repositorio VERA_REPO.
+#                          GitHub el commit VERA_CODIGO_SHA o REPO_SHA (40 hex) del repositorio VERA_REPO.
 #   OLLAMA_NUM_PARALLEL    por defecto 2 (demo). Medido en una 4090: P=8 aguanta 8 usuarios, P=2 usa 5 GB de VRAM.
 #   OLLAMA_KEEP_ALIVE      por defecto 24h
 #   WHISPER_GPU            por defecto si (con "auto" un fallo de CUDA bajaría a CPU en silencio)
@@ -37,7 +39,8 @@
 #
 # Códigos de salida (contrato con modelos-control):
 #   0 listo   1 fallo genérico   2 entrada inválida (tokens, variables, código)   3 sha256 distinto
-#   4 un servicio no quedó sano a tiempo   13 Ollama no cabe entero en VRAM
+#   4 un servicio no quedó sano a tiempo   5 ya hay otra corrida en curso (no toca el progreso)
+#   13 Ollama no cabe entero en VRAM
 #   14 el driver no ofrece CUDA 13.0 (terminar el pod y crear otro en otro host)
 #   15 Kokoro abortó porque CUDAExecutionProvider no cargó (mismo remedio que 14)
 set -euo pipefail
@@ -49,7 +52,12 @@ PIDS="${ESTADO_DIR}/pids"
 VENV_DIR="${VERA_VENV_DIR:-/workspace/venv}"
 DIR_SERV="${VERA_SERVIDORES_DIR:-/workspace/vera/servidores}"
 TOKENS_ARCHIVO="${VERA_TOKENS_ARCHIVO:-${ESTADO_DIR}/tokens.env}"
-CODIGO_SHA="${VERA_CODIGO_SHA:-}"
+CODIGO_SHA="${VERA_CODIGO_SHA:-${REPO_SHA:-}}"
+# Tokens que pudo entregar modelos-control por entorno (export en el stdin de "bash -s"). Se capturan y se
+# quitan del entorno de este proceso para que no los hereden pip, curl ni ningún hijo.
+TOKEN_STT_ENTORNO="${WHISPER_TOKEN:-}"
+TOKEN_VOZ_ENTORNO="${VERA_LAB_TOKEN:-${KOKORO_TOKEN:-}}"
+unset WHISPER_TOKEN VERA_LAB_TOKEN KOKORO_TOKEN
 REPO="${VERA_REPO:-SantiagoVillamilC/Backend_Vera}"
 GGUF_DIR="${VERA_GGUF_DIR:-/workspace/modelos/gemma4}"
 export HF_HOME="${HF_HOME:-/workspace/hf}"
@@ -209,11 +217,10 @@ validar_entradas() {
   [[ "$WHISPER_GPU" =~ ^(si|no|auto)$ ]] || fallar 2 validar_entradas "WHISPER_GPU debe ser si, no o auto"
 }
 
-# Lee las dos claves permitidas sin ejecutar el archivo. Nunca imprime los valores.
-cargar_tokens() {
+# Lee las dos claves permitidas del archivo sin ejecutarlo. Nunca imprime los valores.
+leer_tokens_archivo() {
   local linea clave valor modo dueno
-  paso tokens
-  [[ -f "$TOKENS_ARCHIVO" ]] || fallar 2 tokens "falta ${TOKENS_ARCHIVO}"
+  [[ -f "$TOKENS_ARCHIVO" ]] || fallar 2 tokens "faltan los tokens: ni en el entorno ni en ${TOKENS_ARCHIVO}"
   modo="$(stat -c %a "$TOKENS_ARCHIVO")"
   dueno="$(stat -c %u "$TOKENS_ARCHIVO")"
   [[ "$modo" == "600" ]] || fallar 2 tokens "${TOKENS_ARCHIVO} debe tener modo 600 y tiene ${modo}"
@@ -228,9 +235,34 @@ cargar_tokens() {
       *) fallar 2 tokens "clave no permitida en el archivo de tokens" ;;
     esac
   done < "$TOKENS_ARCHIVO"
+}
+
+# Guarda los tokens recibidos por entorno en un archivo 0600 para que salud-modelos.sh pueda leerlos después.
+persistir_tokens() {
+  ( umask 077 && printf 'WHISPER_TOKEN=%s\nVERA_LAB_TOKEN=%s\n' "$WHISPER_TOKEN" "$VERA_LAB_TOKEN" > "${TOKENS_ARCHIVO}.tmp" )
+  chmod 600 "${TOKENS_ARCHIVO}.tmp"
+  mv "${TOKENS_ARCHIVO}.tmp" "$TOKENS_ARCHIVO"
+}
+
+# Dos orígenes, el entorno gana porque es el más reciente (modelos-control lo exporta en cada arranque):
+#   1. WHISPER_TOKEN y VERA_LAB_TOKEN (o KOKORO_TOKEN) en el entorno, enviados por stdin y nunca en argv
+#   2. el archivo 0600 de VERA_TOKENS_ARCHIVO
+cargar_tokens() {
+  local desde="archivo"
+  paso tokens
+  if [[ -n "$TOKEN_STT_ENTORNO" && -n "$TOKEN_VOZ_ENTORNO" ]]; then
+    WHISPER_TOKEN="$TOKEN_STT_ENTORNO"
+    VERA_LAB_TOKEN="$TOKEN_VOZ_ENTORNO"
+    desde="entorno"
+  else
+    leer_tokens_archivo
+  fi
   [[ "$WHISPER_TOKEN" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fallar 2 tokens "WHISPER_TOKEN ausente, corto o con caracteres no permitidos"
   [[ "$VERA_LAB_TOKEN" =~ ^[A-Za-z0-9_-]{32,}$ ]] || fallar 2 tokens "VERA_LAB_TOKEN ausente, corto o con caracteres no permitidos"
-  ok tokens
+  if [[ "$desde" == "entorno" ]]; then
+    persistir_tokens
+  fi
+  ok tokens "origen=${desde}"
 }
 
 tamano_de() { stat -c %s "$1"; }
@@ -438,7 +470,8 @@ lanzar() {
   local nombre="$1" log="${LOGS}/$1.log"
   shift
   : > "$log"
-  setsid nohup "$@" > "$log" 2>&1 < /dev/null &
+  # 9>&-: el servicio no hereda el bloqueo de la corrida (fd 9), o impediría la siguiente.
+  setsid nohup "$@" > "$log" 2>&1 < /dev/null 9>&- &
   printf '%s\n' "$!" > "${PIDS}/${nombre}.pid"
 }
 
@@ -603,6 +636,18 @@ Pasos, en este orden:
 PLAN
 }
 
+# Una sola corrida a la vez. Se toma ANTES de truncar progreso.jsonl: una segunda corrida no borra el progreso
+# de la primera, sale con 5 sin escribir nada y quien la lanzó sigue leyendo el progreso de la que corre.
+tomar_bloqueo() {
+  mkdir -p "$ESTADO_DIR"
+  exec 9> "${ESTADO_DIR}/arrancar.lock"
+  if ! flock -n 9; then
+    LINEA_FINAL="si"
+    printf '[aviso] ya hay otra corrida de arrancar-modelos.sh en curso\n' >&2
+    exit 5
+  fi
+}
+
 preparar_estado() {
   mkdir -p "$ESTADO_DIR" "$LOGS" "$PIDS"
   chmod 700 "$ESTADO_DIR"
@@ -627,11 +672,12 @@ principal() {
     "") ;;
     *) printf 'uso: arrancar-modelos.sh [--seco|--compuerta]\n' >&2; exit 2 ;;
   esac
+  validar_entradas
+  exigir_comandos curl tar sha256sum stat date pgrep pkill flock
+  tomar_bloqueo
   preparar_estado
   progreso inicio en_curso 0 "arranque de modelos, P=${OLLAMA_NUM_PARALLEL}"
-  validar_entradas
   paso entorno
-  exigir_comandos curl tar sha256sum stat date pgrep pkill "$NVIDIA_SMI"
   elegir_python
   ok entorno "python=${PYTHON_BIN}"
   compuerta_cuda

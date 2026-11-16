@@ -2,10 +2,8 @@
 # Destino en la VM: /etc/systemd/system/vera-modelos-guardian.service (root:root 0644).
 #
 # Lo dispara vera-modelos-guardian.timer cada 5 minutos. "modelos-control reconcile" termina cualquier pod
-# cuyo nombre empiece por VERA_MODELOS_NOMBRE_POD que esté huérfano (no lo conoce el estado), pasado de la
-# sesión máxima o de la inactividad. Es la red de seguridad del gasto: funciona aunque modelos-control serve
-# esté caído. Usa la misma carpeta de estado que serve, así que ambos deben tomar un bloqueo compartido
-# (flock en VERA_MODELOS_DIR_ESTADO) para no pelearse.
+# vencido, huérfano o duplicado sin tocar los ajenos. Es la red de seguridad del gasto: funciona aunque
+# modelos-control servir esté caído. Usa la misma carpeta de estado que servir (MODELOS_DIR_ESTADO).
 [Unit]
 Description=Vera modelos-control reconcile (termina pods huérfanos o vencidos)
 Documentation=https://github.com/SantiagoVillamilC/Backend_Vera/blob/dev/docs/despliegue-modelos-runpod-vm.md
