@@ -199,6 +199,81 @@ Para ver el `compose.api.yaml` generado hace falta correr el paso en la VM (o so
 Además, `go test ./cmd/api/` cubre la coherencia entre la matriz, `.env.example`, las plantillas y
 `LoadConfig` sin necesitar docker ni la VM.
 
+## Destinos de modelos en una IP privada
+
+`VERA_MODELOS_HOST_PERMITIDO` autoriza a la API a hablar con voz (`VERA_VOZ_URL`), STT
+(`VERA_STT_URL`) y Ollama (`VERA_OLLAMA_URL`) en una IPv4 privada concreta, además de
+`127.0.0.1`. No pertenece a la matriz de banderas: es opcional y no depende del destino.
+
+### Para qué sirve
+
+La API corre en un contenedor Docker, así que su `127.0.0.1` es el del contenedor y no alcanza lo
+que escucha en el host. Con el pod de RunPod bajo demanda, `modelos-control` abre el túnel SSH en la
+VM y escucha en el gateway del puente de Docker (por ejemplo `172.18.0.1`). Para llegar hasta él, la
+API necesita aceptar esa IP como destino.
+
+### Formato
+
+- Una lista de IPv4 literales separadas por comas. Los espacios alrededor de cada coma se ignoran.
+- Cada entrada debe estar en `10.0.0.0/8`, `172.16.0.0/12` o `192.168.0.0/16`, escrita en forma
+  canónica (sin ceros a la izquierda).
+- Máximo 16 entradas. Las repetidas se colapsan.
+- Se rechaza la lista completa si trae un hostname, IPv6, un rango CIDR, un puerto, una IP pública,
+  link-local, `0.0.0.0`, `127.0.0.1` (el loopback ya se acepta siempre) o una entrada vacía.
+
+| Valor | Efecto |
+| --- | --- |
+| sin definir o vacío | Solo `http://127.0.0.1[:puerto]`. Es el comportamiento de siempre. |
+| `172.18.0.1` | Además `http://172.18.0.1:<puerto>`. |
+| `172.18.0.1,10.0.0.5` | Además esas dos IPs, cada una con puerto. |
+
+Ejemplo para la API en contenedor, con los servicios de `modelos-control` en el gateway del puente:
+
+```bash
+VERA_MODELOS_HOST_PERMITIDO=172.18.0.1
+VERA_VOZ_URL=http://172.18.0.1:8766
+VERA_STT_URL=http://172.18.0.1:8777
+VERA_OLLAMA_URL=http://172.18.0.1:11434
+```
+
+### Qué se acepta y qué no
+
+Una URL de voz, STT u Ollama es aceptable solo si es un origen `http` sin credenciales, ruta, consulta
+ni fragmento, cuyo host es exactamente `127.0.0.1` (puerto opcional) o exactamente una IP de la lista
+(puerto obligatorio, de 1 a 65535). Se rechazan los hostnames (incluidos `localhost` y
+`host.docker.internal`), IPv6, `0.0.0.0`, IPs públicas, link-local, otros loopback como `127.0.0.2`,
+`https`, y cualquier IP privada que no esté en la lista. Sin la variable, ninguna IP privada se acepta.
+
+Una lista inválida hace fallar el arranque con un error que nombra `VERA_MODELOS_HOST_PERMITIDO` sin
+repetir su valor. Una URL rechazada también nombra solo la variable, nunca el valor, porque podría
+traer una contraseña. Los comandos `laboratorio-vera` y `revisar-voz-vera` leen la misma variable
+del entorno al construir el cliente de voz.
+
+### Riesgo que se acepta
+
+Antes, los clientes de voz y STT solo hablaban con `127.0.0.1`. Ahora esa regla pasa a ser una lista
+permitida explícita: el operador puede apuntar el tráfico de la API (audio del usuario, texto de la
+conversación y, en Ollama, datos financieros) a otro host de la red privada. Ollama ya aceptaba
+cualquier URL http(s) sin token. Con este cambio también se endurece: desde ahora solo admite
+`127.0.0.1` o una IP de la lista, y los hostnames, `https` y las IPs públicas dejan de arrancar.
+
+### Por qué sigue siendo aceptable
+
+- La IP debe estar escrita de forma exacta en la lista. No hay rangos, hostnames ni comodines, y sin
+  la variable no se acepta ninguna IP privada.
+- Voz y STT mantienen el token `X-Vera-Token` de al menos 32 caracteres. Solo Ollama va sin token, como
+  antes.
+- El puente de Docker no es alcanzable desde fuera de la VM, y `modelos-control` debe escuchar solo en esa
+  IP, no en `0.0.0.0` (eso se verifica en su propio despliegue).
+- La lista la fija el operador por entorno. Ni la app ni ninguna petición pueden cambiarla.
+- Los clientes siguen sin seguir redirecciones, así que un servicio no puede reenviar el tráfico a
+  otro destino.
+
+### Qué no cubre
+
+Esta variable no abre nada por sí sola: el servicio de destino tiene que escuchar en esa IP y el firewall
+de la VM no debe exponer ese puerto fuera de la VM. Esa parte es de `modelos-control` y de la infraestructura.
+
 ## Criterio pendiente
 
 La verificación real de `make verificar-banderas` sobre la VM de demo y la de producción queda
