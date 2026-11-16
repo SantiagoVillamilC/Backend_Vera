@@ -1,6 +1,6 @@
 # Atajos del backend. Los binarios viven en out/bin, que está en .gitignore.
 BIN := out/bin
-COMANDOS := api migrate enriquecer avisos semilla-inteligencia evaluar-clasificador rollback-m8 cargar-catalogo
+COMANDOS := api migrate enriquecer avisos semilla-inteligencia evaluar-clasificador rollback-m8 cargar-catalogo modelos-control
 
 .PHONY: build verificar imagen demo limpiar verificar-banderas
 
