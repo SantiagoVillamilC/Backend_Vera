@@ -39,6 +39,28 @@
       "version_herramienta": "kokoro-onnx 0.6.1"
     },
     {
+      "nombre": "kokoro-v1.0-fp32-onnx",
+      "raiz": "voz",
+      "origen": "Release model-files-v1.1 de thewh1teagle/kokoro-onnx, asset kokoro-v1.0.onnx (fp32). Opcional: solo lo carga infra/voz-local/servidor.py con VERA_VOZ_DISPOSITIVO=cuda, y descargar.py lo baja unicamente con VERA_VOZ_DESCARGAR_GPU=1. Huella y tamano salen del manifiesto infra/voz-local/descargar.py y coinciden con el tamano y el digest que declara la API de esa release (consultada el 2026-11-15).",
+      "ruta": "kokoro-v1.0.onnx",
+      "sha256": "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a",
+      "bytes": 325505369,
+      "licencia": "Apache-2.0 (Kokoro-82M), MIT (exportacion kokoro-onnx)",
+      "fecha_captura": "2026-11-15",
+      "version_herramienta": "kokoro-onnx 0.6.1"
+    },
+    {
+      "nombre": "kokoro-v1.0-fp16-onnx",
+      "raiz": "voz",
+      "origen": "Release model-files-v1.1 de thewh1teagle/kokoro-onnx, asset kokoro-v1.0.fp16.onnx. Opcional: solo lo carga infra/voz-local/servidor.py con VERA_VOZ_DISPOSITIVO=cuda y VERA_VOZ_PRECISION=fp16, y descargar.py lo baja unicamente con VERA_VOZ_DESCARGAR_GPU=1. Huella y tamano salen del manifiesto infra/voz-local/descargar.py y coinciden con el tamano y el digest que declara la API de esa release (consultada el 2026-11-15).",
+      "ruta": "kokoro-v1.0.fp16.onnx",
+      "sha256": "f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96",
+      "bytes": 163527961,
+      "licencia": "Apache-2.0 (Kokoro-82M), MIT (exportacion kokoro-onnx)",
+      "fecha_captura": "2026-11-15",
+      "version_herramienta": "kokoro-onnx 0.6.1"
+    },
+    {
       "nombre": "kokoro-voces-v1.0",
       "raiz": "voz",
       "origen": "Release model-files-v1.1 de thewh1teagle/kokoro-onnx, asset voices-v1.0.bin. Huella y tamano salen del manifiesto infra/voz-local/descargar.py. La copia local de este equipo en modelos-gemma/modelos/kokoro/voices.bin coincide byte a byte con ese asset. Incluye las 54 voces v1.0, entre ellas ef_dora en espanol. Lo carga infra/voz-local/servidor.py desde /opt/voz/modelos.",

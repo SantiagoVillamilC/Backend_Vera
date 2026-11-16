@@ -199,15 +199,123 @@ class ConcurrenciaTest(unittest.TestCase):
         self.assertEqual((r1, r2), ([200], [200]))
 
 
+class OrtFalso:
+    """Falso de onnxruntime sin GPU: anota cada llamada en orden y devuelve proveedores a elección."""
+
+    def __init__(self, proveedores=("CPUExecutionProvider",)):
+        self.proveedores = list(proveedores)
+        self.registro = []
+        self.sesiones = []
+        self.SessionOptions = types.SimpleNamespace
+
+    def preload_dlls(self, *args, **kwargs):
+        self.registro.append("preload_dlls")
+
+    def InferenceSession(self, ruta, sess_options=None, providers=None):
+        self.registro.append("InferenceSession")
+        self.sesiones.append({"ruta": ruta, "opciones": sess_options, "proveedores": providers})
+        return types.SimpleNamespace(get_providers=lambda: self.registro.append("get_providers") or self.proveedores)
+
+
+class CrearSesionTest(unittest.TestCase):
+    def test_sin_variables_pide_cpu_int8_y_los_hilos_de_siempre(self):
+        ort = OrtFalso()
+        servidor.crear_sesion(ort, "cpu", None)
+        (sesion,) = ort.sesiones
+        self.assertEqual(sesion["ruta"], "/opt/voz/modelos/kokoro-v1.0.int8.onnx")
+        self.assertEqual(sesion["proveedores"], ["CPUExecutionProvider"])
+        self.assertEqual((sesion["opciones"].intra_op_num_threads, sesion["opciones"].inter_op_num_threads), (2, 1))
+
+    def test_cpu_no_hace_llamadas_nuevas(self):
+        ort = OrtFalso()
+        servidor.crear_sesion(ort, "cpu", None)
+        self.assertEqual(ort.registro, ["InferenceSession"])
+
+    def test_cuda_fp32_usa_el_modelo_fp32_y_las_opciones_del_proveedor(self):
+        ort = OrtFalso(["CUDAExecutionProvider", "CPUExecutionProvider"])
+        servidor.crear_sesion(ort, "cuda", "fp32")
+        (sesion,) = ort.sesiones
+        self.assertEqual(sesion["ruta"], "/opt/voz/modelos/kokoro-v1.0.onnx")
+        self.assertEqual(sesion["proveedores"], [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "HEURISTIC"}), "CPUExecutionProvider"])
+        self.assertEqual((sesion["opciones"].intra_op_num_threads, sesion["opciones"].inter_op_num_threads), (2, 1))
+
+    def test_cuda_fp16_usa_el_modelo_fp16(self):
+        ort = OrtFalso(["CUDAExecutionProvider", "CPUExecutionProvider"])
+        servidor.crear_sesion(ort, "cuda", "fp16")
+        self.assertEqual(ort.sesiones[0]["ruta"], "/opt/voz/modelos/kokoro-v1.0.fp16.onnx")
+
+    def test_cuda_nunca_carga_el_modelo_int8(self):
+        for precision in ("fp32", "fp16"):
+            ort = OrtFalso(["CUDAExecutionProvider", "CPUExecutionProvider"])
+            servidor.crear_sesion(ort, "cuda", precision)
+            self.assertNotIn("int8", ort.sesiones[0]["ruta"])
+
+    def test_cuda_precarga_las_librerias_antes_de_crear_la_sesion(self):
+        ort = OrtFalso(["CUDAExecutionProvider", "CPUExecutionProvider"])
+        servidor.crear_sesion(ort, "cuda", "fp32")
+        self.assertEqual(ort.registro, ["preload_dlls", "InferenceSession", "get_providers"])
+
+    def test_cuda_respeta_el_directorio_indicado(self):
+        ort = OrtFalso(["CUDAExecutionProvider", "CPUExecutionProvider"])
+        servidor.crear_sesion(ort, "cuda", "fp32", directorio="/otro/sitio")
+        self.assertEqual(ort.sesiones[0]["ruta"], "/otro/sitio/kokoro-v1.0.onnx")
+
+    def test_cuda_que_cae_a_cpu_aborta_en_vez_de_seguir_en_silencio(self):
+        ort = OrtFalso(["CPUExecutionProvider"])
+        with self.assertRaises(SystemExit) as fallo:
+            servidor.crear_sesion(ort, "cuda", "fp32")
+        self.assertIn("CUDAExecutionProvider", str(fallo.exception.code))
+        self.assertIn("CPUExecutionProvider", str(fallo.exception.code))
+
+    def test_cuda_con_cpu_primero_aborta_aunque_cuda_figure_despues(self):
+        ort = OrtFalso(["CPUExecutionProvider", "CUDAExecutionProvider"])
+        with self.assertRaises(SystemExit):
+            servidor.crear_sesion(ort, "cuda", "fp16")
+
+    def test_cpu_rechaza_cualquier_precision(self):
+        for precision in ("fp32", "fp16", "int8"):
+            with self.subTest(precision=precision):
+                with self.assertRaises(SystemExit):
+                    servidor.crear_sesion(OrtFalso(), "cpu", precision)
+
+    def test_un_dispositivo_desconocido_aborta_sin_crear_sesion(self):
+        ort = OrtFalso()
+        with self.assertRaises(SystemExit):
+            servidor.crear_sesion(ort, "tpu", None)
+        self.assertEqual(ort.sesiones, [])
+
+
+class CalentamientoTest(unittest.TestCase):
+    def test_en_cpu_calienta_con_una_sola_frase_como_siempre(self):
+        motor = MotorPrueba()
+        servidor.calentar(motor, "cpu")
+        self.assertEqual([t for t, _ in motor.textos], ["Hola, soy Vera y estoy lista para ayudarte."])
+        self.assertEqual(motor.textos[0][1], {"voice": "ef_dora", "lang": "es"})
+
+    def test_en_cuda_calienta_con_tres_longitudes_distintas_y_empieza_por_la_de_siempre(self):
+        motor = MotorPrueba()
+        servidor.calentar(motor, "cuda")
+        textos = [t for t, _ in motor.textos]
+        self.assertEqual(len(textos), 3)
+        self.assertEqual(textos[0], "Hola, soy Vera y estoy lista para ayudarte.")
+        self.assertEqual(len({len(t) for t in textos}), 3)
+        self.assertTrue(all(o == {"voice": "ef_dora", "lang": "es"} for _, o in motor.textos))
+
+
 class ConfiguracionTest(unittest.TestCase):
     def setUp(self):
         self.addCleanup(logging.disable, logging.NOTSET)
 
-    def ejecutar_main(self, extra, motor_listo=False):
+    def ejecutar_main(self, extra, motor_listo=False, ort=None):
         entorno = dict({"VERA_LAB_TOKEN": "t" * 32}, **extra)
+        self.llamadas_kokoro = []
+        self.motor = MotorPrueba()
+        def desde_sesion(*a, **k):
+            self.llamadas_kokoro.append(a)
+            return self.motor
         modulos = {
-            "onnxruntime": types.SimpleNamespace(SessionOptions=types.SimpleNamespace, InferenceSession=lambda *a, **k: object()),
-            "kokoro_onnx": types.SimpleNamespace(Kokoro=types.SimpleNamespace(from_session=lambda *a, **k: types.SimpleNamespace(create=lambda *a, **k: None))),
+            "onnxruntime": ort or types.SimpleNamespace(SessionOptions=types.SimpleNamespace, InferenceSession=lambda *a, **k: object()),
+            "kokoro_onnx": types.SimpleNamespace(Kokoro=types.SimpleNamespace(from_session=desde_sesion)),
         }
         falso = types.SimpleNamespace(serve_forever=lambda: None)
         with patch.dict(os.environ, entorno, clear=True), patch.dict(sys.modules, modulos), \
@@ -215,6 +323,69 @@ class ConfiguracionTest(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             servidor.main()
         return crear
+
+    def test_sin_variables_nuevas_main_arranca_en_cpu_con_una_frase_de_calentamiento(self):
+        ort = OrtFalso()
+        self.ejecutar_main({}, ort=ort)
+        self.assertEqual(ort.registro, ["InferenceSession"])
+        self.assertEqual(ort.sesiones[0]["ruta"], "/opt/voz/modelos/kokoro-v1.0.int8.onnx")
+        self.assertEqual(self.llamadas_kokoro[0][1], "/opt/voz/modelos/voices-v1.0.bin")
+        self.assertEqual(len(self.motor.textos), 1)
+
+    def test_main_con_cuda_usa_fp32_y_calienta_tres_textos(self):
+        ort = OrtFalso(["CUDAExecutionProvider", "CPUExecutionProvider"])
+        self.ejecutar_main({"VERA_VOZ_DISPOSITIVO": "cuda"}, ort=ort)
+        self.assertEqual(ort.sesiones[0]["ruta"], "/opt/voz/modelos/kokoro-v1.0.onnx")
+        self.assertEqual(len(self.motor.textos), 3)
+
+    def test_main_con_cuda_y_fp16_usa_el_modelo_fp16(self):
+        ort = OrtFalso(["CUDAExecutionProvider", "CPUExecutionProvider"])
+        self.ejecutar_main({"VERA_VOZ_DISPOSITIVO": "cuda", "VERA_VOZ_PRECISION": "fp16"}, ort=ort)
+        self.assertEqual(ort.sesiones[0]["ruta"], "/opt/voz/modelos/kokoro-v1.0.fp16.onnx")
+
+    def test_main_con_cuda_que_cae_a_cpu_no_llega_a_servir(self):
+        ort = OrtFalso(["CPUExecutionProvider"])
+        with self.assertRaises(SystemExit):
+            self.ejecutar_main({"VERA_VOZ_DISPOSITIVO": "cuda"}, ort=ort)
+        self.assertEqual(self.motor.textos, [])
+
+    def test_dispositivo_explicito_cpu_equivale_al_valor_por_defecto(self):
+        ort = OrtFalso()
+        self.ejecutar_main({"VERA_VOZ_DISPOSITIVO": "cpu"}, ort=ort)
+        self.assertEqual(ort.registro, ["InferenceSession"])
+
+    def test_dispositivo_y_precision_vacios_cuentan_como_ausentes(self):
+        ort = OrtFalso()
+        self.ejecutar_main({"VERA_VOZ_DISPOSITIVO": "", "VERA_VOZ_PRECISION": ""}, ort=ort)
+        self.assertEqual(ort.sesiones[0]["ruta"], "/opt/voz/modelos/kokoro-v1.0.int8.onnx")
+
+    def test_dispositivo_y_precision_invalidos_abortan_antes_de_cargar_el_modelo(self):
+        invalidos = [{"VERA_VOZ_DISPOSITIVO": v} for v in ("gpu", "CUDA", " cuda", "cuda ", "cuda\n", "1", "cpu,cuda")]
+        invalidos += [{"VERA_VOZ_DISPOSITIVO": "cuda", "VERA_VOZ_PRECISION": v} for v in ("fp8", "FP16", " fp16", "int8", "fp32 ", "bf16")]
+        invalidos += [{"VERA_VOZ_PRECISION": v} for v in ("fp32", "fp16", "int8", "x")]
+        invalidos += [{"VERA_VOZ_DISPOSITIVO": "cpu", "VERA_VOZ_PRECISION": v} for v in ("fp32", "fp16", "int8")]
+        for extra in invalidos:
+            with self.subTest(extra=str(extra)):
+                with patch.dict(os.environ, dict({"VERA_LAB_TOKEN": "t" * 32}, **extra), clear=True), \
+                        patch.dict(sys.modules, {"onnxruntime": None, "kokoro_onnx": None}):
+                    with self.assertRaises(SystemExit) as fallo:
+                        servidor.main()
+                    self.assertIn("VERA_VOZ_", str(fallo.exception.code))
+
+    def test_los_mensajes_nombran_la_variable_y_los_valores_validos(self):
+        casos = [
+            ({"VERA_VOZ_DISPOSITIVO": "gpu"}, ["VERA_VOZ_DISPOSITIVO", "cpu", "cuda"]),
+            ({"VERA_VOZ_DISPOSITIVO": "cuda", "VERA_VOZ_PRECISION": "fp8"}, ["VERA_VOZ_PRECISION", "fp32", "fp16"]),
+            ({"VERA_VOZ_PRECISION": "fp16"}, ["VERA_VOZ_PRECISION", "VERA_VOZ_DISPOSITIVO=cuda"]),
+        ]
+        for extra, fragmentos in casos:
+            with self.subTest(extra=str(extra)):
+                with patch.dict(os.environ, dict({"VERA_LAB_TOKEN": "t" * 32}, **extra), clear=True), \
+                        patch.dict(sys.modules, {"onnxruntime": None, "kokoro_onnx": None}):
+                    with self.assertRaises(SystemExit) as fallo:
+                        servidor.main()
+                for fragmento in fragmentos:
+                    self.assertIn(fragmento, str(fallo.exception.code))
 
     def test_el_puerto_sale_de_vera_voz_puerto(self):
         crear = self.ejecutar_main({"VERA_VOZ_PUERTO": "9123", "VERA_VOZ_ESPERA_MS": "2500"})
