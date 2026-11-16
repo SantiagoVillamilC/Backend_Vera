@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"time"
 )
 
@@ -59,8 +60,32 @@ func Dormir(ctx context.Context, d time.Duration) error {
 // Terminar borra los pods vivos con el nombre del Terminador. Los ids explícitos se borran aunque la
 // lista falle, pero sin lista no hay verificación y por eso no se declara éxito.
 func (t Terminador) Terminar(ctx context.Context, ids ...string) Resultado {
+	return t.terminar(ctx, nil, ids)
+}
+
+// TerminarSolo borra y verifica únicamente los ids indicados, aunque haya otros pods con el mismo nombre.
+// Sirve al reconcile, que decide pod por pod.
+func (t Terminador) TerminarSolo(ctx context.Context, ids ...string) Resultado {
+	return t.terminar(ctx, ids, ids)
+}
+
+func (t Terminador) listar(ctx context.Context, solo []string) ([]Pod, error) {
+	vivos, err := t.Cliente.ListarVivos(ctx, t.Nombre)
+	if err != nil || solo == nil {
+		return vivos, err
+	}
+	var elegidos []Pod
+	for _, p := range vivos {
+		if slices.Contains(solo, p.ID) {
+			elegidos = append(elegidos, p)
+		}
+	}
+	return elegidos, nil
+}
+
+func (t Terminador) terminar(ctx context.Context, solo, ids []string) Resultado {
 	r := Resultado{}
-	vivos, errLista := t.Cliente.ListarVivos(ctx, t.Nombre)
+	vivos, errLista := t.listar(ctx, solo)
 	for i := 0; ; i++ {
 		if errLista == nil && len(vivos) == 0 {
 			r.Terminado, r.Restantes, r.Motivo = true, nil, ""
@@ -73,14 +98,14 @@ func (t Terminador) Terminar(ctx context.Context, ids ...string) Resultado {
 		r.Intentos++
 		t.borrar(ctx, objetivos(vivos, errLista, ids))
 		// Verificación inmediata: si el pod ya desapareció no hace falta esperar.
-		if vivos, errLista = t.Cliente.ListarVivos(ctx, t.Nombre); errLista == nil && len(vivos) == 0 {
+		if vivos, errLista = t.listar(ctx, solo); errLista == nil && len(vivos) == 0 {
 			continue
 		}
 		if err := t.Dormir(ctx, t.Esperas[i]); err != nil {
 			r.Motivo = "cancelado: " + err.Error()
 			return r
 		}
-		vivos, errLista = t.Cliente.ListarVivos(ctx, t.Nombre)
+		vivos, errLista = t.listar(ctx, solo)
 	}
 }
 

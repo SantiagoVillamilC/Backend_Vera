@@ -51,6 +51,9 @@ func (s *Servicio) vigilarListo(ctx context.Context, est estado.Estado, ahora ti
 		s.solicitarApagado(estado.Apagado, fmt.Sprintf("sin peticiones durante %s", s.d.Cfg.Inactividad))
 		return
 	}
+	if s.d.Actividad.EnVuelo() > 0 {
+		ultima = ahora // una peticion larga mantiene viva la marca que lee el reconcile
+	}
 	s.guardarActividad(ultima)
 	pod, err := s.d.Nube.Obtener(ctx, est.PodID)
 	switch {

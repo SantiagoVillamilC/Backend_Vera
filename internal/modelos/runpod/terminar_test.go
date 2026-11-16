@@ -116,3 +116,15 @@ func TestCalendarios(t *testing.T) {
 		t.Fatal("calendario breve")
 	}
 }
+
+func TestTerminarSoloNoTocaOtrosPodsConElMismoNombre(t *testing.T) {
+	c, f := nuevoCliente(t)
+	objetivo := f.AnadirPod("vera-modelos", "RUNNING", time.Now())
+	otro := f.AnadirPod("vera-modelos", "RUNNING", time.Now())
+	term := Terminador{Cliente: c, Nombre: "vera-modelos", Esperas: []time.Duration{time.Second},
+		Dormir: func(context.Context, time.Duration) error { return nil }, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	r := term.TerminarSolo(t.Context(), objetivo)
+	if !r.Terminado || f.Existe(objetivo) || !f.Existe(otro) {
+		t.Fatalf("resultado %+v objetivo=%v otro=%v", r, f.Existe(objetivo), f.Existe(otro))
+	}
+}
