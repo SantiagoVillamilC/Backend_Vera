@@ -113,16 +113,63 @@ func (l *lector) entero(clave string, defecto, piso, techo int) int {
 	return v
 }
 
+// redesPrivadas son los únicos rangos privados admitidos para escuchar: RFC 1918, sin CGNAT ni link-local.
+var redesPrivadas = []*net.IPNet{mustCIDR("10.0.0.0/8"), mustCIDR("172.16.0.0/12"), mustCIDR("192.168.0.0/16")}
+
+func mustCIDR(c string) *net.IPNet {
+	_, red, err := net.ParseCIDR(c)
+	if err != nil {
+		panic(err)
+	}
+	return red
+}
+
+// esPrivadaIPv4 dice si es una IPv4 literal de 10/8, 172.16/12 o 192.168/16.
+func esPrivadaIPv4(ip net.IP) bool {
+	for _, red := range redesPrivadas {
+		if red.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// direccion exige loopback IP:puerto. Es para la API de control y los puertos internos del túnel.
 func (l *lector) direccion(clave, defecto string) string {
+	return l.direccionCon(clave, defecto, false)
+}
+
+// direccionEscucha admite además una IPv4 privada explícita (por ejemplo el gateway del puente de
+// Docker) para que la API en su contenedor alcance el proxy. Nunca 0.0.0.0, hostnames ni IP públicas.
+func (l *lector) direccionEscucha(clave, defecto string) string {
+	return l.direccionCon(clave, defecto, true)
+}
+
+func (l *lector) direccionCon(clave, defecto string, admitePrivada bool) string {
 	valor := l.texto(clave, defecto)
-	host, puerto, err := net.SplitHostPort(valor)
-	ip := net.ParseIP(host)
-	p, errPuerto := strconv.Atoi(puerto)
-	if err != nil || ip == nil || !ip.IsLoopback() || errPuerto != nil || p < 1 || p > 65535 {
-		l.fallo(clave, "debe ser una direccion loopback IP:puerto, por ejemplo 127.0.0.1:8790")
+	if !direccionAdmitida(valor, admitePrivada) {
+		mensaje := "debe ser una direccion loopback IP:puerto, por ejemplo 127.0.0.1:8790"
+		if admitePrivada {
+			mensaje = "debe ser IP:puerto con una IP loopback o una IPv4 privada literal (10.0.0.0/8, 172.16.0.0/12 o 192.168.0.0/16), por ejemplo 172.17.0.1:8766"
+		}
+		l.fallo(clave, mensaje)
 		return defecto
 	}
 	return valor
+}
+
+func direccionAdmitida(valor string, admitePrivada bool) bool {
+	host, puerto, err := net.SplitHostPort(valor)
+	p, errPuerto := strconv.Atoi(puerto)
+	ip := net.ParseIP(host)
+	if err != nil || ip == nil || errPuerto != nil || p < 1 || p > 65535 {
+		return false
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	// Solo IPv4 literal: una IPv4 mapeada en IPv6 ("::ffff:10.0.0.1") lleva dos puntos y no pasa.
+	return admitePrivada && !strings.Contains(host, ":") && esPrivadaIPv4(ip)
 }
 
 func (l *lector) ruta(clave, defecto string) string {
@@ -183,9 +230,9 @@ func Cargar(buscar func(string) (string, bool)) (Config, error) {
 	c.Vigilancia = l.duracion("MODELOS_VIGILANCIA", 30*time.Second, 10*time.Millisecond, 10*time.Minute)
 	c.DirEstado = l.ruta("MODELOS_DIR_ESTADO", "/var/lib/modelos-control")
 	c.Control = l.direccion("MODELOS_PUERTO_CONTROL", "127.0.0.1:8790")
-	c.EscuchaVoz = l.direccion("MODELOS_ESCUCHA_VOZ", "127.0.0.1:8766")
-	c.EscuchaSTT = l.direccion("MODELOS_ESCUCHA_STT", "127.0.0.1:8767")
-	c.EscuchaOllama = l.direccion("MODELOS_ESCUCHA_OLLAMA", "127.0.0.1:11434")
+	c.EscuchaVoz = l.direccionEscucha("MODELOS_ESCUCHA_VOZ", "127.0.0.1:8766")
+	c.EscuchaSTT = l.direccionEscucha("MODELOS_ESCUCHA_STT", "127.0.0.1:8767")
+	c.EscuchaOllama = l.direccionEscucha("MODELOS_ESCUCHA_OLLAMA", "127.0.0.1:11434")
 	c.InternoVoz = l.direccion("MODELOS_INTERNO_VOZ", "127.0.0.1:18766")
 	c.InternoSTT = l.direccion("MODELOS_INTERNO_STT", "127.0.0.1:18767")
 	c.InternoOllama = l.direccion("MODELOS_INTERNO_OLLAMA", "127.0.0.1:18434")

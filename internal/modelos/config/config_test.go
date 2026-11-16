@@ -47,7 +47,7 @@ func TestSobrescribeDesdeElEntorno(t *testing.T) {
 
 func TestRechazaConfiguracionPeligrosaYJuntaLosErrores(t *testing.T) {
 	_, err := Cargar(entorno(map[string]string{
-		"MODELOS_PUERTO_CONTROL": "0.0.0.0:8790", "MODELOS_ESCUCHA_VOZ": "192.168.1.5:8766", "MODELOS_TARIFA_TOPE_USD_H": "-1",
+		"MODELOS_PUERTO_CONTROL": "0.0.0.0:8790", "MODELOS_ESCUCHA_VOZ": "8.8.8.8:8766", "MODELOS_TARIFA_TOPE_USD_H": "-1",
 		"MODELOS_GPUS": "NVIDIA; rm -rf /", "MODELOS_INACTIVIDAD": "10 minutos", "MODELOS_SESION_MAXIMA": "1s",
 		"MODELOS_RUNPOD_URL": "http://api.runpod.io/v2", "MODELOS_IMAGEN": "-malo"}))
 	if err == nil {
@@ -139,5 +139,69 @@ func TestResumenNoLeeSecretosNiLosImprime(t *testing.T) {
 		if strings.Contains(salida, prohibido) {
 			t.Fatalf("el resumen contiene %q", prohibido)
 		}
+	}
+}
+
+func TestLosProxysAdmitenLoopbackOUnaIPv4Privada(t *testing.T) {
+	for _, ip := range []string{"127.0.0.1", "127.0.0.2", "10.0.0.5", "10.255.255.254", "172.16.0.1", "172.17.0.1", "172.31.255.254", "192.168.0.1", "192.168.255.254"} {
+		for _, variable := range []string{"MODELOS_ESCUCHA_VOZ", "MODELOS_ESCUCHA_STT", "MODELOS_ESCUCHA_OLLAMA"} {
+			c, err := Cargar(entorno(map[string]string{variable: ip + ":9001"}))
+			if err != nil {
+				t.Errorf("%s=%s debio aceptarse: %v", variable, ip, err)
+				continue
+			}
+			if got := map[string]string{"MODELOS_ESCUCHA_VOZ": c.EscuchaVoz, "MODELOS_ESCUCHA_STT": c.EscuchaSTT, "MODELOS_ESCUCHA_OLLAMA": c.EscuchaOllama}[variable]; got != ip+":9001" {
+				t.Errorf("%s: got %q", variable, got)
+			}
+		}
+	}
+}
+
+func TestLosProxysRechazanTodoLoQueNoSeaLoopbackOPrivadaIPv4(t *testing.T) {
+	rechazadas := map[string]string{
+		"todas las interfaces IPv4": "0.0.0.0:8766", "todas las interfaces IPv6": "[::]:8766", "hostname local": "localhost:8766", "hostname": "vm.interna:8766",
+		"publica": "8.8.8.8:8766", "publica cercana a 172.16": "172.15.255.255:8766", "publica cercana a 172.31": "172.32.0.1:8766",
+		"publica cercana a 192.168": "192.169.0.1:8766", "publica cercana a 10": "11.0.0.1:8766", "link-local": "169.254.169.254:8766",
+		"CGNAT": "100.64.0.1:8766", "IPv6 privada": "[fd00::1]:8766", "IPv4 mapeada en IPv6": "[::ffff:10.0.0.1]:8766", "sin puerto": "10.0.0.5",
+		"puerto fuera de rango": "10.0.0.5:70000", "multicast": "224.0.0.1:8766", "broadcast": "255.255.255.255:8766",
+	}
+	for nombre, valor := range rechazadas {
+		for _, variable := range []string{"MODELOS_ESCUCHA_VOZ", "MODELOS_ESCUCHA_STT", "MODELOS_ESCUCHA_OLLAMA"} {
+			if _, err := Cargar(entorno(map[string]string{variable: valor})); err == nil || !strings.Contains(err.Error(), variable) {
+				t.Errorf("%s (%s=%s) debio rechazarse, err=%v", nombre, variable, valor, err)
+			}
+		}
+	}
+}
+
+func TestLaAPIDeControlYLosPuertosInternosSiguenSiendoSoloLoopback(t *testing.T) {
+	for _, variable := range []string{"MODELOS_PUERTO_CONTROL", "MODELOS_INTERNO_VOZ", "MODELOS_INTERNO_STT", "MODELOS_INTERNO_OLLAMA"} {
+		for _, privada := range []string{"10.0.0.5:9100", "172.17.0.1:9100", "192.168.1.5:9100"} {
+			if _, err := Cargar(entorno(map[string]string{variable: privada})); err == nil || !strings.Contains(err.Error(), variable) {
+				t.Errorf("%s=%s debio rechazarse, err=%v", variable, privada, err)
+			}
+		}
+		if _, err := Cargar(entorno(map[string]string{variable: "127.0.0.1:9100"})); err != nil {
+			t.Errorf("%s con loopback debio aceptarse: %v", variable, err)
+		}
+	}
+}
+
+func TestSinVariablesLosProxysEscuchanSoloEnLoopback(t *testing.T) {
+	c, err := Cargar(entorno(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{c.EscuchaVoz, c.EscuchaSTT, c.EscuchaOllama, c.Control} {
+		if !strings.HasPrefix(dir, "127.0.0.1:") {
+			t.Errorf("el valor por defecto %s no es loopback", dir)
+		}
+	}
+}
+
+func TestRechazaDireccionDeProxyIgualAOtraPorOtraIP(t *testing.T) {
+	_, err := Cargar(entorno(map[string]string{"MODELOS_ESCUCHA_VOZ": "172.17.0.1:8767", "MODELOS_ESCUCHA_STT": "172.17.0.1:8767"}))
+	if err == nil || !strings.Contains(err.Error(), "repetid") {
+		t.Fatalf("err=%v", err)
 	}
 }

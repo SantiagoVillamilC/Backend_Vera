@@ -219,3 +219,38 @@ func TestServirFallaSiOtraInstanciaTieneElBloqueo(t *testing.T) {
 		t.Fatalf("codigo=%d err=%s", codigo, errores.String())
 	}
 }
+
+func TestLosProxysEscuchanEnLaDireccionConfiguradaYElControlSoloEnLoopback(t *testing.T) {
+	f := falsos.NuevoRunPod(t, claveRunPod)
+	env := entornoCompleto(t, f.URL)
+	_, puertoControl, _ := net.SplitHostPort(env["MODELOS_PUERTO_CONTROL"])
+	for _, v := range []string{"MODELOS_ESCUCHA_VOZ", "MODELOS_ESCUCHA_STT", "MODELOS_ESCUCHA_OLLAMA"} {
+		_, p, _ := net.SplitHostPort(env[v])
+		env[v] = "127.0.0.2:" + p // otra direccion de la maquina: hace de IP privada del puente de Docker
+	}
+	ctx, parar := context.WithCancel(t.Context())
+	terminado := make(chan int, 1)
+	go func() { terminado <- ejecutar(ctx, []string{"servir"}, lookup(env), io.Discard, io.Discard) }()
+	defer func() { parar(); <-terminado }()
+	limite := time.Now().Add(5 * time.Second)
+	for {
+		c, err := (&net.Dialer{Timeout: time.Second}).DialContext(t.Context(), "tcp", env["MODELOS_ESCUCHA_VOZ"])
+		if err == nil {
+			_ = c.Close()
+			break
+		}
+		if time.Now().After(limite) {
+			t.Fatalf("el proxy no escucha en %s: %v", env["MODELOS_ESCUCHA_VOZ"], err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if c, err := (&net.Dialer{Timeout: time.Second}).DialContext(t.Context(), "tcp", "127.0.0.2:"+puertoControl); err == nil {
+		_ = c.Close()
+		t.Fatal("la API de control no debe escuchar en la direccion de los proxys")
+	}
+	if c, err := (&net.Dialer{Timeout: time.Second}).DialContext(t.Context(), "tcp", env["MODELOS_PUERTO_CONTROL"]); err != nil {
+		t.Fatalf("la API de control debe seguir en loopback: %v", err)
+	} else {
+		_ = c.Close()
+	}
+}
