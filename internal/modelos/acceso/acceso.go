@@ -138,7 +138,7 @@ func (s *SSH) errorDeProceso(herramienta string, err error, salida string) error
 	if strings.Contains(salida, "Host key verification failed") || strings.Contains(salida, "REMOTE HOST IDENTIFICATION HAS CHANGED") {
 		return fmt.Errorf("%w (%s)", ErrHuella, herramienta)
 	}
-	texto := secreto.Recortar(s.cfg.Redactor.Limpiar(strings.TrimSpace(salida)), 300)
+	texto := secreto.Recortar(s.cfg.Redactor.Limpiar(strings.TrimSpace(salida)), 800)
 	var salidaProceso *exec.ExitError
 	if errors.As(err, &salidaProceso) {
 		return fmt.Errorf("acceso: %s termino con codigo %d: %s", herramienta, salidaProceso.ExitCode(), texto)

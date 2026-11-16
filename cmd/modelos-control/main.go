@@ -222,10 +222,10 @@ func correr(ctx context.Context, cfg config.Config, svc *control.Servicio, token
 		go func() { fallo <- p.Servir() }()
 	}
 	go func() { fallo <- aErrorServidor(srvControl.Serve(lnControl)) }()
-	go svc.Vigilar(ctx)
 	if err := svc.Recuperar(ctx); err != nil {
 		log.Error("la reconciliacion inicial fallo, el estado queda en error", "error", err.Error())
 	}
+	go svc.Vigilar(ctx) // despues de reconciliar: un Tick con estado viejo no debe competir con retomar
 	log.Info("modelos-control en marcha", "control", cfg.Control)
 	codigo := 0
 	select {

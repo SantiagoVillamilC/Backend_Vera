@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/modelos/acceso"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/modelos/config"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/modelos/estado"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/modelos/falsos"
@@ -47,7 +48,7 @@ func TestEncendidoFelizLlegaAListoYPersisteElEstado(t *testing.T) {
 		t.Fatal("los tokens de los modelos no deben ir en el env del pod, que RunPod devuelve en sus respuestas")
 	}
 	stdin := a.ssh.Stdin()
-	for _, esperado := range []string{"WHISPER_TOKEN='" + tokenSTT + "'", "KOKORO_TOKEN='" + tokenVoz + "'", "REPO_SHA='abc123'", "exec bash /tmp/vera-arranque.sh"} {
+	for _, esperado := range []string{"WHISPER_TOKEN='" + tokenSTT + "'", "KOKORO_TOKEN='" + tokenVoz + "'", "REPO_SHA='abc123'", "bash /tmp/vera-arranque.sh >/tmp/vera-arranque.sh.log 2>&1 </dev/null", "tail -n 20 /tmp/vera-arranque.sh.log >&2"} {
 		if !strings.Contains(stdin, esperado) {
 			t.Errorf("falta %q en el stdin del arranque", esperado)
 		}
@@ -244,5 +245,31 @@ func TestEncenderConUnHuerfanoPreviamenteLoTermina(t *testing.T) {
 	a.encenderYEsperar()
 	if a.nube.Existe(huerfano) || a.nube.Vivos("vera-modelos") != 1 {
 		t.Fatalf("huerfano vivo=%v vivos=%d", a.nube.Existe(huerfano), a.nube.Vivos("vera-modelos"))
+	}
+}
+
+func TestElPreambuloAislaElStdioDelScriptYDevuelveElFinalDelLogSiFalla(t *testing.T) {
+	a := nuevoArnes(t)
+	a.ssh.Modo("fallo_script")
+	if _, _, err := a.svc.Encender(); err != nil {
+		t.Fatal(err)
+	}
+	a.esperarFase(estado.Error)
+	if !strings.Contains(a.ssh.Stdin(), "</dev/null") || strings.Contains(a.ssh.Stdin(), "exec bash") {
+		t.Fatalf("el script no debe heredar el canal de ssh: %s", a.ssh.Stdin())
+	}
+}
+
+func TestNoAbreTunelSiYaSePidioElApagado(t *testing.T) {
+	a := nuevoArnes(t)
+	a.svc.mu.Lock()
+	a.svc.est.Fase = estado.Apagando
+	a.svc.mu.Unlock()
+	a.svc.abrirTunel(acceso.Destino{PodID: "pod0001", Host: "203.0.113.7", Puerto: 40022, Usuario: "root"})
+	a.svc.mu.Lock()
+	t0 := a.svc.tunel
+	a.svc.mu.Unlock()
+	if t0 != nil || a.ssh.Tuneles() != 0 {
+		t.Fatalf("no debio abrirse un tunel: tunel=%v lanzados=%d", t0, a.ssh.Tuneles())
 	}
 }

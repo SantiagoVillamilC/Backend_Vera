@@ -147,7 +147,10 @@ func (s *Servicio) preambulo() (string, error) {
 	if s.d.Cfg.RepoSHA != "" {
 		b.WriteString("export REPO_SHA='" + s.d.Cfg.RepoSHA + "'\n")
 	}
-	b.WriteString("exec bash " + s.d.Cfg.ScriptRemoto + "\n")
+	// Todo el stdio del script va a un archivo: si los servicios quedan en segundo plano no retienen el
+	// canal de ssh y la sesion termina cuando el script sale. Ante un fallo se devuelve el final del log.
+	registro := s.d.Cfg.ScriptRemoto + ".log"
+	b.WriteString("bash " + s.d.Cfg.ScriptRemoto + " >" + registro + " 2>&1 </dev/null || { c=$?; tail -n 20 " + registro + " >&2; exit $c; }\n")
 	return b.String(), nil
 }
 
@@ -173,11 +176,15 @@ func (s *Servicio) abrirTunel(d acceso.Destino) {
 		{Local: s.d.Cfg.InternoSTT, Remoto: puertoPodSTT},
 		{Local: s.d.Cfg.InternoVoz, Remoto: puertoPodVoz},
 	}
-	// El túnel vive más que el encendido: se ata al contexto base y lo cierra el apagado.
-	t := s.d.Acceso.AbrirTunel(s.base, d, reenvios, s.alFatalTunel)
+	// El túnel vive más que el encendido: se ata al contexto base y lo cierra el apagado. La fase se
+	// comprueba y el túnel se asigna en una sola sección crítica: si ya se pidió el apagado no se abre,
+	// porque nadie lo cerraría después y quedaría un ssh -N reintentando contra un pod muerto.
 	s.mu.Lock()
-	s.tunel = t
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	if s.est.Fase != estado.Encendiendo && s.est.Fase != estado.Listo {
+		return
+	}
+	s.tunel = s.d.Acceso.AbrirTunel(s.base, d, reenvios, s.alFatalTunel)
 }
 
 func (s *Servicio) alFatalTunel(err error) {

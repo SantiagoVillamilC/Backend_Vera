@@ -41,7 +41,7 @@ func (s *Servicio) crearPod(ctx context.Context) (runpod.Pod, error) {
 		}
 		rechazos = append(rechazos, gpu+": RunPod no pudo ubicarla ("+err.Error()+")")
 	}
-	return runpod.Pod{}, fmt.Errorf("%w: %s", errSinExistencias, strings.Join(rechazos, "; "))
+	return runpod.Pod{}, fmt.Errorf("%w: %s", errSinExistencias, strings.Join(rechazos, " | "))
 }
 
 func (s *Servicio) evaluarOferta(ctx context.Context, gpu string) (string, error) {
