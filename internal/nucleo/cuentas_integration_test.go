@@ -80,6 +80,45 @@ func TestAbrirSubcuentasDeUsuarioEsIdempotente(t *testing.T) {
 	}
 }
 
+func TestAbrirSubcuentasDeUsuarioEnComparteLaTransaccionDelLlamador(t *testing.T) {
+	pool := abrirPoolDePrueba(t)
+	ctx := t.Context()
+	usuarioID := uuid.NewString()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("abrir transacción: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// El llamador responde por el rol: aquí actúa como el núcleo, igual que enTransaccion.
+	if _, err := tx.Exec(ctx, sentenciaCambioDeRol); err != nil {
+		t.Fatalf("cambiar de rol: %v", err)
+	}
+
+	for intento, want := range []int64{2, 0} {
+		if creadas, err := AbrirSubcuentasDeUsuarioEn(ctx, tx, usuarioID); err != nil || creadas != want {
+			t.Fatalf("intento %d: creadas = %d, err = %v; want %d, nil", intento+1, creadas, err, want)
+		}
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("revertir: %v", err)
+	}
+
+	if _, err := enTransaccion(ctx, poolDeNucleo{pool: pool},
+		func(ctx context.Context, tx transaccionDeNucleo, _ *repositorio.Queries) (struct{}, error) {
+			var filas int
+			if err := tx.QueryRow(ctx, "SELECT count(*) FROM cuenta WHERE titular_id = $1", usuarioID).Scan(&filas); err != nil {
+				return struct{}{}, err
+			}
+			if filas != 0 {
+				t.Errorf("filas tras revertir = %d, want 0: la apertura debe vivir en la transacción del llamador", filas)
+			}
+			return struct{}{}, nil
+		}); err != nil {
+		t.Fatalf("contar subcuentas: %v", err)
+	}
+}
+
 func TestCuentaConNombreDuplicadoSeRechaza(t *testing.T) {
 	pool := abrirPoolDePrueba(t)
 	ctx := t.Context()

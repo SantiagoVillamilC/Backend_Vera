@@ -14,6 +14,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/inteligencia/avisos"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -329,7 +330,12 @@ func sembrar(ctx context.Context, conn *pgxpool.Conn, usuario uuid.UUID, ahora t
 	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
 		return st, fmt.Errorf("no se pudo leer el manifiesto public.demo_escenario, revisa las migraciones: %w", e)
 	}
-	cuenta := "pasivo:usuario:" + usuario.String() + ":disponible"
+	cuenta := nucleo.NombreCuentaDisponible(usuario.String())
+	// Las dos subcuentas del usuario, con la consulta del registro real. Va antes de la salida
+	// temprana para que una siembra sin reiniciar también repare un usuario que ya tiene manifiesto.
+	if _, e = nucleo.AbrirSubcuentasDeUsuarioEn(ctx, tx, usuario.String()); e != nil {
+		return st, fmt.Errorf("no se pudieron abrir las subcuentas del usuario: %w", e)
+	}
 	var ajenos int
 	e = tx.QueryRow(ctx, `SELECT count(*) FROM nucleo.posting WHERE cuenta_id LIKE $1 AND NOT(entry_id=ANY($2::bigint[]))`, "pasivo:usuario:"+usuario.String()+":%", st.Asientos).Scan(&ajenos)
 	if e != nil {
@@ -369,7 +375,7 @@ func sembrar(ctx context.Context, conn *pgxpool.Conn, usuario uuid.UUID, ahora t
 	st.Transferencias = []uuid.UUID{}
 	externa := "pasivo:liquidacion_pendiente:demo-" + usuario.String()
 	custodia := "activo:custodia:demo-" + usuario.String()
-	for _, c := range []struct{ id, naturaleza, clase string }{{cuenta, "pasivo", "usuario"}, {externa, "pasivo", "liquidacion"}, {custodia, "activo", "custodia"}} {
+	for _, c := range []struct{ id, naturaleza, clase string }{{externa, "pasivo", "liquidacion"}, {custodia, "activo", "custodia"}} {
 		if _, e = tx.Exec(ctx, `INSERT INTO nucleo.cuenta(id,naturaleza,clase,titular_id) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING`, c.id, c.naturaleza, c.clase, usuario.String()); e != nil {
 			return st, e
 		}

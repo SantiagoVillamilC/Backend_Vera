@@ -101,3 +101,42 @@ func TestAbrirSubcuentasDeUsuarioInsertaLasDosCuentasConTitular(t *testing.T) {
 		t.Errorf("titular = %#v, want pgtype.Text{String: %q, Valid: true}", tx.args[1], usuarioID)
 	}
 }
+
+func TestAbrirSubcuentasDeUsuarioEnRechazaUsuarioInvalidoSinTocarLaTransaccion(t *testing.T) {
+	t.Parallel()
+
+	casos := map[string]struct {
+		usuario string
+		want    error
+	}{
+		"vacío":             {"", ErrUsuarioVacio},
+		"sin forma de UUID": {"usuario-1", ErrUsuarioIDInvalido},
+	}
+	for nombre, caso := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			t.Parallel()
+
+			// La transacción es nil: la validación debe fallar antes de usarla.
+			if _, err := AbrirSubcuentasDeUsuarioEn(t.Context(), nil, caso.usuario); !errors.Is(err, caso.want) {
+				t.Fatalf("AbrirSubcuentasDeUsuarioEn(%q) error = %v, want %v", caso.usuario, err, caso.want)
+			}
+		})
+	}
+}
+
+func TestParametrosDeSubcuentasUsaLosMismosNombresQueElRegistro(t *testing.T) {
+	t.Parallel()
+
+	const usuarioID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+
+	params, err := parametrosDeSubcuentas(usuarioID)
+	if err != nil {
+		t.Fatalf("parametrosDeSubcuentas: %v", err)
+	}
+	if params.Disponible != NombreCuentaDisponible(usuarioID) || params.Retenido != NombreCuentaRetenido(usuarioID) {
+		t.Errorf("nombres = %q y %q, want los de NombreCuentaDisponible y NombreCuentaRetenido", params.Disponible, params.Retenido)
+	}
+	if !params.TitularID.Valid || params.TitularID.String != usuarioID {
+		t.Errorf("titular = %+v, want %q", params.TitularID, usuarioID)
+	}
+}
