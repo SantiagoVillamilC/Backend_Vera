@@ -2,8 +2,12 @@
 # Destino en la VM: /etc/systemd/system/vera-modelos-control.service (root:root 0644).
 #
 # modelos-control crea y apaga el pod de RunPod bajo demanda, abre el túnel SSH hacia él (con los binarios
-# ssh y scp del sistema) y escucha en loopback los puertos de los modelos y el de control. El puente de
-# puente-modelos.sh los lleva hasta 127.0.0.1 dentro del contenedor de la API.
+# ssh y scp del sistema), escucha en loopback el puerto de control y escucha los tres puertos de los modelos
+# en la IP del gateway de la red docker "centinela" (MODELOS_ESCUCHA_*, la escribe vm/red-api.sh instalar), que
+# es lo que alcanza el contenedor de la API. Sin esa IP en el entorno el servicio no arranca (código 2).
+#
+# Reinicios: si la IP del gateway aún no existe (docker no terminó de levantar la red) el bind falla con código 1 y
+# systemd reintenta cada 10 s sin tope. Un error de configuración (código 2 o 64) no se reintenta: no se arregla solo.
 #
 # Secretos: la clave de RunPod llega por EnvironmentFile (root:root 0600). systemd lo abre como root antes de
 # bajar privilegios, así que el usuario del servicio no necesita poder leerlo. Los tokens y la llave privada
@@ -22,8 +26,9 @@ After=network-online.target docker.service
 Wants=network-online.target docker.service
 ConditionPathExists=/usr/local/bin/modelos-control
 ConditionPathExists=/etc/vera-modelos/modelos-control.env
-StartLimitIntervalSec=300
-StartLimitBurst=5
+# Sin tope de arranques: con el límite por defecto, cinco bind fallidos seguidos (docker aún sin red) dejarían
+# el servicio en failed hasta que alguien lo reinicie a mano.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -32,7 +37,8 @@ Group=vera-modelos
 EnvironmentFile=/etc/vera-modelos/modelos-control.env
 ExecStart=/usr/local/bin/modelos-control servir
 Restart=on-failure
-RestartSec=5s
+RestartSec=10s
+RestartPreventExitStatus=2 64
 TimeoutStopSec=30s
 LimitNOFILE=4096
 

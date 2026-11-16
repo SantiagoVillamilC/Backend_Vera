@@ -230,7 +230,7 @@ principal() {
   decidir_clave_runpod
   escribir_archivos
   if [[ "$ROTAR" == "si" ]]; then
-    info "tokens rotados: reinicia vera-modelos-control y recrea la API (puente-modelos.sh aplicar)"
+    info "tokens rotados: reinicia vera-modelos-control y recrea la API (red-api.sh aplicar)"
   fi
 }
 
