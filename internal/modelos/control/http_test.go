@@ -139,3 +139,12 @@ func TestControlConElServicioReal(t *testing.T) {
 	}
 	a.esperarFase("apagado")
 }
+
+func TestEstadoIncluyeElCentroYElVolumenElegidos(t *testing.T) {
+	h := nuevoManejador(&controladorFalso{vista: Vista{Estado: "listo", PodID: "pod0001", GPU: "NVIDIA RTX A5000", Centro: "US-CA-2", Volumen: "3ztqv80lvj"}})
+	_, cuerpo := peticion(t, h, http.MethodGet, "/estado", "Bearer "+tokenControl)
+	datos, ok := cuerpo["data"].(map[string]any)
+	if !ok || datos["centro"] != "US-CA-2" || datos["volumen"] != "3ztqv80lvj" {
+		t.Fatalf("cuerpo %v", cuerpo)
+	}
+}

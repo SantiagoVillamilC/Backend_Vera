@@ -10,6 +10,7 @@ import (
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/nucleo/internal/repositorio"
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -157,20 +158,41 @@ func transferirInterna(ctx context.Context, q *repositorio.Queries, solicitud So
 
 // AbrirSubcuentasDeUsuario crea las dos subcuentas del usuario y devuelve cuántas creó; es idempotente.
 func (s *Servicio) AbrirSubcuentasDeUsuario(ctx context.Context, usuarioID string) (int64, error) {
-	if usuarioID == "" {
-		return 0, ErrUsuarioVacio
-	}
-	if _, err := uuid.Parse(usuarioID); err != nil {
-		return 0, ErrUsuarioIDInvalido
+	params, err := parametrosDeSubcuentas(usuarioID)
+	if err != nil {
+		return 0, err
 	}
 	return enTransaccion(ctx, s.pool,
 		func(ctx context.Context, _ transaccionDeNucleo, q *repositorio.Queries) (int64, error) {
-			return q.InsertarSubcuentasDeUsuario(ctx, repositorio.InsertarSubcuentasDeUsuarioParams{
-				Disponible: NombreCuentaDisponible(usuarioID),
-				Retenido:   NombreCuentaRetenido(usuarioID),
-				TitularID:  pgtype.Text{String: usuarioID, Valid: true},
-			})
+			return q.InsertarSubcuentasDeUsuario(ctx, params)
 		})
+}
+
+// AbrirSubcuentasDeUsuarioEn abre las mismas dos subcuentas dentro de la transacción del llamador,
+// con la misma consulta y las mismas validaciones que AbrirSubcuentasDeUsuario. Las siembras de demo
+// la usan para no divergir del registro real. No confirma ni cambia de rol: el llamador responde por
+// ambas cosas.
+func AbrirSubcuentasDeUsuarioEn(ctx context.Context, tx pgx.Tx, usuarioID string) (int64, error) {
+	params, err := parametrosDeSubcuentas(usuarioID)
+	if err != nil {
+		return 0, err
+	}
+	return repositorio.New(tx).InsertarSubcuentasDeUsuario(ctx, params)
+}
+
+// parametrosDeSubcuentas valida el usuario y arma los nombres de sus dos subcuentas.
+func parametrosDeSubcuentas(usuarioID string) (repositorio.InsertarSubcuentasDeUsuarioParams, error) {
+	if usuarioID == "" {
+		return repositorio.InsertarSubcuentasDeUsuarioParams{}, ErrUsuarioVacio
+	}
+	if _, err := uuid.Parse(usuarioID); err != nil {
+		return repositorio.InsertarSubcuentasDeUsuarioParams{}, ErrUsuarioIDInvalido
+	}
+	return repositorio.InsertarSubcuentasDeUsuarioParams{
+		Disponible: NombreCuentaDisponible(usuarioID),
+		Retenido:   NombreCuentaRetenido(usuarioID),
+		TitularID:  pgtype.Text{String: usuarioID, Valid: true},
+	}, nil
 }
 
 // Saldo devuelve, con el signo del usuario, lo que puede gastar en una cuenta del diario.
