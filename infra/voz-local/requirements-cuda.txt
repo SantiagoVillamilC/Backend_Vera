@@ -1,0 +1,52 @@
+# Dependencias de la variante opcional de Kokoro en GPU (VERA_VOZ_DISPOSITIVO=cuda en servidor.py).
+# No las usa ninguna imagen ni ningún workflow: la imagen CPU sigue con requirements.txt.
+#
+# Instalar en un venv de Python 3.12 con:
+#
+#   pip install --no-deps -r infra/voz-local/requirements-cuda.txt
+#
+# Por qué --no-deps y por qué es obligatorio: kokoro-onnx 0.6.1 declara onnxruntime>=1.20.1 como
+# dependencia dura (la GPU solo existe como extra "gpu"). Un "pip install kokoro-onnx" traería el
+# paquete CPU "onnxruntime", y ese paquete y "onnxruntime-gpu" comparten el módulo "onnxruntime". El
+# CPU taparía al GPU y ONNX Runtime caería a CPU sin avisar. Este archivo es un conjunto cerrado: lista
+# cada dependencia a mano y no incluye "onnxruntime". Con --no-deps pip no resuelve nada más.
+#
+# Comprobación tras instalar (las dos deben cumplirse):
+#   python -c "import importlib.metadata as m; m.version('onnxruntime')"   # debe lanzar PackageNotFoundError
+#   python -c "import onnxruntime as o; print(o.get_available_providers())" # debe incluir CUDAExecutionProvider
+# "pip check" se queja de una sola cosa, y es esperada: kokoro-onnx pide onnxruntime y aquí lo
+# aporta onnxruntime-gpu. No hay que "arreglarla" instalando onnxruntime.
+#
+# Librerías de NVIDIA: onnxruntime-gpu 1.31.0 está compilado con CUDA 13.0 y cuDNN 9 (metadatos de
+# PyPI: extras "cuda" y "cudnn", y la documentación del CUDA EP desde la 1.27). Los extras traen
+# nvidia-cuda-runtime, nvidia-cuda-nvrtc, nvidia-cufft, nvidia-curand y nvidia-cudnn-cu13. cuBLAS y
+# nvJitLink llegan como dependencias transitivas de esos wheels y se fijan aquí porque --no-deps no
+# las resolvería. Versiones tomadas de un "pip install onnxruntime-gpu[cuda,cudnn]==1.31.0" en un
+# venv limpio. CUDA 13.0 exige un driver con soporte de CUDA 13.0 o posterior: se comprueba con
+# "nvidia-smi" (campo CUDA Version).
+#
+# El peso fp32 se descarga con VERA_VOZ_DESCARGAR_GPU=1 python infra/voz-local/descargar.py. El fp16 es
+# un opt-in aparte (VERA_VOZ_DESCARGAR_FP16=1) y en CUDA produjo audio vacío.
+
+kokoro-onnx==0.6.1
+onnxruntime-gpu==1.31.0
+
+nvidia-cublas==13.10.0.20
+nvidia-cuda-nvrtc==13.5.37
+nvidia-cuda-runtime==13.5.37
+nvidia-cudnn-cu13==9.28.1.4
+nvidia-cufft==12.5.0.14
+nvidia-curand==10.4.5.25
+nvidia-nvjitlink==13.5.37
+
+attrs==26.1.0
+cloudpickle==3.1.2
+dlinfo==2.0.0
+espeakng-loader==0.2.4
+flatbuffers==25.12.19
+joblib==1.6.0
+numpy==2.5.4
+packaging==26.3
+phonemizer==3.4.0
+protobuf==7.36.2
+typing_extensions==4.16.0
