@@ -142,7 +142,7 @@ a `dev` por los PRs por rama):
 
 ## 3. Lista de cambios que Christian aprueba antes de ejecutar
 
-Todo es nuevo. **No se modifica ningún archivo existente de la VM** salvo `compose.api.yaml` indirectamente: la API se recrea con un override. El orden de la sección 4 es el de esta tabla.
+Todo es nuevo. **No se edita ningún archivo existente de la VM**: el override se agrega junto a `compose.api.yaml` sin tocarlo, y la API se recrea para tomarlo. El orden de la sección 4 es el de esta tabla.
 
 | # | Qué | Dónde | Dueño y modo | Comando que lo crea |
 |---|-----|-------|--------------|---------------------|
@@ -274,7 +274,7 @@ sudo systemctl enable --now vera-modelos-control.service
 sudo systemctl status vera-modelos-control.service --no-pager
 sudo ss -ltn            # nuevos: 127.0.0.1:8790 y GATEWAY:{11434,8766,8767}, nada en 0.0.0.0
 sudo bash /opt/vera-modelos/vm/red-api.sh aplicar --seco
-sudo bash /opt/vera-modelos/vm/red-api.sh aplicar         # recrea la API: unos segundos de 502
+sudo bash /opt/vera-modelos/vm/red-api.sh aplicar         # recrea la API: unos segundos de 502. Repítelo si algún día se recrea la API sin el override
 docker exec centinela-api wget -S -qO- "http://GATEWAY:8766/healthz"   # con el pod apagado: HTTP 503
 sudo systemctl enable --now vera-modelos-guardian.timer
 ```
@@ -391,7 +391,7 @@ Todas en esta máquina, con secretos de prueba generados en un directorio tempor
 | `modelos-control --seco` con el entorno que genera `generar-secretos.sh` + `red-api.sh instalar` contra una red docker temporal | configuración efectiva con las tres direcciones en el gateway, sin secretos |
 | `modelos-control --seco` con el marcador `<GATEWAY_DE_DOCKER>` sin sustituir | sale con 2 y nombra las tres variables |
 | `systemd-analyze verify` de las tres unidades | solo se queja de que el binario no existe |
-| `docker compose config` con `compose.api.yaml` de prueba y el override generado | válido, las seis variables de la API presentes |
+| `docker compose config` con un `compose.api.yaml` con la forma del generado (`VERA_PROVEEDOR: "simulado"`, `VERA_MODELO: ""`, claves ajenas y un `env_file`), el override generado y los archivos en el orden del glob | el override gana: `VERA_PROVEEDOR: local`, `VERA_MODELO: gemma4-e4b-local`, las seis variables de la API, las claves de los dos `env_file` y las ajenas intactas |
 | Binario real `servir` ligado al gateway de una red docker temporal, RunPod falso en loopback | solo `GATEWAY:{11434,8766,8767}` y `127.0.0.1:8790` escuchan, el control rechaza sin token (401) |
 | Contenedor `busybox` de esa red hacia `GATEWAY:{8766,8767,11434}` con el pod apagado | `HTTP/1.1 503 Service Unavailable` en los tres, y nada responde en `127.0.0.1:8766` del host |
 | `cmd/modelos-control/integracion_clientes_test.go` | `vozlocal` y `sttlocal` con `VERA_MODELOS_HOST_PERMITIDO` apuntando a una IPv4 privada real de la máquina: rechazan la IP sin autorización, reciben 503 con el pod apagado, y con un pod falso encendido (RunPod, ssh y modelos falsos) sintetizan y transcriben. Tras apagar vuelve el 503 |
@@ -489,8 +489,11 @@ que consulte esa ruta no impide el apagado por inactividad [V, `proxy.EsSonda`].
 
 Si el producto no tolera esos 503, la salida es de producto, no de infraestructura: un proveedor compuesto en Go que caiga a `simulado` (decisión 10 del diseño aprobado, no se hace aquí).
 
-**Regla operativa:** un despliegue del CD recrea `centinela-api` y conserva el override, porque `deploy-ci.sh` y `60-api.sh` unen todos los `compose*.yaml` del directorio. Si el glob no ordenara
-`compose.z-modelos.yaml` al final, el override no ganaría sobre `compose.api.yaml` **[N]**: `red-api.sh verificar` y el `wget` del paso 7 lo delatan.
+**Regla operativa:** un despliegue del CD recrea `centinela-api` y conserva el override, porque `deploy-ci.sh` (`banderas_compose`) y `asegurar_servicio_compose` (`infra/servidor/lib/comun.sh`, que usa
+`60-api.sh`) arman un `-f` por cada `compose*.yaml` del directorio [V, leído en el código]. Por eso también un nuevo aprovisionamiento con `aprovisionar.sh` regenera `compose.api.yaml` pero no toca el override.
+Con tres archivos de prueba en el orden que produce ese glob (`compose.api.yaml`, `compose.yaml`, `compose.z-modelos.yaml`), un `compose.api.yaml` con `VERA_PROVEEDOR: "simulado"` y `VERA_MODELO: ""` y dos `env_file`,
+`docker compose config` dio `VERA_PROVEEDOR: local`, `VERA_MODELO: gemma4-e4b-local`, las claves de ambos `env_file` y las claves ajenas intactas [V]. Falta repetirlo con el compose real de la VM [N]. Si algo
+dejara la API sin el override, `red-api.sh aplicar` lo restablece y el `wget` del paso 7 lo delata (con la API en simulado el gateway no recibe tráfico, y no hay ninguna alerta propia).
 
 ## 11. Riesgos conocidos
 
@@ -499,8 +502,8 @@ Si el producto no tolera esos 503, la salida es de producto, no de infraestructu
    `red-api.sh instalar`, reiniciar `vera-modelos-control` y `red-api.sh aplicar`. `red-api.sh verificar` detecta el desfase. Mejora de fondo, no aplicada: fijar la subred de `centinela` con `ipam`
    en `30-nginx.sh`, lo que exige recrear la red.
 2. **Reinicios del servicio.** Si docker aún no levantó la red al arrancar la VM, el bind falla y systemd reintenta cada 10 s sin tope (`StartLimitIntervalSec=0`). Con el límite por defecto de la
-   unidad original (5 arranques en 300 s con pausa de 5 s) el servicio quedaría en `failed` a los 25 s. Un error de configuración (código 2 o 64) no se reintenta (`RestartPreventExitStatus=2 64`). El
-   orden de arranque real de la VM no se probó **[N]**.
+   unidad original (5 arranques en 300 s con pausa de 5 s) el servicio quedaría en `failed` a los 25 s. Solo los errores de configuración con código 2 o 64 no se reintentan (`RestartPreventExitStatus=2 64`). Un archivo de tokens ilegible o con permisos distintos de 0600 sale con código 1 y se reintenta cada 10 s sin tope:
+   ante un servicio que no se estabiliza, revisa `journalctl -u vera-modelos-control`. El orden de arranque real de la VM no se probó **[N]**.
 3. **Los puertos del gateway no tienen autenticación de red.** Los alcanza cualquier contenedor de la VM (Postgres, Redis, simuladores, nginx y los de otras redes bridge) [I, el contenedor de una red
    temporal alcanzó su gateway en esta máquina]. Voz y STT exigen su `X-Vera-Token` en el pod, pero **Ollama no lleva token**, y el proxy reenvía cualquier ruta de Ollama (también `/api/pull` y `/api/delete`)
    al pod mientras está encendido. Aceptable en una VM de un solo propósito [I]. Mitigación posible, no hecha: reglas en `DOCKER-USER`.
@@ -562,7 +565,8 @@ Una rama por PR, todos contra `dev`, y después `dev` a `staging` y `staging` a 
 2. `feat/modelos-host-privado` (`VERA_MODELOS_HOST_PERMITIDO` y los clientes).
 3. `feat/modelos-control` (binario `cmd/modelos-control` e `internal/modelos`).
 4. `integracion/modelos-runpod` (infra alineada con el binario, esta documentación, `Makefile` y la prueba de integración). **No abrir `feat/modelos-runpod-infra` tal cual**: trae los puentes nginx descartados.
-   Cuando los PRs 1 a 3 ya estén en `dev`, el diff de este PR se reduce a la infra y la alineación.
+   Cuando los PRs 1 a 3 ya estén en `dev`, el diff de este PR se reduce a la infra y la alineación, siempre que se hayan fusionado con commit de fusión y sin rebase (el historial del repositorio usa
+   "Merge pull request"). Si alguno se reescribe durante la revisión, fusiona `origin/dev` en `integracion/modelos-runpod` antes de abrir el PR 4.
 
 ## 15. Divergencias con el diseño aprobado y con el encargo
 

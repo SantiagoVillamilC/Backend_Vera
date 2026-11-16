@@ -1,9 +1,10 @@
 # Generado por red-api.sh instalar a partir de compose.z-modelos.yaml.plantilla. No editar a mano.
 # Destino: /opt/centinela/infra-servidor/compose.z-modelos.yaml
 #
-# deploy-ci.sh y 60-api.sh unen todos los compose*.yaml del directorio, así que este archivo sobrevive a
-# cada despliegue de la API. Empieza por "z" para que quede al final del glob y sus valores ganen sobre los
-# de compose.api.yaml (environment se pisa clave por clave, env_file se suma).
+# deploy-ci.sh y asegurar_servicio_compose (lib/comun.sh, que usa 60-api.sh) unen todos los compose*.yaml del
+# directorio, así que este archivo sobrevive a cada despliegue y a un nuevo aprovisionamiento de la API.
+# Empieza por "z" para que quede al final del glob y sus valores ganen sobre los de compose.api.yaml
+# (environment se pisa clave por clave, env_file se suma).
 # Para volver a simulado: red-api.sh desinstalar.
 #
 # La API corre en un contenedor de la red docker "centinela", así que su 127.0.0.1 no llega al host. Los
