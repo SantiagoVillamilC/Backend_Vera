@@ -232,9 +232,13 @@ Ejemplo para la API en contenedor, con los servicios de `modelos-control` en el 
 ```bash
 VERA_MODELOS_HOST_PERMITIDO=172.18.0.1
 VERA_VOZ_URL=http://172.18.0.1:8766
-VERA_STT_URL=http://172.18.0.1:8777
+VERA_STT_URL=http://172.18.0.1:8767
 VERA_OLLAMA_URL=http://172.18.0.1:11434
 ```
+
+La IP `172.18.0.1` del ejemplo es solo ilustrativa: en la VM real el gateway se lee con
+`docker network inspect centinela` y `infra/modelos-runpod/vm/red-api.sh instalar` lo escribe en el compose de la
+API y en la configuración de `modelos-control`. El procedimiento está en `docs/despliegue-modelos-runpod-vm.md`.
 
 ### Qué se acepta y qué no
 
