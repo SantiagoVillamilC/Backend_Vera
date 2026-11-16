@@ -140,6 +140,9 @@ func (s *Servicio) cerrarTunel() {
 	}
 }
 
+// Actividad devuelve el contador de actividad que comparten los proxys.
+func (s *Servicio) Actividad() *proxy.Actividad { return s.d.Actividad }
+
 // Disponible dice si el proxy puede reenviar: pod listo y túnel vivo.
 func (s *Servicio) Disponible() bool {
 	s.mu.Lock()

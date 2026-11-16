@@ -25,6 +25,15 @@ func Nuevo(valores ...string) Redactor {
 	return Redactor{valores: util}
 }
 
+// Ocultar reemplaza solo los secretos y deja intacto el resto, saltos de línea incluidos. Sirve de
+// última defensa sobre una salida de registro ya formateada.
+func (r Redactor) Ocultar(texto string) string {
+	for _, v := range r.valores {
+		texto = strings.ReplaceAll(texto, v, "***")
+	}
+	return texto
+}
+
 // Limpiar oculta los secretos y quita los caracteres de control. Saltos de línea y tabuladores
 // se vuelven espacios para que un texto externo no pueda falsificar líneas de registro.
 func (r Redactor) Limpiar(texto string) string {

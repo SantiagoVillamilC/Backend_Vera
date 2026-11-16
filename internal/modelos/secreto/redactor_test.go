@@ -42,3 +42,10 @@ func TestRedactorVacioNoRompe(t *testing.T) {
 		t.Fatal("un secreto vacio no debe reemplazar nada")
 	}
 }
+
+func TestOcultarConservaSaltosDeLinea(t *testing.T) {
+	r := Nuevo("secreto-largo-123")
+	if got := r.Ocultar("a secreto-largo-123\nb"); got != "a ***\nb" {
+		t.Fatalf("got %q", got)
+	}
+}
