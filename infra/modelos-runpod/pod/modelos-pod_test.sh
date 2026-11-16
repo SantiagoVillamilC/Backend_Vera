@@ -285,6 +285,22 @@ no_contiene "el progreso no contiene el token de Whisper" "${R2}/progreso.jsonl"
 no_contiene "la salida no contiene el token de Kokoro" "${R2}/salida.txt" "$TOKEN_VOZ"
 contiene "el origen de los tokens queda anotado" "${R2}/progreso.jsonl" "origen=entorno"
 
+# Contrato literal con modelos-control: el texto que su preámbulo envía por stdin de "bash -s" (ver preambulo()
+# en internal/modelos/control/encendido.go, que otra prueba fija en Go) ejecutado tal cual contra este script.
+R2B="${BASE}/reuso-stdin"
+mkdir -p "$R2B"
+PREAMBULO="export WHISPER_TOKEN='${TOKEN_STT}'
+export KOKORO_TOKEN='${TOKEN_VOZ}'
+export REPO_SHA='0123456789abcdef0123456789abcdef01234567'
+bash ${ARRANQUE} >${R2B}/remoto.log 2>&1 </dev/null || { c=\$?; tail -n 20 ${R2B}/remoto.log >&2; exit \$c; }
+"
+rc=0
+printf '%s' "$PREAMBULO" | VERA_ESTADO_DIR="$R2B" PATH="${BASE}/bin-falso:${PATH}" NVIDIA_SMI="${BASE}/smi-13" bash -s \
+  > "${R2B}/salida.txt" 2>&1 || rc=$?
+verificar "el stdin literal de modelos-control sale con 0" 0 "$rc"
+contiene "el progreso dice reutilizados con el stdin literal" <(ultima_linea "$R2B") 'reutilizados sin reiniciar'
+no_contiene "el stdin literal no filtra el token de Whisper al progreso" "${R2B}/progreso.jsonl" "$TOKEN_STT"
+
 # Un token del entorno demasiado corto aborta con 2 aunque exista un archivo válido.
 R3="${BASE}/entorno-corto"
 mkdir -p "$R3"
