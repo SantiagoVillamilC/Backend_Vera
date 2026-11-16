@@ -1,0 +1,37 @@
+# Generado por puente-modelos.sh instalar a partir de compose.z-modelos.yaml.plantilla. No editar a mano.
+# Destino: /opt/centinela/infra-servidor/compose.z-modelos.yaml
+#
+# deploy-ci.sh y 60-api.sh unen todos los compose*.yaml del directorio, así que este archivo sobrevive a
+# cada despliegue de la API. Empieza por "z" para que quede al final del glob y sus valores ganen sobre los
+# de compose.api.yaml (environment se pisa clave por clave, env_file se suma).
+# Para volver a simulado: puente-modelos.sh desinstalar.
+services:
+  puente-modelos:
+    image: @IMAGEN_PUENTE@
+    container_name: centinela-modelos-puente
+    restart: unless-stopped
+    network_mode: "service:api"
+    depends_on:
+      - api
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - @RUTA_STREAM@:/etc/nginx/puente-modelos.conf:ro
+    command: ["nginx", "-g", "daemon off;", "-c", "/etc/nginx/puente-modelos.conf"]
+@SERVICIO_SALTO@
+  api:
+    # Solo VERA_STT_TOKEN y VERA_VOZ_TOKEN. La clave de RunPod NO entra en este contenedor.
+    env_file:
+      - @ARCHIVO_TOKENS_API@
+    environment:
+      VERA_PROVEEDOR: "local"
+      VERA_MODELO: "gemma4-e4b-local"
+      VERA_OLLAMA_URL: "http://127.0.0.1:@PUERTO_OLLAMA@"
+      VERA_STT_URL: "http://127.0.0.1:@PUERTO_STT@"
+      VERA_VOZ_URL: "http://127.0.0.1:@PUERTO_VOZ@"

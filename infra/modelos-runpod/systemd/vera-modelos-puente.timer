@@ -1,0 +1,16 @@
+# infra/modelos-runpod/systemd/vera-modelos-puente.timer
+# Destino en la VM: /etc/systemd/system/vera-modelos-puente.timer (root:root 0644).
+# Cada 2 minutos comprueba el puente. Un despliegue del CD tarda unos segundos en recrear la API, así que
+# el puente queda huérfano como máximo unos 2 minutos.
+[Unit]
+Description=Vera puente de modelos cada 2 minutos
+Documentation=https://github.com/SantiagoVillamilC/Backend_Vera/blob/dev/docs/despliegue-modelos-runpod-vm.md
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Unit=vera-modelos-puente.service
+
+[Install]
+WantedBy=timers.target

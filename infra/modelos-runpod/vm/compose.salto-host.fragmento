@@ -1,0 +1,18 @@
+
+  # Salto en la red del host: modelos-control solo escucha en loopback. Ver puente-host.conf.plantilla.
+  puente-host-modelos:
+    image: @IMAGEN_PUENTE@
+    container_name: centinela-modelos-puente-host
+    restart: unless-stopped
+    network_mode: host
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - @RUTA_STREAM_HOST@:/etc/nginx/puente-host.conf:ro
+    command: ["nginx", "-g", "daemon off;", "-c", "/etc/nginx/puente-host.conf"]
