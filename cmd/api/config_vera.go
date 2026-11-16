@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"net/url"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/compuesto"
+	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/destinolocal"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/gemini"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/ollama"
 	"github.com/SantiagoVillamilC/Backend_Centinela/internal/copilot/provsim"
@@ -49,7 +50,13 @@ func cargarConfigVera() (ConfigVera, []error) {
 	if c.Proveedor != "simulado" && c.Proveedor != "gemini" && c.Proveedor != "local" {
 		errs = append(errs, errors.New("VERA_PROVEEDOR debe ser simulado, gemini o local"))
 	}
-	if err := urlOrigenOpcional("VERA_OLLAMA_URL", c.OllamaURL); err != nil {
+	permitidos, errPermitidos := destinolocal.Permitidos()
+	if errPermitidos != nil {
+		errs = append(errs, errPermitidos)
+		permitidos = nil
+	}
+	// Ollama no lleva token: una barra final se tolera, pero nada más que un origen aceptable.
+	if err := urlModeloLocal("VERA_OLLAMA_URL", strings.TrimSuffix(c.OllamaURL, "/"), permitidos); err != nil {
 		errs = append(errs, err)
 	}
 	c.STTURL = strings.TrimSpace(os.Getenv("VERA_STT_URL"))
@@ -57,7 +64,7 @@ func cargarConfigVera() (ConfigVera, []error) {
 	if (c.STTURL == "") != (c.STTToken == "") {
 		errs = append(errs, errors.New("VERA_STT_URL y VERA_STT_TOKEN deben definirse juntas"))
 	} else if c.STTURL != "" {
-		if err := urlSTTLocal(c.STTURL); err != nil {
+		if err := urlModeloLocal("VERA_STT_URL", c.STTURL, permitidos); err != nil {
 			errs = append(errs, err)
 		}
 		if len(c.STTToken) < 32 {
@@ -150,13 +157,14 @@ func cargarLimitesVera() (copilot.LimitesUso, error) {
 	return l, errors.Join(errs...)
 }
 
-// urlSTTLocal exige un origen http de loopback sin ruta ni credenciales incrustadas.
-func urlSTTLocal(valor string) error {
-	u, err := url.Parse(valor)
-	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-		return fmt.Errorf("VERA_STT_URL debe ser un origen http en 127.0.0.1 sin ruta, recibido %q", valor)
+// urlModeloLocal exige un origen http en 127.0.0.1 o en una IPv4 privada de la lista permitida,
+// sin ruta ni credenciales incrustadas. El mensaje nombra la variable y nunca repite el valor,
+// porque una URL mal escrita puede traer una contraseña.
+func urlModeloLocal(variable, valor string, permitidos []netip.Addr) error {
+	if destinolocal.AceptableCon(valor, permitidos) {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("%s debe ser un origen http en 127.0.0.1 o en una IPv4 privada listada en %s, con puerto en ese caso y sin ruta, credenciales ni consulta", variable, destinolocal.VariableHostPermitido)
 }
 
 // LogValue omite la clave y sólo indica su presencia.

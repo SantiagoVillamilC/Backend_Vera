@@ -91,8 +91,10 @@ El 401 de la ruta tiene una sola causa: la sesión. Lo emite `RequireAuth` con e
 ### Qué pasa sin las variables
 
 `cmd/api/main.go:64-72`: el sintetizador solo se crea si `VERA_VOZ_TOKEN` no está vacío. Ese valor es el secreto con el que el backend habla con Kokoro y no es una credencial de la app. `VERA_VOZ_URL` es
-opcional y vale `http://127.0.0.1:8766` por defecto. `vozlocal.Nueva` solo acepta `http://127.0.0.1` y un token de
-al menos 32 caracteres, si no el API no arranca (`internal/copilot/vozlocal/voz.go:26-31`, `main.go:68-70`).
+opcional y vale `http://127.0.0.1:8766` por defecto. `vozlocal.Nueva` acepta `http://127.0.0.1` y, solo si el operador la
+lista en `VERA_MODELOS_HOST_PERMITIDO`, una IPv4 privada exacta con puerto (por ejemplo el gateway de la red docker en
+producción, ver `docs/configuracion-entornos.md`), y exige un token de al menos 32 caracteres. Con un destino no aceptable
+o un token más corto (si `VERA_VOZ_TOKEN` está definido) el API no arranca (`internal/copilot/vozlocal/voz.go:26-31`, `internal/copilot/destinolocal`, `main.go:68-70`).
 
 | Situación del servidor | Lo que ve la app |
 |---|---|

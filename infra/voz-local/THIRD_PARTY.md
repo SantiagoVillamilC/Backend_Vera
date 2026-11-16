@@ -10,9 +10,17 @@
 - Dependencias directas y transitivas fijadas en `requirements.txt`; no se cambian
   dependencias del backend Go. Pesos descargados durante el build, fuera de Git.
 
-SHA256 y tamaño de los dos assets están en `modelos/lock.json` y en el manifiesto
-`descargar.py`, que los comprueba durante el build. Una prueba de `cmd/verificar-modelos`
-cruza ambas fuentes y falla si divergen, así que no se repiten aquí.
+SHA256 y tamaño de los assets (`kokoro-v1.0.int8.onnx` y `voices-v1.0.bin` por defecto, más
+`kokoro-v1.0.onnx` con `VERA_VOZ_DESCARGAR_GPU=1` y `kokoro-v1.0.fp16.onnx` con `VERA_VOZ_DESCARGAR_FP16=1`) están en
+`modelos/lock.json` y en el manifiesto `descargar.py`, que los comprueba durante el build. Una
+prueba de `cmd/verificar-modelos` cruza ambas fuentes y falla si divergen, así que no se repiten
+aquí. Los pesos fp32 y fp16 pertenecen a la misma release y licencias que el int8.
+
+Variante opcional en GPU: `servidor.py` con `VERA_VOZ_DISPOSITIVO=cuda` usa `onnxruntime-gpu` y
+las librerías de NVIDIA fijadas en `requirements-cuda.txt`, que no se instalan en la imagen CPU.
+Esas librerías (CUDA runtime, cuDNN, cuFFT, cuRAND, NVRTC, cuBLAS y nvJitLink) se distribuyen
+bajo licencias de NVIDIA, no bajo MIT ni Apache-2.0. Revisa sus términos antes de redistribuir
+una imagen que las incluya.
 
 El contenedor carga los modelos al inicio y calienta una frase antes de abrir el
 laboratorio. El sintetizador escucha sólo en loopback interno, exige token
