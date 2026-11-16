@@ -134,6 +134,7 @@ func TestTunelAbreConTresReenviosYSeCierra(t *testing.T) {
 	s, f := nuevoSSH(t)
 	tunel := s.AbrirTunel(t.Context(), destino, reenvios, func(error) {})
 	esperar(t, tunel.Vivo)
+	esperar(t, func() bool { return strings.Contains(f.Argv(), "18767") }) // el script falso registra sus argumentos al arrancar
 	argv := f.Argv()
 	for _, esperado := range []string{"-N", "ExitOnForwardFailure=yes", "ServerAliveInterval=15", "-L 127.0.0.1:18434:127.0.0.1:11434", "-L 127.0.0.1:18767:127.0.0.1:8767"} {
 		if !strings.Contains(argv, esperado) {

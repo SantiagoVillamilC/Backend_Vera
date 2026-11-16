@@ -223,6 +223,10 @@ func TestRecuperarRetomaUnPodListoTrasReiniciar(t *testing.T) {
 	if err := segundo.Recuperar(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	limite := time.Now().Add(3 * time.Second)
+	for !segundo.Disponible() && time.Now().Before(limite) {
+		time.Sleep(time.Millisecond)
+	}
 	if !segundo.Disponible() || segundo.Vista().PodID != v.PodID || a.nube.Vivos("vera-modelos") != 1 {
 		t.Fatalf("vista %+v", segundo.Vista())
 	}

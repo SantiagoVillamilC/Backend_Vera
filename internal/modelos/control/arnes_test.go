@@ -156,7 +156,8 @@ func (a *arnes) esperarFase(fase estado.Fase) Vista {
 	limite := time.Now().Add(10 * time.Second)
 	for {
 		v := a.svc.Vista()
-		if v.Estado == string(fase) {
+		// Con el pod listo el proceso ssh del tunel arranca en otra goroutine: se espera a que quede vivo.
+		if v.Estado == string(fase) && (fase != estado.Listo || a.svc.Disponible()) {
 			return v
 		}
 		if time.Now().After(limite) {
